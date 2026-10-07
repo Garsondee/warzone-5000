@@ -3,7 +3,7 @@
 <!-- GENERATED FILE: do not edit by hand. Regenerate with tools/research/generate_tables.py -->
 > **Provenance:** derived from the Warzone 2100 game data (`mp` stats), snapshot commit `d7ce18df8d`
 > (2026-10-07). Warzone 2100 data is GPL-2.0-or-later. These tables are **research notes for reference only**; do not
-> paste them into our own game data. Generator: `python3 -I tools/research/wz_research_graph.py <wz_checkout> mp`.
+> paste them into our own game data. Generated with: `wz_research_graph.py <wz_checkout> mp`
 
 - Research items: **390**
 - Dangling prerequisite ids (not in file): none
@@ -187,8 +187,8 @@ Filter parameters used: Weapon.ImpactClass (249), Body.BodyClass (91), Building.
 | R-Sys-Sensor-Turret01 | Sensor Turret | 266 | 0 |
 | R-Sys-Sensor-Tower01 | Sensor Tower | 265 | 1 |
 | R-Struc-CommandRelay | Command Relay Post | 263 | 2 |
-| R-Sys-Engineering01 | Engineering | 261 | 0 |
 | R-Struc-Research-Module | Research Module | 261 | 3 |
+| R-Sys-Engineering01 | Engineering | 261 | 0 |
 | R-Struc-Research-Upgrade01 | Synaptic Link Data Analysis | 236 | 4 |
 | R-Struc-Research-Upgrade02 | Synaptic Link Data Analysis Mk2 | 222 | 5 |
 | R-Struc-Research-Upgrade03 | Synaptic Link Data Analysis Mk3 | 218 | 6 |
@@ -289,3 +289,4 @@ Shows which research lines gate which other lines. Edges within one family (upgr
 | Heavy Body - Vengeance | Medium Body - Retribution, Superdense Composite Alloys Mk3, Gas Turbine Engine |
 | Heavy Body - Wyvern | Gas Turbine Engine Mk3, High Intensity Thermal Armor Mk3 |
 | Multi Turret Body - Dragon | Heavy Body - Wyvern |
+

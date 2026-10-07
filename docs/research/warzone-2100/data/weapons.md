@@ -3,7 +3,7 @@
 <!-- GENERATED FILE: do not edit by hand. Regenerate with tools/research/generate_tables.py -->
 > **Provenance:** derived from the Warzone 2100 game data (`mp` stats), snapshot commit `d7ce18df8d`
 > (2026-10-07). Warzone 2100 data is GPL-2.0-or-later. These tables are **research notes for reference only**; do not
-> paste them into our own game data. Generator: `python3 -I tools/research/wz_components.py <wz_checkout> weapons`.
+> paste them into our own game data. Generated with: `wz_components.py <wz_checkout> weapons`
 
 | Subclass | Weapon | Effect | Class | Flight | Damage | Fire pause | Reload | Rounds | Short rng | Long rng | Min rng | Hit% short | Hit% long | Splash rad | Splash dmg | Burn dmg | Weight | Power cost | Build pts | Flags | Tech depth |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -86,3 +86,4 @@
 | ROCKET | VTOL Sunburst AA | ANTI TANK | KINETIC | HOMING-DIRECT | 120 | 1 | 30 | 6 | 1024 | 2048 | 128 | 45 | 60 |  |  |  | 250 | 200 | 500 | AirOnly | 7 |
 | ROCKET | VTOL Tank Killer | ANTI TANK | KINETIC | DIRECT | 240 | 1 | 160 | 2 | 512 | 1536 | 128 | 50 | 60 |  |  |  | 750 | 250 | 1000 |  | 10 |
 | ROCKET | Ripple Rockets | ARTILLERY ROUND | KINETIC | INDIRECT | 45 | 1 | 600 | 8 | 1024 | 11008 | 640 | 40 | 80 | 64 | 50 |  | 20000 | 300 | 1500 |  | 10 |
+

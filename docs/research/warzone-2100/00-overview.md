@@ -31,7 +31,8 @@ Since December 2004 it has been free, open-source software (GPL-2.0-or-later), m
 3. **Unit design system.** Body + propulsion + turret. Over 2,000 possible designs are quoted by sources.
 4. **Artillery and information warfare.** Sensors spot, artillery fires, counter-battery sensors find enemy artillery.
 5. **Air power.** VTOLs with limited ammo that need rearming pads; anti-air counters.
-6. **Commanders**, **experience ranks**, **factions** (multiplayer, since 4.0), **transporters**.
+6. **Commanders**, **experience ranks**, **transporters**, and three display **factions** (Normal, NEXUS, Collective; added in 4.0). The factions
+   are *cosmetic only*: they swap building and unit models, not stats (confirmed in the source).
 7. **Scriptable.** JavaScript API for AI bots, maps, campaign rules and mods.
 8. **Modern community features.** Spectators, lobby browser, auto-rated duels, campaign balance mods.
 

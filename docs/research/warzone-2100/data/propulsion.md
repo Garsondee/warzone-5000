@@ -3,7 +3,7 @@
 <!-- GENERATED FILE: do not edit by hand. Regenerate with tools/research/generate_tables.py -->
 > **Provenance:** derived from the Warzone 2100 game data (`mp` stats), snapshot commit `d7ce18df8d`
 > (2026-10-07). Warzone 2100 data is GPL-2.0-or-later. These tables are **research notes for reference only**; do not
-> paste them into our own game data. Generator: `python3 -I tools/research/wz_components.py <wz_checkout> propulsion`.
+> paste them into our own game data. Generated with: `wz_components.py <wz_checkout> propulsion`
 
 | Propulsion | Type | Max speed | Weight | HP % of body | Power cost | Build pts | Type multiplier | Layer | Skid decel | Accel | Decel | Turn speed | Spin speed | Tech depth | Tech crit-path pts |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -15,3 +15,4 @@
 | Wheels | Wheeled | 175 | 300 | 100 | 50 | 50 | 80 | GROUND | 350 | - | - | - | - | 0 | 1200 |
 
 Non-designable propulsion (cyborg legs, helicopters, scenery): BaBaLegs, BaBaProp, CyborgLegs, Helicopter, ZNULLPROP
+

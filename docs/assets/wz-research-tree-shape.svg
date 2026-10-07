@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="460" viewBox="0 0 880 460" role="img" aria-labelledby="t d" font-family='system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>
+<title id="t">Research items per prerequisite depth, by what they do</title><desc id="d">Stacked column chart of the 390 multiplayer research items by depth in the prerequisite graph. The tree is narrow at the start, widest at depth 12 with 40 items, and narrow again at the end. About half of all items are stat upgrades. The table is in docs/research/warzone-2100/research-system/03-tree-analysis.md.</desc>
+<rect x="0.5" y="0.5" width="879" height="459" rx="6" fill="#fcfcfb" stroke="#e1e0d9"/>
+<text x="24.0" y="30.0" font-size="16" fill="#0b0b0b" text-anchor="start" font-weight="600">The research tree is spindle-shaped, and half of it is stat upgrades</text>
+<text x="24.0" y="50.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="400">Warzone 2100 multiplayer tree: 390 items by prerequisite depth (0 = no prerequisites).</text>
+<rect x="24" y="70" width="12" height="12" rx="2" fill="#2a78d6"/>
+<text x="42.0" y="80.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="400">Stat upgrade only</text>
+<rect x="180.8" y="70" width="12" height="12" rx="2" fill="#eb6834"/>
+<text x="198.8" y="80.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="400">Unlocks a component</text>
+<rect x="350.40000000000003" y="70" width="12" height="12" rx="2" fill="#1baf7a"/>
+<text x="368.4" y="80.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="400">Unlocks structures only</text>
+<line x1="56.0" y1="390.0" x2="852.0" y2="390.0" stroke="#c3c2b7" stroke-width="1" stroke-linecap="butt"/>
+<text x="48.0" y="394.0" font-size="11" fill="#898781" text-anchor="end" font-weight="400">0</text>
+<line x1="56.0" y1="320.5" x2="852.0" y2="320.5" stroke="#e1e0d9" stroke-width="1" stroke-linecap="butt"/>
+<text x="48.0" y="324.5" font-size="11" fill="#898781" text-anchor="end" font-weight="400">10</text>
+<line x1="56.0" y1="251.0" x2="852.0" y2="251.0" stroke="#e1e0d9" stroke-width="1" stroke-linecap="butt"/>
+<text x="48.0" y="255.0" font-size="11" fill="#898781" text-anchor="end" font-weight="400">20</text>
+<line x1="56.0" y1="181.5" x2="852.0" y2="181.5" stroke="#e1e0d9" stroke-width="1" stroke-linecap="butt"/>
+<text x="48.0" y="185.5" font-size="11" fill="#898781" text-anchor="end" font-weight="400">30</text>
+<line x1="56.0" y1="112.0" x2="852.0" y2="112.0" stroke="#e1e0d9" stroke-width="1" stroke-linecap="butt"/>
+<text x="48.0" y="116.0" font-size="11" fill="#898781" text-anchor="end" font-weight="400">40</text>
+<text x="48.0" y="104.0" font-size="11" fill="#898781" text-anchor="start" font-weight="400">Research items</text>
+<text x="454.0" y="436.0" font-size="12" fill="#52514e" text-anchor="middle" font-weight="400">Prerequisite depth (longest chain of required topics before this one)</text>
+<text x="76.9" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">0</text>
+<rect x="64.9" y="383.1" width="24.0" height="6.9" fill="#2a78d6"/>
+<path d="M 64.9 381.1 L 64.9 352.3 Q 64.9 348.3 68.9 348.3 L 84.9 348.3 Q 88.9 348.3 88.9 352.3 L 88.9 381.1 Z" fill="#eb6834"/>
+<text x="118.8" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">1</text>
+<rect x="106.8" y="376.1" width="24.0" height="13.9" fill="#2a78d6"/>
+<rect x="106.8" y="348.3" width="24.0" height="25.8" fill="#eb6834"/>
+<path d="M 106.8 346.3 L 106.8 324.5 Q 106.8 320.5 110.8 320.5 L 126.8 320.5 Q 130.8 320.5 130.8 324.5 L 130.8 346.3 Z" fill="#1baf7a"/>
+<text x="160.7" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">2</text>
+<rect x="148.7" y="362.2" width="24.0" height="27.8" fill="#2a78d6"/>
+<rect x="148.7" y="348.3" width="24.0" height="11.9" fill="#eb6834"/>
+<path d="M 148.7 346.3 L 148.7 310.6 Q 148.7 306.6 152.7 306.6 L 168.7 306.6 Q 172.7 306.6 172.7 310.6 L 172.7 346.3 Z" fill="#1baf7a"/>
+<text x="202.6" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">3</text>
+<rect x="190.6" y="348.3" width="24.0" height="41.7" fill="#2a78d6"/>
+<rect x="190.6" y="334.4" width="24.0" height="11.9" fill="#eb6834"/>
+<path d="M 190.6 332.4 L 190.6 303.7 Q 190.6 299.7 194.6 299.7 L 210.6 299.7 Q 214.6 299.7 214.6 303.7 L 214.6 332.4 Z" fill="#1baf7a"/>
+<text x="244.5" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">4</text>
+<rect x="232.5" y="320.5" width="24.0" height="69.5" fill="#2a78d6"/>
+<rect x="232.5" y="285.8" width="24.0" height="32.8" fill="#eb6834"/>
+<path d="M 232.5 283.8 L 232.5 281.3 Q 232.5 278.8 235.0 278.8 L 254.1 278.8 Q 256.5 278.8 256.5 281.3 L 256.5 283.8 Z" fill="#1baf7a"/>
+<text x="286.4" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">5</text>
+<rect x="274.4" y="299.6" width="24.0" height="90.4" fill="#2a78d6"/>
+<rect x="274.4" y="278.8" width="24.0" height="18.9" fill="#eb6834"/>
+<path d="M 274.4 276.8 L 274.4 261.9 Q 274.4 257.9 278.4 257.9 L 294.4 257.9 Q 298.4 257.9 298.4 261.9 L 298.4 276.8 Z" fill="#1baf7a"/>
+<text x="328.3" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">6</text>
+<rect x="316.3" y="320.5" width="24.0" height="69.5" fill="#2a78d6"/>
+<rect x="316.3" y="264.9" width="24.0" height="53.6" fill="#eb6834"/>
+<path d="M 316.3 262.9 L 316.3 255.0 Q 316.3 251.0 320.3 251.0 L 336.3 251.0 Q 340.3 251.0 340.3 255.0 L 340.3 262.9 Z" fill="#1baf7a"/>
+<text x="370.2" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">7</text>
+<rect x="358.2" y="299.6" width="24.0" height="90.4" fill="#2a78d6"/>
+<rect x="358.2" y="216.2" width="24.0" height="81.4" fill="#eb6834"/>
+<path d="M 358.2 214.2 L 358.2 178.5 Q 358.2 174.5 362.2 174.5 L 378.2 174.5 Q 382.2 174.5 382.2 178.5 L 382.2 214.2 Z" fill="#1baf7a"/>
+<text x="412.1" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">8</text>
+<rect x="400.1" y="237.1" width="24.0" height="152.9" fill="#2a78d6"/>
+<rect x="400.1" y="209.3" width="24.0" height="25.8" fill="#eb6834"/>
+<path d="M 400.1 207.3 L 400.1 150.8 Q 400.1 146.8 404.1 146.8 L 420.1 146.8 Q 424.1 146.8 424.1 150.8 L 424.1 207.3 Z" fill="#1baf7a"/>
+<text x="454.0" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">9</text>
+<rect x="442.0" y="271.9" width="24.0" height="118.1" fill="#2a78d6"/>
+<rect x="442.0" y="216.3" width="24.0" height="53.6" fill="#eb6834"/>
+<path d="M 442.0 214.3 L 442.0 206.4 Q 442.0 202.4 446.0 202.4 L 462.0 202.4 Q 466.0 202.4 466.0 206.4 L 466.0 214.3 Z" fill="#1baf7a"/>
+<text x="495.9" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">10</text>
+<rect x="483.9" y="278.8" width="24.0" height="111.2" fill="#2a78d6"/>
+<rect x="483.9" y="202.4" width="24.0" height="74.4" fill="#eb6834"/>
+<path d="M 483.9 200.4 L 483.9 185.5 Q 483.9 181.5 487.9 181.5 L 503.9 181.5 Q 507.9 181.5 507.9 185.5 L 507.9 200.4 Z" fill="#1baf7a"/>
+<text x="537.8" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">11</text>
+<rect x="525.8" y="271.9" width="24.0" height="118.1" fill="#2a78d6"/>
+<rect x="525.8" y="209.3" width="24.0" height="60.6" fill="#eb6834"/>
+<path d="M 525.8 207.3 L 525.8 136.9 Q 525.8 132.9 529.8 132.9 L 545.8 132.9 Q 549.8 132.9 549.8 136.9 L 549.8 207.3 Z" fill="#1baf7a"/>
+<text x="579.7" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">12</text>
+<rect x="567.7" y="257.9" width="24.0" height="132.1" fill="#2a78d6"/>
+<rect x="567.7" y="188.4" width="24.0" height="67.5" fill="#eb6834"/>
+<path d="M 567.7 186.4 L 567.7 116.0 Q 567.7 112.0 571.7 112.0 L 587.7 112.0 Q 591.7 112.0 591.7 116.0 L 591.7 186.4 Z" fill="#1baf7a"/>
+<text x="621.6" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">13</text>
+<rect x="609.6" y="257.9" width="24.0" height="132.1" fill="#2a78d6"/>
+<rect x="609.6" y="223.2" width="24.0" height="32.8" fill="#eb6834"/>
+<path d="M 609.6 221.2 L 609.6 171.6 Q 609.6 167.6 613.6 167.6 L 629.6 167.6 Q 633.6 167.6 633.6 171.6 L 633.6 221.2 Z" fill="#1baf7a"/>
+<text x="663.5" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">14</text>
+<rect x="651.5" y="285.8" width="24.0" height="104.2" fill="#2a78d6"/>
+<rect x="651.5" y="251.0" width="24.0" height="32.8" fill="#eb6834"/>
+<path d="M 651.5 249.0 L 651.5 227.2 Q 651.5 223.2 655.5 223.2 L 671.5 223.2 Q 675.5 223.2 675.5 227.2 L 675.5 249.0 Z" fill="#1baf7a"/>
+<text x="705.4" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">15</text>
+<rect x="693.4" y="313.6" width="24.0" height="76.4" fill="#2a78d6"/>
+<rect x="693.4" y="292.7" width="24.0" height="18.9" fill="#eb6834"/>
+<path d="M 693.4 290.7 L 693.4 261.9 Q 693.4 257.9 697.4 257.9 L 713.4 257.9 Q 717.4 257.9 717.4 261.9 L 717.4 290.7 Z" fill="#1baf7a"/>
+<text x="747.3" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">16</text>
+<rect x="735.3" y="348.3" width="24.0" height="41.7" fill="#2a78d6"/>
+<rect x="735.3" y="334.4" width="24.0" height="11.9" fill="#eb6834"/>
+<path d="M 735.3 332.4 L 735.3 317.6 Q 735.3 313.6 739.3 313.6 L 755.3 313.6 Q 759.3 313.6 759.3 317.6 L 759.3 332.4 Z" fill="#1baf7a"/>
+<text x="789.2" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">17</text>
+<rect x="777.2" y="376.1" width="24.0" height="13.9" fill="#2a78d6"/>
+<rect x="777.2" y="369.2" width="24.0" height="4.9" fill="#eb6834"/>
+<path d="M 777.2 367.2 L 777.2 345.4 Q 777.2 341.4 781.2 341.4 L 797.2 341.4 Q 801.2 341.4 801.2 345.4 L 801.2 367.2 Z" fill="#1baf7a"/>
+<text x="831.1" y="408.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">18</text>
+<path d="M 819.1 390.0 L 819.1 386.5 Q 819.1 383.1 822.5 383.1 L 839.6 383.1 Q 843.1 383.1 843.1 386.5 L 843.1 390.0 Z" fill="#2a78d6"/>
+<text x="579.7" y="104.0" font-size="11.5" fill="#0b0b0b" text-anchor="middle" font-weight="400">40 items at depth 12</text>
+</svg>

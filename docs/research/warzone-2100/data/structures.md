@@ -3,7 +3,7 @@
 <!-- GENERATED FILE: do not edit by hand. Regenerate with tools/research/generate_tables.py -->
 > **Provenance:** derived from the Warzone 2100 game data (`mp` stats), snapshot commit `d7ce18df8d`
 > (2026-10-07). Warzone 2100 data is GPL-2.0-or-later. These tables are **research notes for reference only**; do not
-> paste them into our own game data. Generator: `python3 -I tools/research/wz_components.py <wz_checkout> structures`.
+> paste them into our own game data. Generated with: `wz_components.py <wz_checkout> structures`
 
 | Type | Name | Power cost | Build pts | HP | Production pts | Module prod pts | Research pts | Module research pts | Power pts | Module power pts | Rearm pts | Repair pts | User limits |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -24,3 +24,4 @@
 | RESOURCE EXTRACTOR | Oil Derrick | 0 | 100 | 600 |  |  |  |  |  |  |  |  |  |
 | SAT UPLINK | Satellite Uplink Center | 1000 | 1250 | 1600 |  |  |  |  |  |  |  |  | [0, 1, 1] |
 | VTOL FACTORY | VTOL Factory | 100 | 500 | 500 | 10 | 10 |  |  |  |  |  |  | [0, 5, 5] |
+

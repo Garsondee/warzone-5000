@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="430" viewBox="0 0 880 430" role="img" aria-labelledby="t d" font-family='system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>
+<title id="t">Share of ground designs whose speed cap hides the engine, by propulsion</title><desc id="d">Dumbbell chart. For each propulsion, a light dot shows the share of designs already at the speed cap with no engine research and a dark dot shows the share after all nine engine upgrades. Wheels: 53% to 76%; Hover: 45% to 72%; Half-tracks: 51% to 70%; Tracks: 26% to 28%.</desc>
+<rect x="0.5" y="0.5" width="879" height="429" rx="6" fill="#fcfcfb" stroke="#e1e0d9"/>
+<text x="24.0" y="30.0" font-size="16" fill="#0b0b0b" text-anchor="start" font-weight="600">Engine research mostly lifts designs into the speed cap</text>
+<text x="24.0" y="50.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="400">Share of ground designs (every body x weapon) at the propulsion's speed cap on flat ground, before and after all nine engine upgrades.</text>
+<circle cx="29.0" cy="76.0" r="5" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<text x="42.0" y="80.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="400">No engine research</text>
+<circle cx="194.0" cy="76.0" r="5" fill="#184f95" stroke="#fcfcfb" stroke-width="2"/>
+<text x="207.0" y="80.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="400">All nine engine upgrades</text>
+<line x1="150.0" y1="106.0" x2="150.0" y2="348.0" stroke="#c3c2b7" stroke-width="1" stroke-linecap="butt"/>
+<text x="150.0" y="366.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">0%</text>
+<line x1="284.0" y1="106.0" x2="284.0" y2="348.0" stroke="#e1e0d9" stroke-width="1" stroke-linecap="butt"/>
+<text x="284.0" y="366.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">20%</text>
+<line x1="418.0" y1="106.0" x2="418.0" y2="348.0" stroke="#e1e0d9" stroke-width="1" stroke-linecap="butt"/>
+<text x="418.0" y="366.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">40%</text>
+<line x1="552.0" y1="106.0" x2="552.0" y2="348.0" stroke="#e1e0d9" stroke-width="1" stroke-linecap="butt"/>
+<text x="552.0" y="366.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">60%</text>
+<line x1="686.0" y1="106.0" x2="686.0" y2="348.0" stroke="#e1e0d9" stroke-width="1" stroke-linecap="butt"/>
+<text x="686.0" y="366.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">80%</text>
+<line x1="820.0" y1="106.0" x2="820.0" y2="348.0" stroke="#e1e0d9" stroke-width="1" stroke-linecap="butt"/>
+<text x="820.0" y="366.0" font-size="11" fill="#898781" text-anchor="middle" font-weight="400">100%</text>
+<text x="136.0" y="134.0" font-size="12.5" fill="#0b0b0b" text-anchor="end" font-weight="400">Wheels</text>
+<line x1="505.2" y1="130.0" x2="661.7" y2="130.0" stroke="#c3c2b7" stroke-width="3" stroke-linecap="round"/>
+<circle cx="505.2" cy="130.0" r="6" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="661.7" cy="130.0" r="6" fill="#184f95" stroke="#fcfcfb" stroke-width="2"/>
+<text x="493.2" y="134.0" font-size="11.5" fill="#52514e" text-anchor="end" font-weight="400">53%</text>
+<text x="673.7" y="134.0" font-size="11.5" fill="#52514e" text-anchor="start" font-weight="400">76%</text>
+<text x="136.0" y="194.0" font-size="12.5" fill="#0b0b0b" text-anchor="end" font-weight="400">Hover</text>
+<line x1="453.7" y1="190.0" x2="632.3" y2="190.0" stroke="#c3c2b7" stroke-width="3" stroke-linecap="round"/>
+<circle cx="453.7" cy="190.0" r="6" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="632.3" cy="190.0" r="6" fill="#184f95" stroke="#fcfcfb" stroke-width="2"/>
+<text x="441.7" y="194.0" font-size="11.5" fill="#52514e" text-anchor="end" font-weight="400">45%</text>
+<text x="644.3" y="194.0" font-size="11.5" fill="#52514e" text-anchor="start" font-weight="400">72%</text>
+<text x="136.0" y="254.0" font-size="12.5" fill="#0b0b0b" text-anchor="end" font-weight="400">Half-tracks</text>
+<line x1="494.2" y1="250.0" x2="618.4" y2="250.0" stroke="#c3c2b7" stroke-width="3" stroke-linecap="round"/>
+<circle cx="494.2" cy="250.0" r="6" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="618.4" cy="250.0" r="6" fill="#184f95" stroke="#fcfcfb" stroke-width="2"/>
+<text x="482.2" y="254.0" font-size="11.5" fill="#52514e" text-anchor="end" font-weight="400">51%</text>
+<text x="630.4" y="254.0" font-size="11.5" fill="#52514e" text-anchor="start" font-weight="400">70%</text>
+<text x="136.0" y="314.0" font-size="12.5" fill="#0b0b0b" text-anchor="end" font-weight="400">Tracks</text>
+<line x1="323.9" y1="310.0" x2="338.7" y2="310.0" stroke="#c3c2b7" stroke-width="3" stroke-linecap="round"/>
+<circle cx="323.9" cy="310.0" r="6" fill="#86b6ef" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="338.7" cy="310.0" r="6" fill="#184f95" stroke="#fcfcfb" stroke-width="2"/>
+<text x="311.9" y="314.0" font-size="11.5" fill="#52514e" text-anchor="end" font-weight="400">26%</text>
+<text x="350.7" y="314.0" font-size="11.5" fill="#52514e" text-anchor="start" font-weight="400">28%</text>
+</svg>

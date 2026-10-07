@@ -3,7 +3,7 @@
 <!-- GENERATED FILE: do not edit by hand. Regenerate with tools/research/generate_tables.py -->
 > **Provenance:** derived from the Warzone 2100 game data (`mp` stats), snapshot commit `d7ce18df8d`
 > (2026-10-07). Warzone 2100 data is GPL-2.0-or-later. These tables are **research notes for reference only**; do not
-> paste them into our own game data. Generator: `python3 -I tools/research/wz_components.py <wz_checkout> modifiers`.
+> paste them into our own game data. Generated with: `wz_components.py <wz_checkout> modifiers`
 
 ### Weapon effect vs target propulsion (percent of base damage)
 
@@ -26,3 +26,4 @@
 | ARTILLERY ROUND | 200 | 120 | 100 | 20 |
 | BUNKER BUSTER | 100 | 120 | 300 | 400 |
 | FLAMER | 150 | 60 | 10 | 300 |
+

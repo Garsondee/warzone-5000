@@ -55,6 +55,8 @@ multiplied by research.
 
 ## 3. Shape of the tree
 
+![Stacked columns of research items per prerequisite depth: narrow at the start, widest at depth 12 with 40 items, narrow at the end; about half of each column is stat upgrades](../../../assets/wz-research-tree-shape.svg)
+
 Items per prerequisite-depth ("wave"), with average cost:
 
 | Depth | Items | Avg points | | Depth | Items | Avg points |
@@ -153,8 +155,9 @@ Almost every upgrade chain is a ladder of **identical** steps:
 Observations:
 - **Engines get the stingiest upgrade line** in the game (+50% total for about 80,000 points) compared with armour
   (+270%) and weapon damage (+225 to +250%). With engine output scaling so little while armour and damage scale a
-  lot, upgrades shift the balance *away from mobility* as the game progresses (to be quantified once the speed
-  formula is confirmed; see [04-engine-and-speed.md](../unit-design/04-engine-and-speed.md)).
+  lot, upgrades shift the balance *away from mobility* as the game progresses. The speed formula
+  ([04-engine-and-speed.md](../unit-design/04-engine-and-speed.md)) shows the engine only matters for the 38-56% of ground
+  designs that are not already at their propulsion's speed cap.
 - Steps are **flat, additive and uniform**, which is easy to understand but means that *the order of
   upgrades doesn't matter*, only the total spent. There is no "choose this OR that" in the upgrade ladders.
 - Upgrade chains cost **54,000 to 137,000 points** each, i.e. a single line is worth about 1.5% to 4% of the tree.
@@ -165,7 +168,7 @@ Observations:
   very late items run 43,200-56,600 points and 450 power each (450 appears to be a cap).
 - The most expensive chain to reach any single item sums to **220,510 points**.
 - Research-rate numbers (what a lab produces per second) and the resulting game time are in
-  [01-mechanics.md](01-mechanics.md).
+  [01-mechanics.md](01-mechanics.md): in an hour, five fully upgraded labs complete only about **a third** of the tree.
 
 ## 7. Campaign tree versus multiplayer tree
 

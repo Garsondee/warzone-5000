@@ -3,7 +3,7 @@
 <!-- GENERATED FILE: do not edit by hand. Regenerate with tools/research/generate_tables.py -->
 > **Provenance:** derived from the Warzone 2100 game data (`mp` stats), snapshot commit `d7ce18df8d`
 > (2026-10-07). Warzone 2100 data is GPL-2.0-or-later. These tables are **research notes for reference only**; do not
-> paste them into our own game data. Generator: `python3 -I tools/research/wz_components.py <wz_checkout> timeline`.
+> paste them into our own game data. Generated with: `wz_components.py <wz_checkout> timeline`
 
 | Crit-path research pts | Depth | Kind | Component | Own research pts |
 |---|---|---|---|---|
@@ -113,3 +113,4 @@
 | 170510 | 15 | Weapon | Gauss Cannon | 43200 |
 | 186400 | 16 | Weapon | Vindicator SAM | 28800 |
 | 210200 | 17 | Body | Dragon | 43200 |
+

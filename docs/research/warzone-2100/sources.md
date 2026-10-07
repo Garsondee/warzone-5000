@@ -23,3 +23,7 @@ Reliability: **High** = official/primary, fetched and read. **Medium** = reputab
 | [Warzone 2100 Reference (benbridle)](https://benbridle.com/warzone-2100-reference.html) | Damage profiles (snippet) | Low |
 | [Warzone 2100 forums](https://forums.wz2100.net/) | Balance assumptions | Low |
 | [TV Tropes](https://tvtropes.org/pmwiki/pmwiki.php/VideoGame/Warzone2100) | Faction impressions | Low |
+| **Warzone 2100 repository snapshot** `d7ce18df8d` (2026-10-07): `data/mp/stats/*.json`, `data/base/stats/*.json`, `src/*.cpp`, `doc/*.md`, `ChangeLog` | Second pass: all stats, formulas and mechanics in `unit-design/`, `research-system/` and `data/` | **High** (read directly; engine behaviour read by analysis agents, key formulas re-verified) |
+| [Community precedents document](community-precedents.md) (mods, forum threads, review excerpts; full list at its end) | Mods and community debates | Low-medium (search excerpts only) |
+| [GameSpot review of Warzone 2100](https://www.gamespot.com/reviews/warzone-2100-review/1900-2531842/) | "Five largely similar tanks" critique of design variety (excerpt) | Medium |
+| [Project wiki: History of Warzone 2100](https://warzone.atlassian.net/wiki/spaces/wzpedia/pages/7635452/History+of+Warzone+2100) | Studio history and design intent (excerpt) | Medium |

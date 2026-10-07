@@ -3,7 +3,7 @@
 <!-- GENERATED FILE: do not edit by hand. Regenerate with tools/research/generate_tables.py -->
 > **Provenance:** derived from the Warzone 2100 game data (`mp` stats), snapshot commit `d7ce18df8d`
 > (2026-10-07). Warzone 2100 data is GPL-2.0-or-later. These tables are **research notes for reference only**; do not
-> paste them into our own game data. Generator: `python3 -I tools/research/wz_components.py <wz_checkout> bodies`.
+> paste them into our own game data. Generated with: `wz_components.py <wz_checkout> bodies`
 
 | Size | Body | Slots | HP | Armour (kin) | Armour (heat) | Engine power | Weight | Power/weight | Power cost | Build pts | Tech depth | Tech crit-path pts |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -21,3 +21,4 @@
 | HEAVY | Vengeance | 1 | 300 | 28 | 25 | 23000 | 2500 | 9.2 | 80 | 470 | 14 | 121200 |
 | HEAVY | Wyvern | 1 | 350 | 28 | 28 | 25000 | 3500 | 7.1 | 86 | 470 | 16 | 167000 |
 | HEAVY | Dragon | 2 | 350 | 30 | 30 | 30000 | 4500 | 6.7 | 90 | 500 | 17 | 210200 |
+

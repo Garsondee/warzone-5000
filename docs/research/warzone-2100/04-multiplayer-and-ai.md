@@ -6,7 +6,8 @@
 - **Skirmish**: offline against AI bots.
 - **Cross-platform** multiplayer between Windows, macOS and Linux.
 - In multiplayer/skirmish you progress up the tech tree directly (no artifacts).
-- **Factions** for multiplayer/skirmish arrived in 4.0.
+- **Factions** for multiplayer/skirmish arrived in 4.0: three of them (Normal, NEXUS, Collective). **They are display-only model swaps** in the source
+  (`src/faction.cpp`, marked "DISPLAY ONLY"); they do not change stats or tech.
 - **Rated games:** an auto-hosting and rating system ("Autorating") hosts 1v1 duels from a small map pool
   (as of a 2020 post: 9 maps in low/medium/high oil sets, random base level and scavenger on/off). Keep the same
   player name/profile to accumulate stats. The pool may have changed since.
@@ -30,7 +31,9 @@ Games can be started with no base, a base, or an advanced base, with scavengers 
   (though the name is shared) and distinct from "The NEXUS Project" scripting library.
 - **Scavenger scripts:** `scavfact.js` is the simple starting script; community mods such as the "Ultimate
   Scavenger AI Mod" replace it.
-- Cobra and BoneCrusher are commonly mentioned bots *(general knowledge)* but were **not** confirmed by sources.
+- **Bundled AIs, confirmed from the repository** (`data/mp/multiplay/skirmish/`): **Cobra**, **BoneCrusher**, **NullBot** in three
+  personalities (generic, hover, turtle), **Nexus** (the older wzscript-based bot) and **SemperFi**. Several have explicit hover and
+  sea-map handling (a force-hover option, minimum hover-truck counts).
 - A bot is registered by writing an `.ai` file pointing to a `.js` script (path relative to the `.ai` file).
 
 ## Design takeaway
