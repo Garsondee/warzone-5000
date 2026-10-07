@@ -1,0 +1,37 @@
+#![enable(implicit_some)]
+// Medium track unit (right-hand side; the left one is attached mirrored). Part space: x = 0 is the unit's
+// centre line, the mount is on the inner face (-X). In a vehicle its y = 0 sits 0.7 m above the ground.
+(
+    id: "track_medium",
+    name: "Medium track unit",
+    category: Locomotion,
+    size: Medium,
+    tags: ["tracks"],
+    shapes: [
+        // The track run as one pod, side profile (z, y): flat bottom run, raised front idler, rear sprocket.
+        Hull(
+            points: [
+                (-0.3, -0.7, -2.3), (-0.3, -0.7, 2.3), (-0.3, -0.3, 3.0), (-0.3, 0.05, 3.05), (-0.3, 0.3, 2.75), (-0.3, 0.3, -2.85), (-0.3, 0.0, -3.2), (-0.3, -0.3, -3.1),
+                ( 0.3, -0.7, -2.3), ( 0.3, -0.7, 2.3), ( 0.3, -0.3, 3.0), ( 0.3, 0.05, 3.05), ( 0.3, 0.3, 2.75), ( 0.3, 0.3, -2.85), ( 0.3, 0.0, -3.2), ( 0.3, -0.3, -3.1),
+            ],
+            mat: "running_gear", slot: Dark, chamfer: 0.04,
+        ),
+        // Cleats on the top run.
+        Array(count: 14, step: (0, 0, 0.4), children: [
+            Box(size: (0.62, 0.04, 0.12), at: (0, 0.31, -2.6), mat: "running_gear", slot: Rubber),
+        ]),
+        // Road wheels and hubs on the outer face.
+        Array(count: 6, step: (0, 0, 0.8), children: [
+            Cylinder(radius: 0.3, length: 0.1, axis: X, segments: 14, at: (0.29, -0.38, -2.0), mat: "running_gear", slot: Secondary, chamfer: 0.02),
+            Cylinder(radius: 0.1, length: 0.06, axis: X, segments: 8, at: (0.36, -0.38, -2.0), mat: "running_gear", slot: Metal),
+        ]),
+        // Drive sprocket (rear) and idler (front).
+        Cylinder(radius: 0.3, length: 0.14, axis: X, segments: 10, at: (0.27, 0.0, 2.72), mat: "running_gear", slot: Dark, chamfer: 0.02),
+        Cylinder(radius: 0.12, length: 0.06, axis: X, segments: 8, at: (0.36, 0.0, 2.72), mat: "running_gear", slot: Metal),
+        Cylinder(radius: 0.27, length: 0.12, axis: X, segments: 12, at: (0.27, 0.0, -2.85), mat: "running_gear", slot: Secondary, chamfer: 0.02),
+    ],
+    sockets: [
+        (name: "mount", kind: Mount, size: Medium, at: (-0.3, 0, 0), normal: (-1, 0, 0)),
+    ],
+    function: (locomotion: Tracks, load_kg: 30000, rolling: 0.06, traction: 0.9),
+)

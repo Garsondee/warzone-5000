@@ -1,0 +1,46 @@
+// Materials and colour palettes.
+//
+// density:  kg per cubic metre (real-world values).
+// hardness: protection per metre of thickness relative to rolled homogeneous armour steel (RHA = 1.0).
+//           A 50 mm plate of a material with hardness 0.5 protects like 25 mm of steel.
+//           Mass efficiency (protection per kg) is hardness / (density / 7850).
+(
+    materials: {
+        "steel":       (density: 7850, hardness: 1.0),   // structural / rolled homogeneous armour
+        "hard_steel":  (density: 7850, hardness: 1.25),  // high-hardness plate: same weight, more protection
+        "aluminium":   (density: 2700, hardness: 0.33),  // light hulls: thick, weak per mm, about steel per kg
+        "titanium":    (density: 4500, hardness: 0.8),   // expensive: 1.4x steel per kg
+        "ceramic":     (density: 3900, hardness: 1.6),   // composite inserts: 3.2x steel per kg, brittle later
+        "composite":   (density: 1800, hardness: 0.3),   // airframes and drone bodies
+        "rubber":      (density: 1100, hardness: 0.02),  // tyres, track pads
+        "glass":       (density: 2500, hardness: 0.15),  // optics and canopies
+        "machinery":   (density: 1600, hardness: 0.2),   // engines, gearboxes: average density of a filled engine bay
+        "electronics": (density: 1500, hardness: 0.05),  // sensor heads, radar dishes
+        // Homogenised materials: a volume that stands for a mix of parts and air, so chunky shapes weigh what
+        // the real thing would.
+        "running_gear": (density: 900, hardness: 0.12),  // track pods: links, wheels, suspension and air
+        "fittings":    (density: 600, hardness: 0.05),   // stowage, fenders, lights and other detail
+    },
+    palettes: {
+        "default": (colours: {
+            Primary: "#6f7752", Secondary: "#4d5539", Trim: "#c2a04a", Dark: "#2a2c2d",
+            Metal: "#70757b", Rubber: "#1f1f21", Glow: "#5ad8ff", Glass: "#2c4652",
+        }),
+        "desert": (colours: {
+            Primary: "#b39a6c", Secondary: "#8a7451", Trim: "#5c4f3a", Dark: "#2e2a25",
+            Metal: "#8c8a86", Rubber: "#1f1e1d", Glow: "#ffb347", Glass: "#3a4a50",
+        }),
+        "arctic": (colours: {
+            Primary: "#d4d8d6", Secondary: "#9ea6a7", Trim: "#4a7fa8", Dark: "#2b3033",
+            Metal: "#8d949a", Rubber: "#222324", Glow: "#7fe6ff", Glass: "#30485a",
+        }),
+        "red_team": (colours: {
+            Primary: "#7a3a30", Secondary: "#4f2a25", Trim: "#d8c27a", Dark: "#262222",
+            Metal: "#8f8b88", Rubber: "#1f1d1d", Glow: "#ff5a3c", Glass: "#3f3436",
+        }),
+        "blue_team": (colours: {
+            Primary: "#3d5a78", Secondary: "#2b3e52", Trim: "#e0c35a", Dark: "#23272c",
+            Metal: "#8d939a", Rubber: "#1e1f21", Glow: "#5ad8ff", Glass: "#2c4652",
+        }),
+    },
+)

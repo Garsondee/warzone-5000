@@ -1,0 +1,15 @@
+[package]
+name = "w5k_tools"
+description = "Command-line tools for warzone-5000: render part previews, export GLB, bake stats"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "w5k"
+path = "src/main.rs"
+
+[dependencies]
+w5k_forge = { path = "../w5k_forge" }
+ron = "0.12"

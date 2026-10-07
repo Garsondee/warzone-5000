@@ -1,0 +1,16 @@
+#![enable(implicit_some)]
+// Medium tank: medium hull, two track units, a 450 kW diesel, medium turret with a 75 mm cannon.
+(
+    id: "tank_medium",
+    name: "Medium tank",
+    hull: "hull_medium",
+    palette: "default",
+    attach: [
+        (socket: "track_r", part: "track_medium"),
+        (socket: "track_l", part: "track_medium", mirror: true),
+        (socket: "engine", part: "engine_diesel_450"),
+        (socket: "turret", part: "turret_medium", children: [
+            (socket: "gun", part: "cannon_75"),
+        ]),
+    ],
+)

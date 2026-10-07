@@ -1,0 +1,20 @@
+#![enable(implicit_some)]
+// 450 kW (600 hp) diesel power pack. Sits inside a hull; part space origin at the base.
+(
+    id: "engine_diesel_450",
+    name: "450 kW diesel",
+    category: Engine,
+    size: Medium,
+    tags: ["engine", "combustion"],
+    shapes: [
+        Box(size: (1.4, 0.75, 1.1), at: (0, 0.375, 0), mat: "machinery", slot: Metal, chamfer: 0.04),
+        Mirror(children: [
+            Box(size: (0.45, 0.12, 0.95), at: (0.35, 0.81, 0), mat: "machinery", slot: Dark, chamfer: 0.02),
+        ]),
+        Box(size: (1.3, 0.5, 0.15), at: (0, 0.45, 0.65), mat: "machinery", slot: Dark, chamfer: 0.02),
+    ],
+    sockets: [
+        (name: "mount", kind: Mount, size: Medium, at: (0, 0, 0), normal: (0, -1, 0)),
+    ],
+    function: (power_kw: 450),
+)
