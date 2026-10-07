@@ -73,6 +73,8 @@ struct Target {
     outer: Vec<Plane>,
     /// Inset planes of a shell piece (`None` for solid pieces).
     inner: Option<Vec<Plane>>,
+    /// Whether the shell's inside is vital space (otherwise it is air between two walls).
+    vital: bool,
     hardness: f64,
 }
 
@@ -88,6 +90,7 @@ pub fn armour_table(pieces: &[Piece], lib: &MaterialLibrary) -> ArmourTable {
                 radius,
                 outer: p.convex.planes.clone(),
                 inner: p.inner().map(|c| c.planes),
+                vital: p.vital,
                 hardness: lib.materials.get(&p.mat).map(|m| m.hardness).unwrap_or(1.0),
             }
         })
@@ -206,12 +209,18 @@ fn cast_ray(targets: &[Target], o: V3, d: V3) -> Ray {
         let Some((a0, a1)) = clip(&t.outer, o, d) else { continue };
         match &t.inner {
             None => solids.push(Seg { a: a0, b: a1, h: t.hardness }),
-            Some(inner) => {
-                walls.push(Seg { a: a0, b: a1, h: t.hardness });
-                if let Some((b0, b1)) = clip(inner, o, d) {
+            Some(inner) => match clip(inner, o, d) {
+                Some((b0, b1)) if t.vital => {
+                    walls.push(Seg { a: a0, b: a1, h: t.hardness });
                     ints.push(Seg { a: b0, b: b1, h: 0.0 });
                 }
-            }
+                // A non-vital hollow: two walls with air between.
+                Some((b0, b1)) => {
+                    walls.push(Seg { a: a0, b: b0, h: t.hardness });
+                    walls.push(Seg { a: b1, b: a1, h: t.hardness });
+                }
+                None => walls.push(Seg { a: a0, b: a1, h: t.hardness }),
+            },
         }
     }
     if solids.is_empty() && walls.is_empty() {

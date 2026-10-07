@@ -1,0 +1,21 @@
+#![enable(implicit_some)]
+// Eight-legged walker: the spider body on long legs, a 900 kW turbine, a sensor mast and a 75 mm chin gun.
+(
+    id: "walker_spider",
+    name: "Spider walker",
+    hull: "walker_body_spider",
+    palette: "red_team",
+    attach: [
+        (socket: "leg_r1", part: "leg_spider_long"),
+        (socket: "leg_r2", part: "leg_spider_long"),
+        (socket: "leg_r3", part: "leg_spider_long"),
+        (socket: "leg_r4", part: "leg_spider_long"),
+        (socket: "leg_l1", part: "leg_spider_long", mirror: true),
+        (socket: "leg_l2", part: "leg_spider_long", mirror: true),
+        (socket: "leg_l3", part: "leg_spider_long", mirror: true),
+        (socket: "leg_l4", part: "leg_spider_long", mirror: true),
+        (socket: "engine", part: "engine_turbine_900", spin: 90),
+        (socket: "mast", part: "sensor_mast"),
+        (socket: "gun", part: "cannon_75"),
+    ],
+)

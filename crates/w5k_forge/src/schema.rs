@@ -203,6 +203,26 @@ pub enum Node {
         #[serde(default)]
         chamfer: f64,
     },
+    /// A straight member from `from` to `to` (legs, struts, arms, rams): a box section `size` = (width,
+    /// height) at `from`, tapering to `end` (default: the same) at `to`. The height is measured along `up`
+    /// (made perpendicular to the beam); the width across it.
+    Beam {
+        from: [f64; 3],
+        to: [f64; 3],
+        size: [f64; 2],
+        #[serde(default)]
+        end: Option<[f64; 2]>,
+        #[serde(default = "up")]
+        up: [f64; 3],
+        #[serde(default = "steel")]
+        mat: String,
+        #[serde(default)]
+        slot: Slot,
+        #[serde(default)]
+        shell: Option<f64>,
+        #[serde(default)]
+        chamfer: f64,
+    },
     /// Convex hull of explicit points.
     Hull {
         points: Vec<[f64; 3]>,
@@ -296,6 +316,18 @@ pub struct Function {
     /// Sensor range (m) for sensor parts.
     #[serde(default)]
     pub sensor_m: f64,
+    /// For rotor parts: rotor radius (m). Hover power depends on the total disc area.
+    #[serde(default)]
+    pub rotor_radius_m: f64,
+    /// For locomotion parts: the fastest this running gear allows (gearing, suspension or gait), km/h.
+    #[serde(default)]
+    pub max_kmh: Option<f64>,
+}
+
+impl PartDef {
+    pub fn vital_interior(&self) -> bool {
+        self.vital.unwrap_or(matches!(self.category, Category::Hull | Category::Turret))
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -313,6 +345,10 @@ pub struct PartDef {
     /// Voxel cells along the longest axis for statistics (default 64).
     #[serde(default)]
     pub voxels: Option<u32>,
+    /// Whether the inside of this part's shells is vital space (crew, ammunition, engine bay) that a shot must
+    /// not reach. Defaults to true for hulls and turrets; the hollow of a leg or a mast is just air.
+    #[serde(default)]
+    pub vital: Option<bool>,
     pub shapes: Vec<Node>,
     #[serde(default)]
     pub sockets: Vec<SocketDef>,

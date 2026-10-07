@@ -1,0 +1,41 @@
+#![enable(implicit_some)]
+// Spider walker body: an armoured ellipsoid with a hard carapace, a sensor head and eight hip sockets on a
+// ring below the centre. Part space origin at the body centre; with the long legs the body rides 3.8 m up.
+(
+    id: "walker_body_spider",
+    name: "Spider walker body",
+    category: Hull,
+    size: Large,
+    tags: ["walker", "ground"],
+    shapes: [
+        Sphere(radius: 1.4, segments: 14, scale: (1.0, 0.55, 1.2), shell: 0.05, chamfer: 0.03),
+        // Hard upper carapace.
+        Sphere(radius: 1.3, segments: 14, scale: (1.05, 0.35, 1.15), at: (0, 0.42, 0.1), mat: "hard_steel", slot: Secondary, shell: 0.06, chamfer: 0.03),
+        // Sensor head with three pairs of eyes.
+        Box(size: (0.8, 0.45, 0.6), taper: (0.8, 0.7), at: (0, 0.12, -1.55), shell: 0.04, chamfer: 0.06),
+        Mirror(children: [
+            Sphere(radius: 0.065, segments: 8, at: (0.2, 0.22, -1.83), mat: "glass", slot: Glow),
+            Sphere(radius: 0.05, segments: 8, at: (0.31, 0.1, -1.83), mat: "glass", slot: Glow),
+            Sphere(radius: 0.04, segments: 8, at: (0.1, 0.06, -1.86), mat: "glass", slot: Glow),
+        ]),
+        // Hip ring underneath.
+        Cylinder(radius: 1.05, length: 0.35, segments: 16, at: (0, -0.42, 0), mat: "machinery", slot: Dark, shell: 0.04),
+        // Exhaust stacks for the turbine.
+        Mirror(children: [
+            Cylinder(radius: 0.09, length: 0.4, segments: 8, at: (0.55, 0.62, 1.05), rot: (-25, 0, 0), mat: "fittings", slot: Dark),
+        ]),
+    ],
+    sockets: [
+        (name: "leg_r1", kind: LegHip, size: Large, at: (0.631, -0.42, -0.901), normal: (0.5736, 0, -0.8192), forward: (0, 1, 0)),
+        (name: "leg_r2", kind: LegHip, size: Large, at: (1.034, -0.42, -0.376), normal: (0.9397, 0, -0.342), forward: (0, 1, 0)),
+        (name: "leg_r3", kind: LegHip, size: Large, at: (1.034, -0.42, 0.376), normal: (0.9397, 0, 0.342), forward: (0, 1, 0)),
+        (name: "leg_r4", kind: LegHip, size: Large, at: (0.631, -0.42, 0.901), normal: (0.5736, 0, 0.8192), forward: (0, 1, 0)),
+        (name: "leg_l1", kind: LegHip, size: Large, at: (-0.631, -0.42, -0.901), normal: (-0.5736, 0, -0.8192), forward: (0, 1, 0)),
+        (name: "leg_l2", kind: LegHip, size: Large, at: (-1.034, -0.42, -0.376), normal: (-0.9397, 0, -0.342), forward: (0, 1, 0)),
+        (name: "leg_l3", kind: LegHip, size: Large, at: (-1.034, -0.42, 0.376), normal: (-0.9397, 0, 0.342), forward: (0, 1, 0)),
+        (name: "leg_l4", kind: LegHip, size: Large, at: (-0.631, -0.42, 0.901), normal: (-0.5736, 0, 0.8192), forward: (0, 1, 0)),
+        (name: "mast", kind: Utility, size: Medium, at: (0, 0.77, 0.35), normal: (0, 1, 0)),
+        (name: "gun", kind: Hardpoint, size: Medium, at: (0, -0.42, -1.33), normal: (0, 0, -1), forward: (0, 1, 0)),
+        (name: "engine", kind: Internal, size: Large, at: (0, -0.35, 0.3), normal: (0, 1, 0)),
+    ],
+)

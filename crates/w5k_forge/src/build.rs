@@ -18,6 +18,8 @@ pub struct Piece {
     pub shell: Option<f64>,
     /// Which part this piece belongs to (index into a vehicle's part list; 0 for a single part).
     pub part: u16,
+    /// Whether the inside of this piece's shell is vital space (see `PartDef::vital`).
+    pub vital: bool,
 }
 
 impl Piece {
@@ -31,7 +33,7 @@ impl Piece {
         if poly.faces.len() < 4 {
             return None;
         }
-        Some(Piece { convex, poly, mat: mat.to_string(), slot, shell, part: 0 })
+        Some(Piece { convex, poly, mat: mat.to_string(), slot, shell, part: 0, vital: true })
     }
 
     /// The inset region of a shell piece (every face moved inward by the shell thickness). For a convex shape
@@ -60,7 +62,15 @@ impl Piece {
     pub fn transformed(&self, x: &Xform, part: u16) -> Piece {
         let convex = self.convex.transformed(x);
         let poly = convex.polyhedron();
-        Piece { convex, poly, mat: self.mat.clone(), slot: self.slot, shell: self.shell.map(|s| s * x.m.det().abs().cbrt()), part }
+        Piece {
+            convex,
+            poly,
+            mat: self.mat.clone(),
+            slot: self.slot,
+            shell: self.shell.map(|s| s * x.m.det().abs().cbrt()),
+            part,
+            vital: self.vital,
+        }
     }
 }
 
@@ -137,11 +147,35 @@ pub fn sphere_points(radius: f64, segments: u32, scale: [f64; 3]) -> Vec<V3> {
     p
 }
 
+/// Points of a beam from `a` to `b`: a box section (width, height) at each end, height along `up`.
+pub fn beam_points(a: V3, b: V3, start: [f64; 2], end: [f64; 2], up: V3) -> Vec<V3> {
+    let u = (b - a).norm();
+    let mut h = up - u * up.dot(u);
+    if h.len() < 1e-9 {
+        h = u.any_perp();
+    }
+    let h = h.norm();
+    let w = u.cross(h);
+    let mut p = Vec::with_capacity(8);
+    for (c, s) in [(a, start), (b, end)] {
+        for sw in [-0.5, 0.5] {
+            for sh in [-0.5, 0.5] {
+                p.push(c + w * (sw * s[0]) + h * (sh * s[1]));
+            }
+        }
+    }
+    p
+}
+
 /// Build all pieces of a part.
 pub fn build_part(def: &PartDef) -> Vec<Piece> {
     let mut out = Vec::new();
     for n in &def.shapes {
         build_node(n, &Xform::IDENTITY, &mut out);
+    }
+    let vital = def.vital_interior();
+    for p in &mut out {
+        p.vital = vital;
     }
     out
 }
@@ -177,6 +211,10 @@ fn build_node(node: &Node, parent: &Xform, out: &mut Vec<Piece>) {
         Node::Sphere { radius, segments, scale, at, rot, mat, slot, shell, chamfer } => {
             let x = parent.compose(&local(*at, *rot));
             emit(sphere_points(*radius, *segments, scale.unwrap_or([1.0, 1.0, 1.0])), &x, *chamfer, mat, *slot, *shell, out);
+        }
+        Node::Beam { from, to, size, end, up, mat, slot, shell, chamfer } => {
+            let pts = beam_points(V3::from_arr(*from), V3::from_arr(*to), *size, end.unwrap_or(*size), V3::from_arr(*up));
+            emit(pts, parent, *chamfer, mat, *slot, *shell, out);
         }
         Node::Hull { points, at, rot, mat, slot, shell, chamfer } => {
             let x = parent.compose(&local(*at, *rot));

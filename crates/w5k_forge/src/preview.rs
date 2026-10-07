@@ -252,6 +252,14 @@ fn mass_text(kg: f64) -> String {
     }
 }
 
+fn kw_text(kw: f64) -> String {
+    if kw < 10.0 {
+        format!("{kw:.1}")
+    } else {
+        format!("{kw:.0}")
+    }
+}
+
 /// Human-readable stats for the panel under the views.
 pub fn stats_lines(st: &StatsFile, grid_m: f64) -> Vec<(String, Rgb)> {
     let m = &st.mass;
@@ -274,8 +282,10 @@ pub fn stats_lines(st: &StatsFile, grid_m: f64) -> Vec<(String, Rgb)> {
         (format!("area m2: front {:.2}  side {:.2}  top {:.2}", a.at(0.0, 0.0).area_m2, a.at(90.0, 0.0).area_m2, a.at(0.0, 90.0).area_m2), TEXT),
     ];
     if let Some(v) = &st.vehicle {
-        out.push((format!("power {:.0} kW   draw {:.0} kW   load {}", v.power_kw, v.draw_kw, mass_text(v.load_kg)), TEXT));
-        out.push((format!("top speed {:.0} km/h   {:.1} kW/t   {:?}", v.top_speed_kmh, v.power_to_weight_kw_t, v.locomotion), TEXT));
+        out.push((format!("power {} kW   draw {} kW   load {}", kw_text(v.power_kw), kw_text(v.draw_kw), mass_text(v.load_kg)), TEXT));
+        out.push((format!("top speed {:.0} km/h ({})   {:.1} kW/t", v.top_speed_kmh, v.speed_limited_by, v.power_to_weight_kw_t), TEXT));
+        let hover = if v.hover_kw > 0.0 { format!("   hover {} kW", kw_text(v.hover_kw)) } else { String::new() };
+        out.push((format!("{:?}{hover}", v.locomotion), TEXT));
         for p in &v.problems {
             out.push((format!("! {p}"), WARN));
         }

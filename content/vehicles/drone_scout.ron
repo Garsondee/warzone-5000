@@ -1,0 +1,15 @@
+#![enable(implicit_some)]
+// Scout quadrotor: about 6 kg, a camera pod and four rotor arms.
+(
+    id: "drone_scout",
+    name: "Scout drone",
+    hull: "drone_body_small",
+    palette: "blue_team",
+    attach: [
+        (socket: "rotor_fr", part: "rotor_small"),
+        (socket: "rotor_fl", part: "rotor_small"),
+        (socket: "rotor_rr", part: "rotor_small"),
+        (socket: "rotor_rl", part: "rotor_small"),
+        (socket: "chin", part: "camera_pod_small"),
+    ],
+)

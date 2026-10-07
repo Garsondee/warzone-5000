@@ -103,10 +103,42 @@ pub struct VehicleSheet {
     pub locomotion: Vec<Locomotion>,
     /// Frontal area used for drag (m^2).
     pub frontal_m2: f64,
-    /// Top speed on flat ground from the power balance (km/h); 0 when the vehicle cannot move.
+    /// Top speed on flat ground (km/h); 0 when the vehicle cannot move.
     pub top_speed_kmh: f64,
+    /// What sets the top speed: "power" (the power balance) or "running gear" (a locomotion part's limit).
+    #[serde(default)]
+    pub speed_limited_by: String,
+    /// Power needed just to hover (rotorcraft), kW.
+    #[serde(default)]
+    pub hover_kw: f64,
     pub power_to_weight_kw_t: f64,
     pub problems: Vec<String>,
+}
+
+/// Fraction of engine power (after what other systems draw) that ends up pushing the vehicle along.
+pub fn drive_efficiency(l: Locomotion) -> f64 {
+    match l {
+        Locomotion::Wheels => 0.9,
+        Locomotion::HalfTracks => 0.85,
+        Locomotion::Tracks => 0.8,
+        Locomotion::Legs => 0.6,
+        Locomotion::Hover => 0.7,
+        Locomotion::AntiGrav => 0.7,
+        Locomotion::Rotor => 0.5,
+        Locomotion::Jet => 0.6,
+    }
+}
+
+/// Ideal hover power of rotors from actuator-disc (momentum) theory: lifting weight `w` (N) through total
+/// disc area `area` (m^2) accelerates air downward, costing w^1.5 / sqrt(2 rho A). Real rotors reach about
+/// 70% of that ideal (their "figure of merit").
+pub fn hover_power_w(w: f64, area: f64) -> f64 {
+    const RHO: f64 = 1.225;
+    const FIGURE_OF_MERIT: f64 = 0.7;
+    if area <= 0.0 {
+        return f64::INFINITY;
+    }
+    w.powf(1.5) / (2.0 * RHO * area).sqrt() / FIGURE_OF_MERIT
 }
 
 /// Solve P = c1 v + c3 v^3 for v >= 0 (Newton's method; the function is monotonic).

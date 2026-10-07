@@ -1,0 +1,25 @@
+#![enable(implicit_some)]
+// Rotor arm with motor and a two-blade propeller. Part space: mount at the arm root, the arm runs along +X.
+// The faint disc stands for the spinning blades.
+(
+    id: "rotor_small",
+    name: "Small rotor arm",
+    category: Locomotion,
+    size: Tiny,
+    tags: ["rotor", "air"],
+    shapes: [
+        Box(size: (0.3, 0.022, 0.035), at: (0.15, 0, 0), mat: "composite", slot: Dark, chamfer: 0.004),
+        Cylinder(radius: 0.032, length: 0.045, segments: 10, at: (0.31, 0.02, 0), mat: "machinery", slot: Metal, chamfer: 0.004),
+        Cylinder(radius: 0.012, length: 0.02, segments: 8, at: (0.31, 0.05, 0), mat: "fittings", slot: Trim),
+        Cylinder(radius: 0.17, length: 0.002, segments: 18, at: (0.31, 0.046, 0), mat: "fittings", slot: Glass),
+        Group(at: (0.31, 0.049, 0), rot: (0, 25, 0), children: [
+            Box(size: (0.33, 0.005, 0.026), mat: "composite", slot: Dark),
+        ]),
+        // Navigation light under the motor.
+        Box(size: (0.02, 0.012, 0.02), at: (0.31, -0.017, 0), mat: "fittings", slot: Glow),
+    ],
+    sockets: [
+        (name: "mount", kind: Mount, size: Tiny, at: (0, 0, 0), normal: (-1, 0, 0), forward: (0, 1, 0)),
+    ],
+    function: (locomotion: Rotor, rotor_radius_m: 0.17, max_kmh: 120),
+)

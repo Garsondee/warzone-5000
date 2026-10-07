@@ -82,7 +82,8 @@ impl Convex {
                     if above {
                         pl = Plane { n: -pl.n, d: -pl.d };
                     }
-                    if !planes.iter().any(|q| (q.n - pl.n).len() < 1e-9 && (q.d - pl.d).abs() < tol) {
+                    // Points that are coplanar only up to rounding give several almost identical planes; keep one.
+                    if !planes.iter().any(|q| (q.n - pl.n).len() < 1e-6 && (q.d - pl.d).abs() < 1e-6 * scale) {
                         planes.push(pl);
                     }
                 }
@@ -133,8 +134,14 @@ impl Convex {
                 let ab = db.dot(w).atan2(db.dot(u));
                 aa.partial_cmp(&ab).unwrap()
             });
-            // Skip duplicate planes that produce the same face.
-            if faces.iter().any(|f: &Face| (f.plane.n - pl.n).len() < 1e-9 && (f.plane.d - pl.d).abs() < 1e-7) {
+            // Skip duplicate (or nearly coincident) planes that produce the same face.
+            let mut key = on.clone();
+            key.sort_unstable();
+            if faces.iter().any(|f: &Face| {
+                let mut k = f.idx.clone();
+                k.sort_unstable();
+                k == key || ((f.plane.n - pl.n).len() < 1e-6 && (f.plane.d - pl.d).abs() < 1e-6)
+            }) {
                 continue;
             }
             faces.push(Face { plane: *pl, kind: self.kinds[pi], idx: on });

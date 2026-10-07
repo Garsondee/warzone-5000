@@ -1,0 +1,25 @@
+#![enable(implicit_some)]
+// Remote weapon station with a heavy machine gun: small, light, unmanned (so its inside is not vital).
+(
+    id: "rws_mg",
+    name: "MG weapon station",
+    category: Weapon,
+    size: Small,
+    tags: ["kinetic", "direct", "calibre_12"],
+    shapes: [
+        Cylinder(radius: 0.4, length: 0.1, segments: 12, at: (0, 0.05, 0), mat: "machinery", slot: Dark),
+        Box(size: (0.55, 0.35, 0.6), taper: (0.85, 0.85), at: (0, 0.275, 0), mat: "hard_steel", shell: 0.012, chamfer: 0.03),
+        // Gun and its cradle.
+        Box(size: (0.14, 0.14, 0.45), at: (0.15, 0.3, -0.35), mat: "steel", slot: Dark, chamfer: 0.015),
+        Cylinder(radius: 0.022, length: 1.0, axis: Z, segments: 6, at: (0.15, 0.3, -1.0), mat: "steel", slot: Dark),
+        Cylinder(radius: 0.035, length: 0.12, axis: Z, segments: 6, at: (0.15, 0.3, -1.52), mat: "steel", slot: Dark),
+        // Ammunition box and sight.
+        Box(size: (0.18, 0.2, 0.3), at: (-0.33, 0.3, 0.05), mat: "fittings", slot: Secondary, chamfer: 0.02),
+        Box(size: (0.18, 0.14, 0.22), at: (-0.12, 0.52, -0.1), mat: "electronics", slot: Secondary, chamfer: 0.02),
+        Box(size: (0.12, 0.08, 0.02), at: (-0.12, 0.52, -0.215), mat: "glass", slot: Glass),
+    ],
+    sockets: [
+        (name: "mount", kind: Mount, size: Small, at: (0, 0, 0), normal: (0, -1, 0)),
+    ],
+    function: (draw_kw: 1, sensor_m: 800),
+)

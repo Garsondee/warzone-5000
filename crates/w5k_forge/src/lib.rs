@@ -23,7 +23,7 @@ use armour::ArmourTable;
 use assemble::{power_balance_speed, Assembly, VehicleSheet};
 use build::Piece;
 use mesh::Mesh;
-use schema::{DesignDef, MaterialLibrary, PartDef};
+use schema::{DesignDef, Locomotion, MaterialLibrary, PartDef};
 use voxel::{Grid, MassProps};
 
 /// Default (minimum) voxel resolution along the longest axis.
@@ -183,16 +183,24 @@ impl Forge {
     fn vehicle_sheet(&self, asm: &Assembly, built: &Built) -> VehicleSheet {
         let mut s = VehicleSheet { mass_kg: built.mass.mass_kg, problems: asm.errors.clone(), ..Default::default() };
         let mut rolling = Vec::new();
+        let mut efficiency = Vec::new();
+        let mut gear_limit = f64::INFINITY;
+        let mut disc_area = 0.0;
         for (id, _) in &asm.parts {
             let f = &self.parts[id].def.function;
             s.power_kw += f.power_kw;
             s.draw_kw += f.draw_kw;
             s.load_kg += f.load_kg;
+            disc_area += std::f64::consts::PI * f.rotor_radius_m * f.rotor_radius_m;
             if let Some(l) = f.locomotion {
                 if !s.locomotion.contains(&l) {
                     s.locomotion.push(l);
                 }
-                rolling.push(f.rolling.unwrap_or(0.03));
+                // Rolling resistance belongs to ground contact; flyers and hovering craft have none.
+                let grounded = !matches!(l, Locomotion::Rotor | Locomotion::Jet | Locomotion::AntiGrav | Locomotion::Hover);
+                rolling.push(if grounded { f.rolling.unwrap_or(0.03) } else { 0.0 });
+                efficiency.push(assemble::drive_efficiency(l));
+                gear_limit = gear_limit.min(f.max_kmh.unwrap_or(f64::INFINITY));
             }
         }
         // Frontal area: the silhouette seen from straight ahead.
@@ -211,11 +219,27 @@ impl Forge {
         if s.draw_kw > s.power_kw {
             s.problems.push(format!("power deficit: draws {:.0} kW of {:.0} kW", s.draw_kw, s.power_kw));
         }
-        let crr = if rolling.is_empty() { 0.0 } else { rolling.iter().sum::<f64>() / rolling.len() as f64 };
-        let net_kw = (s.power_kw - s.draw_kw).max(0.0) * 0.8; // drivetrain efficiency
-        let c1 = crr * s.mass_kg * 9.81;
+        let mean = |v: &[f64]| if v.is_empty() { 0.0 } else { v.iter().sum::<f64>() / v.len() as f64 };
+        let weight_n = s.mass_kg * 9.81;
+        let mut spare_kw = (s.power_kw - s.draw_kw).max(0.0);
+        if s.locomotion.contains(&Locomotion::Rotor) {
+            s.hover_kw = assemble::hover_power_w(weight_n, disc_area) / 1000.0;
+            if s.hover_kw > spare_kw {
+                s.problems.push(format!("cannot hover: needs {:.1} kW, has {:.1} kW", s.hover_kw, spare_kw));
+            }
+            spare_kw = (spare_kw - s.hover_kw).max(0.0);
+        }
+        let net_kw = spare_kw * mean(&efficiency);
+        let c1 = mean(&rolling) * weight_n;
         let c3 = 0.5 * 1.225 * 0.9 * s.frontal_m2;
-        s.top_speed_kmh = if s.locomotion.is_empty() { 0.0 } else { power_balance_speed(net_kw * 1000.0, c1, c3) * 3.6 };
+        let by_power = if s.locomotion.is_empty() { 0.0 } else { power_balance_speed(net_kw * 1000.0, c1, c3) * 3.6 };
+        if by_power > gear_limit {
+            s.top_speed_kmh = gear_limit;
+            s.speed_limited_by = "running gear".into();
+        } else {
+            s.top_speed_kmh = by_power;
+            s.speed_limited_by = "power".into();
+        }
         s
     }
 
@@ -236,7 +260,7 @@ fn collect_materials(def: &PartDef) -> Vec<String> {
     fn walk(n: &schema::Node, out: &mut Vec<String>) {
         use schema::Node::*;
         match n {
-            Box { mat, .. } | Wedge { mat, .. } | Cylinder { mat, .. } | Sphere { mat, .. } | Hull { mat, .. } => {
+            Box { mat, .. } | Wedge { mat, .. } | Cylinder { mat, .. } | Sphere { mat, .. } | Beam { mat, .. } | Hull { mat, .. } => {
                 if !out.contains(mat) {
                     out.push(mat.clone());
                 }

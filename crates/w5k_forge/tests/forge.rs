@@ -330,3 +330,31 @@ fn builds_are_repeatable() {
     assert_eq!(ron::to_string(&a.armour).unwrap(), ron::to_string(&b.armour).unwrap());
     assert_eq!(a.mass.mass_kg.to_bits(), b.mass.mass_kg.to_bits());
 }
+
+#[test]
+fn hollow_legs_are_not_vital_space() {
+    // The same hollow box as a hull (vital inside) and as a leg (just air inside).
+    let f = forge(&[
+        r#"(id: "core", name: "core", category: Hull, shapes: [Box(size: (1.0, 1.0, 1.0), shell: 0.05)])"#,
+        r#"(id: "tube", name: "tube", category: Leg, shapes: [Box(size: (1.0, 1.0, 1.0), shell: 0.05)])"#,
+    ]);
+    let core = f.build_part("core").unwrap();
+    let tube = f.build_part("tube").unwrap();
+    assert!(core.armour.at(0.0, 0.0).vital_m2 > 0.5);
+    assert_eq!(tube.armour.at(0.0, 0.0).vital_m2, 0.0);
+    assert!(tube.armour.at(0.0, 0.0).area_m2 > 0.9);
+    assert_eq!(tube.mass.internal_m3, 0.0);
+    // Mass is the same either way: the walls are the walls.
+    assert!(rel(tube.mass.mass_kg, core.mass.mass_kg) < 1e-9);
+}
+
+#[test]
+fn rotorcraft_pay_hover_power() {
+    use w5k_forge::assemble::hover_power_w;
+    // Momentum theory: doubling the disc area cuts ideal hover power by sqrt(2).
+    let (a, b) = (hover_power_w(1000.0, 1.0), hover_power_w(1000.0, 2.0));
+    assert!(rel(a / b, 2f64.sqrt()) < 1e-12);
+    let f = Forge::load(&content_dir()).unwrap();
+    let (_, _, sheet) = f.build_design(&f.designs["drone_scout"]);
+    assert!(sheet.hover_kw > 0.1 && sheet.hover_kw < sheet.power_kw, "hover {} of {}", sheet.hover_kw, sheet.power_kw);
+}

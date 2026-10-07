@@ -1,0 +1,18 @@
+#![enable(implicit_some)]
+// Wheeled armoured personnel carrier: light 6x6 hull, six wheels, a 250 kW diesel and an MG station.
+(
+    id: "apc_6x6",
+    name: "6x6 APC",
+    hull: "hull_light_6x6",
+    palette: "desert",
+    attach: [
+        (socket: "wheel_r1", part: "wheel_medium"),
+        (socket: "wheel_r2", part: "wheel_medium"),
+        (socket: "wheel_r3", part: "wheel_medium"),
+        (socket: "wheel_l1", part: "wheel_medium", mirror: true),
+        (socket: "wheel_l2", part: "wheel_medium", mirror: true),
+        (socket: "wheel_l3", part: "wheel_medium", mirror: true),
+        (socket: "engine", part: "engine_diesel_250"),
+        (socket: "turret", part: "rws_mg"),
+    ],
+)

@@ -129,7 +129,12 @@ pub fn voxelise(pieces: &[Piece], res: u32) -> Grid {
                             }
                             bits[i] |= SOLID;
                         }
-                        Some(q) if q.contains(c, 0.0) => bits[i] |= INNER,
+                        // The hollow of a non-vital shell (a leg tube) is just air.
+                        Some(q) if q.contains(c, 0.0) => {
+                            if p.vital {
+                                bits[i] |= INNER;
+                            }
+                        }
                         Some(_) => {
                             g.claims[pi] += 1;
                             if bits[i] & (SOLID | WALL) == 0 {

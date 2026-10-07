@@ -1,0 +1,52 @@
+#![enable(implicit_some)]
+// Light wheeled hull (6x6): aluminium armour, front engine bay, troop compartment with a rear door.
+// Vehicle space: ground at y = 0; the body runs from 0.8 m to 1.85 m, 6 m long and 2.3 m wide.
+(
+    id: "hull_light_6x6",
+    name: "Light 6x6 hull",
+    category: Hull,
+    size: Medium,
+    tags: ["wheeled", "ground"],
+    shapes: [
+        // Body: sloped nose, sides leaning in toward the roof.
+        Hull(
+            points: [
+                (-1.15, 0.8, 2.9), (-1.0, 1.85, 2.9), (-1.0, 1.85, -1.4), (-1.0, 1.35, -3.0), (-1.15, 1.0, -3.0), (-1.15, 0.8, -2.4),
+                ( 1.15, 0.8, 2.9), ( 1.0, 1.85, 2.9), ( 1.0, 1.85, -1.4), ( 1.0, 1.35, -3.0), ( 1.15, 1.0, -3.0), ( 1.15, 0.8, -2.4),
+            ],
+            mat: "aluminium", shell: 0.04, chamfer: 0.04,
+        ),
+        // Rear door outline and its window.
+        Box(size: (1.3, 0.85, 0.04), at: (0, 1.3, 2.91), mat: "fittings", slot: Secondary, chamfer: 0.015),
+        Box(size: (0.3, 0.12, 0.03), at: (0, 1.55, 2.94), mat: "glass", slot: Glass),
+        // Wheel arches.
+        Mirror(children: [
+            Array(count: 3, step: (0, 0, 2.0), children: [
+                Box(size: (0.74, 0.05, 1.3), at: (1.45, 1.22, -2.0), mat: "fittings", slot: Secondary, chamfer: 0.012),
+            ]),
+            // Vision blocks along the troop compartment.
+            Array(count: 3, step: (0, 0, 0.7), children: [
+                Box(size: (0.04, 0.1, 0.22), at: (1.07, 1.62, 0.3), rot: (0, 0, -8), mat: "glass", slot: Glass),
+            ]),
+            // Headlights and the driver's window.
+            Box(size: (0.18, 0.1, 0.06), at: (0.82, 1.2, -3.01), mat: "fittings", slot: Glow),
+        ]),
+        Box(size: (0.7, 0.14, 0.05), at: (0, 1.7, -1.75), rot: (-17, 0, 0), mat: "glass", slot: Glass),
+        // Engine grille on the nose.
+        Array(count: 4, step: (0, 0, 0.22), children: [
+            Box(size: (1.2, 0.04, 0.09), at: (0, 1.86, -1.05), mat: "fittings", slot: Dark),
+        ]),
+        // Stowage on the roof.
+        Box(size: (0.5, 0.2, 1.0), at: (-0.55, 1.95, 1.9), mat: "fittings", slot: Trim, chamfer: 0.03),
+    ],
+    sockets: [
+        (name: "turret", kind: TurretRing, size: Small, at: (0, 1.85, 0.4), normal: (0, 1, 0)),
+        (name: "wheel_r1", kind: Locomotion, size: Medium, at: (1.15, 1.0, -2.0), normal: (1, 0, 0)),
+        (name: "wheel_r2", kind: Locomotion, size: Medium, at: (1.15, 1.0, 0.0), normal: (1, 0, 0)),
+        (name: "wheel_r3", kind: Locomotion, size: Medium, at: (1.15, 1.0, 2.0), normal: (1, 0, 0)),
+        (name: "wheel_l1", kind: Locomotion, size: Medium, at: (-1.15, 1.0, -2.0), normal: (-1, 0, 0)),
+        (name: "wheel_l2", kind: Locomotion, size: Medium, at: (-1.15, 1.0, 0.0), normal: (-1, 0, 0)),
+        (name: "wheel_l3", kind: Locomotion, size: Medium, at: (-1.15, 1.0, 2.0), normal: (-1, 0, 0)),
+        (name: "engine", kind: Internal, size: Medium, at: (0, 0.84, -1.25), normal: (0, 1, 0)),
+    ],
+)

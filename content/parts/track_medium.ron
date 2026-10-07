@@ -33,5 +33,5 @@
     sockets: [
         (name: "mount", kind: Mount, size: Medium, at: (-0.3, 0, 0), normal: (-1, 0, 0)),
     ],
-    function: (locomotion: Tracks, load_kg: 30000, rolling: 0.06, traction: 0.9),
+    function: (locomotion: Tracks, load_kg: 30000, rolling: 0.06, traction: 0.9, max_kmh: 65),
 )

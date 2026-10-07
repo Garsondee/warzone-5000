@@ -1,0 +1,20 @@
+#![enable(implicit_some)]
+// 250 kW (335 hp) diesel power pack for light vehicles. Part space origin at the base.
+(
+    id: "engine_diesel_250",
+    name: "250 kW diesel",
+    category: Engine,
+    size: Small,
+    tags: ["engine", "combustion"],
+    shapes: [
+        Box(size: (1.1, 0.6, 0.85), at: (0, 0.3, 0), mat: "machinery", slot: Metal, chamfer: 0.035),
+        Mirror(children: [
+            Box(size: (0.36, 0.1, 0.75), at: (0.27, 0.65, 0), mat: "machinery", slot: Dark, chamfer: 0.015),
+        ]),
+        Box(size: (1.0, 0.42, 0.12), at: (0, 0.36, -0.5), mat: "machinery", slot: Dark, chamfer: 0.015),
+    ],
+    sockets: [
+        (name: "mount", kind: Mount, size: Small, at: (0, 0, 0), normal: (0, -1, 0)),
+    ],
+    function: (power_kw: 250),
+)
