@@ -26,6 +26,9 @@ component prototype ([04-parametric-components.md](04-parametric-components.md))
 6. **Shop.** Gold buys new cards, and **licences**: roster slots for more designs and a bigger CP budget.
 7. Back to the bench: refine designs, add new ones, retire failures.
 
+**Run structure (owner, 2026-10-08):** a player has **three lives**. A battle in which all their units are destroyed
+costs a life; losing all three ends the run. **Ten victories** against other players make the run golden: a win.
+
 ## Command points: pricing a design
 The CP price decides whether swarms or titans win, so it must price **combat value**, not just size.
 
@@ -94,7 +97,7 @@ the roadmap.
   later) produces them and they travel with the roster.
 
 ## Open questions for the owner
-- Run structure: a fixed number of rounds, or until N losses (like most auto-battlers)?
 - Does the CP budget grow during a run, or do licences add slots under a fixed budget?
+- Is a battle that ends with both sides alive (a timeout) a loss of nothing, or decided on points?
 - Route choice: a handful of lanes per map, or free waypoints?
 - Can designs be retired or sold back in the shop?

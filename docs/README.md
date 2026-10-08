@@ -33,14 +33,17 @@ code or assets. Tables in `docs/research/warzone-2100/data/` are derived referen
 | [03 Part Forge](design/03-part-forge.md) | authoring parts, how mass and armour are measured, vehicles, tools |
 | [04 Parametric components](design/04-parametric-components.md) | slider families, the coupling solver, gun physics |
 | [05 Game loop](design/05-game-loop.md) | draft, design, deploy, battle, shop; Lanchester and terramechanics |
+| [06 Art direction](design/06-art-direction.md) | colour theory, faction palettes, stylised light, the shared design language |
 | [Roadmap](planning/roadmap.md) | milestones and status |
 | [Decision log](planning/decisions.md) | D1 to D6 |
 | [Development environment](planning/dev-environment.md) | Rust, Godot, Blender, cloud sessions |
 | [Theory note: Part Forge](notes/m1-part-forge-theory.md) | half-spaces, sloped armour, sampling, composition, power balance, hover, scaling |
 
-Renders: [overview](assets/forge/overview-m1.png), [medium tank](assets/forge/tank_medium.png),
+Renders: [overview](assets/forge/overview.png), [medium tank](assets/forge/tank_medium.png),
 [spider walker](assets/forge/walker_spider.png), [scout drone](assets/forge/drone_scout.png), [6x6 APC](assets/forge/apc_6x6.png),
-[turret sweep](assets/forge/turret_gun_sweep.png), [slider coupling](assets/forge/turret_gun_coupling.png).
+[turret sweep](assets/forge/turret_gun_sweep.png), [slider coupling](assets/forge/turret_gun_coupling.png),
+[army lineup](assets/forge/lineup_vanguard.png), [factions](assets/forge/factions_bastion_twin.png),
+[hull variants](assets/forge/hull_variants.png).
 
 ## Warzone 2100 research dossier
 

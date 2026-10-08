@@ -178,6 +178,48 @@ impl Image {
     }
 }
 
+/// Blur a buffer in place with `passes` box blurs of radius `r` (three passes approximate a Gaussian).
+pub fn blur(buf: &mut [Rgb], w: usize, h: usize, r: usize, passes: usize) {
+    if r == 0 {
+        return;
+    }
+    let mut tmp = vec![[0.0f32; 3]; buf.len()];
+    let inv = 1.0 / (2 * r + 1) as f32;
+    for _ in 0..passes {
+        // Horizontal then vertical, each a running sum (cost independent of the radius).
+        for (src, dst, len, count, stride, step) in [(0, 1, w, h, w, 1usize), (1, 0, h, w, 1usize, w)] {
+            let (from, to): (&[Rgb], &mut [Rgb]) = if src == 0 { (&*buf, &mut tmp[..]) } else { (&tmp[..], &mut *buf) };
+            let _ = dst;
+            for line in 0..count {
+                let base = line * stride;
+                let at = |k: i64| from[base + (k.clamp(0, len as i64 - 1) as usize) * step];
+                let mut acc = [0.0f32; 3];
+                for k in -(r as i64)..=(r as i64) {
+                    let c = at(k);
+                    for ch in 0..3 {
+                        acc[ch] += c[ch];
+                    }
+                }
+                for x in 0..len {
+                    to[base + x * step] = scale(acc, inv);
+                    let (add, sub) = (at(x as i64 + r as i64 + 1), at(x as i64 - r as i64));
+                    for ch in 0..3 {
+                        acc[ch] += add[ch] - sub[ch];
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// ACES filmic tone curve (Narkowicz's fit): bright values roll off smoothly instead of clipping.
+pub fn aces(c: Rgb) -> Rgb {
+    c.map(|x| {
+        let x = x.max(0.0);
+        ((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14)).clamp(0.0, 1.0)
+    })
+}
+
 /// A perspective camera.
 #[derive(Clone, Copy, Debug)]
 pub struct Camera {
@@ -245,11 +287,13 @@ pub fn raster_tri(w: usize, h: usize, p: [[f64; 2]; 3], mut f: impl FnMut(usize,
     }
 }
 
-/// Colour, depth and id buffers.
+/// Colour, emission, depth and id buffers.
 pub struct Target {
     pub w: usize,
     pub h: usize,
     pub colour: Vec<Rgb>,
+    /// Light emitted by the visible surface (for bloom).
+    pub emit: Vec<Rgb>,
     pub depth: Vec<f32>,
     /// 0 = nothing drawn.
     pub id: Vec<u32>,
@@ -257,12 +301,13 @@ pub struct Target {
 
 impl Target {
     pub fn new(w: usize, h: usize) -> Target {
-        Target { w, h, colour: vec![[0.0; 3]; w * h], depth: vec![f32::INFINITY; w * h], id: vec![0; w * h] }
+        Target { w, h, colour: vec![[0.0; 3]; w * h], emit: vec![[0.0; 3]; w * h], depth: vec![f32::INFINITY; w * h], id: vec![0; w * h] }
     }
 
     /// Depth-tested triangle. `p` holds screen x, y and view depth per vertex; `shade` receives
     /// perspective-correct barycentric weights (so attributes interpolate correctly across the 3D face).
-    pub fn triangle(&mut self, p: [[f64; 3]; 3], id: u32, mut shade: impl FnMut([f32; 3]) -> Rgb) {
+    /// `emit` is the light the face gives off.
+    pub fn triangle(&mut self, p: [[f64; 3]; 3], id: u32, emit: Rgb, mut shade: impl FnMut([f32; 3]) -> Rgb) {
         let (w, h) = (self.w, self.h);
         let inv_z = [1.0 / p[0][2], 1.0 / p[1][2], 1.0 / p[2][2]];
         raster_tri(w, h, [[p[0][0], p[0][1]], [p[1][0], p[1][1]], [p[2][0], p[2][1]]], |x, y, b| {
@@ -275,6 +320,7 @@ impl Target {
             let pc = [(b[0] * inv_z[0] / iz) as f32, (b[1] * inv_z[1] / iz) as f32, (b[2] * inv_z[2] / iz) as f32];
             self.depth[i] = z;
             self.id[i] = id;
+            self.emit[i] = emit;
             self.colour[i] = shade(pc);
         });
     }

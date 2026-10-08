@@ -3,7 +3,10 @@
 ## How the owner likes to work
 - **Show the visuals.** Whenever something visible changes (parts, vehicles, previews, UI), render it and
   send the images to the owner (`SendUserFile`), not just a description. Contact sheets come from
-  `cargo run --release -p w5k_tools --bin w5k -- render content --out <dir>`.
+  `cargo run --release -p w5k_tools --bin w5k -- render content --out <dir>`; also `lineup` (one army at true
+  scale, `--palette`), `factions` (one design in every palette) and `family` (slider sweeps and coupling).
+- **Art direction** is in `docs/design/06-art-direction.md`; every new family decorates itself through
+  `crates/w5k_forge/src/family/style.rs` so the army stays consistent.
 - **Teach the theory.** The owner has a computer graphics background and wants to learn: explain the principle
   behind each design or engineering decision (the physics, the maths, the trade-off), briefly and concretely.
 - Design documents live in `docs/design/`, plans and decisions in `docs/planning/`, theory notes in `docs/notes/`.

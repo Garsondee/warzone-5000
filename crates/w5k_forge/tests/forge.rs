@@ -185,6 +185,7 @@ fn armour_follows_thickness_over_cosine() {
         let expect = 50.0 / t.to_radians().cos();
         assert!(rel(front.weak_mm, expect) < 0.03, "tilt {t}: weak {} vs {expect}", front.weak_mm);
         assert!(rel(front.mean_mm, expect) < 0.05, "tilt {t}: mean {} vs {expect}", front.mean_mm);
+        assert!(rel(front.median_mm, expect) < 0.03, "tilt {t}: median {} vs {expect}", front.median_mm);
         assert!(front.mean_mm > last);
         last = front.mean_mm;
         // The side walls are vertical whatever the front does.

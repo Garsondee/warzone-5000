@@ -4,7 +4,7 @@
     id: "apc_6x6",
     name: "6x6 APC",
     hull: "hull_light_6x6",
-    palette: "desert",
+    palette: "verdant",
     attach: [
         (socket: "wheel_r1", part: "wheel_medium"),
         (socket: "wheel_r2", part: "wheel_medium"),

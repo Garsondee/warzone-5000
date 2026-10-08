@@ -94,3 +94,70 @@ fn coupled_sliders_hold_mass_and_respect_locks() {
     assert!(lighter["armour_mm"] > start["armour_mm"]);
     assert!((mass_estimate(&f, &lighter, &lib) / m0 - 1.0).abs() < 0.005);
 }
+
+#[test]
+fn low_turrets_trade_room_for_silhouette() {
+    use w5k_forge::family::turret::layout;
+    let f = TankTurret;
+    let low = layout(&f.with(&[("profile", 0.0)]));
+    let tall = layout(&f.with(&[("profile", 1.0)]));
+    assert!(low.h < tall.h);
+    assert!(low.reload_s(0.0) > tall.reload_s(0.0), "cramped hand loading is slower");
+    assert!(low.depression_deg() < tall.depression_deg(), "less room for the breech to swing up");
+    assert!((low.reload_s(1.0) - tall.reload_s(1.0)).abs() < 1e-9, "an autoloader does not care");
+    let (lb, tb) = (build(&f, &f.with(&[("profile", 0.0)])), build(&f, &f.with(&[("profile", 1.0)])));
+    let (la, ta) = (lb.armour.at(0.0, 0.0).area_m2, tb.armour.at(0.0, 0.0).area_m2);
+    assert!(la < ta, "lower turret, smaller frontal target: {la} vs {ta}");
+}
+
+#[test]
+fn every_family_builds_closed_geometry_across_its_range() {
+    for fam in w5k_forge::family::all() {
+        let params = fam.params();
+        for corner in [0.0, 0.5, 1.0] {
+            let mut v = fam.defaults();
+            for p in &params {
+                v.insert(p.id.to_string(), p.value_at(corner));
+            }
+            let pieces = w5k_forge::build::build_part(&fam.generate(&v));
+            assert!(!pieces.is_empty(), "{} at {corner}", fam.id());
+            for (i, p) in pieces.iter().enumerate() {
+                assert!(p.poly.is_closed(), "{} at {corner}: piece {i} not closed", fam.id());
+            }
+        }
+    }
+}
+
+#[test]
+fn tracks_size_themselves_to_the_hull() {
+    use w5k_forge::family::{hull::Lancer, track::Track, values_for};
+    let hull = Lancer.generate(&Lancer.defaults());
+    let sock = hull.sockets.iter().find(|s| s.name == "track_r").unwrap();
+    let v = values_for(&Track, &Default::default(), &sock.hints);
+    let pieces = w5k_forge::build::build_part(&Track.generate(&v));
+    let (lo, hi) = w5k_forge::voxel::bounds(&pieces);
+    let want = sock.hints["ctx.length"];
+    assert!((hi.z - lo.z) > 0.95 * want && (hi.z - lo.z) < 1.05 * want, "{} vs {want}", hi.z - lo.z);
+    // The track reaches the ground (y = -bottom below the socket).
+    assert!((lo.y + sock.hints["ctx.bottom"]).abs() < 0.05, "{}", lo.y);
+}
+
+#[test]
+fn wider_tracks_lower_ground_pressure() {
+    let mut forge = Forge::load(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../content")).unwrap();
+    let pressure = |forge: &mut Forge, w: f64| {
+        let mut d = forge.designs["lancer_mk1"].clone();
+        let src: w5k_forge::schema::DesignDef =
+            ron::from_str(&std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../content/vehicles/lancer_mk1.ron")).unwrap()).unwrap();
+        d.attach = src.attach.clone();
+        d.hull = src.hull.clone();
+        d.hull_params = src.hull_params.clone();
+        for a in d.attach.iter_mut().filter(|a| a.family.as_deref() == Some("track")) {
+            a.params.insert("width_m".into(), w);
+        }
+        let d = forge.instantiate(&d).unwrap();
+        forge.build_design(&d).2.ground_pressure_kpa
+    };
+    let (narrow, wide) = (pressure(&mut forge, 0.4), pressure(&mut forge, 1.0));
+    assert!(wide < 0.6 * narrow, "{narrow} -> {wide} kPa");
+}

@@ -9,6 +9,10 @@
 //! * **Budgeted**: they compete for the part's mass. With "hold mass" on, moving one makes the unlocked
 //!   budgeted sliders give way so the mass stays put ([`set_slider`]); locked sliders never move.
 
+pub mod engine;
+pub mod hull;
+pub mod style;
+pub mod track;
 pub mod turret;
 
 use std::collections::BTreeMap;
@@ -76,7 +80,7 @@ pub fn stat(name: &str, value: f64, unit: &str) -> Stat {
     Stat { name: name.into(), value, unit: unit.into() }
 }
 
-pub trait Family: Sync {
+pub trait Family: Sync + Send {
     fn id(&self) -> &'static str;
     fn name(&self) -> &'static str;
     fn params(&self) -> Vec<Param>;
@@ -177,5 +181,24 @@ pub fn set_slider(fam: &dyn Family, lib: &MaterialLibrary, values: &Values, id: 
 
 /// All families compiled into the game.
 pub fn all() -> Vec<Box<dyn Family>> {
-    vec![Box::new(turret::TankTurret)]
+    vec![
+        Box::new(turret::TankTurret),
+        Box::new(hull::Lancer),
+        Box::new(hull::Bastion),
+        Box::new(hull::Dreadnought),
+        Box::new(track::Track),
+        Box::new(engine::Engine),
+    ]
+}
+
+/// Slider values for a family: its defaults, then `params`, then context hints (keys starting with `ctx.`).
+pub fn values_for(fam: &dyn Family, params: &BTreeMap<String, f64>, hints: &BTreeMap<String, f64>) -> Values {
+    let mut v = fam.defaults();
+    for (k, x) in params {
+        v.insert(k.clone(), *x);
+    }
+    for (k, x) in hints {
+        v.insert(k.clone(), *x);
+    }
+    v
 }

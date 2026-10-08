@@ -30,8 +30,12 @@ pub struct DirStats {
     pub area_m2: f64,
     /// Part of that area where a shot reaches the interior (m^2).
     pub vital_m2: f64,
-    /// Mean steel-equivalent thickness protecting the interior (mm).
+    /// Mean steel-equivalent thickness protecting the interior (mm). Sensitive to rare, very long paths (a ray
+    /// running down the length of a track), so the median is the better "typical" figure.
     pub mean_mm: f64,
+    /// Median steel-equivalent thickness protecting the interior (mm): what a typical hit faces.
+    #[serde(default)]
+    pub median_mm: f64,
     /// 10th-percentile thickness: the weak spots (mm).
     pub weak_mm: f64,
 }
@@ -145,8 +149,15 @@ fn cast_direction(targets: &[Target], centre: V3, radius: f64, f: V3) -> DirStat
     thick.sort_by(f64::total_cmp);
     let mean = if thick.is_empty() { 0.0 } else { thick.iter().sum::<f64>() / thick.len() as f64 };
     let weak = if thick.is_empty() { 0.0 } else { thick[thick.len() / 10] };
+    let median = if thick.is_empty() { 0.0 } else { thick[thick.len() / 2] };
     let ray_area = spacing * spacing;
-    DirStats { area_m2: hit as f64 * ray_area, vital_m2: thick.len() as f64 * ray_area, mean_mm: mean * 1000.0, weak_mm: weak * 1000.0 }
+    DirStats {
+        area_m2: hit as f64 * ray_area,
+        vital_m2: thick.len() as f64 * ray_area,
+        mean_mm: mean * 1000.0,
+        median_mm: median * 1000.0,
+        weak_mm: weak * 1000.0,
+    }
 }
 
 pub(crate) enum Ray {

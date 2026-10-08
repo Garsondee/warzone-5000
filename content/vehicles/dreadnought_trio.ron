@@ -1,0 +1,22 @@
+#![enable(implicit_some)]
+// A land dreadnought: a 22 m armoured deck on three track sets per side, carrying three 200 mm guns with
+// mechanical loaders, driven by a 6 MW turbine.
+(
+    id: "dreadnought_trio",
+    name: "Dreadnought Trio",
+    hull: "hull_dreadnought",
+    hull_params: { "length_m": 22.0, "width_m": 6.5, "height_m": 2.6, "front_mm": 150, "side_mm": 60, "turrets": 3, "bogies": 3 },
+    palette: "vanguard",
+    attach: [
+        (socket: "track_r1", family: "track", params: { "width_m": 1.4, "wheels": 6 }),
+        (socket: "track_r2", family: "track", params: { "width_m": 1.4, "wheels": 6 }),
+        (socket: "track_r3", family: "track", params: { "width_m": 1.4, "wheels": 6 }),
+        (socket: "track_l1", family: "track", params: { "width_m": 1.4, "wheels": 6 }, mirror: true),
+        (socket: "track_l2", family: "track", params: { "width_m": 1.4, "wheels": 6 }, mirror: true),
+        (socket: "track_l3", family: "track", params: { "width_m": 1.4, "wheels": 6 }, mirror: true),
+        (socket: "engine", family: "engine", params: { "power_kw": 6000, "tech": 1 }),
+        (socket: "turret_1", family: "turret_gun", params: { "calibre_mm": 200, "barrel_cal": 45, "armour_mm": 150, "slope": 0.6, "loader": 1, "ammo": 40 }),
+        (socket: "turret_2", family: "turret_gun", params: { "calibre_mm": 200, "barrel_cal": 45, "armour_mm": 150, "slope": 0.6, "loader": 1, "ammo": 40 }),
+        (socket: "turret_3", family: "turret_gun", params: { "calibre_mm": 200, "barrel_cal": 45, "armour_mm": 150, "slope": 0.6, "loader": 1, "ammo": 40 }, spin: 180),
+    ],
+)

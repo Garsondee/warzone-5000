@@ -4,7 +4,7 @@
     id: "drone_scout",
     name: "Scout drone",
     hull: "drone_body_small",
-    palette: "blue_team",
+    palette: "ultraviolet",
     attach: [
         (socket: "rotor_fr", part: "rotor_small"),
         (socket: "rotor_fl", part: "rotor_small"),

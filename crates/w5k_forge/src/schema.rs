@@ -291,6 +291,10 @@ pub struct SocketDef {
     pub normal: [f64; 3],
     #[serde(default = "fwd")]
     pub forward: [f64; 3],
+    /// Sizes for whatever attaches here (for example `ctx.length` for a track unit). A parametric family reads
+    /// them alongside its slider values.
+    #[serde(default)]
+    pub hints: BTreeMap<String, f64>,
 }
 
 /// What a part does, beyond its shape. All fields optional.
@@ -322,6 +326,9 @@ pub struct Function {
     /// For locomotion parts: the fastest this running gear allows (gearing, suspension or gait), km/h.
     #[serde(default)]
     pub max_kmh: Option<f64>,
+    /// For ground locomotion: area in contact with the ground (m^2). Weight over contact area is ground pressure.
+    #[serde(default)]
+    pub contact_m2: f64,
 }
 
 impl PartDef {
@@ -381,12 +388,17 @@ pub struct MaterialLibrary {
     pub palettes: BTreeMap<String, Palette>,
 }
 
-/// A vehicle: a hull part plus parts attached to its sockets (recursively).
+/// A vehicle: a hull plus parts attached to its sockets (recursively). The hull and each attachment are either a
+/// fixed part (`part`) or a parametric family with slider values (`family` + `params`).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DesignDef {
     pub id: String,
     pub name: String,
+    /// A part id or a family id.
     pub hull: String,
+    /// Slider values when `hull` names a family.
+    #[serde(default)]
+    pub hull_params: BTreeMap<String, f64>,
     #[serde(default)]
     pub palette: Option<String>,
     #[serde(default)]
@@ -397,7 +409,14 @@ pub struct DesignDef {
 pub struct Attach {
     /// Socket on the parent part.
     pub socket: String,
+    /// A fixed part id (leave empty when `family` is given).
+    #[serde(default)]
     pub part: String,
+    /// A parametric family id, generated with `params` plus the parent socket's hints.
+    #[serde(default)]
+    pub family: Option<String>,
+    #[serde(default)]
+    pub params: BTreeMap<String, f64>,
     /// Mirror the child left-right before attaching (for symmetric pairs such as left/right tracks).
     #[serde(default)]
     pub mirror: bool,

@@ -1,0 +1,15 @@
+#![enable(implicit_some)]
+// A small, fast scout: a short low Lancer with narrow tracks, a turbine and a 20 mm rotary gun.
+(
+    id: "lancer_scout",
+    name: "Lancer Scout",
+    hull: "hull_lancer",
+    hull_params: { "length_m": 4.2, "width_m": 1.7, "height_m": 0.7, "front_mm": 30, "side_mm": 12, "glacis": 0.8, "nose": 0.9 },
+    palette: "vanguard",
+    attach: [
+        (socket: "track_r", family: "track", params: { "width_m": 0.38, "wheels": 4 }),
+        (socket: "track_l", family: "track", params: { "width_m": 0.38, "wheels": 4 }, mirror: true),
+        (socket: "engine", family: "engine", params: { "power_kw": 400, "tech": 1 }),
+        (socket: "turret", family: "turret_gun", params: { "calibre_mm": 20, "barrel_cal": 60, "armour_mm": 15, "slope": 0.8, "loader": 1, "ammo": 800 }),
+    ],
+)

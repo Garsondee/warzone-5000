@@ -18,7 +18,7 @@ use w5k_forge::raster::Image;
 use w5k_forge::{Built, Forge, StatsFile};
 
 fn usage() -> ! {
-    eprintln!("usage:\n  w5k render <content-dir> --out <dir> [--only id,id,...]\n  w5k check <content-dir>\n  w5k family <content-dir> --out <dir>");
+    eprintln!("usage:\n  w5k render <content-dir> --out <dir> [--only id,id,...]\n  w5k check <content-dir>\n  w5k family <content-dir> --out <dir>\n  w5k lineup <content-dir> --out <dir> [--only design,design,...]");
     std::process::exit(2)
 }
 
@@ -26,22 +26,25 @@ struct Args {
     content: PathBuf,
     out: Option<PathBuf>,
     only: Option<Vec<String>>,
+    palette: Option<String>,
 }
 
 fn parse(rest: &[String]) -> Args {
     let mut content = None;
     let mut out = None;
     let mut only = None;
+    let mut palette = None;
     let mut it = rest.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--out" => out = Some(PathBuf::from(it.next().unwrap_or_else(|| usage()))),
             "--only" => only = Some(it.next().unwrap_or_else(|| usage()).split(',').map(|s| s.trim().to_string()).collect()),
+            "--palette" => palette = Some(it.next().unwrap_or_else(|| usage()).clone()),
             s if s.starts_with("--") => usage(),
             s => content = Some(PathBuf::from(s)),
         }
     }
-    Args { content: content.unwrap_or_else(|| usage()), out, only }
+    Args { content: content.unwrap_or_else(|| usage()), out, only, palette }
 }
 
 fn main() {
@@ -56,6 +59,8 @@ fn main() {
         "render" => render(&forge, a.out.as_deref().unwrap_or_else(|| usage()), a.only.as_deref()),
         "check" => check(&forge),
         "family" => family_cmd::run(&forge, a.out.as_deref().unwrap_or_else(|| usage())),
+        "lineup" => lineup(&forge, a.out.as_deref().unwrap_or_else(|| usage()), a.only.as_deref(), a.palette.as_deref()),
+        "factions" => factions(&forge, a.out.as_deref().unwrap_or_else(|| usage()), a.only.as_deref()),
         _ => usage(),
     };
     if !ok {
@@ -98,7 +103,7 @@ fn render(forge: &Forge, out: &Path, only: Option<&[String]>) -> bool {
     let mut ok = true;
     let mut thumbs = Vec::new();
     for (id, part) in &forge.parts {
-        if !wanted(only, id) {
+        if !wanted(only, id) || part.generated {
             continue;
         }
         let t = Instant::now();
@@ -155,9 +160,64 @@ fn render(forge: &Forge, out: &Path, only: Option<&[String]>) -> bool {
     ok
 }
 
+/// One image of several vehicles at true relative scale, all in one army's palette (`--palette`, or the first
+/// design's).
+fn lineup(forge: &Forge, out: &Path, only: Option<&[String]>, palette: Option<&str>) -> bool {
+    let ids: Vec<String> = match only {
+        Some(o) => o.to_vec(),
+        None => forge.designs.keys().cloned().collect(),
+    };
+    let mut built = Vec::new();
+    for id in &ids {
+        let Some(d) = forge.designs.get(id) else {
+            eprintln!("error: no design '{id}'");
+            return false;
+        };
+        let (b, _, _) = forge.build_design(d);
+        built.push((b, d.name.clone(), d.palette.clone()));
+    }
+    let pal = palette.map(|s| s.to_string()).or_else(|| built.first().and_then(|b| b.2.clone()));
+    let colours = preview::palette_colours(&forge.lib, pal.as_deref());
+    let units: Vec<(&w5k_forge::mesh::Mesh, &str)> = built.iter().map(|(b, n, _)| (&b.mesh, n.as_str())).collect();
+    std::fs::create_dir_all(out).ok();
+    let img = preview::lineup(&units, &colours, 1600, 700);
+    match img.save_png(&out.join(format!("lineup_{}.png", pal.unwrap_or_else(|| "default".into())))) {
+        Ok(()) => true,
+        Err(e) => {
+            eprintln!("error: {e}");
+            false
+        }
+    }
+}
+
+/// The first given design in each faction palette, side by side.
+fn factions(forge: &Forge, out: &Path, only: Option<&[String]>) -> bool {
+    let id = only.and_then(|o| o.first().cloned()).unwrap_or_else(|| forge.designs.keys().next().cloned().unwrap_or_default());
+    let Some(d) = forge.designs.get(&id) else {
+        eprintln!("error: no design '{id}'");
+        return false;
+    };
+    let (b, _, _) = forge.build_design(d);
+    let fr = Frame::of(&b.mesh);
+    let names = ["vanguard", "crimson", "verdant", "ultraviolet"];
+    let tile = 400;
+    let mut img = Image::new(tile * names.len(), tile + 24, [0.018, 0.019, 0.022]);
+    for (k, name) in names.iter().enumerate() {
+        let colours = preview::palette_colours(&forge.lib, Some(name));
+        let view = preview::render_view(&b.mesh, &colours, &fr, 35.0, 28.0, tile);
+        img.blit(&view, k * tile, 0);
+        img.text((k * tile) as i64 + 8, tile as i64 + 6, 1, name, [0.8, 0.82, 0.86]);
+    }
+    std::fs::create_dir_all(out).ok();
+    img.save_png(&out.join(format!("factions_{id}.png"))).is_ok()
+}
+
 fn check(forge: &Forge) -> bool {
     let mut ok = true;
-    for id in forge.parts.keys() {
+    for (id, part) in &forge.parts {
+        if part.generated {
+            continue;
+        }
         let b = forge.build_part(id).expect("part exists");
         println!("part    {id:<24} {:>9.1} kg {:>6} tris", b.mass.mass_kg, b.mesh.triangle_count());
     }

@@ -4,7 +4,7 @@
     id: "walker_spider",
     name: "Spider walker",
     hull: "walker_body_spider",
-    palette: "red_team",
+    palette: "crimson",
     attach: [
         (socket: "leg_r1", part: "leg_spider_long"),
         (socket: "leg_r2", part: "leg_spider_long"),

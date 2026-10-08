@@ -48,6 +48,8 @@ pub struct Built {
 pub struct BuiltPart {
     pub def: PartDef,
     pub pieces: Vec<Piece>,
+    /// Made by a parametric family for a design (not a content file).
+    pub generated: bool,
 }
 
 /// Baked statistics written next to each part (and later loaded by the simulation).
@@ -95,9 +97,59 @@ impl Forge {
         }
         for f in ron_files(&content.join("vehicles")) {
             let d: DesignDef = read_ron(&f)?;
+            let d = forge.instantiate(&d).map_err(|e| format!("{}: {e}", f.display()))?;
             forge.designs.insert(d.id.clone(), d);
         }
         Ok(forge)
+    }
+
+    /// Generate the parts a design asks for by family and return the design rewritten to use plain part ids.
+    /// Each attachment's family sees its own sliders plus the hints of the socket it attaches to, so a track
+    /// sizes itself to its hull. Identical requests share one generated part.
+    pub fn instantiate(&mut self, d: &DesignDef) -> Result<DesignDef, String> {
+        let families = family::all();
+        let find = |id: &str| families.iter().find(|f| f.id() == id);
+        let mut out = d.clone();
+        if let Some(f) = find(&d.hull) {
+            let def = f.generate(&family::values_for(f.as_ref(), &d.hull_params, &BTreeMap::new()));
+            out.hull = self.add_generated(def)?;
+        } else if !self.parts.contains_key(&d.hull) {
+            return Err(format!("unknown hull '{}'", d.hull));
+        }
+        out.attach = self.instantiate_list(&out.hull.clone(), &d.attach, &families)?;
+        Ok(out)
+    }
+
+    fn instantiate_list(&mut self, parent: &str, list: &[schema::Attach], families: &[Box<dyn family::Family>]) -> Result<Vec<schema::Attach>, String> {
+        let mut out = Vec::new();
+        for a in list {
+            let mut a2 = a.clone();
+            if let Some(fid) = &a.family {
+                let f = families.iter().find(|f| f.id() == fid).ok_or_else(|| format!("unknown family '{fid}'"))?;
+                let hints = self.parts[parent].def.sockets.iter().find(|s| s.name == a.socket).map(|s| s.hints.clone()).unwrap_or_default();
+                let def = f.generate(&family::values_for(f.as_ref(), &a.params, &hints));
+                a2.part = self.add_generated(def)?;
+                a2.family = None;
+            }
+            if self.parts.contains_key(&a2.part) {
+                a2.children = self.instantiate_list(&a2.part.clone(), &a.children, families)?;
+            }
+            out.push(a2);
+        }
+        Ok(out)
+    }
+
+    /// Add a generated part under an id derived from its content, so identical requests share it.
+    fn add_generated(&mut self, mut def: PartDef) -> Result<String, String> {
+        let mut h = w5k_math::StateHasher::new();
+        h.write_bytes(ron::to_string(&def).map_err(|e| e.to_string())?.as_bytes());
+        let id = format!("{}#{:08x}", def.id, h.finish() as u32);
+        if !self.parts.contains_key(&id) {
+            def.id = id.clone();
+            self.add_part(def)?;
+            self.parts.get_mut(&id).unwrap().generated = true;
+        }
+        Ok(id)
     }
 
     pub fn from_parts(lib: MaterialLibrary, parts: Vec<PartDef>) -> Result<Forge, String> {
@@ -121,7 +173,7 @@ impl Forge {
         if self.parts.contains_key(&def.id) {
             return Err(format!("duplicate part id '{}'", def.id));
         }
-        self.parts.insert(def.id.clone(), BuiltPart { def, pieces });
+        self.parts.insert(def.id.clone(), BuiltPart { def, pieces, generated: false });
         Ok(())
     }
 
@@ -187,12 +239,14 @@ impl Forge {
         let mut efficiency = Vec::new();
         let mut gear_limit = f64::INFINITY;
         let mut disc_area = 0.0;
+        let mut contact = 0.0;
         for (id, _) in &asm.parts {
             let f = &self.parts[id].def.function;
             s.power_kw += f.power_kw;
             s.draw_kw += f.draw_kw;
             s.load_kg += f.load_kg;
             disc_area += std::f64::consts::PI * f.rotor_radius_m * f.rotor_radius_m;
+            contact += f.contact_m2;
             if let Some(l) = f.locomotion {
                 if !s.locomotion.contains(&l) {
                     s.locomotion.push(l);
@@ -219,6 +273,9 @@ impl Forge {
         }
         if s.draw_kw > s.power_kw {
             s.problems.push(format!("power deficit: draws {:.0} kW of {:.0} kW", s.draw_kw, s.power_kw));
+        }
+        if contact > 0.0 {
+            s.ground_pressure_kpa = s.mass_kg * 9.81 / contact / 1000.0;
         }
         let mean = |v: &[f64]| if v.is_empty() { 0.0 } else { v.iter().sum::<f64>() / v.len() as f64 };
         let weight_n = s.mass_kg * 9.81;

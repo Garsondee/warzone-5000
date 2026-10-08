@@ -156,9 +156,32 @@ pub fn run(forge: &Forge, out: &Path) -> bool {
         eprintln!("error: {}: {e}", out.display());
         std::process::exit(1)
     });
-    for fam in family::all() {
-        sweep(&forge.lib, fam.as_ref(), out);
-        coupling(&forge.lib, fam.as_ref(), out);
-    }
+    let turret = family::turret::TankTurret;
+    sweep(&forge.lib, &turret, out);
+    coupling(&forge.lib, &turret, out);
+    hull_variants(&forge.lib, out);
     true
+}
+
+/// The hull families side by side at true scale, each at a few slider settings.
+fn hull_variants(lib: &MaterialLibrary, out: &Path) {
+    use family::hull::{Bastion, Dreadnought, Lancer};
+    let variants: Vec<(Box<dyn Family>, Vec<(&str, f64)>, &str)> = vec![
+        (Box::new(Lancer), vec![("length_m", 4.0), ("width_m", 1.7), ("height_m", 0.7), ("nose", 1.0)], "Lancer, short"),
+        (Box::new(Lancer), vec![], "Lancer"),
+        (Box::new(Lancer), vec![("glacis", 1.0), ("height_m", 0.8), ("length_m", 9.0)], "Lancer, long glacis"),
+        (Box::new(Bastion), vec![], "Bastion"),
+        (Box::new(Bastion), vec![("turrets", 2.0), ("length_m", 10.0), ("height_m", 2.4), ("sponson", 1.0)], "Bastion, twin"),
+        (Box::new(Dreadnought), vec![("turrets", 2.0), ("bogies", 2.0), ("length_m", 14.0)], "Dreadnought, short"),
+        (Box::new(Dreadnought), vec![], "Dreadnought"),
+    ];
+    let mut built = Vec::new();
+    for (fam, overrides, name) in &variants {
+        let v = fam.with(overrides);
+        built.push((build(lib, fam.as_ref(), &v), *name));
+        println!("hull  {name:<22} {:>9.0} kg", built.last().unwrap().0.mass.mass_kg);
+    }
+    let units: Vec<(&w5k_forge::mesh::Mesh, &str)> = built.iter().map(|(b, n)| (&b.mesh, *n)).collect();
+    let colours = preview::palette_colours(lib, Some("vanguard"));
+    save(&preview::lineup(&units, &colours, 1600, 620), &out.join("hull_variants.png"));
 }

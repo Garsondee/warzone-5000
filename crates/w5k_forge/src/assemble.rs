@@ -111,6 +111,10 @@ pub struct VehicleSheet {
     /// Power needed just to hover (rotorcraft), kW.
     #[serde(default)]
     pub hover_kw: f64,
+    /// Weight over ground contact area (kPa); 0 when the running gear does not report contact. Soft soil gives way
+    /// somewhere around 50-100 kPa; a tank presses about 90.
+    #[serde(default)]
+    pub ground_pressure_kpa: f64,
     pub power_to_weight_kw_t: f64,
     pub problems: Vec<String>,
 }

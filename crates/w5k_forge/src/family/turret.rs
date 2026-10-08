@@ -11,7 +11,7 @@
 //! ammunition and the loader. Armour thickness and slope shape the shell; more slope makes a squatter,
 //! steeper turret with less room, so it must grow. Mass, armour and inertia are then measured as for any part.
 
-use super::{stat, Family, Param, Role, Scale, Stat, Values};
+use super::{stat, style, Family, Param, Role, Scale, Stat, Values};
 use crate::convex::Convex;
 use crate::geom::{v3, Plane, V3};
 use crate::schema::{Axis, Category, Function, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
@@ -105,6 +105,26 @@ pub struct Layout {
 const THETA_REAR: f64 = 6.0;
 
 impl Layout {
+    /// How cramped the turret is for a standing loader (0 = enough room, 1 = none). A loader stands in the
+    /// turret basket, about 0.9 m below the ring, and needs about 1.7 m of headroom.
+    pub fn cramped(&self) -> f64 {
+        let standing = self.h - 2.0 * self.t_side + 0.9;
+        ((1.7 - standing) / 1.7).clamp(0.0, 1.0)
+    }
+
+    /// Time between shots, including the cramped-turret penalty on hand loading.
+    pub fn reload_s(&self, loader: f64) -> f64 {
+        self.gun.reload_s * (1.0 + 1.5 * self.cramped() * (1.0 - loader))
+    }
+
+    /// Largest gun depression (degrees). The gun pivots on its trunnions at the front wall: as the barrel dips,
+    /// the back of the breech (plus its recoil stroke) swings up by lever x sin(angle) until it meets the roof.
+    pub fn depression_deg(&self) -> f64 {
+        let headroom = (self.y0 + self.h - self.t_side) - (self.y_gun + self.breech[1] / 2.0);
+        let lever = self.breech[2] + 5.0 * self.gun.d;
+        (headroom.max(0.0) / lever.max(1e-3)).min(1.0).asin().to_degrees().min(20.0)
+    }
+
     fn lf(&self) -> f64 {
         self.lt * 0.45
     }
@@ -174,6 +194,7 @@ pub fn layout(v: &Values) -> Layout {
     let cal = get(v, "calibre_mm");
     let loader = get(v, "loader");
     let slope = get(v, "slope");
+    let profile = v.get("profile").copied().unwrap_or(0.5);
     let g = gun(cal, get(v, "barrel_cal"), loader);
     let rounds = get(v, "ammo").round().max(1.0);
     let remote = cal < 25.0 && loader >= 0.5;
@@ -202,8 +223,8 @@ pub fn layout(v: &Values) -> Layout {
     let lt_min = breech[2] + 5.0 * g.d + 0.1 + t_front;
     let w_min = (mantlet[0] + 2.0 * t_side + 0.1).max(breech[0] + 2.0 * t_side + 0.1).max(if crew > 0 { 1.3 } else { 0.25 }).max(lt_min / lt_ratio);
     let make = |w: f64| {
-        // Slope and heavy armour both make the turret squatter.
-        let h = (w * (0.55 - 0.25 * slope - 0.08 * (t_front / 0.25).min(1.0))).max(h_min);
+        // Profile sets the height; slope and heavy armour both pull it lower.
+        let h = (w * (0.3 + 0.4 * profile - 0.2 * slope - 0.08 * (t_front / 0.25).min(1.0))).max(h_min);
         let ring_h = 0.05 + 0.03 * w;
         let mut l = Layout {
             gun: g,
@@ -355,6 +376,17 @@ impl Family for TankTurret {
                 help: "Steeper, squatter plates resist more per mm but leave less room inside, so the turret grows.",
             },
             Param {
+                id: "profile",
+                name: "Profile",
+                unit: "",
+                min: 0.0,
+                max: 1.0,
+                default: 0.5,
+                scale: Scale::Linear,
+                role: Role::Free,
+                help: "Low turrets are smaller targets but cramped (slower hand loading) and the gun cannot dip as far.",
+            },
+            Param {
                 id: "loader",
                 name: "Loader",
                 unit: "",
@@ -442,6 +474,22 @@ impl Family for TankTurret {
                 shapes.push(bx([2.7 * g.d, 2.1 * g.d, 3.2 * g.d], v3(0.0, l.y_gun, z_m - len + 1.2 * g.d), "gun_steel", Slot::Dark, 0.25 * g.d));
             }
         }
+        // Livery (the shared design language): a two-tone roof, darker lower cheeks with a trim line, and one
+        // glowing sensor eye on the front face.
+        {
+            let b = l.body_points();
+            let inside = v3(0.0, l.y0 + l.h / 2.0, (l.lr() - l.lf()) / 2.0);
+            let t = 0.008 + 0.005 * l.w;
+            let roof_q: style::Quad = [b[2], b[6], b[7], b[3]];
+            shapes.push(style::plate(&roof_q, inside, (0.0, 1.0), (0.64, 1.0), t, t, "fittings", Slot::Secondary));
+            shapes.push(style::plate(&roof_q, inside, (0.0, 1.0), (0.56, 0.6), t, 0.0, "fittings", Slot::Trim));
+            for q in [[b[4], b[5], b[7], b[6]], [b[1], b[0], b[2], b[3]]] {
+                shapes.push(style::plate(&q, inside, (0.0, 1.0), (0.0, 0.42), t, t, "fittings", Slot::Secondary));
+                shapes.push(style::plate(&q, inside, (0.04, 0.55), (0.46, 0.53), t, 0.0, "fittings", Slot::Trim));
+            }
+            let front_q: style::Quad = [b[0], b[4], b[6], b[2]];
+            style::eye(style::at(&front_q, 0.8, 0.72), style::normal(&front_q, inside), (0.03 + 0.012 * l.w).min(0.2), &mut shapes);
+        }
         // Crew fittings (human-sized, so they read the turret's scale) or a sensor head for a remote station.
         let top_hw = l.w / 2.0 - l.h * l.theta_s.tan();
         let (zf_top, zr_top) = (l.z_face(l.y0 + l.h), l.lr() - l.h * THETA_REAR.to_radians().tan());
@@ -482,6 +530,7 @@ impl Family for TankTurret {
                 at: [0.0; 3],
                 normal: [0.0, -1.0, 0.0],
                 forward: [0.0, 0.0, -1.0],
+                hints: Default::default(),
             }],
             function: Function { draw_kw: 0.5 + 2.0 * l.w * l.w, ..Default::default() },
         }
@@ -503,12 +552,14 @@ impl Family for TankTurret {
             stat("muzzle energy", g.energy_j / 1e6, "MJ"),
             stat("penetration at muzzle", penetration_mm(&g, g.velocity), "mm"),
             stat("penetration at 1 km", penetration_mm(&g, velocity_at(&g, 1000.0)), "mm"),
-            stat("reload", g.reload_s, "s"),
-            stat("rate of fire", 60.0 / g.reload_s, "rpm"),
+            stat("reload", l.reload_s(v["loader"]), "s"),
+            stat("rate of fire", 60.0 / l.reload_s(v["loader"]), "rpm"),
+            stat("gun depression", l.depression_deg(), "deg"),
+            stat("frontal area", built.armour.at(0.0, 0.0).area_m2, "m2"),
             stat("gun mass", g.gun_kg, "kg"),
             stat("turret mass", m.mass_kg / 1000.0, "t"),
-            stat("front armour (effective)", built.armour.at(0.0, 0.0).mean_mm, "mm"),
-            stat("side armour (effective)", built.armour.at(90.0, 0.0).mean_mm, "mm"),
+            stat("front armour (effective)", built.armour.at(0.0, 0.0).median_mm, "mm"),
+            stat("side armour (effective)", built.armour.at(90.0, 0.0).median_mm, "mm"),
             stat("ring diameter", 2.0 * l.ring_r, "m"),
             stat("traverse 180 deg", t180, "s"),
             stat("crew", l.crew as f64, ""),

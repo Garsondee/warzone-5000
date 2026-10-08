@@ -24,26 +24,44 @@
         "running_gear": (density: 900, hardness: 0.12),  // track pods: links, wheels, suspension and air
         "fittings":    (density: 600, hardness: 0.05),   // stowage, fenders, lights and other detail
     },
+    // Faction palettes. Each follows a 60-30-10 structure: Primary is the dominant body colour (about 60% of the
+    // surface), Secondary a darker colour from a neighbouring hue (about 30%), Trim a complementary accent used
+    // sparingly (about 10%) for markings, and Glow a high-energy emissive hue. Darks are tinted toward the faction
+    // hue rather than neutral grey. Values are spaced so units read at a distance by value, before hue.
+    // See docs/design/06-art-direction.md.
     palettes: {
+        // Cobalt body, orange markings (blue's complement), electric cyan energy.
+        "vanguard": (colours: {
+            Primary: "#2f6ee0", Secondary: "#1b2b5e", Trim: "#ff8a24", Dark: "#121628",
+            Metal: "#9aa6bc", Rubber: "#191c27", Glow: "#45efff", Glass: "#173d6e",
+        }),
+        // Crimson body, gold markings, acid-lime energy (red's near complement).
+        "crimson": (colours: {
+            Primary: "#c9302a", Secondary: "#4c1426", Trim: "#ffcf55", Dark: "#1d0f15",
+            Metal: "#ab9e98", Rubber: "#1e1517", Glow: "#b5ff36", Glass: "#3d1a2b",
+        }),
+        // Teal body, magenta markings (green's complement), lemon energy.
+        "verdant": (colours: {
+            Primary: "#16a88a", Secondary: "#0e3a40", Trim: "#ff3b98", Dark: "#0c1a1d",
+            Metal: "#93a9a5", Rubber: "#131c1d", Glow: "#fff056", Glass: "#103f4b",
+        }),
+        // Violet body, yellow markings (violet's complement), hot-pink energy.
+        "ultraviolet": (colours: {
+            Primary: "#6b45ea", Secondary: "#22154f", Trim: "#ffd646", Dark: "#140e25",
+            Metal: "#a49fbb", Rubber: "#18152a", Glow: "#ff4bd0", Glass: "#2a185e",
+        }),
         "default": (colours: {
+            Primary: "#2f6ee0", Secondary: "#1b2b5e", Trim: "#ff8a24", Dark: "#121628",
+            Metal: "#9aa6bc", Rubber: "#191c27", Glow: "#45efff", Glass: "#173d6e",
+        }),
+        // Older, muted palettes kept for comparison.
+        "olive": (colours: {
             Primary: "#6f7752", Secondary: "#4d5539", Trim: "#c2a04a", Dark: "#2a2c2d",
             Metal: "#70757b", Rubber: "#1f1f21", Glow: "#5ad8ff", Glass: "#2c4652",
         }),
         "desert": (colours: {
             Primary: "#b39a6c", Secondary: "#8a7451", Trim: "#5c4f3a", Dark: "#2e2a25",
             Metal: "#8c8a86", Rubber: "#1f1e1d", Glow: "#ffb347", Glass: "#3a4a50",
-        }),
-        "arctic": (colours: {
-            Primary: "#d4d8d6", Secondary: "#9ea6a7", Trim: "#4a7fa8", Dark: "#2b3033",
-            Metal: "#8d949a", Rubber: "#222324", Glow: "#7fe6ff", Glass: "#30485a",
-        }),
-        "red_team": (colours: {
-            Primary: "#7a3a30", Secondary: "#4f2a25", Trim: "#d8c27a", Dark: "#262222",
-            Metal: "#8f8b88", Rubber: "#1f1d1d", Glow: "#ff5a3c", Glass: "#3f3436",
-        }),
-        "blue_team": (colours: {
-            Primary: "#3d5a78", Secondary: "#2b3e52", Trim: "#e0c35a", Dark: "#23272c",
-            Metal: "#8d939a", Rubber: "#1e1f21", Glow: "#5ad8ff", Glass: "#2c4652",
         }),
     },
 )

@@ -1,7 +1,9 @@
 # Parametric Components
 
-*Status: first family (gun turret) prototyped in `crates/w5k_forge/src/family/`. Renders:
-[sweep](../assets/forge/turret_gun_sweep.png), [coupling](../assets/forge/turret_gun_coupling.png).*
+*Status: families for the gun turret, three hull shapes (Lancer, Bastion, Dreadnought), tracks and engines in
+`crates/w5k_forge/src/family/`; designs can be built entirely from families. Renders:
+[sweep](../assets/forge/turret_gun_sweep.png), [coupling](../assets/forge/turret_gun_coupling.png),
+[army lineup](../assets/forge/lineup_vanguard.png).*
 
 ## The idea
 Instead of a tech tree full of fixed parts ("75 mm turret", "88 mm turret", "heavy 88 mm turret"...), each component is
@@ -86,14 +88,51 @@ The relationships are real scaling laws, so the trade-offs are ones a player can
   that component, so it is not counted as armour. Without this, a ray down the length of a barrel would read as
   20 m of steel.
 
-## Next families
-Hull (size, length:width, armour per face, internal volume, ring capacity); engine (power, type: diesel, turbine,
-electric; mass, fuel and heat); locomotion (track width, wheel count and diameter, leg count and length, rail bogies); sensor
-(mast height, radar against optics). Each gets the same three kinds of sliders and one family test like
-`crates/w5k_forge/tests/family.rs`.
+## Shape is a trade-off, not just a look
+The owner asked whether shapes can carry real trade-offs. Several shape axes have them, from physics:
 
-## Open questions for the owner
-- Should *hold mass* be the default, or should players switch it on per slider group?
-- Should slope stay free, or should armour automatically push the shape toward sloped and squat (the first brief
-  read both ways)?
-- How many sliders per component before it stops being fun? The turret has six; that may be near the limit.
+| Axis | One end | Other end | Why |
+|---|---|---|---|
+| **Profile** (low or tall) | small silhouette, hard to hit | room inside; gun can dip further | hit chance follows silhouette area; a gun pivots on its trunnions, so dipping the barrel swings the breech up into the roof (max depression = asin(headroom / lever)); a loader needs about 1.7 m to stand |
+| **Slope** | upright: roomy, cheap | steep: more protection per mm, less room, so a bigger, heavier turret | a plate crossed at angle a is t / cos a thick; slanted walls eat interior volume |
+| **Length : width** | short and wide: turns well, takes big turret rings | long and narrow: more turrets and track, turns badly | tracked vehicles turn by skidding; the torque needed grows with track length over track spacing, and skid steering fails beyond about 1.8:1 |
+| **Height of a hull** | low: hard to see and hit | tall: room for engines and crew, sensors see further | silhouette and line of sight |
+| **Sponsons** (overhang) | narrow, light | wide upper body: more room, wider target | volume against frontal area |
+| **Nose and bow** | blunt: room in front | pointed: front plates angled against side shots too | slope seen from more directions |
+
+Some axes stay **free** (taste): wheel count, nose style. The rule of thumb: if two settings are equally good, the slider is free;
+if one end buys something the other pays for, physics makes it a trade.
+
+In the turret family, **profile** is implemented: low turrets measure a smaller frontal area, load more slowly by hand
+(not with an autoloader) and depress the gun less (about 8 degrees at the lowest against 20 at the tallest).
+
+## Families so far
+| Family | Sliders | Shape character |
+|---|---|---|
+| `turret_gun` | calibre, barrel length, front armour, slope, profile, loader, ammunition | sized to fit crew, breech, ammunition and loader |
+| `hull_lancer` | length, width, height, front and side armour, glacis, nose | low sharp wedge, one turret |
+| `hull_bastion` | the same plus turrets (1-2), sponsons | tall box, dark lower hull, bright overhanging sponsons |
+| `hull_dreadnought` | the same plus turrets (1-6), track sets (2-6) | long deck with a prow, command tower and a row of turrets |
+| `track` | width, skirt armour, road wheels | sized by the hull's socket; wider spreads weight |
+| `engine` | power, technology (diesel 0.22, turbine 0.75, fusion 2.5 kW/kg) | hidden in the hull, but its mass is real |
+
+## How families fit together
+- A hull's sockets carry **hints** (`ctx.length`, `ctx.top`, `ctx.bottom` for tracks; `ctx.ring_max` for turrets;
+  `ctx.bay_*` for engines). An attached family reads them alongside its sliders, so a track sizes itself to its hull.
+- A **design** names families with slider values instead of fixed parts:
+  ```ron
+  (socket: "track_r", family: "track", params: { "width_m": 0.62 }),
+  ```
+  Loading a design generates the parts (identical requests share one part) and assembles them as usual. Vehicle mass
+  is still the exact sum of the parts.
+- The vehicle sheet now reports **ground pressure** (weight over track contact area): the Lancer Mk1 presses 46 kPa,
+  the 400 t Dreadnought 88 kPa thanks to 1.4 m tracks.
+
+## Decisions taken
+- *Hold mass* is on by default (owner, 2026-10-08).
+- Slope stays a free slider, with profile as a separate shape slider; heavy armour also pulls the turret a little
+  lower and its chamfers heavier, so armour reads visually.
+
+## Open questions
+- How many sliders per component before it stops being fun? The turret has seven.
+- Should hull families also expose per-face armour (front, side, rear, roof) or keep two values?
