@@ -162,7 +162,12 @@ impl Quat {
         let s = scalar::sin(theta);
         let ka = scalar::sin((1.0 - t) * theta) / s;
         let kb = scalar::sin(t * theta) / s;
-        Quat { w: ka * self.w + kb * b.w, x: ka * self.x + kb * b.x, y: ka * self.y + kb * b.y, z: ka * self.z + kb * b.z }
+        Quat {
+            w: ka * self.w + kb * b.w,
+            x: ka * self.x + kb * b.x,
+            y: ka * self.y + kb * b.y,
+            z: ka * self.z + kb * b.z,
+        }
     }
 
     pub fn is_finite(self) -> bool {

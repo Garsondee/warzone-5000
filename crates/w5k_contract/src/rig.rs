@@ -427,15 +427,24 @@ impl PhysRig {
             }
         };
         chk(self.hull.mass_kg > 0.0 && self.hull.mass_kg.is_finite(), "hull mass must be positive".into());
-        chk(self.hull.inertia_kg_m2.is_finite() && self.hull.inertia_kg_m2.det() > 0.0, "hull inertia must be a finite, positive definite tensor".into());
+        chk(
+            self.hull.inertia_kg_m2.is_finite() && self.hull.inertia_kg_m2.det() > 0.0,
+            "hull inertia must be a finite, positive definite tensor".into(),
+        );
         chk(self.integration.substeps >= 1, "substeps must be at least 1".into());
         for (i, s) in self.stations.iter().enumerate() {
             chk(s.wheel.radius_m > 0.0, format!("station {i} ({}): wheel radius must be positive", s.name));
             chk(s.unsprung_mass_kg >= 0.0, format!("station {i} ({}): negative unsprung mass", s.name));
             chk(s.bump_dir.length() > 0.5, format!("station {i} ({}): bump_dir must be a unit vector", s.name));
-            chk(s.bump_travel_m >= 0.0 && s.droop_travel_m >= 0.0, format!("station {i} ({}): negative travel", s.name));
+            chk(
+                s.bump_travel_m >= 0.0 && s.droop_travel_m >= 0.0,
+                format!("station {i} ({}): negative travel", s.name),
+            );
             if let Some(o) = s.drive_output {
-                chk(o < self.drivetrain.outputs.len(), format!("station {i} ({}): drive_output {o} out of range", s.name));
+                chk(
+                    o < self.drivetrain.outputs.len(),
+                    format!("station {i} ({}): drive_output {o} out of range", s.name),
+                );
             }
             if s.wheel.kind == WheelKind::Tyre {
                 chk(s.wheel.tyre.is_some(), format!("station {i} ({}): a Tyre wheel needs a TyreDef", s.name));
@@ -469,7 +478,10 @@ impl PhysRig {
             chk(m.joint < self.articulation.len(), format!("muzzle {}: joint {} out of range", m.name, m.joint));
         }
         for a in &self.anti_roll {
-            chk(a.left_station < self.stations.len() && a.right_station < self.stations.len(), "anti-roll bar refers to a missing station".into());
+            chk(
+                a.left_station < self.stations.len() && a.right_station < self.stations.len(),
+                "anti-roll bar refers to a missing station".into(),
+            );
         }
         if e.is_empty() {
             Ok(())

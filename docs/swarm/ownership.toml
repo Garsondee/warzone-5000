@@ -30,7 +30,7 @@ paths = ["crates/w5k_contract/**", "docs/architecture/CONTRACTS.md"]
 paths = [
   "crates/w5k_math/**", "crates/w5k_contract/**", "crates/w5k_vehicle/**", "crates/w5k_sim/**",
   "crates/w5k_tools/Cargo.toml", "crates/w5k_tools/src/main.rs", "crates/w5k_tools/src/cmd/mod.rs", "crates/w5k_tools/src/cmd/arch.rs",
-  "Cargo.toml", "clippy.toml", "rustfmt.toml", "CLAUDE.md", "README.md", ".gitignore", ".github/**", ".claude/**", "tools/ci/**",
+  "Cargo.toml", "clippy.toml", "rustfmt.toml", "CLAUDE.md", "README.md", ".gitignore", ".github/**", ".claude/**", "tools/ci/**", "tools/control_room/**",
   "docs/README.md", "docs/dev-environment.md", "docs/brief/**", "docs/architecture/**", "docs/decisions/**", "docs/swarm/**",
   "docs/research/**", "docs/assets/**", "docs/archive/**", "docs/theory/the-physics-of-a-time-trial.md", "reference/**", "content/fixtures/**",
 ]

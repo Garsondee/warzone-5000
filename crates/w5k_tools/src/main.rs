@@ -27,7 +27,21 @@ fn main() {
     }
 }
 
-const LANES: [&str; 13] = ["arch", "chassis", "drive", "tracks", "world", "forge", "geometry", "look", "viewer", "godot", "validation", "combat", "ai"];
+const LANES: [&str; 13] = [
+    "arch",
+    "chassis",
+    "drive",
+    "tracks",
+    "world",
+    "forge",
+    "geometry",
+    "look",
+    "viewer",
+    "godot",
+    "validation",
+    "combat",
+    "ai",
+];
 
 /// `w5k scenario first-light --out DIR`: run the integration spine on the stand-ins (see w5k_sim).
 fn scenario(args: &[String]) -> Result<(), String> {

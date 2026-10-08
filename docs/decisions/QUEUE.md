@@ -74,7 +74,7 @@ Cost of being wrong: (a) loses hours; (b) risks hitting the limit mid-wave.
 Default: (a).
 
 ### C-009  The old prototype code in the working tree
-Asked by: ARCH | Status: OPEN
+Asked by: ARCH | Status: DONE as (a) on 2026-10-08 (moved with `git mv`, one directory at a time; deleting stays the owner's word)
 Options: (a) moved to `reference/prototype-v0/` (read-only, excluded from the workspace and CI); (b) removed from the tree entirely (history keeps it at `2854baf`).
 Recommendation: (a) until the port ledger is done, then (b). Moving or deleting the code needs the owner's explicit word in this environment.
 Cost of being wrong: none; both are one command.

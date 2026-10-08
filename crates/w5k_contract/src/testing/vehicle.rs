@@ -53,13 +53,19 @@ impl RigidBoxVehicle {
             .iter()
             .map(|&(rpm, t)| t * scalar::rpm_to_rad_s(rpm))
             .fold(0.0, f64::max);
-        let tyre_z: Vec<f64> = rig.stations.iter().filter(|s| s.wheel.kind == WheelKind::Tyre).map(|s| s.rest_pos_m.z).collect();
+        let tyre_z: Vec<f64> =
+            rig.stations.iter().filter(|s| s.wheel.kind == WheelKind::Tyre).map(|s| s.rest_pos_m.z).collect();
         let wheelbase_m = if tyre_z.len() >= 2 {
             tyre_z.iter().cloned().fold(f64::MIN, f64::max) - tyre_z.iter().cloned().fold(f64::MAX, f64::min)
         } else {
             3.0
         };
-        let max_steer_rad = rig.stations.iter().filter_map(|s| s.steer.as_ref().map(|st| st.max_angle_rad)).fold(0.0, f64::max).max(0.3);
+        let max_steer_rad = rig
+            .stations
+            .iter()
+            .filter_map(|s| s.steer.as_ref().map(|st| st.max_angle_rad))
+            .fold(0.0, f64::max)
+            .max(0.3);
         let n = rig.stations.len();
         let m = rig.articulation.len();
         let mass_kg = rig.total_mass_kg();
@@ -138,7 +144,10 @@ impl VehicleModel for RigidBoxVehicle {
             let a_power = self.power_w / (self.mass_kg * v.abs().max(2.0));
             cmd.throttle * a_power.min(grip_a) * dir * if reverse { 0.6 } else { 1.0 }
         };
-        let drag = (0.5 * crate::AIR_DENSITY_KG_M3 * self.rig.aero.drag_coeff * self.rig.aero.frontal_area_m2 * v * v.abs() + 0.02 * self.mass_kg * g * scalar::sign(v)) / self.mass_kg;
+        let drag =
+            (0.5 * crate::AIR_DENSITY_KG_M3 * self.rig.aero.drag_coeff * self.rig.aero.frontal_area_m2 * v * v.abs()
+                + 0.02 * self.mass_kg * g * scalar::sign(v))
+                / self.mass_kg;
         let brake_a = (cmd.brake * if self.tracked { 0.6 } else { 0.8 } * g) * scalar::sign(v);
         let mut v_new = v + (a_drive - drag - brake_a) * dt_s;
         // Brakes and drag cannot reverse the direction of travel.
@@ -164,7 +173,8 @@ impl VehicleModel for RigidBoxVehicle {
         // --- ride: sample the terrain under every station, filter pitch, roll and height.
         let n = self.rig.stations.len();
         let mut heights = Vec::with_capacity(n);
-        let (mut hf, mut nf, mut hr, mut nr, mut hl, mut nl, mut hrr, mut nrr, mut hm) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+        let (mut hf, mut nf, mut hr, mut nr, mut hl, mut nl, mut hrr, mut nrr, mut hm) =
+            (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
         for s in &self.rig.stations {
             let (px, pz) = self.plan_point(s.rest_pos_m);
             let h = world.height_m(px, pz);
@@ -189,8 +199,10 @@ impl VehicleModel for RigidBoxVehicle {
         let h_mean = hm / nn;
         let zs: Vec<f64> = self.rig.stations.iter().map(|s| s.rest_pos_m.z).collect();
         let xs: Vec<f64> = self.rig.stations.iter().map(|s| s.rest_pos_m.x).collect();
-        let span_z = (zs.iter().cloned().fold(f64::MIN, f64::max) - zs.iter().cloned().fold(f64::MAX, f64::min)).max(0.5);
-        let span_x = (xs.iter().cloned().fold(f64::MIN, f64::max) - xs.iter().cloned().fold(f64::MAX, f64::min)).max(0.5);
+        let span_z =
+            (zs.iter().cloned().fold(f64::MIN, f64::max) - zs.iter().cloned().fold(f64::MAX, f64::min)).max(0.5);
+        let span_x =
+            (xs.iter().cloned().fold(f64::MIN, f64::max) - xs.iter().cloned().fold(f64::MAX, f64::min)).max(0.5);
         let target_pitch = if nf > 0.0 && nr > 0.0 { scalar::atan2(hf / nf - hr / nr, 0.8 * span_z) } else { 0.0 };
         let target_roll = if nl > 0.0 && nrr > 0.0 { scalar::atan2(hl / nl - hrr / nrr, 0.8 * span_x) } else { 0.0 };
         if !self.started {
@@ -226,7 +238,8 @@ impl VehicleModel for RigidBoxVehicle {
                             Some((lo, hi)) => scalar::clamp(t, lo, hi),
                             None => t,
                         };
-                        let err = if j.limits.is_none() { scalar::wrap_pi(t - self.artic[k]) } else { t - self.artic[k] };
+                        let err =
+                            if j.limits.is_none() { scalar::wrap_pi(t - self.artic[k]) } else { t - self.artic[k] };
                         self.artic[k] += scalar::clamp(err, -rate * dt_s, rate * dt_s);
                     }
                 }
@@ -249,19 +262,31 @@ impl VehicleModel for RigidBoxVehicle {
             GearRequest::Reverse => -1,
             _ => (1.0 + (vv / 7.0).floor()).min(self.rig.drivetrain.gearbox.forward_ratios.len() as f64) as i8,
         };
-        let ratio = if self.gear > 0 { self.rig.drivetrain.gearbox.forward_ratios[(self.gear - 1) as usize] } else { 3.0 };
+        let ratio =
+            if self.gear > 0 { self.rig.drivetrain.gearbox.forward_ratios[(self.gear - 1) as usize] } else { 3.0 };
         let wheel_r = self.rig.stations.first().map(|s| s.wheel.radius_m).unwrap_or(0.4);
         let e = &self.rig.drivetrain.engine;
         // A made-up overall ratio of 3.7 on top of the gearbox: only the shape of the rpm trace matters for a stand-in.
         self.rpm = scalar::clamp(scalar::rad_s_to_rpm(vv / wheel_r * ratio * 3.7), e.idle_rpm, e.redline_rpm);
         ledger.add(ForceTerm::Gravity, 0, Vec3::new(0.0, -self.mass_kg * g, 0.0), Vec3::ZERO);
-        let limiting = if self.speed.abs() < 0.2 && cmd.throttle > 0.5 { LimitingFactor::Stuck } else if cmd.brake > 0.5 && self.speed.abs() > 0.5 { LimitingFactor::Brake } else if a_drive.abs() >= grip_a * cmd.throttle * 0.999 && cmd.throttle > 0.0 { LimitingFactor::Grip } else if cmd.throttle > 0.0 { LimitingFactor::Power } else { LimitingFactor::None };
+        let limiting = if self.speed.abs() < 0.2 && cmd.throttle > 0.5 {
+            LimitingFactor::Stuck
+        } else if cmd.brake > 0.5 && self.speed.abs() > 0.5 {
+            LimitingFactor::Brake
+        } else if a_drive.abs() >= grip_a * cmd.throttle * 0.999 && cmd.throttle > 0.0 {
+            LimitingFactor::Grip
+        } else if cmd.throttle > 0.0 {
+            LimitingFactor::Power
+        } else {
+            LimitingFactor::None
+        };
         StepReport { limiting, speed_m_s: self.speed.abs(), substeps: 1 }
     }
 
     fn frame(&self) -> VehicleFrame {
         let n = self.rig.stations.len();
-        let steered: Vec<usize> = self.rig.stations.iter().enumerate().filter(|(_, s)| s.steer.is_some()).map(|(i, _)| i).collect();
+        let steered: Vec<usize> =
+            self.rig.stations.iter().enumerate().filter(|(_, s)| s.steer.is_some()).map(|(i, _)| i).collect();
         let mut joints: Vec<f32> = Vec::with_capacity(self.rig.joint_names().len());
         joints.extend(self.spin.iter().map(|&a| scalar::wrap_pi(a) as f32));
         joints.extend(steered.iter().map(|_| self.steer_angle as f32));
@@ -280,13 +305,26 @@ impl VehicleModel for RigidBoxVehicle {
             joints,
             engine_rpm: self.rpm as f32,
             gear: self.gear,
-            contacts: (0..n).map(|_| ContactFrame { flags: 1, normal_force_n: weight_share, sinkage_m: 0.0, slip: 0.0 }).collect(),
+            contacts: (0..n)
+                .map(|_| ContactFrame { flags: 1, normal_force_n: weight_share, sinkage_m: 0.0, slip: 0.0 })
+                .collect(),
             ledger_n: vec![],
         }
     }
 
     fn hash_state(&self, h: &mut StateHasher) {
-        for v in [self.x, self.z, self.yaw, self.speed, self.steer_angle, self.zb, self.pitch, self.roll, self.recoil_vel, self.rpm] {
+        for v in [
+            self.x,
+            self.z,
+            self.yaw,
+            self.speed,
+            self.steer_angle,
+            self.zb,
+            self.pitch,
+            self.roll,
+            self.recoil_vel,
+            self.rpm,
+        ] {
             h.write_f64(v);
         }
         for v in self.spin.iter().chain(&self.travel).chain(&self.artic) {

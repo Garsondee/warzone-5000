@@ -42,7 +42,16 @@ impl ScriptedCommands {
     /// A slow drive on flat ground while the turret slews through a full circle and the gun elevates and fires. 40 s long.
     pub fn tank_demo() -> ScriptedCommands {
         let aim = |t: f64, yaw: f64, pitch: f64, fire: bool| {
-            (t, Command { throttle: 0.2, turret_yaw_rad: Some(yaw), gun_pitch_rad: Some(pitch), fire, ..Command::NEUTRAL })
+            (
+                t,
+                Command {
+                    throttle: 0.2,
+                    turret_yaw_rad: Some(yaw),
+                    gun_pitch_rad: Some(pitch),
+                    fire,
+                    ..Command::NEUTRAL
+                },
+            )
         };
         ScriptedCommands::new(vec![
             aim(0.0, 0.0, 0.0, false),
@@ -95,7 +104,13 @@ impl DrivePort for ConstantTorquePowertrain {
         }
         mean_omega /= self.outputs.max(1) as f64;
         self.last_rpm = 800.0 + scalar::rad_s_to_rpm(mean_omega.abs()) * 6.0;
-        self.last_gear = if matches!(inputs.gear, GearRequest::Reverse) { -1 } else if matches!(inputs.gear, GearRequest::Neutral) { 0 } else { 1 };
+        self.last_gear = if matches!(inputs.gear, GearRequest::Reverse) {
+            -1
+        } else if matches!(inputs.gear, GearRequest::Neutral) {
+            0
+        } else {
+            1
+        };
     }
 
     fn telemetry(&self) -> DriveTelemetry {
@@ -130,7 +145,12 @@ mod tests {
         let j = 2.0;
         let dt = 1.0 / 240.0;
         for _ in 0..2000 {
-            p.step(dt, &inputs, &[ShaftState { omega_rad_s: omega, inertia_kg_m2: j, vehicle_speed_m_s: 0.0 }], &mut out);
+            p.step(
+                dt,
+                &inputs,
+                &[ShaftState { omega_rad_s: omega, inertia_kg_m2: j, vehicle_speed_m_s: 0.0 }],
+                &mut out,
+            );
             omega += out[0] / j * dt;
             assert!(omega > -1e-9, "reversed: {omega}");
         }

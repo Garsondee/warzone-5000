@@ -1,0 +1,45 @@
+{
+  "subtitle": "warzone-5000: a realistic ground-vehicle simulator, built by thirteen domain agents working in parallel. This page is the coordinator's view.",
+  "updated": "",
+  "strip": [
+    {"k": "Phase", "v": "Wave 0", "s": "Launch Kit: brief, contracts, guardrails, lane briefs", "state": "run"},
+    {"k": "Contract", "v": "0.1.0 draft", "s": "settles to v0.2 after the first design notes", "state": "wait"},
+    {"k": "First light", "v": "green on stand-ins", "s": "one truck over a bump strip, every merge", "state": "run"},
+    {"k": "Sessions", "v": "1 of 13", "s": "ARCH only; lanes launch in three ranks", "state": "run"},
+    {"k": "Usage", "v": "$204 / 20 h", "s": "this session's meter; weekly warning resets 10 Oct 02:00 UTC", "state": "wait"}
+  ],
+  "ranks": [
+    {"rank": 1, "note": "critical path to first light"},
+    {"rank": 2, "note": "parallel-safe; launches when rank 1's first hour looks healthy"},
+    {"rank": 3, "note": "needs the settled Command and CapabilityTable"}
+  ],
+  "lanes": [
+    {"name": "ARCH", "squad": "platform", "rank": 1, "state": "building", "mission": "Contracts, CI and guardrails, the integration spine, merges, reviews. Writes no feature code.", "last": "Launch Kit nearly done: contract, tooling, 13 briefs."},
+    {"name": "CHASSIS", "squad": "dynamics", "rank": 1, "state": "not launched", "mission": "A wheeled vehicle that rides, grips and handles: hull, suspension, tyres, steering."},
+    {"name": "DRIVE", "squad": "dynamics", "rank": 1, "state": "not launched", "mission": "Engine map, converter, gearbox, differentials, brakes with heat, fuel."},
+    {"name": "WORLD", "squad": "world", "rank": 1, "state": "not launched", "mission": "The obstacle course: hills, roads, mud, trees, barricades, buildings."},
+    {"name": "FORGE", "squad": "design", "rank": 1, "state": "not launched", "mission": "Designer choices to solver parameters; the reference garage starts with the HMMWV."},
+    {"name": "VIEWER", "squad": "visuals", "rank": 1, "state": "not launched", "mission": "Replay format, the browser viewer with forces drawn on, MP4 and chart tools."},
+    {"name": "VALIDATION", "squad": "truth", "rank": 1, "state": "not launched", "mission": "Real-vehicle dossiers, the harness, the dashboard and the Design Impact Matrix."},
+    {"name": "GEOMETRY", "squad": "design", "rank": 2, "state": "not launched", "mission": "Realistic hulls, turrets, wheels and tracks from lofted sections."},
+    {"name": "LOOK", "squad": "visuals", "rank": 2, "state": "not launched", "mission": "Camouflage, weathering, materials, lighting and dust."},
+    {"name": "TRACKS", "squad": "dynamics", "rank": 2, "state": "not launched", "mission": "Tracked running gear and soft ground: floats where tyres bog, turns by skidding."},
+    {"name": "GODOT", "squad": "platform", "rank": 2, "state": "not launched", "mission": "The Godot 4.6 front end: replay player, drive mode, Windows package."},
+    {"name": "COMBAT", "squad": "behaviour", "rank": 2, "state": "not launched", "mission": "Ballistics, penetration, damage, targets, turret and gun servos, recoil."},
+    {"name": "AI", "squad": "behaviour", "rank": 3, "state": "not launched", "mission": "Perception, planner, driver, gunner, tactician; fair: it emits only what a human could."}
+  ],
+  "milestones": [
+    {"id": "W0", "name": "Launch Kit", "state": "in progress", "criteria": "Briefs pass a cold-start test; guardrails reject a bad PR; a rehearsal lane round-trips."},
+    {"id": "S", "name": "Settling round", "state": "not started", "criteria": "Each lane's spike and design note; contract v0.2 within 24 hours."},
+    {"id": "M1", "name": "First light", "state": "not started", "criteria": "An HMMWV-class 4x4 over the bump strip, within 15/7/15% of the real truck on acceleration, top speed and braking; identical on Linux and Windows."},
+    {"id": "M2", "name": "Mud and steel", "state": "not started", "criteria": "Tracked vehicles on soft ground; a 2 km course; held-out vehicles within 12% median error; Godot drive mode on Windows."},
+    {"id": "M3", "name": "Turret and targets", "state": "not started", "criteria": "Recoil conserves momentum; traverse and elevation times within 20%; damage changes mobility."},
+    {"id": "M4", "name": "Thinking vehicles", "state": "not started", "criteria": "At least 90% course completion for five vehicles, stuck under 3%, rollover under 1%."},
+    {"id": "M5", "name": "Game loop", "state": "not started", "criteria": "Decided at the M4 checkpoint."}
+  ],
+  "pictures": [],
+  "log": [
+    {"t": "2026-10-08 17:00", "sessions": "1 of 13", "note": "Launch Kit under way. This session's meter reads about $204 after about 20 hours."}
+  ],
+  "footer": "Defaults apply to every open card until you answer it."
+}

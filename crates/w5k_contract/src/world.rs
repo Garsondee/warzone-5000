@@ -154,10 +154,17 @@ pub enum PropKind {
 /// Collision shape of a prop, in the prop's local frame (primitives only; the world lane may extend this by CCR).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum PropShape {
-    Sphere { radius_m: f64 },
+    Sphere {
+        radius_m: f64,
+    },
     /// A vertical cylinder standing on `base` (a tree trunk, a pillar), `height_m` tall.
-    Cylinder { radius_m: f64, height_m: f64 },
-    Box { half_m: Vec3 },
+    Cylinder {
+        radius_m: f64,
+        height_m: f64,
+    },
+    Box {
+        half_m: Vec3,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -213,14 +220,29 @@ mod tests {
     fn mud() -> MaterialDef {
         MaterialDef {
             name: "mud".into(),
-            mu_peak: Param::estimate(0.45, 0.3, 0.6, "stand-in order of magnitude for a wet clay; WORLD and VALIDATION replace it with a cited value"),
+            mu_peak: Param::estimate(
+                0.45,
+                0.3,
+                0.6,
+                "stand-in order of magnitude for a wet clay; WORLD and VALIDATION replace it with a cited value",
+            ),
             mu_slide: Param::estimate(0.4, 0.3, 0.5, "stand-in; to be sourced"),
             rolling_coeff: Param::estimate(0.12, 0.08, 0.2, "stand-in; to be sourced"),
             roughness_rms_m: Param::estimate(0.03, 0.01, 0.06, "stand-in; to be sourced"),
             soil: Some(SoilDef {
                 n: Param::estimate(0.8, 0.5, 1.1, "stand-in; to be sourced"),
-                kc_pa_m_n1: Param::estimate(13_190.0, 5_000.0, 30_000.0, "stand-in order of magnitude for a clayey soil; to be sourced"),
-                kphi_pa_m_n: Param::estimate(692_200.0, 400_000.0, 1_200_000.0, "stand-in order of magnitude for a clayey soil; to be sourced"),
+                kc_pa_m_n1: Param::estimate(
+                    13_190.0,
+                    5_000.0,
+                    30_000.0,
+                    "stand-in order of magnitude for a clayey soil; to be sourced",
+                ),
+                kphi_pa_m_n: Param::estimate(
+                    692_200.0,
+                    400_000.0,
+                    1_200_000.0,
+                    "stand-in order of magnitude for a clayey soil; to be sourced",
+                ),
                 cohesion_pa: Param::estimate(4_140.0, 2_000.0, 8_000.0, "stand-in; to be sourced"),
                 friction_angle_deg: Param::estimate(13.0, 8.0, 20.0, "stand-in; to be sourced"),
                 shear_k_m: Param::estimate(0.025, 0.01, 0.05, "stand-in; to be sourced"),

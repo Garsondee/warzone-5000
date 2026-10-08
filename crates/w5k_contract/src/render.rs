@@ -109,7 +109,10 @@ impl RenderRig {
             }
             if let Some(j) = n.joint {
                 if j.index >= self.joint_count {
-                    e.push(format!("node {i} ({}): joint index {} >= joint_count {}", n.name, j.index, self.joint_count));
+                    e.push(format!(
+                        "node {i} ({}): joint index {} >= joint_count {}",
+                        n.name, j.index, self.joint_count
+                    ));
                 }
             }
         }

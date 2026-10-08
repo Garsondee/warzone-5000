@@ -65,7 +65,15 @@ pub fn first_light(mut p: FirstLightParts) -> ScenarioResult {
 }
 
 /// Step `model` for `duration_s` seconds at [`TICK_HZ`] under `script`, recording `record_hz` frames per second.
-pub fn run(model: &mut dyn VehicleModel, world: &dyn WorldQuery, script: &ScriptedCommands, duration_s: f64, record_hz: f64, scenario: &str, course: &str) -> ScenarioResult {
+pub fn run(
+    model: &mut dyn VehicleModel,
+    world: &dyn WorldQuery,
+    script: &ScriptedCommands,
+    duration_s: f64,
+    record_hz: f64,
+    scenario: &str,
+    course: &str,
+) -> ScenarioResult {
     let dt = 1.0 / TICK_HZ;
     let ticks = (duration_s * TICK_HZ).round() as usize;
     let every = (TICK_HZ / record_hz).round().max(1.0) as usize;

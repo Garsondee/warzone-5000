@@ -39,9 +39,12 @@ pub use command::{Command, GearRequest};
 pub use frame::{ContactFrame, Event, Frame, ReplayHeader, VehicleFrame, VehicleHeader};
 pub use ledger::{ForceLedger, ForceTerm};
 pub use param::{Param, Provenance};
-pub use ports::{ContactElement, ContactInput, ContactOutput, DriveInputs, DrivePort, DriveTelemetry, ShaftState, SuspensionElement, SuspensionOut};
-pub use rig::PhysRig;
+pub use ports::{
+    ContactElement, ContactInput, ContactOutput, DriveInputs, DrivePort, DriveTelemetry, ShaftState, SuspensionElement,
+    SuspensionOut,
+};
 pub use render::RenderRig;
+pub use rig::PhysRig;
 pub use vehicle::{LimitingFactor, StepReport, VehicleModel};
 pub use world::{GroundSample, Material, MaterialId, MaterialTable, PropRef, RayHit, SoilParams, WorldQuery};
 

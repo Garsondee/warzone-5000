@@ -1,0 +1,6 @@
+# Formatting rules for every Rust file. CI runs `cargo fmt --all -- --check`; fix a failure with `cargo fmt --all`.
+# Stable options only. Wide lines (120) and "Max" small-heuristics keep short structs, calls and match arms on one line,
+# which suits maths-heavy code where a formula should read as a formula.
+edition = "2021"
+max_width = 120
+use_small_heuristics = "Max"

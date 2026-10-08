@@ -51,7 +51,12 @@ impl Command {
     /// The same command with every analogue input forced into range (NaN becomes 0). Models should call this first.
     pub fn sanitized(&self) -> Command {
         let fix = |v: f64, lo: f64, hi: f64| if v.is_nan() { 0.0 } else { v.clamp(lo, hi) };
-        Command { throttle: fix(self.throttle, 0.0, 1.0), brake: fix(self.brake, 0.0, 1.0), steer: fix(self.steer, -1.0, 1.0), ..*self }
+        Command {
+            throttle: fix(self.throttle, 0.0, 1.0),
+            brake: fix(self.brake, 0.0, 1.0),
+            steer: fix(self.steer, -1.0, 1.0),
+            ..*self
+        }
     }
 
     pub fn throttle(t: f64) -> Command {
@@ -75,7 +80,13 @@ mod tests {
 
     #[test]
     fn json_round_trip() {
-        let c = Command { throttle: 0.5, steer: -0.25, gear: GearRequest::Gear(2), turret_yaw_rad: Some(0.1), ..Command::NEUTRAL };
+        let c = Command {
+            throttle: 0.5,
+            steer: -0.25,
+            gear: GearRequest::Gear(2),
+            turret_yaw_rad: Some(0.1),
+            ..Command::NEUTRAL
+        };
         let s = serde_json::to_string(&c).unwrap();
         assert_eq!(serde_json::from_str::<Command>(&s).unwrap(), c);
     }

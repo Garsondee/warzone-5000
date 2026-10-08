@@ -80,14 +80,32 @@ pub fn run_stand_in(
 /// The truck driving the bump strip: launch, hump, washboard, plateau, pothole, mud patch, turn, brake. 40 s at 30 Hz.
 pub fn truck_over_bumps() -> (ReplayHeader, Vec<Frame>, RenderRig) {
     let (rig, render) = box_truck();
-    let (h, f, _) = run_stand_in("truck_over_bumps", &rig, &BumpStrip::standard(), "bump_strip", (0.0, 0.0), &ScriptedCommands::first_light(), 40.0, 30.0);
+    let (h, f, _) = run_stand_in(
+        "truck_over_bumps",
+        &rig,
+        &BumpStrip::standard(),
+        "bump_strip",
+        (0.0, 0.0),
+        &ScriptedCommands::first_light(),
+        40.0,
+        30.0,
+    );
     (h, f, render)
 }
 
 /// The tank creeping along flat ground while the turret slews through a full circle, the gun elevates and fires once. 36 s at 30 Hz.
 pub fn tank_slew_and_pitch() -> (ReplayHeader, Vec<Frame>, RenderRig) {
     let (rig, render) = box_tank();
-    let (h, f, _) = run_stand_in("tank_slew_and_pitch", &rig, &FlatPlane::new(), "flat_plane", (0.0, 0.0), &ScriptedCommands::tank_demo(), 36.0, 30.0);
+    let (h, f, _) = run_stand_in(
+        "tank_slew_and_pitch",
+        &rig,
+        &FlatPlane::new(),
+        "flat_plane",
+        (0.0, 0.0),
+        &ScriptedCommands::tank_demo(),
+        36.0,
+        30.0,
+    );
     (h, f, render)
 }
 

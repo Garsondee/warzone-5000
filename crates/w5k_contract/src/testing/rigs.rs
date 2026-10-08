@@ -37,11 +37,30 @@ pub fn box_mesh(name: &str, node: usize, slot: usize, c: Vec3, h: Vec3) -> MeshP
         }
     }
     let n = positions.len();
-    MeshPart { name: name.into(), node, material_slot: slot, positions, normals, edge: vec![0.0; n], cavity: vec![0.0; n], indices }
+    MeshPart {
+        name: name.into(),
+        node,
+        material_slot: slot,
+        positions,
+        normals,
+        edge: vec![0.0; n],
+        cavity: vec![0.0; n],
+        indices,
+    }
 }
 
 /// A cylinder along local axis `axis` (0 = X, 1 = Y, 2 = Z) centred at `c`, with radial side normals and flat caps.
-pub fn cylinder_mesh(name: &str, node: usize, slot: usize, c: Vec3, radius: f64, half_len: f64, axis: usize, segments: usize) -> MeshPart {
+#[allow(clippy::too_many_arguments)] // a mesh generator's natural parameter list
+pub fn cylinder_mesh(
+    name: &str,
+    node: usize,
+    slot: usize,
+    c: Vec3,
+    radius: f64,
+    half_len: f64,
+    axis: usize,
+    segments: usize,
+) -> MeshPart {
     let (u, v) = ((axis + 1) % 3, (axis + 2) % 3);
     let cs = c.as_array();
     let mut positions = Vec::new();
@@ -96,12 +115,25 @@ pub fn cylinder_mesh(name: &str, node: usize, slot: usize, c: Vec3, radius: f64,
         }
     }
     let n = positions.len();
-    MeshPart { name: name.into(), node, material_slot: slot, positions, normals, edge: vec![0.0; n], cavity: vec![0.0; n], indices }
+    MeshPart {
+        name: name.into(),
+        node,
+        material_slot: slot,
+        positions,
+        normals,
+        edge: vec![0.0; n],
+        cavity: vec![0.0; n],
+        indices,
+    }
 }
 
 fn box_inertia(mass: f64, size: Vec3) -> Mat3 {
     let k = mass / 12.0;
-    Mat3::diagonal(k * (size.y * size.y + size.z * size.z), k * (size.x * size.x + size.z * size.z), k * (size.x * size.x + size.y * size.y))
+    Mat3::diagonal(
+        k * (size.y * size.y + size.z * size.z),
+        k * (size.x * size.x + size.z * size.z),
+        k * (size.x * size.x + size.y * size.y),
+    )
 }
 
 fn solid(name: &str, mass_kg: f64, com: Vec3, size: Vec3) -> BodyDef {
@@ -129,7 +161,16 @@ fn damper(bump: f64, rebound: f64) -> DamperDef {
 }
 
 fn engine(curve: Vec<(f64, f64)>, idle: f64, redline: f64, inertia: f64, kind: EngineKind) -> EngineDef {
-    EngineDef { kind, torque_curve: curve, idle_rpm: idle, redline_rpm: redline, inertia_kg_m2: inertia, drag_const_nm: 12.0, drag_per_rpm_nm: 0.006, bsfc_best_g_kwh: 240.0 }
+    EngineDef {
+        kind,
+        torque_curve: curve,
+        idle_rpm: idle,
+        redline_rpm: redline,
+        inertia_kg_m2: inertia,
+        drag_const_nm: 12.0,
+        drag_per_rpm_nm: 0.006,
+        bsfc_best_g_kwh: 240.0,
+    }
 }
 
 fn brake(station: usize, max_torque_nm: f64, parking: bool) -> BrakeDef {
@@ -154,7 +195,10 @@ struct Layout {
 
 impl Layout {
     fn of(rig: &PhysRig) -> Layout {
-        Layout { stations: rig.stations.len(), steered: rig.stations.iter().enumerate().filter(|(_, s)| s.steer.is_some()).map(|(i, _)| i).collect() }
+        Layout {
+            stations: rig.stations.len(),
+            steered: rig.stations.iter().enumerate().filter(|(_, s)| s.steer.is_some()).map(|(i, _)| i).collect(),
+        }
     }
     fn spin(&self, station: usize) -> usize {
         station
@@ -177,7 +221,15 @@ fn spin_axis() -> Vec3 {
 
 /// Add the node chain and meshes for one station: travel > (steer) > wheel.
 #[allow(clippy::too_many_arguments)]
-fn station_nodes(rr: &mut RenderRig, lay: &Layout, rig: &PhysRig, i: usize, tyre_slot: usize, rim_slot: usize, wheel_segments: usize) {
+fn station_nodes(
+    rr: &mut RenderRig,
+    lay: &Layout,
+    rig: &PhysRig,
+    i: usize,
+    tyre_slot: usize,
+    rim_slot: usize,
+    wheel_segments: usize,
+) {
     let s = &rig.stations[i];
     let travel = rr.nodes.len();
     rr.nodes.push(RenderNode {
@@ -217,9 +269,24 @@ fn station_nodes(rr: &mut RenderRig, lay: &Layout, rig: &PhysRig, i: usize, tyre
     let r = s.wheel.radius_m;
     let hw = 0.5 * s.wheel.width_m;
     rr.meshes.push(cylinder_mesh(&format!("{}.tyre", s.name), wheel, tyre_slot, Vec3::ZERO, r, hw, 0, wheel_segments));
-    rr.meshes.push(cylinder_mesh(&format!("{}.rim", s.name), wheel, rim_slot, Vec3::ZERO, 0.62 * r, hw * 1.05, 0, wheel_segments));
+    rr.meshes.push(cylinder_mesh(
+        &format!("{}.rim", s.name),
+        wheel,
+        rim_slot,
+        Vec3::ZERO,
+        0.62 * r,
+        hw * 1.05,
+        0,
+        wheel_segments,
+    ));
     // A marker lug so that wheel spin is visible even on a plain cylinder.
-    rr.meshes.push(box_mesh(&format!("{}.lug", s.name), wheel, rim_slot, Vec3::new(hw * 1.05, 0.0, 0.8 * r), Vec3::new(0.02, 0.04, 0.05)));
+    rr.meshes.push(box_mesh(
+        &format!("{}.lug", s.name),
+        wheel,
+        rim_slot,
+        Vec3::new(hw * 1.05, 0.0, 0.8 * r),
+        Vec3::new(0.02, 0.04, 0.05),
+    ));
 }
 
 fn finish(rr: &mut RenderRig, rig: &PhysRig) {
@@ -233,7 +300,12 @@ fn finish(rr: &mut RenderRig, rig: &PhysRig) {
 pub fn box_truck() -> (PhysRig, RenderRig) {
     let (half_x, half_y, half_z) = (1.05, 0.5, 2.3);
     let mut stations = Vec::new();
-    let spec = [("fl", Side::Left, 0u8, -0.9, -1.5, true, 0usize), ("fr", Side::Right, 0, 0.9, -1.5, true, 1), ("rl", Side::Left, 1, -0.9, 1.5, false, 2), ("rr", Side::Right, 1, 0.9, 1.5, false, 3)];
+    let spec = [
+        ("fl", Side::Left, 0u8, -0.9, -1.5, true, 0usize),
+        ("fr", Side::Right, 0, 0.9, -1.5, true, 1),
+        ("rl", Side::Left, 1, -0.9, 1.5, false, 2),
+        ("rr", Side::Right, 1, 0.9, 1.5, false, 3),
+    ];
     for (name, side, axle, x, z, steered, out) in spec {
         stations.push(StationDef {
             name: name.into(),
@@ -251,14 +323,35 @@ pub fn box_truck() -> (PhysRig, RenderRig) {
                 bump_stop: BumpStopDef { engage_m: 0.09, rate_n_m: 120_000.0, progression: 1.0 },
             },
             steer: steered.then_some(SteerDef { max_angle_rad: 0.55, ackermann: 1.0 }),
-            wheel: WheelDef { kind: WheelKind::Tyre, radius_m: 0.4, width_m: 0.26, inertia_kg_m2: 1.4, tyre: Some(tyre()) },
+            wheel: WheelDef {
+                kind: WheelKind::Tyre,
+                radius_m: 0.4,
+                width_m: 0.26,
+                inertia_kg_m2: 1.4,
+                tyre: Some(tyre()),
+            },
             drive_output: Some(out),
         });
     }
-    let axle_diff = |a: usize, b: usize| DriveNode::Diff { kind: DiffKind::Open, ratio: 3.73, bias: 0.0, children: vec![DriveNode::Output(a), DriveNode::Output(b)] };
+    let axle_diff = |a: usize, b: usize| DriveNode::Diff {
+        kind: DiffKind::Open,
+        ratio: 3.73,
+        bias: 0.0,
+        children: vec![DriveNode::Output(a), DriveNode::Output(b)],
+    };
     let drivetrain = DrivetrainDef {
-        engine: engine(vec![(800.0, 150.0), (1500.0, 240.0), (2500.0, 300.0), (3500.0, 280.0), (4500.0, 220.0)], 800.0, 4500.0, 0.35, EngineKind::Diesel),
-        coupling: CouplingDef::TorqueConverter { stall_ratio: 2.0, k_factor_rpm_per_sqrt_nm: 85.0, lockup_speed_ratio: Some(0.85) },
+        engine: engine(
+            vec![(800.0, 150.0), (1500.0, 240.0), (2500.0, 300.0), (3500.0, 280.0), (4500.0, 220.0)],
+            800.0,
+            4500.0,
+            0.35,
+            EngineKind::Diesel,
+        ),
+        coupling: CouplingDef::TorqueConverter {
+            stall_ratio: 2.0,
+            k_factor_rpm_per_sqrt_nm: 85.0,
+            lockup_speed_ratio: Some(0.85),
+        },
         gearbox: GearboxDef {
             forward_ratios: vec![3.06, 1.63, 1.0, 0.7],
             reverse_ratios: vec![2.29],
@@ -266,22 +359,45 @@ pub fn box_truck() -> (PhysRig, RenderRig) {
             inertia_kg_m2: 0.12,
             shift: ShiftDef { automatic: true, upshift_rpm: 4_000.0, downshift_rpm: 1_600.0, shift_time_s: 0.4 },
         },
-        driveline: DriveNode::Diff { kind: DiffKind::Open, ratio: 1.0, bias: 0.0, children: vec![axle_diff(0, 1), axle_diff(2, 3)] },
+        driveline: DriveNode::Diff {
+            kind: DiffKind::Open,
+            ratio: 1.0,
+            bias: 0.0,
+            children: vec![axle_diff(0, 1), axle_diff(2, 3)],
+        },
         outputs: (0..4).map(|i| OutputDef { station: i, final_drive_ratio: 1.0, efficiency: 0.97 }).collect(),
-        brakes: vec![brake(0, 1_800.0, false), brake(1, 1_800.0, false), brake(2, 1_500.0, true), brake(3, 1_500.0, true)],
+        brakes: vec![
+            brake(0, 1_800.0, false),
+            brake(1, 1_800.0, false),
+            brake(2, 1_500.0, true),
+            brake(3, 1_500.0, true),
+        ],
     };
     let rig = PhysRig {
         id: "box_truck".into(),
         hull: solid("hull", 2_000.0, Vec3::new(0.0, -0.05, 0.1), Vec3::new(2.0 * half_x, 2.0 * half_y, 2.0 * half_z)),
         stations,
-        anti_roll: vec![AntiRollDef { left_station: 0, right_station: 1, rate_n_m: 9_000.0 }, AntiRollDef { left_station: 2, right_station: 3, rate_n_m: 6_000.0 }],
+        anti_roll: vec![
+            AntiRollDef { left_station: 0, right_station: 1, rate_n_m: 9_000.0 },
+            AntiRollDef { left_station: 2, right_station: 3, rate_n_m: 6_000.0 },
+        ],
         tracks: vec![],
         drivetrain,
         articulation: vec![],
         aero: AeroDef { drag_coeff: 0.45, frontal_area_m2: 3.2, centre_of_pressure_m: Vec3::new(0.0, 0.2, 0.0) },
         proxies: vec![
-            CollisionProxy { name: "hull".into(), shape: ProxyShape::Box { half_m: Vec3::new(half_x, half_y, half_z) }, pose: Transform::IDENTITY, attached_to: None },
-            CollisionProxy { name: "cabin".into(), shape: ProxyShape::Box { half_m: Vec3::new(0.95, 0.4, 1.0) }, pose: Transform::from_pos(Vec3::new(0.0, 0.9, -0.6)), attached_to: None },
+            CollisionProxy {
+                name: "hull".into(),
+                shape: ProxyShape::Box { half_m: Vec3::new(half_x, half_y, half_z) },
+                pose: Transform::IDENTITY,
+                attached_to: None,
+            },
+            CollisionProxy {
+                name: "cabin".into(),
+                shape: ProxyShape::Box { half_m: Vec3::new(0.95, 0.4, 1.0) },
+                pose: Transform::from_pos(Vec3::new(0.0, 0.9, -0.6)),
+                attached_to: None,
+            },
         ],
         muzzles: vec![],
         integration: IntegrationDef { substeps: 4 },
@@ -290,7 +406,13 @@ pub fn box_truck() -> (PhysRig, RenderRig) {
     let lay = Layout::of(&rig);
     let mut rr = RenderRig {
         id: rig.id.clone(),
-        nodes: vec![RenderNode { name: "hull".into(), parent: None, role: NodeRole::Hull, rest: Transform::IDENTITY, joint: None }],
+        nodes: vec![RenderNode {
+            name: "hull".into(),
+            parent: None,
+            role: NodeRole::Hull,
+            rest: Transform::IDENTITY,
+            joint: None,
+        }],
         meshes: vec![],
         material_slots: vec![
             MaterialSlot { name: "paint".into(), kind: SlotKind::Paint },
@@ -315,7 +437,15 @@ pub fn box_truck() -> (PhysRig, RenderRig) {
 /// and the full articulation chain (turret yaw > gun pitch > recoil) with a muzzle.
 pub fn box_tank() -> (PhysRig, RenderRig) {
     let mut stations = Vec::new();
-    let zs = [(-3.2, WheelKind::Idler, 0.35, "idler"), (-2.4, WheelKind::RoadWheel, 0.38, "r1"), (-1.2, WheelKind::RoadWheel, 0.38, "r2"), (0.0, WheelKind::RoadWheel, 0.38, "r3"), (1.2, WheelKind::RoadWheel, 0.38, "r4"), (2.4, WheelKind::RoadWheel, 0.38, "r5"), (3.3, WheelKind::Sprocket, 0.4, "spr")];
+    let zs = [
+        (-3.2, WheelKind::Idler, 0.35, "idler"),
+        (-2.4, WheelKind::RoadWheel, 0.38, "r1"),
+        (-1.2, WheelKind::RoadWheel, 0.38, "r2"),
+        (0.0, WheelKind::RoadWheel, 0.38, "r3"),
+        (1.2, WheelKind::RoadWheel, 0.38, "r4"),
+        (2.4, WheelKind::RoadWheel, 0.38, "r5"),
+        (3.3, WheelKind::Sprocket, 0.4, "spr"),
+    ];
     for (side, sx, prefix) in [(Side::Left, -1.35, "l"), (Side::Right, 1.35, "r")] {
         for (k, (z, kind, radius, tag)) in zs.iter().enumerate() {
             let suspension = match kind {
@@ -325,7 +455,12 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
                     damper: damper(18_000.0, 24_000.0),
                     bump_stop: BumpStopDef { engage_m: 0.17, rate_n_m: 900_000.0, progression: 1.5 },
                 },
-                _ => SuspensionDef { spring: SpringKind::Rigid, preload_n: 0.0, damper: damper(0.0, 0.0), bump_stop: BumpStopDef { engage_m: 0.0, rate_n_m: 0.0, progression: 0.0 } },
+                _ => SuspensionDef {
+                    spring: SpringKind::Rigid,
+                    preload_n: 0.0,
+                    damper: damper(0.0, 0.0),
+                    bump_stop: BumpStopDef { engage_m: 0.0, rate_n_m: 0.0, progression: 0.0 },
+                },
             };
             stations.push(StationDef {
                 name: format!("{prefix}_{tag}"),
@@ -339,7 +474,11 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
                 suspension,
                 steer: None,
                 wheel: WheelDef { kind: *kind, radius_m: *radius, width_m: 0.3, inertia_kg_m2: 6.0, tyre: None },
-                drive_output: if *kind == WheelKind::Sprocket { Some(if side == Side::Left { 0 } else { 1 }) } else { None },
+                drive_output: if *kind == WheelKind::Sprocket {
+                    Some(if side == Side::Left { 0 } else { 1 })
+                } else {
+                    None
+                },
             });
         }
     }
@@ -362,8 +501,18 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
         })
         .collect();
     let drivetrain = DrivetrainDef {
-        engine: engine(vec![(600.0, 1_500.0), (1_200.0, 3_500.0), (1_800.0, 4_200.0), (2_400.0, 3_800.0), (2_800.0, 3_000.0)], 600.0, 2_800.0, 3.0, EngineKind::Diesel),
-        coupling: CouplingDef::TorqueConverter { stall_ratio: 2.4, k_factor_rpm_per_sqrt_nm: 40.0, lockup_speed_ratio: None },
+        engine: engine(
+            vec![(600.0, 1_500.0), (1_200.0, 3_500.0), (1_800.0, 4_200.0), (2_400.0, 3_800.0), (2_800.0, 3_000.0)],
+            600.0,
+            2_800.0,
+            3.0,
+            EngineKind::Diesel,
+        ),
+        coupling: CouplingDef::TorqueConverter {
+            stall_ratio: 2.4,
+            k_factor_rpm_per_sqrt_nm: 40.0,
+            lockup_speed_ratio: None,
+        },
         gearbox: GearboxDef {
             forward_ratios: vec![4.0, 2.4, 1.5, 1.0],
             reverse_ratios: vec![4.4, 2.2],
@@ -371,8 +520,15 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
             inertia_kg_m2: 1.2,
             shift: ShiftDef { automatic: true, upshift_rpm: 2_500.0, downshift_rpm: 1_100.0, shift_time_s: 0.6 },
         },
-        driveline: DriveNode::SteerUnit { kind: SteerUnitKind::ControlledDifferential, ratio: 1.0, children: vec![DriveNode::Output(0), DriveNode::Output(1)] },
-        outputs: vec![OutputDef { station: per_side - 1, final_drive_ratio: 5.0, efficiency: 0.96 }, OutputDef { station: 2 * per_side - 1, final_drive_ratio: 5.0, efficiency: 0.96 }],
+        driveline: DriveNode::SteerUnit {
+            kind: SteerUnitKind::ControlledDifferential,
+            ratio: 1.0,
+            children: vec![DriveNode::Output(0), DriveNode::Output(1)],
+        },
+        outputs: vec![
+            OutputDef { station: per_side - 1, final_drive_ratio: 5.0, efficiency: 0.96 },
+            OutputDef { station: 2 * per_side - 1, final_drive_ratio: 5.0, efficiency: 0.96 },
+        ],
         brakes: vec![brake(per_side - 1, 14_000.0, true), brake(2 * per_side - 1, 14_000.0, true)],
     };
     let turret_anchor = Vec3::new(0.0, 0.6, 0.2);
@@ -387,7 +543,16 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
             axis: Vec3::Y,
             limits: None,
             body: solid("turret", 12_000.0, Vec3::new(0.0, 0.5, 0.1), Vec3::new(2.8, 0.9, 3.6)),
-            servo: Some(ServoDef { max_rate: 0.7, max_accel: 1.2, max_effort: 40_000.0, kp: 60_000.0, kd: 12_000.0, stabiliser_rejection: 0.9, stabiliser_bandwidth_hz: 3.0, recoil: None }),
+            servo: Some(ServoDef {
+                max_rate: 0.7,
+                max_accel: 1.2,
+                max_effort: 40_000.0,
+                kp: 60_000.0,
+                kd: 12_000.0,
+                stabiliser_rejection: 0.9,
+                stabiliser_bandwidth_hz: 3.0,
+                recoil: None,
+            }),
         },
         JointDef {
             name: "gun_pitch".into(),
@@ -398,7 +563,16 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
             axis: Vec3::X,
             limits: Some((-0.14, 0.35)),
             body: solid("gun_cradle", 2_800.0, Vec3::new(0.0, 0.0, -0.6), Vec3::new(0.5, 0.5, 1.5)),
-            servo: Some(ServoDef { max_rate: 0.35, max_accel: 1.0, max_effort: 12_000.0, kp: 30_000.0, kd: 6_000.0, stabiliser_rejection: 0.9, stabiliser_bandwidth_hz: 3.0, recoil: None }),
+            servo: Some(ServoDef {
+                max_rate: 0.35,
+                max_accel: 1.0,
+                max_effort: 12_000.0,
+                kp: 30_000.0,
+                kd: 6_000.0,
+                stabiliser_rejection: 0.9,
+                stabiliser_bandwidth_hz: 3.0,
+                recoil: None,
+            }),
         },
         JointDef {
             name: "gun_recoil".into(),
@@ -409,7 +583,16 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
             axis: Vec3::Z,
             limits: Some((0.0, 0.35)),
             body: solid("barrel", 1_200.0, Vec3::new(0.0, 0.0, -2.5), Vec3::new(0.15, 0.15, 5.0)),
-            servo: Some(ServoDef { max_rate: 6.0, max_accel: 200.0, max_effort: 500_000.0, kp: 0.0, kd: 0.0, stabiliser_rejection: 0.0, stabiliser_bandwidth_hz: 0.0, recoil: Some(RecoilDef { spring_n_m: 150_000.0, damper_ns_m: 30_000.0, stroke_m: 0.35 }) }),
+            servo: Some(ServoDef {
+                max_rate: 6.0,
+                max_accel: 200.0,
+                max_effort: 500_000.0,
+                kp: 0.0,
+                kd: 0.0,
+                stabiliser_rejection: 0.0,
+                stabiliser_bandwidth_hz: 0.0,
+                recoil: Some(RecoilDef { spring_n_m: 150_000.0, damper_ns_m: 30_000.0, stroke_m: 0.35 }),
+            }),
         },
     ];
     let rig = PhysRig {
@@ -422,17 +605,38 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
         articulation,
         aero: AeroDef { drag_coeff: 0.9, frontal_area_m2: 8.0, centre_of_pressure_m: Vec3::new(0.0, 0.6, 0.0) },
         proxies: vec![
-            CollisionProxy { name: "hull".into(), shape: ProxyShape::Box { half_m: Vec3::new(1.5, 0.6, 3.5) }, pose: Transform::IDENTITY, attached_to: None },
-            CollisionProxy { name: "turret".into(), shape: ProxyShape::Box { half_m: Vec3::new(1.4, 0.4, 1.8) }, pose: Transform::from_pos(Vec3::new(0.0, 0.4, 0.1)), attached_to: Some(0) },
+            CollisionProxy {
+                name: "hull".into(),
+                shape: ProxyShape::Box { half_m: Vec3::new(1.5, 0.6, 3.5) },
+                pose: Transform::IDENTITY,
+                attached_to: None,
+            },
+            CollisionProxy {
+                name: "turret".into(),
+                shape: ProxyShape::Box { half_m: Vec3::new(1.4, 0.4, 1.8) },
+                pose: Transform::from_pos(Vec3::new(0.0, 0.4, 0.1)),
+                attached_to: Some(0),
+            },
         ],
-        muzzles: vec![MuzzleDef { name: "main_gun".into(), joint: 2, pose: Transform::new(Vec3::new(0.0, 0.0, -4.9), Quat::IDENTITY), caliber_m: 0.12 }],
+        muzzles: vec![MuzzleDef {
+            name: "main_gun".into(),
+            joint: 2,
+            pose: Transform::new(Vec3::new(0.0, 0.0, -4.9), Quat::IDENTITY),
+            caliber_m: 0.12,
+        }],
         integration: IntegrationDef { substeps: 6 },
     };
 
     let lay = Layout::of(&rig);
     let mut rr = RenderRig {
         id: rig.id.clone(),
-        nodes: vec![RenderNode { name: "hull".into(), parent: None, role: NodeRole::Hull, rest: Transform::IDENTITY, joint: None }],
+        nodes: vec![RenderNode {
+            name: "hull".into(),
+            parent: None,
+            role: NodeRole::Hull,
+            rest: Transform::IDENTITY,
+            joint: None,
+        }],
         meshes: vec![],
         material_slots: vec![
             MaterialSlot { name: "paint".into(), kind: SlotKind::Paint },
@@ -449,7 +653,13 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
     for (side, sx, name) in [(Side::Left, -1.35, "track_l"), (Side::Right, 1.35, "track_r")] {
         let _ = side;
         let n = rr.nodes.len();
-        rr.nodes.push(RenderNode { name: name.into(), parent: Some(0), role: NodeRole::Track, rest: Transform::from_pos(Vec3::new(sx, -0.45, 0.05)), joint: None });
+        rr.nodes.push(RenderNode {
+            name: name.into(),
+            parent: Some(0),
+            role: NodeRole::Track,
+            rest: Transform::from_pos(Vec3::new(sx, -0.45, 0.05)),
+            joint: None,
+        });
         rr.meshes.push(box_mesh(name, n, 3, Vec3::ZERO, Vec3::new(0.27, 0.43, 3.7)));
     }
     // Turret > gun pitch > recoil.
@@ -490,7 +700,13 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
 /// which is all it is for: FORGE's real reference vehicles (HMMWV, M113, ...) replace it.
 pub fn dummy_vehicle_def() -> VehicleDef {
     let e = |v: f64, lo: f64, hi: f64| Param::estimate(v, lo, hi, "stand-in value, not a measurement");
-    let axle = |from_front: f64, steered: bool| AxleDef { from_front_m: e(from_front, from_front - 0.1, from_front + 0.1), track_width_m: e(1.8, 1.6, 2.0), steered, driven: true, anti_roll_n_m: Some(e(8_000.0, 2_000.0, 20_000.0)) };
+    let axle = |from_front: f64, steered: bool| AxleDef {
+        from_front_m: e(from_front, from_front - 0.1, from_front + 0.1),
+        track_width_m: e(1.8, 1.6, 2.0),
+        steered,
+        driven: true,
+        anti_roll_n_m: Some(e(8_000.0, 2_000.0, 20_000.0)),
+    };
     VehicleDef {
         id: "box_truck".into(),
         name: "Box truck (stand-in)".into(),
@@ -552,7 +768,12 @@ pub fn dummy_vehicle_def() -> VehicleDef {
             steering_unit: None,
             driveline_efficiency: e(0.9, 0.85, 0.95),
         },
-        brakes: BrakesDef { service_decel_g: e(0.8, 0.6, 0.9), front_share: e(0.6, 0.5, 0.7), thermal_mass_kj_k: e(4.0, 2.0, 8.0), parking_brake: true },
+        brakes: BrakesDef {
+            service_decel_g: e(0.8, 0.6, 0.9),
+            front_share: e(0.6, 0.5, 0.7),
+            thermal_mass_kj_k: e(4.0, 2.0, 8.0),
+            parking_brake: true,
+        },
         aero: AeroSliders { drag_coeff: e(0.45, 0.35, 0.6), frontal_area_m2: e(3.2, 2.8, 3.6) },
         turret: None,
     }
@@ -620,7 +841,16 @@ mod tests {
         let m = box_mesh("b", 0, 0, Vec3::new(1.0, 2.0, 3.0), Vec3::new(0.5, 0.6, 0.7));
         let c = Vec3::new(1.0, 2.0, 3.0);
         for t in m.indices.chunks(3) {
-            let p: Vec<Vec3> = t.iter().map(|&i| Vec3::new(m.positions[i as usize][0] as f64, m.positions[i as usize][1] as f64, m.positions[i as usize][2] as f64)).collect();
+            let p: Vec<Vec3> = t
+                .iter()
+                .map(|&i| {
+                    Vec3::new(
+                        m.positions[i as usize][0] as f64,
+                        m.positions[i as usize][1] as f64,
+                        m.positions[i as usize][2] as f64,
+                    )
+                })
+                .collect();
             let n = (p[1] - p[0]).cross(p[2] - p[0]);
             let centroid = (p[0] + p[1] + p[2]) * (1.0 / 3.0);
             assert!(n.dot(centroid - c) > 0.0, "triangle winds inward");
@@ -633,7 +863,16 @@ mod tests {
         for axis in 0..3 {
             let m = cylinder_mesh("c", 0, 0, c, 0.5, 1.0, axis, 12);
             for t in m.indices.chunks(3) {
-                let p: Vec<Vec3> = t.iter().map(|&i| Vec3::new(m.positions[i as usize][0] as f64, m.positions[i as usize][1] as f64, m.positions[i as usize][2] as f64)).collect();
+                let p: Vec<Vec3> = t
+                    .iter()
+                    .map(|&i| {
+                        Vec3::new(
+                            m.positions[i as usize][0] as f64,
+                            m.positions[i as usize][1] as f64,
+                            m.positions[i as usize][2] as f64,
+                        )
+                    })
+                    .collect();
                 let n = (p[1] - p[0]).cross(p[2] - p[0]);
                 if n.length() < 1e-12 {
                     continue;

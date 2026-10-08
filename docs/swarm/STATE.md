@@ -4,6 +4,8 @@
 
 **Updated:** 2026-10-08 (Launch Kit in progress) | **Integration branch:** `integration` (not yet created) | **Contract tag:** none yet (v0.1.0 draft) | **Phase:** Wave 0, the Launch Kit
 
+**Control Room (the owner's live view):** https://claude.ai/artifact/RerESUqi3CaJCzifhQCZCd (private; republish with `python3 -I tools/control_room/build.py <out.html>` then the Artifact tool, same file path). Decision-card answers live in the artifact's database collection `cards` (document id = card id, fields `choice`, `text`, `answeredAt`); read them at each check-in with `ArtifactData` (`list` on `cards`), copy them into `docs/decisions/QUEUE.md` as ANSWERED, and write `appliedAt` back to the document.
+
 ## Lanes
 | Lane | Rank | Session | Branch | State | Last check-in | Burn so far |
 |---|---|---|---|---|---|---|

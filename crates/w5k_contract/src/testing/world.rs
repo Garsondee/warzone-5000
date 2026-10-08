@@ -8,8 +8,22 @@ use crate::world::{Material, MaterialId, MaterialTable, PropRef, RayHit, SoilPar
 /// for a wet clay, nothing more. WORLD and VALIDATION replace them with cited values (`MaterialDef` with provenance).
 pub fn standard_materials() -> MaterialTable {
     let mut t = MaterialTable::default();
-    t.push(Material { name: "asphalt".into(), mu_peak: 0.9, mu_slide: 0.8, rolling_coeff: 0.015, roughness_rms_m: 0.002, soil: None });
-    t.push(Material { name: "dirt".into(), mu_peak: 0.65, mu_slide: 0.55, rolling_coeff: 0.04, roughness_rms_m: 0.015, soil: None });
+    t.push(Material {
+        name: "asphalt".into(),
+        mu_peak: 0.9,
+        mu_slide: 0.8,
+        rolling_coeff: 0.015,
+        roughness_rms_m: 0.002,
+        soil: None,
+    });
+    t.push(Material {
+        name: "dirt".into(),
+        mu_peak: 0.65,
+        mu_slide: 0.55,
+        rolling_coeff: 0.04,
+        roughness_rms_m: 0.015,
+        soil: None,
+    });
     t.push(Material {
         name: "mud".into(),
         mu_peak: 0.45,

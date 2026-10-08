@@ -248,7 +248,17 @@ impl VehicleDef {
                         f(&format!("running_gear.axles[{i}].anti_roll_n_m"), p);
                     }
                 }
-                each!("running_gear.tyre", w.tyre, outer_diameter_m, section_width_m, inflation_pa, mu_peak_ref, cornering_stiffness_per_rad, rolling_coeff, unsprung_mass_kg);
+                each!(
+                    "running_gear.tyre",
+                    w.tyre,
+                    outer_diameter_m,
+                    section_width_m,
+                    inflation_pa,
+                    mu_peak_ref,
+                    cornering_stiffness_per_rad,
+                    rolling_coeff,
+                    unsprung_mass_kg
+                );
             }
             RunningGearDef::Tracked(t) => {
                 each!(
@@ -266,10 +276,29 @@ impl VehicleDef {
             }
         }
         let s = &self.suspension;
-        each!("suspension", s, front_ride_frequency_hz, rear_ride_frequency_hz, damping_ratio, bump_travel_m, droop_travel_m);
+        each!(
+            "suspension",
+            s,
+            front_ride_frequency_hz,
+            rear_ride_frequency_hz,
+            damping_ratio,
+            bump_travel_m,
+            droop_travel_m
+        );
         let p = &self.powertrain;
         let e = &p.engine;
-        each!("powertrain.engine", e, peak_power_w, peak_power_rpm, peak_torque_nm, peak_torque_rpm, idle_rpm, redline_rpm, inertia_kg_m2, bsfc_best_g_kwh);
+        each!(
+            "powertrain.engine",
+            e,
+            peak_power_w,
+            peak_power_rpm,
+            peak_torque_nm,
+            peak_torque_rpm,
+            idle_rpm,
+            redline_rpm,
+            inertia_kg_m2,
+            bsfc_best_g_kwh
+        );
         if let CouplingSliders::TorqueConverter { stall_ratio, .. } = &p.coupling {
             f("powertrain.coupling.stall_ratio", stall_ratio);
         }
@@ -321,8 +350,12 @@ impl VehicleDef {
             errs.push("id must not be empty".into());
         }
         match &self.running_gear {
-            RunningGearDef::Wheeled(w) if w.axles.len() < 2 => errs.push("a wheeled vehicle needs at least two axles".into()),
-            RunningGearDef::Tracked(t) if t.road_wheels_per_side < 2 => errs.push("a tracked vehicle needs at least two road wheels per side".into()),
+            RunningGearDef::Wheeled(w) if w.axles.len() < 2 => {
+                errs.push("a wheeled vehicle needs at least two axles".into())
+            }
+            RunningGearDef::Tracked(t) if t.road_wheels_per_side < 2 => {
+                errs.push("a tracked vehicle needs at least two road wheels per side".into())
+            }
             _ => {}
         }
         if self.powertrain.gearbox.forward_ratios.is_empty() {

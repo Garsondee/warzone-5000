@@ -55,7 +55,8 @@ fn first_light_matches_the_golden_hash_chain() {
         eprintln!("blessed {}", path.display());
         return;
     }
-    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("missing golden {}: {e}. Bless it with W5K_BLESS=1.", path.display()));
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("missing golden {}: {e}. Bless it with W5K_BLESS=1.", path.display()));
     let golden: serde_json::Value = serde_json::from_str(&text).unwrap();
     assert_eq!(
         golden["state_hashes"], now["state_hashes"],

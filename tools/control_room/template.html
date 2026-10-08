@@ -1,0 +1,398 @@
+<title>Swarm Control Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout concept: a range-control board. A status strip on top, what needs the owner first, then the lane board by launch
+   rank, then the milestone track. Palette: sage-grey ground, green-black ink, signal orange only for "needs you" and actions. */
+:root {
+  --bg: #e6e9e2;
+  --surface: #f4f6f1;
+  --surface-2: #dde2d8;
+  --ink: #1b241f;
+  --ink-2: #4b5851;
+  --line: #c3cabf;
+  --accent: #c9480f;
+  --accent-ink: #ffffff;
+  --st-idle: #77827b;
+  --st-run: #2f7a3d;
+  --st-wait: #a96c00;
+  --st-block: #b3261e;
+  --st-done: #26787a;
+  --sq-dynamics: #587a34;
+  --sq-world: #86683a;
+  --sq-design: #3b6690;
+  --sq-visuals: #a4507a;
+  --sq-platform: #5a6670;
+  --sq-truth: #2a7e78;
+  --sq-behaviour: #6859a4;
+  --f-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111613; --surface: #1a211d; --surface-2: #242d28; --ink: #e3e9e1; --ink-2: #9ba8a0; --line: #303b34;
+    --accent: #ff7b3d; --accent-ink: #1a0d05;
+    --st-idle: #86928a; --st-run: #62bd70; --st-wait: #e3ac41; --st-block: #f2685f; --st-done: #55bdbf;
+    --sq-dynamics: #8bb35e; --sq-world: #c3a064; --sq-design: #6b9fd1; --sq-visuals: #d583ae; --sq-platform: #8d9aa5; --sq-truth: #5cc2ba; --sq-behaviour: #9d8ee0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111613; --surface: #1a211d; --surface-2: #242d28; --ink: #e3e9e1; --ink-2: #9ba8a0; --line: #303b34;
+  --accent: #ff7b3d; --accent-ink: #1a0d05;
+  --st-idle: #86928a; --st-run: #62bd70; --st-wait: #e3ac41; --st-block: #f2685f; --st-done: #55bdbf;
+  --sq-dynamics: #8bb35e; --sq-world: #c3a064; --sq-design: #6b9fd1; --sq-visuals: #d583ae; --sq-platform: #8d9aa5; --sq-truth: #5cc2ba; --sq-behaviour: #9d8ee0;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 40px; display: flex; flex-direction: column; gap: 28px; }
+h1, h2, h3 { font-family: var(--f-display); text-transform: uppercase; letter-spacing: 0.06em; margin: 0; text-wrap: balance; }
+h1 { font-size: 38px; line-height: 1; font-weight: 700; }
+h2 { font-size: 20px; font-weight: 600; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+h2 small { font-family: var(--f-body); text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 13px; color: var(--ink-2); }
+p { margin: 0; }
+button { font: inherit; color: inherit; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--ink-2); }
+.top { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px 24px; flex-wrap: wrap; }
+.top p { color: var(--ink-2); max-width: 60ch; margin-top: 6px; }
+.stamp { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); text-align: right; }
+
+/* status strip */
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.cell { padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); margin: 0 -1px -1px 0; }
+.cell .k { font-family: var(--f-display); font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-2); }
+.cell .v { font-family: var(--f-mono); font-size: 15px; overflow-wrap: anywhere; }
+.cell .s { font-size: 12px; color: var(--ink-2); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--st-idle); margin-right: 6px; vertical-align: 1px; }
+.dot.run { background: var(--st-run); } .dot.wait { background: var(--st-wait); } .dot.block { background: var(--st-block); } .dot.done { background: var(--st-done); }
+
+/* needs you */
+.needs { display: flex; flex-direction: column; gap: 12px; }
+.needs-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.badge { font-family: var(--f-mono); font-size: 12px; background: var(--accent); color: var(--accent-ink); padding: 2px 8px; border-radius: 99px; }
+.btn { border: 1px solid var(--ink); background: transparent; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-weight: 500; }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn:focus-visible, .opt:focus-visible, summary:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 10px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.card.answered { background: transparent; }
+.card-top { display: flex; gap: 10px; align-items: baseline; }
+.cid { font-family: var(--f-mono); font-size: 12px; color: var(--accent); flex: none; }
+.card h3 { font-size: 18px; letter-spacing: 0.03em; text-transform: none; font-weight: 600; line-height: 1.2; }
+.opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.opt { border: 1px solid var(--line); background: var(--bg); border-radius: 4px; padding: 5px 9px; cursor: pointer; text-align: left; font-size: 13px; line-height: 1.35; max-width: 100%; }
+.opt:hover { border-color: var(--ink-2); }
+.opt .key { font-family: var(--f-mono); color: var(--ink-2); margin-right: 5px; }
+.opt.rec { border-color: var(--accent); }
+.opt.rec .tag { font-family: var(--f-display); text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; color: var(--accent); margin-left: 6px; }
+.opt.chosen { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.opt.chosen .key { color: inherit; }
+.opt:disabled { cursor: default; }
+.card details { font-size: 13px; color: var(--ink-2); }
+.card summary { cursor: pointer; }
+.card details p { margin-top: 4px; }
+.result { font-size: 12px; color: var(--ink-2); font-family: var(--f-mono); }
+.other { display: flex; gap: 6px; }
+.other input { flex: 1; min-width: 0; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px; font: inherit; font-size: 13px; }
+.hint { font-size: 13px; color: var(--ink-2); }
+
+/* lane board */
+.board { display: flex; flex-direction: column; gap: 22px; }
+.rank { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.rank-h { font-family: var(--f-display); text-transform: uppercase; letter-spacing: 0.1em; font-size: 14px; color: var(--ink-2); display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.rank-h span { font-family: var(--f-body); text-transform: none; letter-spacing: 0; font-size: 13px; }
+.lanes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; }
+.lane { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lane-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.lane h3 { font-size: 22px; font-weight: 700; }
+.squad { font-family: var(--f-display); text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
+.sq { width: 9px; height: 9px; display: inline-block; background: var(--sq-platform); }
+.sq.dynamics { background: var(--sq-dynamics); } .sq.world { background: var(--sq-world); } .sq.design { background: var(--sq-design); }
+.sq.visuals { background: var(--sq-visuals); } .sq.platform { background: var(--sq-platform); } .sq.truth { background: var(--sq-truth); } .sq.behaviour { background: var(--sq-behaviour); }
+.pill { font-family: var(--f-display); text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--st-idle); }
+.pill.run { color: var(--st-run); } .pill.wait { color: var(--st-wait); } .pill.block { color: var(--st-block); } .pill.done { color: var(--st-done); }
+.lane .m { font-size: 13px; }
+.lane .last { font-size: 12px; color: var(--ink-2); }
+.lane.idle { background: transparent; }
+
+/* milestones */
+.track { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 10px; counter-reset: none; }
+.step { border-top: 3px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.step.run { border-top-color: var(--st-run); } .step.wait { border-top-color: var(--st-wait); } .step.done { border-top-color: var(--st-done); }
+.step .id { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); }
+.step h3 { font-size: 20px; font-weight: 600; }
+.step .crit { font-size: 12.5px; color: var(--ink-2); }
+
+/* pictures and log */
+.pics { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; }
+.pic { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 0; }
+.pic img { display: block; width: 100%; height: auto; }
+.pic figcaption { padding: 8px 10px; font-size: 12.5px; color: var(--ink-2); }
+.empty { border: 1px dashed var(--line); border-radius: 6px; padding: 18px; color: var(--ink-2); font-size: 14px; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--f-display); text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; color: var(--ink-2); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+footer { font-size: 12px; color: var(--ink-2); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 520px) { h1 { font-size: 32px; } .stamp { text-align: left; } }
+@media (prefers-reduced-motion: no-preference) { .btn, .opt { transition: background 0.12s, border-color 0.12s; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Swarm Control Room</h1>
+      <p id="subtitle"></p>
+    </div>
+    <div class="stamp" id="stamp"></div>
+  </header>
+
+  <section class="strip" id="strip" aria-label="Status"></section>
+
+  <section class="needs" aria-labelledby="needs-h">
+    <div class="needs-head">
+      <h2 id="needs-h">Needs you <span class="badge" id="needs-count"></span><small id="needs-sub">Nothing blocks on these: each has a default and the work goes ahead on it.</small></h2>
+      <div id="needs-actions"></div>
+    </div>
+    <div class="cards" id="cards"></div>
+    <p class="hint" id="db-hint" hidden></p>
+  </section>
+
+  <section class="board" aria-labelledby="lanes-h">
+    <h2 id="lanes-h">Lane board <small>Thirteen domain agents, launched in three ranks. A lane stops when its milestone deliverables pass.</small></h2>
+    <div id="ranks"></div>
+  </section>
+
+  <section aria-labelledby="miles-h" class="needs">
+    <h2 id="miles-h">Milestones <small>Each ends with numbers and pictures; contracts freeze at M1.</small></h2>
+    <div class="track" id="track"></div>
+  </section>
+
+  <section class="needs" aria-labelledby="pics-h">
+    <h2 id="pics-h">Latest pictures</h2>
+    <div class="pics" id="pics"></div>
+  </section>
+
+  <section class="needs" aria-labelledby="log-h">
+    <h2 id="log-h">Burn and health log <small>Reported at every check-in.</small></h2>
+    <div class="tablewrap"><table><thead><tr><th>Time (UTC)</th><th>Sessions</th><th>Note</th></tr></thead><tbody id="log"></tbody></table></div>
+  </section>
+
+  <footer><span id="foot-left"></span><span>Source: docs/swarm/STATE.md and docs/decisions/QUEUE.md in the repository</span></footer>
+</div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+(function () {
+  "use strict";
+  var D = JSON.parse(document.getElementById("data").textContent);
+  var $ = function (id) { return document.getElementById(id); };
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function stateClass(s) {
+    s = (s || "").toLowerCase();
+    if (/block/.test(s)) return "block";
+    if (/review|wait|launch|paus/.test(s)) return "wait";
+    if (/done|complete|merged/.test(s)) return "done";
+    if (/build|settl|run|writ|work/.test(s)) return "run";
+    return "";
+  }
+
+  // ---- header and strip
+  $("subtitle").textContent = D.subtitle || "";
+  $("stamp").textContent = "Updated " + D.updated;
+  var strip = $("strip");
+  (D.strip || []).forEach(function (c) {
+    var cell = el("div", "cell");
+    cell.appendChild(el("span", "k", c.k));
+    var v = el("span", "v");
+    if (c.state) { var d = el("span", "dot " + stateClass(c.state)); v.appendChild(d); }
+    v.appendChild(document.createTextNode(c.v));
+    cell.appendChild(v);
+    if (c.s) cell.appendChild(el("span", "s", c.s));
+    strip.appendChild(cell);
+  });
+
+  // ---- lanes by rank
+  var ranksEl = $("ranks");
+  (D.ranks || []).forEach(function (r) {
+    var wrap = el("div", "rank");
+    var h = el("div", "rank-h", "Rank " + r.rank);
+    h.appendChild(el("span", "", r.note));
+    wrap.appendChild(h);
+    var grid = el("div", "lanes");
+    D.lanes.filter(function (l) { return l.rank === r.rank; }).forEach(function (l) {
+      var c = el("div", "lane" + (stateClass(l.state) ? "" : " idle"));
+      var top = el("div", "lane-top");
+      top.appendChild(el("h3", "", l.name));
+      top.appendChild(el("span", "pill " + stateClass(l.state), l.state));
+      c.appendChild(top);
+      var sq = el("div", "squad"); sq.appendChild(el("span", "sq " + l.squad)); sq.appendChild(document.createTextNode(l.squad));
+      c.appendChild(sq);
+      c.appendChild(el("p", "m", l.mission));
+      if (l.last) c.appendChild(el("p", "last", l.last));
+      grid.appendChild(c);
+    });
+    wrap.appendChild(grid);
+    ranksEl.appendChild(wrap);
+  });
+
+  // ---- milestones
+  var track = $("track");
+  (D.milestones || []).forEach(function (m) {
+    var s = el("div", "step " + stateClass(m.state));
+    s.appendChild(el("span", "id", m.id + " · " + m.state));
+    s.appendChild(el("h3", "", m.name));
+    s.appendChild(el("p", "crit", m.criteria));
+    track.appendChild(s);
+  });
+
+  // ---- pictures
+  var pics = $("pics");
+  if (!D.pictures || !D.pictures.length) {
+    pics.appendChild(el("div", "empty", "Pictures land here as lanes merge them: the first truck over the speed hump, the course from above, the camo patterns, the dashboard."));
+  } else {
+    D.pictures.forEach(function (p) {
+      var f = el("figure", "pic"); var i = el("img"); i.src = p.src; i.alt = p.caption; f.appendChild(i);
+      f.appendChild(el("figcaption", "", p.lane + ": " + p.caption)); pics.appendChild(f);
+    });
+  }
+
+  // ---- log
+  var log = $("log");
+  (D.log || []).forEach(function (r) {
+    var tr = el("tr");
+    tr.appendChild(el("td", "mono", r.t));
+    tr.appendChild(el("td", "mono", r.sessions));
+    tr.appendChild(el("td", "", r.note));
+    log.appendChild(tr);
+  });
+  $("foot-left").textContent = D.footer || "";
+
+  // ---- decision cards (answers live in the artifact database; defaults apply until someone answers)
+  var answers = {};
+  var db = null, canWrite = false, busy = false;
+  var cards = D.cards || [];
+
+  function fmtTime(iso) { try { return new Date(iso).toISOString().replace("T", " ").slice(0, 16) + " UTC"; } catch (e) { return ""; } }
+
+  function answerLabel(c, a) {
+    if (!a) return "";
+    if (a.choice === "other") return "Your answer: " + (a.text || "");
+    var o = c.options.filter(function (x) { return x.key === a.choice; })[0];
+    return o ? "(" + o.key + ") " + o.text : a.choice;
+  }
+
+  async function save(card, choice, text) {
+    if (!db || busy) return;
+    busy = true; renderCards();
+    try {
+      var body = { choice: choice, answeredAt: new Date().toISOString() };
+      if (text) body.text = text;
+      await db.doc("cards/" + card.id).set(body);
+    } catch (e) {
+      if (e && e.code === "invalid_argument") { canWrite = false; }
+      $("db-hint").hidden = false;
+      $("db-hint").textContent = "That answer could not be saved here (" + ((e && e.code) || "error") + "). You can also answer in the chat with ARCH.";
+    }
+    busy = false; renderCards();
+  }
+
+  var confirming = false;
+  async function acceptAll() {
+    var open = cards.filter(function (c) { return !answers[c.id] && /^OPEN/.test(c.status); });
+    for (var i = 0; i < open.length; i++) { await save(open[i], open[i].defaultKey); }
+    confirming = false; renderCards();
+  }
+
+  function renderCards() {
+    var list = $("cards"); list.textContent = "";
+    var open = cards.filter(function (c) { return /^OPEN/.test(c.status); });
+    var pending = open.filter(function (c) { return !answers[c.id]; });
+    $("needs-count").textContent = pending.length + " open";
+    $("needs-count").hidden = pending.length === 0;
+    var act = $("needs-actions"); act.textContent = "";
+    if (canWrite && pending.length) {
+      if (!confirming) {
+        var b = el("button", "btn primary", "Accept all " + pending.length + " defaults");
+        b.onclick = function () { confirming = true; renderCards(); };
+        act.appendChild(b);
+      } else {
+        var wrap = el("span", "other");
+        var yes = el("button", "btn primary", "Confirm: accept defaults for " + pending.length + " cards"); yes.disabled = busy; yes.onclick = acceptAll;
+        var no = el("button", "btn", "Cancel"); no.onclick = function () { confirming = false; renderCards(); };
+        wrap.appendChild(yes); wrap.appendChild(no); act.appendChild(wrap);
+      }
+    }
+    open.concat(cards.filter(function (c) { return !/^OPEN/.test(c.status); })).forEach(function (c) {
+      var a = answers[c.id];
+      var closed = !/^OPEN/.test(c.status);
+      var box = el("div", "card" + ((a || closed) ? " answered" : ""));
+      var top = el("div", "card-top");
+      top.appendChild(el("span", "cid", c.id));
+      top.appendChild(el("h3", "", c.title));
+      box.appendChild(top);
+      if (closed) {
+        box.appendChild(el("p", "result", c.status));
+      } else {
+        var opts = el("div", "opts");
+        c.options.forEach(function (o) {
+          var isDefault = o.key === c.defaultKey;
+          var b = el("button", "opt" + (isDefault ? " rec" : "") + (a && a.choice === o.key ? " chosen" : ""));
+          b.appendChild(el("span", "key", "(" + o.key + ")"));
+          b.appendChild(document.createTextNode(o.text));
+          if (isDefault) b.appendChild(el("span", "tag", "default"));
+          b.disabled = !canWrite || busy;
+          b.onclick = function () { save(c, o.key); };
+          opts.appendChild(b);
+        });
+        box.appendChild(opts);
+        if (canWrite) {
+          var other = el("div", "other");
+          var inp = el("input"); inp.type = "text"; inp.id = "other-" + c.id; inp.placeholder = "Something else: write it here"; inp.setAttribute("aria-label", "Other answer for " + c.id);
+          var go = el("button", "btn", "Send"); go.disabled = busy;
+          go.onclick = function () { if (inp.value.trim()) save(c, "other", inp.value.trim()); };
+          other.appendChild(inp); other.appendChild(go); box.appendChild(other);
+        }
+        var det = el("details");
+        det.appendChild(el("summary", "", "Why, and what a wrong call costs"));
+        det.appendChild(el("p", "", "Recommendation: " + c.recommendation));
+        det.appendChild(el("p", "", "If wrong: " + c.cost));
+        box.appendChild(det);
+        if (a) {
+          var r = answerLabel(c, a) + " · answered " + fmtTime(a.answeredAt) + (a.appliedAt ? " · applied by ARCH " + fmtTime(a.appliedAt) : " · ARCH applies it at the next check-in");
+          box.appendChild(el("p", "result", r));
+        } else {
+          box.appendChild(el("p", "result", "No answer yet: the work proceeds on the default (" + c.defaultKey + ")."));
+        }
+      }
+      list.appendChild(box);
+    });
+  }
+  renderCards();
+
+  // Light up the shared answers when the database capability resolves; the page works without it.
+  (async function () {
+    try {
+      db = window.claude && window.claude.use ? await window.claude.use("db") : null;
+      var user = window.claude && window.claude.use ? await window.claude.use("user") : null;
+      if (!db) { $("db-hint").hidden = false; $("db-hint").textContent = "Answering from this page needs a signed-in view. Read-only here: you can still answer in the chat with ARCH."; renderCards(); return; }
+      var can = user && user.can ? user.can("data.write") : null;
+      canWrite = can !== false;
+      db.collection("cards").onSnapshot(function (snap) {
+        var next = {};
+        snap.docs.forEach(function (d) { if (d.exists) next[d.id] = d.data(); });
+        answers = next; renderCards();
+      }, function () { /* terminal error: keep what is shown */ });
+      renderCards();
+    } catch (e) { /* no database in this view: stay read-only */ }
+  })();
+})();
+</script>
