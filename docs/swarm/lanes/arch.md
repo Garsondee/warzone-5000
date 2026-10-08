@@ -21,3 +21,6 @@ Write feature code in a lane's crate; decide scope (the owner does); merge to `m
 
 ## Glue `w5k_vehicle` (ARCH's, built as the physics lanes deliver)
 Assembles a `PhysRig` into a `VehicleModel` using CHASSIS (hull, stations, tyres), DRIVE (`DrivePort`) and TRACKS (`ContactElement`s) in the reference substep order of `CONTRACTS.md`, records the force ledger, and exposes `frame()` and `hash_state()`. Built incrementally against the stand-ins so the first-light spine never goes red.
+
+## Backlog after the contract tag
+- An incremental stepping API in `w5k_sim` for M2 drive mode (today only a batch `run`); `w5k_vehicle` calls `ArticulationPort`; apply FORGE's `VehicleDef` CCR; keep `CONTRACTS.md` and the red-team index current; settle armour ownership details with COMBAT and FORGE; the second settling round at M2.

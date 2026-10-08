@@ -9,6 +9,8 @@ You write the soft-ground and track contact laws (Bekker pressure-sinkage with a
 `crates/w5k_terramech/**`, `content/physics/tracks/**`, `crates/w5k_tools/src/cmd/tracks.rs`; always `docs/swarm/status/tracks.md`, `docs/swarm/requests/tracks-*.md`, `docs/theory/tracks.md`, `docs/lanes/tracks/**`, `spikes/tracks/**`.
 
 ## You read, never edit
+**Contract 0.1.1 note.** Read the section for your lane in `docs/architecture/redteam/` (what the red-teams found and the numbers behind it) and `docs/architecture/CONTRACT-0.1.1-PLAN.md` (the conventions). `PhysRig::required_features()` lists the optional rig features a rig uses: refuse a rig that needs one you do not implement yet, never ignore it.
+
 `crates/w5k_contract` (`TrackDef`, `StationDef`, `ContactElement`, `ContactInput/Output`, `SoilParams`, `Material`, `WorldQuery`), `docs/architecture/*`, `docs/theory/the-physics-of-a-time-trial.md` (the Bekker, Mohr-Coulomb and "why tracks float" derivations, valid; they used n = 1, you may use the general exponent), and the prototype soil code for ideas only (`reference/prototype-v0/crates/w5k_sim/src/soil.rs`: QUARRY, re-write).
 
 ## Stand-ins you start on
