@@ -5,7 +5,7 @@
     {
       "k": "Phase",
       "v": "Wave 0",
-      "s": "Launch Kit: brief, contracts, guardrails, lane briefs",
+      "s": "Launch Kit nearly done: guardrails proven, contract hardening batch pending, launch on hold",
       "state": "run"
     },
     {
@@ -54,7 +54,7 @@
       "rank": 1,
       "state": "building",
       "mission": "Contracts, CI and guardrails, the integration spine, merges, reviews. Writes no feature code.",
-      "last": "Launch Kit nearly done: contract, tooling, 13 briefs."
+      "last": "Guards proven on GitHub (bad PR rejected), Linux and Windows CI green, red-teams done. Contract 0.1.1 batch decided; applying it is the next step."
     },
     {
       "name": "CHASSIS",
@@ -146,7 +146,7 @@
       "id": "W0",
       "name": "Launch Kit",
       "state": "in progress",
-      "criteria": "Briefs pass a cold-start test; guardrails reject a bad PR; a rehearsal lane round-trips."
+      "criteria": "Done: briefs, guards proven by a bad PR, Linux+Windows hash identical (S2). To do: contract 0.1.1, rehearsal lane, launch (on hold, card C-008)."
     },
     {
       "id": "S",
@@ -197,6 +197,11 @@
       "t": "2026-10-08 17:00",
       "sessions": "1 of 13",
       "note": "Launch Kit under way. This session's meter reads about $204 after about 20 hours."
+    },
+    {
+      "t": "2026-10-08 18:05",
+      "sessions": "1 of 13",
+      "note": "Owner warned of about $20 of credit left: ARCH stopped and left the repository green. Handoff: docs/architecture/CONTRACT-0.1.1-PLAN.md and docs/swarm/STATE.md."
     }
   ],
   "footer": "Defaults apply to every open card until you answer it."

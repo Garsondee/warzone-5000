@@ -1,0 +1,309 @@
+//! What a combat lane can and cannot compute from the STAGED contract, attempted for real. Each probe says in its doc comment whether
+//! the answer is "computable from the rig as it is", "computable only with extra state the contract does not carry", or "not
+//! computable" and points at the evidence. The proposed-CCR versions are in `proposed.rs`.
+
+use w5k_contract::rig::*;
+use w5k_math::{scalar, Mat3, Quat, Vec3};
+
+use crate::fk::*;
+use crate::geom::ray_obb;
+
+// ============================================================================================================================
+// (1) Reaction wrench of a slewing turret on the hull.  VERDICT: the rig data is sufficient; the state and the seam are not.
+// ============================================================================================================================
+
+/// Hull kinematics in the world frame. `VehicleFrame` carries `pos_m`, `rot`, `lin_vel_m_s`, `ang_vel_rad_s` (frame of the last two
+/// unspecified) but NOT accelerations; a reaction wrench needs `acc_m_s2` and `alpha`.
+#[derive(Clone, Copy, Debug)]
+pub struct HullKin {
+    pub rot: Quat,
+    pub pos_m: Vec3,
+    pub vel_m_s: Vec3,
+    pub acc_m_s2: Vec3,
+    pub omega: Vec3,
+    pub alpha: Vec3,
+}
+
+impl HullKin {
+    pub fn at_rest() -> HullKin {
+        HullKin { rot: Quat::IDENTITY, pos_m: Vec3::ZERO, vel_m_s: Vec3::ZERO, acc_m_s2: Vec3::ZERO, omega: Vec3::ZERO, alpha: Vec3::ZERO }
+    }
+}
+
+/// Joint coordinate, rate and acceleration. `VehicleFrame::joints` carries only `q` (as f32); `qd` and `qdd` live inside whoever
+/// integrates the servos.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct JointState {
+    pub q: f64,
+    pub qd: f64,
+    pub qdd: f64,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ReactionWrench {
+    /// Force the articulated bodies exert on the hull (world, N).
+    pub force_n: Vec3,
+    /// Their torque on the hull about the hull's COM (world, N m). The ledger cannot record this unambiguously: `ForceLedger::add`
+    /// does not say about which point its `torque_nm` is taken.
+    pub torque_about_hull_com_nm: Vec3,
+    /// Per articulation joint: the force (prismatic) or torque (revolute) its drive, spring and damper must supply along the axis.
+    pub joint_effort: Vec<f64>,
+}
+
+/// Recursive Newton-Euler over the articulation tree with the hull as a moving base. This is the algorithm the glue's "articulation
+/// servos and their reaction wrenches on the hull" (CONTRACTS.md, substep order 5) boils down to, and the thing spike S6 exercises.
+pub fn reaction_wrench(rig: &PhysRig, hull: &HullKin, js: &[JointState]) -> ReactionWrench {
+    let g = Vec3::new(0.0, -scalar::G, 0.0);
+    let n = rig.articulation.len();
+    struct Fw {
+        origin: Vec3,
+        f_own: Vec3,
+        m_com: Vec3,
+        p_com: Vec3,
+        u_w: Vec3,
+    }
+    // State of each body's origin point and frame, world.
+    let mut st: Vec<(Quat, Vec3, Vec3, Vec3, Vec3, Vec3)> = Vec::with_capacity(n); // R, w, alpha, p, v, a
+    let mut fw: Vec<Fw> = Vec::with_capacity(n);
+    for (i, jd) in rig.articulation.iter().enumerate() {
+        let (rp, wp, ap, pp, vp, acp) = match jd.parent {
+            None => (hull.rot, hull.omega, hull.alpha, hull.pos_m, hull.vel_m_s, hull.acc_m_s2),
+            Some(p) => st[p],
+        };
+        let s = js[i];
+        let r = rp.rotate(jd.anchor_m);
+        let c = pp + r;
+        let vc = vp + wp.cross(r);
+        let ac = acp + ap.cross(r) + wp.cross(wp.cross(r));
+        let u_w = rp.rotate(jd.axis);
+        let (ri, wi, ai, pi, vi, aci) = match jd.kind {
+            JointKind::Revolute => {
+                let ri = (rp * Quat::from_axis_angle(jd.axis, s.q)).normalized();
+                (ri, wp + u_w * s.qd, ap + u_w * s.qdd + wp.cross(u_w * s.qd), c, vc, ac)
+            }
+            JointKind::Prismatic => {
+                let sv = u_w * s.q;
+                let vi = vc + wp.cross(sv) + u_w * s.qd;
+                let aci = ac + ap.cross(sv) + wp.cross(wp.cross(sv)) + wp.cross(u_w * s.qd) * 2.0 + u_w * s.qdd;
+                (rp, wp, ap, c + sv, vi, aci)
+            }
+        };
+        let rho = ri.rotate(jd.body.com_m);
+        let a_com = aci + ai.cross(rho) + wi.cross(wi.cross(rho));
+        let iw = jd.body.inertia_kg_m2.rotate_inertia(&ri.to_mat3());
+        let m_com = iw.mul_vec(ai) + wi.cross(iw.mul_vec(wi));
+        let f_own = (a_com - g) * jd.body.mass_kg;
+        fw.push(Fw { origin: pi, f_own, m_com, p_com: pi + rho, u_w });
+        st.push((ri, wi, ai, pi, vi, aci));
+    }
+    // Backward pass: wrench the parent applies on each body at the body origin.
+    let mut f: Vec<Vec3> = fw.iter().map(|b| b.f_own).collect();
+    let mut tau: Vec<Vec3> = vec![Vec3::ZERO; n];
+    for i in (0..n).rev() {
+        // children have larger indices, so their sums are complete when we reach i.
+        let mut sum_tau = Vec3::ZERO;
+        for k in (i + 1)..n {
+            if rig.articulation[k].parent == Some(i) {
+                let fk = f[k];
+                f[i] += fk;
+                sum_tau += tau[k] + (fw[k].origin - fw[i].p_com).cross(fk);
+            }
+        }
+        tau[i] = fw[i].m_com - (fw[i].origin - fw[i].p_com).cross(f[i]) + sum_tau;
+    }
+    let hull_com = hull.pos_m + hull.rot.rotate(rig.hull.com_m);
+    let mut out = ReactionWrench { joint_effort: vec![0.0; n], ..ReactionWrench::default() };
+    for i in 0..n {
+        out.joint_effort[i] = match rig.articulation[i].kind {
+            JointKind::Revolute => tau[i].dot(fw[i].u_w),
+            JointKind::Prismatic => f[i].dot(fw[i].u_w),
+        };
+        if rig.articulation[i].parent.is_none() {
+            out.force_n -= f[i];
+            out.torque_about_hull_com_nm -= tau[i] + (fw[i].origin - hull_com).cross(f[i]);
+        }
+    }
+    out
+}
+
+/// Inertia about the yaw axis that the turret servo has to move: the turret and everything on it, frozen. (Convenience for tests.)
+pub fn turret_axis_inertia(rig: &PhysRig, j: usize, qs: &[f64]) -> f64 {
+    inertia_about_axis(&subtree_rigid(rig, j, qs), rig.articulation[j].axis)
+}
+
+// ============================================================================================================================
+// (2) Recoil momentum balance.  VERDICT: not computable (no impulse); the slide itself is.
+// ============================================================================================================================
+
+/// The free-recoil impulse of a muzzle, as far as the staged contract can say it. It cannot: `MuzzleDef` is `{ name, joint, pose,
+/// caliber_m }`. `GunDef::muzzle_velocity_m_s` exists only in `VehicleDef`, and no projectile or propellant mass exists anywhere.
+pub fn staged_recoil_impulse(rig: &PhysRig, muzzle: usize) -> Result<f64, String> {
+    let m = &rig.muzzles[muzzle];
+    Err(format!(
+        "muzzle '{}' (caliber {} m) carries no projectile mass, no muzzle velocity and no recoil factor; PhysRig has no such field",
+        m.name, m.caliber_m
+    ))
+}
+
+/// Critically damped linear (spring, damper) pair that stops a recoil of initial speed `v0` of mass `m` within `stroke` metres.
+/// Peak displacement of a critically damped mass-spring with initial speed v0 is v0 / (w e), so w = v0 / (e stroke).
+/// This is the best `RecoilDef { spring_n_m, damper_ns_m }` can do for a gun with a gas recuperator.
+pub fn linear_recoil_fit(m_kg: f64, v0: f64, stroke_m: f64) -> (f64, f64) {
+    let w = v0 / (scalar::exp(1.0) * stroke_m);
+    (m_kg * w * w, 2.0 * m_kg * w)
+}
+
+/// Force of the ideal (constant-force) recoil brake that stops speed `v0` of mass `m` in `stroke`: `m v0^2 / (2 stroke)`.
+pub fn ideal_brake_force_n(m_kg: f64, v0: f64, stroke_m: f64) -> f64 {
+    m_kg * v0 * v0 / (2.0 * stroke_m)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SlideResult {
+    pub max_stroke_m: f64,
+    pub peak_force_n: f64,
+    /// (total momentum at the end - J) / J, with the hull on frictionless ground. Zero means conserved.
+    pub momentum_error: f64,
+    /// Final common speed of the whole vehicle after the slide settles: J / (m_slide + m_rest).
+    pub final_speed_m_s: f64,
+    pub returned_to_battery: bool,
+}
+
+/// One-dimensional recoil along the bore: the slide (mass `m_slide`) and everything else (`m_rest`) joined by spring `k`, damper
+/// `c` and a hard stop at `stroke`, started by the impulse `j_ns` handed to the slide. `rate_clamp` emulates a `ServoDef::max_rate`
+/// applied as a speed limit on the slide without telling the rest (what a naive glue does with that field).
+#[allow(clippy::too_many_arguments)]
+pub fn simulate_slide(m_slide: f64, m_rest: f64, k: f64, c: f64, stroke: f64, j_ns: f64, rate_clamp: Option<f64>, substeps: u32) -> SlideResult {
+    let dt = 1.0 / (60.0 * substeps as f64);
+    let (mut vb, mut vr, mut x) = (j_ns / m_slide, 0.0, 0.0);
+    if let Some(cl) = rate_clamp {
+        vb = vb.min(cl);
+    }
+    let (mut max_x, mut peak_f) = (0.0f64, 0.0f64);
+    let steps = (4.0 / dt) as usize;
+    for _ in 0..steps {
+        let rel = vb - vr;
+        let f = k * x + c * rel;
+        peak_f = peak_f.max(f.abs());
+        vb += -f / m_slide * dt;
+        vr += f / m_rest * dt;
+        if let Some(cl) = rate_clamp {
+            vb = vb.min(cl);
+        }
+        x += (vb - vr) * dt;
+        if x > stroke {
+            // Hard stop: perfectly inelastic, momentum-conserving.
+            let v = (m_slide * vb + m_rest * vr) / (m_slide + m_rest);
+            vb = v;
+            vr = v;
+            x = stroke;
+        } else if x < 0.0 {
+            let v = (m_slide * vb + m_rest * vr) / (m_slide + m_rest);
+            vb = v;
+            vr = v;
+            x = 0.0;
+        }
+        max_x = max_x.max(x);
+    }
+    let p = m_slide * vb + m_rest * vr;
+    SlideResult {
+        max_stroke_m: max_x,
+        peak_force_n: peak_f,
+        momentum_error: (p - j_ns) / j_ns,
+        final_speed_m_s: p / (m_slide + m_rest),
+        returned_to_battery: x < 0.01 * stroke,
+    }
+}
+
+// ============================================================================================================================
+// (3) Line-of-sight armour thickness.  VERDICT: not computable (no armour data anywhere).
+// ============================================================================================================================
+
+/// The only thing a combat lane can do with the staged contract: treat the collision proxies as armour and take the chord of the
+/// ray through them. Returns the chord lengths (m) through every hull-attached box proxy the ray crosses, with the proxy name.
+/// The numbers are metres, not millimetres: a proxy is a solid bounding box, not a plate.
+pub fn proxy_chords(rig: &PhysRig, origin_hull: Vec3, dir_hull: Vec3, qs: &[f64]) -> Vec<(String, f64)> {
+    let mut out = Vec::new();
+    for p in &rig.proxies {
+        if let ProxyShape::Box { half_m } = p.shape {
+            let pose = frame_of(rig, p.attached_to, qs).compose(&p.pose);
+            if let Some((t0, t1)) = ray_obb(origin_hull, dir_hull, &pose, half_m) {
+                out.push((p.name.clone(), t1 - t0));
+            }
+        }
+    }
+    out
+}
+
+// ============================================================================================================================
+// (4) Module damage: which module owns which volume?  VERDICT: not computable (there are no modules).
+// ============================================================================================================================
+
+/// Names of the proxies that contain a hull-frame point. For the engine bay this returns just "hull": the contract cannot tell the
+/// engine from the crew compartment, the fuel from the ammunition. (Stations have positions, the engine and gearbox do not.)
+pub fn proxies_containing(rig: &PhysRig, p_hull: Vec3, qs: &[f64]) -> Vec<String> {
+    rig.proxies
+        .iter()
+        .filter(|px| match px.shape {
+            ProxyShape::Box { half_m } => {
+                let l = frame_of(rig, px.attached_to, qs).compose(&px.pose).inverse().apply_point(p_hull);
+                l.x.abs() <= half_m.x && l.y.abs() <= half_m.y && l.z.abs() <= half_m.z
+            }
+            ProxyShape::Sphere { radius_m } => (frame_of(rig, px.attached_to, qs).compose(&px.pose).pos - p_hull).length() <= radius_m,
+            ProxyShape::Capsule { .. } => false,
+        })
+        .map(|px| px.name.clone())
+        .collect()
+}
+
+// ============================================================================================================================
+// (6) The stabiliser.  VERDICT: the fields exist, the semantics do not.
+// ============================================================================================================================
+
+/// Three defensible readings of `ServoDef { stabiliser_rejection: r, stabiliser_bandwidth_hz: bw }`. The doc comment on the fields
+/// is "fraction of hull motion rejected (0 = none, 1 = perfect) and its bandwidth, Hz", which supports all three.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Reading {
+    /// Static fraction: residual = (1 - r) at every frequency; bandwidth is a lag only.
+    Fraction,
+    /// First-order disturbance rejection: the loop rejects r of the motion at DC and rolls off at bw (a normal servo loop).
+    FirstOrder,
+    /// Brick wall: r below bw, nothing above.
+    BrickWall,
+}
+
+/// Residual fraction of a sinusoidal hull motion at `f_hz` that reaches the gun.
+pub fn residual_gain(reading: Reading, r: f64, bw_hz: f64, f_hz: f64) -> f64 {
+    match reading {
+        Reading::Fraction => 1.0 - r,
+        Reading::FirstOrder => {
+            let x = f_hz / bw_hz;
+            scalar::sqrt(((1.0 - r) * (1.0 - r) + x * x) / (1.0 + x * x))
+        }
+        Reading::BrickWall => {
+            if f_hz < bw_hz {
+                1.0 - r
+            } else {
+                1.0
+            }
+        }
+    }
+}
+
+/// The hull angular rate a stabiliser on joint `j` can sense using only what the contract hands out: the world-frame hull angular
+/// velocity projected on the joint's axis in the world. The joint rates of the ancestors are not in `VehicleFrame`, so the rate of a
+/// nested joint (gun pitch under a slewing turret) is incomplete.
+pub fn hull_rate_on_axis(rig: &PhysRig, j: usize, qs: &[f64], hull_rot: Quat, hull_omega_world: Vec3) -> f64 {
+    let jd = &rig.articulation[j];
+    let parent_rot = match jd.parent {
+        None => Quat::IDENTITY,
+        Some(p) => body_in_hull(rig, p, qs).rot,
+    };
+    let axis_world = hull_rot.rotate(parent_rot.rotate(jd.axis));
+    hull_omega_world.dot(axis_world)
+}
+
+/// Tiny helper for tests: a diagonal 3x3 inertia as a vector.
+pub fn diag(m: &Mat3) -> Vec3 {
+    Vec3::new(m.m[0][0], m.m[1][1], m.m[2][2])
+}

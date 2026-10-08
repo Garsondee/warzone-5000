@@ -1,0 +1,394 @@
+//! The proposed contract changes (CCRs) as COMPILABLE Rust, each with a small executable reference of the semantics it proposes, so the
+//! claim "this minimal change fixes the gap" is tested rather than asserted. The staged contract is not touched: new fields are shown on
+//! wrapper structs here and as a diff in `REPORT.md`. All additions are `#[serde(default)]`, so existing RON/JSON files still load.
+//!
+//! | CCR | Gap | Change |
+//! |---|---|---|
+//! | 1 | G1 driveline selectors | `DrivetrainDef::modes`, `Command::drive_mode`, `DriveInputs::drive_mode` |
+//! | 2 | G2 `VehicleDef` per axle | `AxleDef` gains layout, dual, hub reduction, portal drop, brake share, own tyre |
+//! | 3 | G3 coupled stations | `PhysRig::shared_springs` (a spring on a weighted sum of station travels) |
+//! | 4 | G4 dual tyres | `WheelDef::patches_x_m` |
+//! | 5 | G5 brakes | `BrakeDef::{apply_time_s, release_time_s, circuit, site}` |
+//! | 6 | G6 ground reference | `PhysRig::ride_height_m` and "radius is the FREE radius" |
+//! | 7 | G7 unsprung proxies | `CollisionProxy::attached_station` |
+//! | 8 | G8 driveline detail | `DriveNode::Diff::split`, defined `bias`, `ShaftState::load_torque_nm` |
+//! | 9 | G9 steering | `SteerDef::{group, rate_limit_rad_s, speed_gain}`, `Command::steer_mode` |
+//! | 10 | G10 render | `JointBinding::{scale, terms}` |
+//! | 11 | G11 suspension | `SuspensionDef::friction_n` |
+//! | 12 | G12 validation | `validate_deep` (below) |
+
+use serde::{Deserialize, Serialize};
+use w5k_contract::def::TyreSliders;
+use w5k_contract::param::Param;
+use w5k_contract::render::JointAxisKind;
+use w5k_contract::rig::*;
+use w5k_math::Vec3;
+
+use crate::common::spring_force;
+
+// ========================================================================================== CCR-1: driveline modes (G1)
+
+/// One position of the driver's driveline selector(s): transfer-case range, axle declutch, diff locks. `DrivetrainDef::modes` is a list of
+/// these; `Command::drive_mode: Option<u8>` selects one (None = hold), `DriveInputs::drive_mode: u8` carries it to the powertrain and
+/// `DriveTelemetry::drive_mode: u8` back out. An empty list is today's behaviour (one fixed mode). `DriveNode` is NOT touched.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DriveModeDef {
+    /// "6x6 high", "6x6 low", "6x4 high".
+    pub name: String,
+    /// Multiplies `ratio` of the root `DriveNode::Diff` (the transfer case): 1.0 = unchanged, 1.96 = low range.
+    pub transfer_ratio_scale: f64,
+    /// Indices into `DrivetrainDef::outputs` whose shaft is declutched in this mode: no drive torque (brakes and the wheel's own inertia remain).
+    pub declutched_outputs: Vec<usize>,
+    /// Groups of outputs forced to one angular speed in this mode (a centre lock, an axle locker).
+    pub locked_groups: Vec<Vec<usize>>,
+}
+
+/// Overall reduction from the gearbox output to `out`: the product of every `ratio` on the path through the tree and `final_drive_ratio`.
+/// (Reading `ratio` as input speed / output speed and as multiplicative down the tree is an inference: CONTRACTS.md does not say.)
+pub fn driveline_ratio_to_output(node: &DriveNode, out: usize, outputs: &[OutputDef]) -> Option<f64> {
+    match node {
+        DriveNode::Output(i) => (*i == out).then(|| outputs[*i].final_drive_ratio),
+        DriveNode::Diff { ratio, children, .. } | DriveNode::SteerUnit { ratio, children, .. } => children.iter().find_map(|c| driveline_ratio_to_output(c, out, outputs)).map(|r| r * ratio),
+    }
+}
+
+/// Engine-to-wheel ratio of output `out` in `mode` with a gearbox ratio `gear`, or `None` when the mode declutches that output.
+pub fn mode_ratio(rig: &PhysRig, mode: &DriveModeDef, gear: f64, out: usize) -> Option<f64> {
+    if mode.declutched_outputs.contains(&out) {
+        return None;
+    }
+    driveline_ratio_to_output(&rig.drivetrain.driveline, out, &rig.drivetrain.outputs).map(|r| gear * mode.transfer_ratio_scale * r)
+}
+
+/// The three real selector positions of the M35 (outputs 0 and 1 are the front axle in `m35()`).
+pub fn m35_modes() -> Vec<DriveModeDef> {
+    vec![
+        DriveModeDef { name: "6x6 high".into(), transfer_ratio_scale: 1.0, declutched_outputs: vec![], locked_groups: vec![] },
+        DriveModeDef { name: "6x6 low".into(), transfer_ratio_scale: crate::m35::TRANSFER_LOW, declutched_outputs: vec![], locked_groups: vec![] },
+        DriveModeDef { name: "6x4 high".into(), transfer_ratio_scale: 1.0, declutched_outputs: vec![0, 1], locked_groups: vec![] },
+    ]
+}
+
+// ======================================================================================= CCR-2: VehicleDef per axle (G2)
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub enum AxleLayout {
+    #[default]
+    Independent,
+    /// A rigid axle on springs `spring_track_m` apart.
+    Solid { spring_track_m: Param },
+    /// A walking-beam tandem member: axles sharing `group` hang from one beam pivoting `pivot_frac` of the way from the front one.
+    Tandem { group: u8, pivot_frac: Param },
+}
+
+/// Fields `AxleDef` needs (all `#[serde(default)]`). With them the M35's three axles and the HMMWV's portals are statable at designer level.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct AxleDefAdditions {
+    /// 1 (or 0) = single tyres, 2 = dual.
+    #[serde(default)]
+    pub tyres_per_side: u8,
+    #[serde(default)]
+    pub dual_spacing_m: Option<Param>,
+    /// Hub (portal) reduction, input speed / wheel speed.
+    #[serde(default)]
+    pub hub_reduction: Option<Param>,
+    /// Axle centreline above the wheel centre (portal lift), m.
+    #[serde(default)]
+    pub portal_drop_m: Option<Param>,
+    #[serde(default)]
+    pub layout: AxleLayout,
+    /// Share of the total braking torque on this axle (replaces the two-axle `BrakesDef::front_share`).
+    #[serde(default)]
+    pub brake_share: Option<Param>,
+    /// This axle's own tyre (a truck's front and rear tyres differ) and unsprung mass.
+    #[serde(default)]
+    pub tyre: Option<TyreSliders>,
+    #[serde(default)]
+    pub unsprung_mass_kg: Option<Param>,
+}
+
+// ============================================================================================ CCR-3: shared springs (G3)
+
+/// A spring (and optional damper) on a WEIGHTED SUM of station travels: `h = sum_i w_i c_i`; by virtual work the force it puts on station i is
+/// `w_i * F(h)`. One struct covers a walking beam (`[(front, 1-p), (rear, p)]`), a solid axle with springs inboard of the wheels
+/// (`[(near, a), (far, b)]` per seat), a tandem on rigid duals (eight weights per side), a twin-spring dual, an interconnected (Hydragas /
+/// Hydractive) pair, and an anti-roll bar (`[(left, 1), (right, -1)]`, linear). The stations' own springs still act, additively.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SharedSpringDef {
+    pub name: String,
+    /// `(station index, weight)`.
+    pub terms: Vec<(usize, f64)>,
+    pub spring: SpringKind,
+    /// Force at the rest pose, N (shared out by weight).
+    pub preload_n: f64,
+    #[serde(default)]
+    pub damper: Option<DamperDef>,
+}
+
+fn dead_suspension(spring: &SpringKind, preload_n: f64) -> SuspensionDef {
+    SuspensionDef {
+        spring: spring.clone(),
+        preload_n,
+        damper: DamperDef { bump_ns_m: 0.0, rebound_ns_m: 0.0, knee_speed_m_s: 0.0, post_knee_ratio: 1.0 },
+        bump_stop: BumpStopDef { engage_m: 0.0, rate_n_m: 0.0, progression: 0.0 },
+    }
+}
+
+impl SharedSpringDef {
+    /// The compression the spring sees, m.
+    pub fn compression(&self, travel: &[f64]) -> f64 {
+        self.terms.iter().map(|&(i, w)| w * travel[i]).sum()
+    }
+
+    /// Force along the spring, N (preload included).
+    pub fn force(&self, travel: &[f64]) -> f64 {
+        spring_force(&dead_suspension(&self.spring, self.preload_n), self.compression(travel))
+    }
+
+    /// Add the force this spring puts on each station (`w_i F(h)`) to `out`.
+    pub fn add_station_forces(&self, travel: &[f64], out: &mut [f64]) {
+        let f = self.force(travel);
+        for &(i, w) in &self.terms {
+            out[i] += w * f;
+        }
+    }
+}
+
+// =========================================================================================== CCR-4: dual tyres (G4)
+
+/// `WheelDef` gains this: lateral offsets (hub frame, +X right, m) of every contact patch from the wheel plane. Empty = one centred tyre
+/// (today). A dual: `[-0.15, 0.15]`. `width_m` and `tyre` are per patch; every patch has its own ground probe, contact state, sinkage and
+/// `ContactFrame`; the patches share the station's travel, spin and drive output. `VehicleHeader::contact_names` become `"<station>.<k>"`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct WheelPatches {
+    #[serde(default)]
+    pub patches_x_m: Vec<f64>,
+}
+
+// ============================================================================================== CCR-5: brakes (G5)
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum BrakeSite {
+    #[default]
+    Wheel,
+    /// Acts on the gearbox/transfer-case output shaft, before the axle diffs (an M35 or Land Rover handbrake). `station` is ignored.
+    Driveline,
+}
+
+/// `BrakeDef` gains these. `apply_time_s` is the first-order time constant from pedal to torque (hydraulic ~0.05, air 0.15-0.35 s).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct BrakeDefAdditions {
+    #[serde(default)]
+    pub apply_time_s: f64,
+    #[serde(default)]
+    pub release_time_s: f64,
+    /// Hydraulic or pneumatic circuit; a failed circuit takes all of its brakes out (damage, COMBAT).
+    #[serde(default)]
+    pub circuit: u8,
+    #[serde(default)]
+    pub site: BrakeSite,
+}
+
+// ================================================================================ CCR-6, 7, 8, 9, 11: single-field additions
+
+/// The additive fields of CCRs 6, 7, 8, 9 and 11, with where each one lives. Every field is `#[serde(default)]`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct SmallAdditions {
+    /// CCR-6, on `PhysRig`: height of the hull datum above the ground plane at the design pose, m. And: `WheelDef::radius_m` IS the free radius, so
+    /// the static tyre penetration at the design pose is `R - (ride_height + rest.y)` and the rig must satisfy `k_t * penetration = tyre load`.
+    #[serde(default)]
+    pub ride_height_m: f64,
+    /// CCR-7, on `CollisionProxy`: attach to a station (unsprung body: axle housing, diff, portal case); mutually exclusive with `attached_to`.
+    #[serde(default)]
+    pub proxy_attached_station: Option<usize>,
+    /// CCR-8, on `DriveNode::Diff`: torque fraction to each child (empty = equal). A planetary centre diff is 0.4/0.6, not 0.5/0.5.
+    #[serde(default)]
+    pub diff_split: Vec<f64>,
+    /// CCR-8, on `ShaftState`: torque the contact patch puts back on the shaft from the previous substep, N m (positive resists forward rolling).
+    #[serde(default)]
+    pub shaft_load_torque_nm: f64,
+    /// CCR-9, on `SteerDef`: steering group (0 = front), slew limit, and a speed schedule `(speed m/s, gain)`; `Command::steer_mode: u8` picks which groups steer.
+    #[serde(default)]
+    pub steer_group: u8,
+    #[serde(default)]
+    pub steer_rate_limit_rad_s: f64,
+    #[serde(default)]
+    pub steer_speed_gain: Vec<(f64, f64)>,
+    /// CCR-11, on `SuspensionDef`: Coulomb (dry) friction along the strut, N: interleaf friction of a leaf pack, ball-joint stiction.
+    #[serde(default)]
+    pub suspension_friction_n: f64,
+}
+
+// =========================================================================================== CCR-10: render bindings (G10)
+
+/// `JointBinding` gains `scale` and `terms`: the node's coordinate is `scale * (joints[index] + sum_k c_k * joints[k])`. A control arm swings by
+/// `travel / L` (scale), a walking beam pitches by `(c_front - c_rear) / (2 L)` and a solid axle rolls by `(c_right - c_left) / t` (terms).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct JointBindingExt {
+    pub kind: JointAxisKind,
+    pub axis: Vec3,
+    pub index: usize,
+    #[serde(default = "one")]
+    pub scale: f64,
+    #[serde(default)]
+    pub terms: Vec<(usize, f64)>,
+}
+
+fn one() -> f64 {
+    1.0
+}
+
+impl JointBindingExt {
+    pub fn value(&self, joints: &[f32]) -> f64 {
+        self.scale * (joints[self.index] as f64 + self.terms.iter().map(|&(k, c)| c * joints[k] as f64).sum::<f64>())
+    }
+}
+
+// ============================================================================================ CCR-12: a validate() that validates
+
+/// The lane tripwire (CHASSIS and DRIVE briefs): a rig needing more than this many substeps is a numerically unstable design. Not in the contract.
+pub const MAX_SUBSTEPS: u32 = 8;
+
+/// Everything `PhysRig::validate()` does not check and a solver silently relies on. Returns every problem found.
+pub fn validate_deep(rig: &PhysRig) -> Vec<String> {
+    let mut e = Vec::new();
+    let n = rig.stations.len();
+    // 1. Station names are the joint names: they must be unique and non-empty (viewers look joints up by name).
+    for (i, s) in rig.stations.iter().enumerate() {
+        if s.name.is_empty() {
+            e.push(format!("station {i}: empty name"));
+        }
+        if rig.stations.iter().take(i).any(|t| t.name == s.name) {
+            e.push(format!("station {i}: duplicate name {:?} (joint names collide)", s.name));
+        }
+        // 2. A unit bump direction to 1e-6, not "longer than 0.5".
+        if (s.bump_dir.length() - 1.0).abs() > 1e-6 {
+            e.push(format!("station {i} ({}): bump_dir has length {}, not 1", s.name, s.bump_dir.length()));
+        }
+        // 3. Numbers a solver divides by or takes roots of.
+        let sd = &s.suspension;
+        for (what, v) in [("preload", sd.preload_n), ("damper bump", sd.damper.bump_ns_m), ("damper rebound", sd.damper.rebound_ns_m), ("bump stop rate", sd.bump_stop.rate_n_m)] {
+            if !v.is_finite() || (what != "preload" && v < 0.0) {
+                e.push(format!("station {i} ({}): {what} = {v}", s.name));
+            }
+        }
+        if let SpringKind::Table { points } = &sd.spring {
+            if points.len() < 2 || points.windows(2).any(|w| w[1].0 <= w[0].0) {
+                e.push(format!("station {i} ({}): spring table must have >= 2 points with strictly ascending compression", s.name));
+            }
+        }
+        if let Some(t) = &s.wheel.tyre {
+            if t.vertical_stiffness_n_m <= 0.0 || t.patch_length_m <= 0.0 || t.relaxation_length_m <= 0.0 {
+                e.push(format!("station {i} ({}): tyre stiffness, patch length and relaxation length must be positive", s.name));
+            }
+        }
+        if let Some(st) = &s.steer {
+            if !(0.0..=1.0).contains(&st.ackermann) {
+                e.push(format!("station {i} ({}): ackermann {} outside 0..1", s.name, st.ackermann));
+            }
+        }
+        // 4. The two-way pointer between a station and its output must agree.
+        if let Some(o) = s.drive_output {
+            match rig.drivetrain.outputs.get(o) {
+                Some(out) if out.station == i => {}
+                Some(out) => e.push(format!("station {i} ({}): drive_output {o} belongs to station {}", s.name, out.station)),
+                None => {}
+            }
+        }
+    }
+    for (o, out) in rig.drivetrain.outputs.iter().enumerate() {
+        if let Some(s) = rig.stations.get(out.station) {
+            if s.drive_output != Some(o) {
+                e.push(format!("output {o}: station {} ({}) does not point back at it (drive_output = {:?})", out.station, s.name, s.drive_output));
+            }
+        }
+    }
+    // 5. Every output appears exactly once in the driveline tree; diffs have at least two children.
+    let mut leaves = Vec::new();
+    fn walk(nd: &DriveNode, leaves: &mut Vec<usize>, e: &mut Vec<String>) {
+        match nd {
+            DriveNode::Output(i) => leaves.push(*i),
+            DriveNode::Diff { children, .. } => {
+                if children.len() < 2 {
+                    e.push(format!("a Diff has {} child(ren); it needs at least 2", children.len()));
+                }
+                children.iter().for_each(|c| walk(c, leaves, e));
+            }
+            DriveNode::SteerUnit { children, .. } => {
+                if children.len() != 2 {
+                    e.push(format!("a SteerUnit has {} children; it needs exactly 2", children.len()));
+                }
+                children.iter().for_each(|c| walk(c, leaves, e));
+            }
+        }
+    }
+    walk(&rig.drivetrain.driveline, &mut leaves, &mut e);
+    for o in 0..rig.drivetrain.outputs.len() {
+        match leaves.iter().filter(|&&l| l == o).count() {
+            1 => {}
+            0 => e.push(format!("output {o} is not in the driveline tree (an undriven shaft the powertrain will never see)")),
+            k => e.push(format!("output {o} appears {k} times in the driveline tree")),
+        }
+    }
+    // 6. Hull inertia: symmetric and positive definite (all leading principal minors > 0), not merely det > 0.
+    let m = &rig.hull.inertia_kg_m2.m;
+    let minors = [m[0][0], m[0][0] * m[1][1] - m[0][1] * m[1][0], rig.hull.inertia_kg_m2.det()];
+    if minors.iter().any(|&d| !(d > 0.0)) {
+        e.push(format!("hull inertia is not positive definite (leading minors {minors:?})"));
+    }
+    // 7. Couplers and proxies refer to things that exist.
+    for (k, a) in rig.anti_roll.iter().enumerate() {
+        if a.left_station == a.right_station {
+            e.push(format!("anti_roll {k}: couples station {} to itself", a.left_station));
+        }
+        if a.left_station >= n || a.right_station >= n {
+            e.push(format!("anti_roll {k}: station out of range"));
+        }
+    }
+    for p in &rig.proxies {
+        if let Some(j) = p.attached_to {
+            if j >= rig.articulation.len() {
+                e.push(format!("proxy {:?}: attached_to {j} is not an articulation joint (there are {})", p.name, rig.articulation.len()));
+            }
+        }
+    }
+    // 8. Static equilibrium at the design pose: spring preloads carry the hull and balance about its COM.
+    let (mut f_sum, mut mx, mut mz) = (0.0, 0.0, 0.0);
+    for s in &rig.stations {
+        let f = spring_force(&s.suspension, 0.0);
+        f_sum += f;
+        mx += f * (s.rest_pos_m.z - rig.hull.com_m.z);
+        mz += f * (s.rest_pos_m.x - rig.hull.com_m.x);
+    }
+    let w = rig.hull.mass_kg * crate::common::G;
+    if rig.tracks.is_empty() && !rig.stations.is_empty() {
+        let span_z = rig.stations.iter().map(|s| s.rest_pos_m.z).fold(f64::MIN, f64::max) - rig.stations.iter().map(|s| s.rest_pos_m.z).fold(f64::MAX, f64::min);
+        if (f_sum - w).abs() > 0.01 * w {
+            e.push(format!("preloads sum to {f_sum:.0} N but the hull weighs {w:.0} N"));
+        }
+        if mx.abs() > 0.01 * w * span_z.max(0.5) {
+            e.push(format!("preloads leave a pitch moment of {mx:.0} N m about the COM (1% of weight x span = {:.0})", 0.01 * w * span_z.max(0.5)));
+        }
+        if mz.abs() > 0.01 * w * 0.5 {
+            e.push(format!("preloads leave a roll moment of {mz:.0} N m about the COM"));
+        }
+    }
+    // 9. Powertrain sanity.
+    if rig.drivetrain.engine.torque_curve.windows(2).any(|w| w[1].0 <= w[0].0) {
+        e.push("engine torque curve rpm must be strictly ascending".into());
+    }
+    let fwd = &rig.drivetrain.gearbox.forward_ratios;
+    if fwd.iter().any(|&r| !(r > 0.0)) || fwd.windows(2).any(|w| w[1] > w[0]) {
+        e.push("forward gear ratios must be positive and descending (first gear first)".into());
+    }
+    for (i, b) in rig.drivetrain.brakes.iter().enumerate() {
+        if !(b.max_torque_nm > 0.0) || b.fade_end_k <= b.fade_start_k {
+            e.push(format!("brake {i}: torque must be positive and fade_end > fade_start"));
+        }
+    }
+    // 10. The substep tripwire.
+    if rig.integration.substeps > MAX_SUBSTEPS {
+        e.push(format!("{} substeps exceeds the numerical-stability tripwire of {MAX_SUBSTEPS}", rig.integration.substeps));
+    }
+    e
+}

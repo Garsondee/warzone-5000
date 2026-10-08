@@ -1,0 +1,860 @@
+//! The proposed CCR types, compiled, with the Sherman and the Leopard re-expressed in them and the six combat questions re-asked.
+//!
+//! Nothing here edits the contract; it is a candidate for a contract diff. Each block names the gap it closes (the G-numbers of the red-team report).
+//! Blocks marked **PRE-M1** change the shape of an existing type (breaking, cheap now); **M3** blocks are additive. Where the COMBAT
+//! brief (docs/swarm/lanes/combat.md) already expects the same CCR, the shapes below are meant to be compatible with it (closed
+//! convex solids, `degrade()` plus a rig swap, an `ArticulationPort` COMBAT implements).
+
+use serde::{Deserialize, Serialize};
+use w5k_contract::command::GearRequest;
+use w5k_contract::frame::Event;
+use w5k_contract::rig::*;
+use w5k_math::{scalar, Quat, StateHasher, Transform, Vec3};
+
+use crate::common::*;
+use crate::fk::*;
+use crate::geom::*;
+
+// =====================================================================================================================
+// PRE-M1  GAP 1  hull-fixed muzzles, and GAP 3  the muzzle becomes a weapon
+// =====================================================================================================================
+
+/// Replaces `MuzzleDef`. `joint: None` = fixed to the hull (bow gun, casemate gun, hull MG).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MuzzleV2 {
+    pub name: String,
+    pub joint: Option<usize>,
+    pub pose: Transform,
+    pub caliber_m: f64,
+    pub weapon: WeaponDef,
+}
+
+/// What `GunDef` already has in `VehicleDef` plus the numbers the recoil needs, now reaching the solver. `GunDef::muzzle_velocity_m_s`
+/// finally has a destination. The *dynamics* numbers live in the rig so that the glue can conserve momentum without reading COMBAT's
+/// content; the *ballistics* (drag, penetrators, round types) stay in `content/combat/`, named by `catalogue_id`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WeaponDef {
+    /// Id in `content/combat/weapons/` (COMBAT's brief asks how a muzzle names its weapon). Empty = use only the numbers below.
+    pub catalogue_id: String,
+    /// Bit of `CommandV2::fire` that pulls this trigger (0..8). Two muzzles may share a bit (a salvo, a twin mount).
+    pub trigger: u8,
+    /// Reference round, kg. COMBAT's catalogue overrides it per round type at fire time.
+    pub projectile_mass_kg: f64,
+    pub muzzle_velocity_m_s: f64,
+    /// Net free-recoil impulse = factor * projectile_mass_kg * muzzle_velocity_m_s. ~1.3-1.9 for a plain gun (projectile + gas),
+    /// < 1 with a muzzle brake, ~0.05 for a recoilless gun (gas thrown out of the breech cancels the rest).
+    pub recoil_impulse_factor: f64,
+    /// 1-sigma dispersion of the weapon itself, milliradians.
+    pub dispersion_mrad: f64,
+    pub cycle: FireCycle,
+    /// M3 part: ammunition stores that feed it, nearest first (indices into `CombatDef::mass_items`). Empty = unlimited.
+    pub stores: Vec<usize>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum FireCycle {
+    /// One round per trigger pull, then `reload_s` (a hand loader; an autoloader's cycle time).
+    Single { reload_s: f64 },
+    /// Cyclic rate while the trigger is held.
+    Auto { rounds_per_min: f64 },
+    /// An autoloader that needs the gun at a fixed elevation to load (T-72B is in the held-out set).
+    Autoloader { cycle_s: f64, loading_pitch_rad: f64 },
+}
+
+impl MuzzleV2 {
+    /// Net free-recoil impulse of the reference round, N s.
+    pub fn recoil_impulse_ns(&self) -> f64 {
+        self.weapon.recoil_impulse_factor * self.weapon.projectile_mass_kg * self.weapon.muzzle_velocity_m_s
+    }
+}
+
+// =====================================================================================================================
+// PRE-M1  GAP 2  Command addresses weapon stations, not roles
+// =====================================================================================================================
+
+pub const AIM_CHANNELS: usize = 4;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AimFrame {
+    /// Angle relative to the joint's parent (what the staged `Command` means).
+    #[default]
+    Parent,
+    /// Angle in the world (azimuth about +Y, positive left; elevation above the horizon). A stabilised joint holds it as the hull
+    /// moves, to the extent of its `stabiliser_*`; an unstabilised one is handed the instantaneous relative angle and follows.
+    World,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AimDemand {
+    pub yaw_rad: Option<f64>,
+    pub pitch_rad: Option<f64>,
+    pub frame: AimFrame,
+}
+
+/// `Command` with four aim channels (main gun + coax; commander's cupola; loader's gun; independent sight) and an eight-bit trigger
+/// word. Still `Copy`. (`throttle`..`parking_brake` unchanged.)
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct CommandV2 {
+    pub throttle: f64,
+    pub brake: f64,
+    pub steer: f64,
+    pub gear: GearRequest,
+    pub parking_brake: bool,
+    pub aim: [AimDemand; AIM_CHANNELS],
+    /// Level-triggered: bit `n` held = trigger `n` pulled. The weapon's `FireCycle` decides what holding means.
+    pub fire: u8,
+}
+
+/// `JointDef` gains `aim_channel: u8` (default 0). This is the routing function the glue needs: which demand reaches which joint.
+pub fn route_aim(rig: &PhysRig, aim_channel: &[u8], cmd: &CommandV2) -> Vec<Option<(f64, AimFrame)>> {
+    rig.articulation
+        .iter()
+        .enumerate()
+        .map(|(i, j)| {
+            let a = cmd.aim[aim_channel[i] as usize % AIM_CHANNELS];
+            match j.role {
+                JointRole::TurretYaw => a.yaw_rad.map(|y| (y, a.frame)),
+                JointRole::GunPitch => a.pitch_rad.map(|p| (p, a.frame)),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+// =====================================================================================================================
+// PRE-M1  GAP 5 / 8  a servo says what drives it; the operator is part of the servo
+// =====================================================================================================================
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum Actuator {
+    /// A person turning a handwheel or leaning on a shoulder rest: capability scales with that crew member's health.
+    Human(CrewRole),
+    /// Needs the engine running (pump on the transmission): dies with `EnginePower`, falls back to a hand crank.
+    Hydraulic,
+    Electric,
+}
+
+/// Added to `ServoDef` (or, better, `ServoDef` becomes `JointDrive::{Servo(ServoDef), Recoil(RecoilDef), Free}`).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ServoExt {
+    pub actuator: Actuator,
+    /// Command-to-motion delay: ~0.25 s for a person, ~0.05 s for a hydraulic valve, ~0.01 s electric.
+    pub latency_s: f64,
+    /// Rate of the hand-crank fallback (rad/s or m/s) when a powered drive has no power; 0 = none.
+    pub fallback_rate: f64,
+}
+
+/// Effective (rate, effort) of a servo when some channels are derated: a human servo follows its operator, a hydraulic one follows the
+/// engine, with the hand crank as the floor.
+pub fn effective_servo(s: &ServoDef, ext: &ServoExt, derate: &[(DerateTarget, f64)]) -> (f64, f64) {
+    let f = |t: DerateTarget| derate.iter().filter(|(x, _)| *x == t).map(|(_, v)| *v).fold(1.0, f64::min);
+    let k = match ext.actuator {
+        Actuator::Human(role) => f(DerateTarget::Crew(role)),
+        Actuator::Hydraulic => f(DerateTarget::EnginePower),
+        Actuator::Electric => 1.0,
+    };
+    if k > 0.0 {
+        (s.max_rate * k, s.max_effort * k)
+    } else {
+        (ext.fallback_rate, s.max_effort * 0.05)
+    }
+}
+
+// =====================================================================================================================
+// M3  GAP 11  mass items (ammunition, fuel, crew, add-on armour) that change
+// =====================================================================================================================
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum MassKind {
+    Ammunition,
+    Fuel,
+    Crew,
+    /// Bolt-on armour (side skirts, ERA tiles): leaves with its module.
+    AddOn,
+}
+
+/// A removable part of a body. **Convention: its mass is already included in the carrying body's `BodyDef::mass_kg`/`com_m`**
+/// (the as-loaded state), so nothing changes for a vehicle that never spends or loses it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MassItemDef {
+    pub name: String,
+    pub kind: MassKind,
+    /// Carrying body (None = hull) and position in its frame.
+    pub body: Option<usize>,
+    pub pos_m: Vec3,
+    pub full_mass_kg: f64,
+    /// Ammunition: rounds at full fill (mass per round = full_mass_kg / rounds). Others: 0.
+    pub rounds: u32,
+    /// Ammunition: time to bring a round from here to the breech, s (0 = ready rack).
+    pub handling_s: f64,
+    /// Add-on armour: the module whose destruction sheds this mass.
+    pub module: Option<usize>,
+}
+
+// =====================================================================================================================
+// M3  GAP 9 / 10 / 12  armour, damage modules (crew), sensors  (COMBAT expects the same shape: closed convex solids per body)
+// =====================================================================================================================
+
+/// `ProxyShape` plus a convex polyhedron (set of half-spaces `n . x <= d`, as the prototype's armour kernel used). The CCR is to add
+/// `Convex` to `ProxyShape` itself, after marking that enum `#[non_exhaustive]`, so collision proxies, armour and module volumes share
+/// one shape vocabulary.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum SolidShape {
+    Box { half_m: Vec3 },
+    Sphere { radius_m: f64 },
+    Convex { planes: Vec<(Vec3, f64)> },
+}
+
+/// Entry and exit distance of a ray through a posed solid.
+pub fn ray_solid(o: Vec3, d: Vec3, pose: &Transform, shape: &SolidShape) -> Option<(f64, f64)> {
+    match shape {
+        SolidShape::Box { half_m } => ray_obb(o, d, pose, *half_m),
+        SolidShape::Sphere { radius_m } => ray_sphere(o, d, pose.pos, *radius_m),
+        SolidShape::Convex { planes } => ray_convex(o, d, pose, planes),
+    }
+}
+
+/// A ballistic material. `rha_*` = metres of rolled homogeneous armour one metre of this stops.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ArmourMaterial {
+    pub name: String,
+    pub density_kg_m3: f64,
+    pub rha_kinetic: f64,
+    pub rha_chemical: f64,
+}
+
+/// A piece of armour as a closed solid. The line-of-sight thickness of a shot is the chord of its ray through the solid (for a slab,
+/// thickness / |cos obliquity|, with no special formula). Spaced and composite arrays are several solids.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ArmourSolid {
+    pub name: String,
+    /// Carrying body (None = hull); `pose` is in its frame.
+    pub body: Option<usize>,
+    pub pose: Transform,
+    pub shape: SolidShape,
+    pub material: usize,
+    /// Add-on solids (skirt, ERA tile, blow-off panel) belong to a module and vanish when it is destroyed.
+    pub module: Option<usize>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum CrewRole {
+    Commander,
+    Gunner,
+    Loader,
+    Driver,
+    AssistantDriver,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum ModuleKind {
+    Engine,
+    Transmission,
+    Fuel,
+    Ammunition,
+    Crew(CrewRole),
+    Weapon,
+    Sight,
+    Track(Side),
+    TurretRing,
+    Skirt,
+    Era,
+    BlowOffPanel,
+}
+
+/// The rig fields a destroyed module scales. `degrade()` (COMBAT) applies them to the as-built `PhysRig` and the glue swaps the result
+/// in; the physics lanes need no knowledge of damage at all.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum DerateTarget {
+    /// Scales `drivetrain.engine.torque_curve`.
+    EnginePower,
+    /// Scales every `OutputDef::efficiency` (transmission or final-drive failure).
+    Gearbox,
+    /// Scales `BrakeDef::max_torque_nm`.
+    Brakes,
+    /// Scales the `OutputDef::efficiency` of the sprocket of that side's track (a thrown track).
+    Track(Side),
+    /// A road wheel or suspension station.
+    Station(usize),
+    /// Scales a joint's servo `max_rate`, `max_accel`, `max_effort` (a jammed ring, a dead drive).
+    Joint(usize),
+    /// Handled by COMBAT's weapon state (no rig field): the muzzle cannot fire.
+    Muzzle(usize),
+    /// Handled by the AI's perception (no rig field).
+    Sensor(usize),
+    /// Handled by COMBAT's weapon state and the AI: that crew action is lost.
+    Crew(CrewRole),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum ModuleEffect {
+    /// Multiply the channel by `factor` (0 = gone).
+    Derate { target: DerateTarget, factor: f64 },
+    /// Ammunition fire: with probability `chance` (wet stowage lowers it) the store burns; the blast goes out through the module
+    /// `vent` (blow-off panel) if it is intact, otherwise into the crew compartment.
+    CookOff { store: usize, chance: f64, vent: Option<usize> },
+    /// Fuel or engine fire: heat in W for as long as it burns.
+    Fire { power_w: f64 },
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ModuleVolume {
+    pub shape: SolidShape,
+    pub pose: Transform,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ModuleDef {
+    pub name: String,
+    pub kind: ModuleKind,
+    pub body: Option<usize>,
+    pub volumes: Vec<ModuleVolume>,
+    /// Energy deposited by penetrators and spall that destroys it, J.
+    pub health_j: f64,
+    pub effects: Vec<ModuleEffect>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum SensorKind {
+    DaySight,
+    Thermal,
+    Periscope,
+    Rangefinder,
+}
+
+/// A sight or sensor head. Optical axis = -Z of `pose`. It rides on the articulation body `body`, so a separately stabilised gimbal is
+/// a joint with its own `ServoDef` and the sensor sits on that joint.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SensorDef {
+    pub name: String,
+    pub kind: SensorKind,
+    pub body: Option<usize>,
+    pub pose: Transform,
+    pub fov_rad: f64,
+    /// Muzzle this sight is boresighted to (gun slaved to sight, parallax offset = difference of the two poses).
+    pub boresight_to: Option<usize>,
+}
+
+/// The single new field of `PhysRig` for M3: `#[serde(default)] pub combat: CombatDef`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct CombatDef {
+    pub mass_items: Vec<MassItemDef>,
+    pub materials: Vec<ArmourMaterial>,
+    pub armour: Vec<ArmourSolid>,
+    pub modules: Vec<ModuleDef>,
+    pub sensors: Vec<SensorDef>,
+}
+
+// =====================================================================================================================
+// M3 (trait shape settled PRE-M1)  GAP 4  the seam: ArticulationPort, events out of a VehicleModel, a rig swap in
+// =====================================================================================================================
+
+/// Hull motion handed to the articulation model every substep (world frame).
+#[derive(Clone, Copy, Debug)]
+pub struct HullMotion {
+    pub rot: Quat,
+    pub pos_m: Vec3,
+    pub vel_m_s: Vec3,
+    pub acc_m_s2: Vec3,
+    pub omega_rad_s: Vec3,
+    pub alpha_rad_s2: Vec3,
+}
+
+/// What the articulation exerts on the hull this substep: force and torque about the hull COM, world frame.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ArticulationWrench {
+    pub force_n: Vec3,
+    pub torque_about_hull_com_nm: Vec3,
+}
+
+/// A round leaving a muzzle: everything COMBAT's ballistics needs and the viewers need to draw a tracer.
+#[derive(Clone, Copy, Debug)]
+pub struct Shot {
+    pub muzzle: u32,
+    pub origin_m: Vec3,
+    pub dir: Vec3,
+    /// Velocity of the muzzle point itself (hull + joint motion), added to `dir * muzzle_velocity`.
+    pub muzzle_point_vel_m_s: Vec3,
+}
+
+/// Implemented by COMBAT (servos, stabiliser, recoil, weapon cycle, ammunition state), called by the glue in substep order 5. A trait,
+/// like `DrivePort`, because `w5k_vehicle` reaches COMBAT only through the contract (LAYERS.md already says "calls the articulation
+/// port"; `ports.rs` has no such trait).
+pub trait ArticulationPort {
+    fn step(&mut self, dt_s: f64, hull: &HullMotion, cmd: &CommandV2, wrench: &mut ArticulationWrench);
+    /// Joint coordinates in rig order (what goes into `VehicleFrame::joints`).
+    fn joint_positions(&self) -> &[f64];
+    /// Rounds that left this substep; the caller spawns projectiles and records `Event::Fired`.
+    fn drain_shots(&mut self, out: &mut Vec<Shot>);
+    fn hash_state(&self, h: &mut StateHasher);
+}
+
+/// Added to `VehicleModel` with default bodies, so existing implementors do not change.
+pub trait VehicleModelExt {
+    /// Events the vehicle itself raised since the last call (`Fired`, `Stuck`, `Rollover`, `BottomedOut`). The staged stand-in computes
+    /// `fire_event` and drops it (testing/vehicle.rs:244) because there is nowhere to put it.
+    fn drain_events(&mut self, _out: &mut Vec<Event>) {}
+    /// Damage as a new numbers-only rig from `degrade()`; topology must match, state is kept. (COMBAT's brief asks for this hook.)
+    fn swap_rig(&mut self, _rig: PhysRig) {}
+}
+
+// =====================================================================================================================
+// The two tanks re-expressed
+// =====================================================================================================================
+
+/// A staged rig with the proposed additions beside it.
+#[derive(Clone, Debug)]
+pub struct RigV2 {
+    pub rig: PhysRig,
+    pub muzzles: Vec<MuzzleV2>,
+    /// `JointDef::aim_channel` for each articulation joint.
+    pub aim_channel: Vec<u8>,
+    /// `ServoExt` for each articulation joint (None = passive).
+    pub servo_ext: Vec<Option<ServoExt>>,
+    pub combat: CombatDef,
+}
+
+pub fn facing(n: Vec3) -> Quat {
+    let n = n.normalized_or_zero();
+    Quat::from_yaw(scalar::atan2(n.x, n.z)) * Quat::from_pitch(-scalar::asin(scalar::clamp(n.y, -1.0, 1.0)))
+}
+
+/// A slab of armour: `thickness_mm` along `normal` (outward), `half` = half extents in the plate plane (local X horizontal-ish, local Y).
+#[allow(clippy::too_many_arguments)]
+fn slab(name: &str, body: Option<usize>, centre: Vec3, normal: Vec3, half: [f64; 2], thickness_mm: f64, material: usize, module: Option<usize>) -> ArmourSolid {
+    ArmourSolid {
+        name: name.into(),
+        body,
+        pose: Transform::new(centre, facing(normal)),
+        shape: SolidShape::Box { half_m: Vec3::new(half[0], half[1], 0.5 * thickness_mm * 1e-3) },
+        material,
+        module,
+    }
+}
+
+fn bx(centre: Vec3, half: Vec3) -> ModuleVolume {
+    ModuleVolume { shape: SolidShape::Box { half_m: half }, pose: Transform::from_pos(centre) }
+}
+
+fn module(name: &str, kind: ModuleKind, body: Option<usize>, volumes: Vec<ModuleVolume>, health_j: f64, effects: Vec<ModuleEffect>) -> ModuleDef {
+    ModuleDef { name: name.into(), kind, body, volumes, health_j, effects }
+}
+
+fn weapon(g: &GunFacts, id: &str, trigger: u8, cycle: FireCycle, stores: Vec<usize>, dispersion: f64) -> WeaponDef {
+    WeaponDef {
+        catalogue_id: id.into(),
+        trigger,
+        projectile_mass_kg: g.projectile_kg,
+        muzzle_velocity_m_s: g.muzzle_v_m_s,
+        recoil_impulse_factor: g.recoil_factor(),
+        dispersion_mrad: dispersion,
+        cycle,
+        stores,
+    }
+}
+
+const RIFLE_30: GunFacts = GunFacts { name: ".30-06", projectile_kg: 0.0097, muzzle_v_m_s: 860.0, charge_kg: 0.003, recoil_mass_kg: 5.0, stroke_m: 0.0 };
+const MG_50: GunFacts = GunFacts { name: ".50 BMG", projectile_kg: 0.043, muzzle_v_m_s: 890.0, charge_kg: 0.0115, recoil_mass_kg: 38.0, stroke_m: 0.0 };
+const MG_762: GunFacts = GunFacts { name: "7.62x51", projectile_kg: 0.0095, muzzle_v_m_s: 850.0, charge_kg: 0.003, recoil_mass_kg: 11.0, stroke_m: 0.0 };
+
+fn materials() -> Vec<ArmourMaterial> {
+    vec![
+        ArmourMaterial { name: "rha".into(), density_kg_m3: 7_850.0, rha_kinetic: 1.0, rha_chemical: 1.0 },
+        ArmourMaterial { name: "cast_steel".into(), density_kg_m3: 7_800.0, rha_kinetic: 0.95, rha_chemical: 0.95 },
+        // Illustrative multipliers for a Leopard-2-class composite array (ceramic + steel layers): much better against shaped charges.
+        ArmourMaterial { name: "composite_array".into(), density_kg_m3: 4_500.0, rha_kinetic: 1.9, rha_chemical: 3.1 },
+        ArmourMaterial { name: "rubber_skirt".into(), density_kg_m3: 1_200.0, rha_kinetic: 0.05, rha_chemical: 0.3 },
+        ArmourMaterial { name: "era_tile".into(), density_kg_m3: 3_000.0, rha_kinetic: 0.4, rha_chemical: 2.5 },
+    ]
+}
+
+/// The Sherman with the PRE-M1 changes applied (phantom bow joint gone, its 14 kg back in the hull) and the M3 data attached.
+pub fn sherman_v2() -> RigV2 {
+    use crate::sherman::{j, m};
+    let mut rig = crate::sherman::m4a3_76w();
+    // GAP 2 closed: the cupola ring and its gun answer to aim channel 1, so they may carry the yaw / pitch roles without being slaved to channel 0.
+    rig.articulation[j::CUPOLA_YAW].role = JointRole::TurretYaw;
+    rig.articulation[j::CUPOLA_MG_PITCH].role = JointRole::GunPitch;
+    // GAP 1 closed: the bow gun is on the hull, not on an invented joint.
+    let phantom = rig.articulation.pop().expect("phantom joint");
+    assert_eq!(phantom.name, "bow_mg_mount");
+    rig.hull.mass_kg += phantom.body.mass_kg;
+    let staged_muzzles = std::mem::take(&mut rig.muzzles); // MuzzleV2 replaces MuzzleDef
+    let muzzles = vec![
+        MuzzleV2 { name: "main_76mm".into(), joint: Some(j::GUN_RECOIL), pose: staged_muzzles[m::MAIN].pose, caliber_m: 0.076, weapon: weapon(&SHERMAN_76, "us_76mm_m1a2", 0, FireCycle::Single { reload_s: 5.0 }, vec![1, 0], 0.6) },
+        MuzzleV2 { name: "coax_30cal".into(), joint: Some(j::GUN_PITCH), pose: staged_muzzles[m::COAX].pose, caliber_m: 0.00762, weapon: weapon(&RIFLE_30, "us_m1919a4", 1, FireCycle::Auto { rounds_per_min: 500.0 }, vec![2], 1.5) },
+        MuzzleV2 { name: "cupola_50cal".into(), joint: Some(j::CUPOLA_MG_PITCH), pose: staged_muzzles[m::CUPOLA_MG].pose, caliber_m: 0.0127, weapon: weapon(&MG_50, "us_m2hb", 2, FireCycle::Auto { rounds_per_min: 485.0 }, vec![3], 2.0) },
+        MuzzleV2 { name: "bow_30cal".into(), joint: None, pose: Transform::from_pos(Vec3::new(0.55, 0.0, -3.50)), caliber_m: 0.00762, weapon: weapon(&RIFLE_30, "us_m1919a4", 3, FireCycle::Auto { rounds_per_min: 500.0 }, vec![2], 3.0) },
+    ];
+    // Aim channels: 0 = gunner (turret + gun), 1 = commander (cupola ring + .50).
+    let aim_channel = vec![0, 0, 0, 1, 1];
+    // Who drives what. The gunner's elevation is a person; the traverse is hydraulic with a hand-crank fallback; the cupola is the commander's arms.
+    let servo_ext = vec![
+        Some(ServoExt { actuator: Actuator::Hydraulic, latency_s: 0.05, fallback_rate: deg(1.5) }),
+        Some(ServoExt { actuator: Actuator::Human(CrewRole::Gunner), latency_s: 0.25, fallback_rate: 0.0 }),
+        None, // recoil slide: passive
+        Some(ServoExt { actuator: Actuator::Human(CrewRole::Commander), latency_s: 0.25, fallback_rate: 0.0 }),
+        Some(ServoExt { actuator: Actuator::Human(CrewRole::Commander), latency_s: 0.25, fallback_rate: 0.0 }),
+    ];
+    let mut c = CombatDef { materials: materials(), ..CombatDef::default() };
+    let stow = crate::sherman::sherman_stowage();
+    // 0 hull wet rack, 1 turret ready rack, 2 belts, 3 .50 belts, 4 fuel, 5.. crew
+    c.mass_items.push(MassItemDef { name: stow[0].name.into(), kind: MassKind::Ammunition, body: stow[0].body, pos_m: stow[0].pos_m, full_mass_kg: 57.0 * 11.0, rounds: 57, handling_s: 6.0, module: None });
+    c.mass_items.push(MassItemDef { name: stow[1].name.into(), kind: MassKind::Ammunition, body: stow[1].body, pos_m: stow[1].pos_m, full_mass_kg: 14.0 * 11.0, rounds: 14, handling_s: 0.0, module: None });
+    c.mass_items.push(MassItemDef { name: "30cal_belts".into(), kind: MassKind::Ammunition, body: None, pos_m: Vec3::new(0.9, 0.0, -2.2), full_mass_kg: 156.0, rounds: 6_250, handling_s: 0.0, module: None });
+    c.mass_items.push(MassItemDef { name: "50cal_belts".into(), kind: MassKind::Ammunition, body: Some(j::TURRET_YAW), pos_m: Vec3::new(-0.6, 0.3, 0.6), full_mass_kg: 22.0, rounds: 200, handling_s: 0.0, module: None });
+    c.mass_items.push(MassItemDef { name: "fuel".into(), kind: MassKind::Fuel, body: None, pos_m: Vec3::new(0.0, -0.2, 1.2), full_mass_kg: 450.0, rounds: 0, handling_s: 0.0, module: None });
+    for (n, body, pos) in [
+        ("commander", Some(j::TURRET_YAW), Vec3::new(-0.55, 0.45, 0.35)),
+        ("gunner", Some(j::TURRET_YAW), Vec3::new(0.45, 0.35, -0.35)),
+        ("loader", Some(j::TURRET_YAW), Vec3::new(-0.45, 0.35, -0.45)),
+        ("driver", None, Vec3::new(-0.55, 0.05, -2.7)),
+        ("assistant_driver", None, Vec3::new(0.55, 0.05, -2.7)),
+    ] {
+        c.mass_items.push(MassItemDef { name: n.into(), kind: MassKind::Crew, body, pos_m: pos, full_mass_kg: 80.0, rounds: 0, handling_s: 0.0, module: None });
+    }
+    // Armour: the upper glacis at 47 deg from vertical (outward normal tilted up by 47 deg), vertical sides and rear, cast turret.
+    let t47 = deg(47.0);
+    let n_glacis = Vec3::new(0.0, scalar::sin(t47), -scalar::cos(t47));
+    let t30 = deg(30.0);
+    let n_turret_front = Vec3::new(0.0, scalar::sin(t30), -scalar::cos(t30));
+    c.armour = vec![
+        slab("upper_glacis", None, Vec3::new(0.0, 0.30, -3.45), n_glacis, [1.30, 0.45], 63.5, 0, None),
+        slab("hull_side_right", None, Vec3::new(1.50, 0.0, 0.0), Vec3::X, [3.3, 0.55], 38.0, 0, None),
+        slab("hull_side_left", None, Vec3::new(-1.50, 0.0, 0.0), -Vec3::X, [3.3, 0.55], 38.0, 0, None),
+        slab("hull_rear", None, Vec3::new(0.0, 0.0, 3.50), Vec3::Z, [1.4, 0.55], 38.0, 0, None),
+        slab("turret_front", Some(j::TURRET_YAW), Vec3::new(0.0, 0.45, -1.15), n_turret_front, [1.1, 0.40], 63.5, 1, None),
+        slab("turret_side_right", Some(j::TURRET_YAW), Vec3::new(1.30, 0.45, 0.15), Vec3::X, [1.3, 0.40], 51.0, 1, None),
+        slab("turret_roof", Some(j::TURRET_YAW), Vec3::new(0.0, 0.90, 0.15), Vec3::Y, [1.2, 1.3], 25.0, 0, None),
+        slab("mantlet", Some(j::GUN_PITCH), Vec3::new(0.0, 0.0, -0.45), -Vec3::Z, [0.4, 0.3], 89.0, 1, None),
+    ];
+    // Modules. Indices are referenced by the effects and by the cook-off, so the order matters.
+    let hullq = |name: &str, kind, vols, hp, eff| module(name, kind, None, vols, hp, eff);
+    c.modules = vec![
+        hullq("engine", ModuleKind::Engine, vec![bx(Vec3::new(0.0, -0.05, 2.35), Vec3::new(0.8, 0.5, 0.9))], 4.0e6, vec![ModuleEffect::Derate { target: DerateTarget::EnginePower, factor: 0.0 }, ModuleEffect::Fire { power_w: 2.0e6 }]), // 0
+        hullq("transmission", ModuleKind::Transmission, vec![bx(Vec3::new(0.0, -0.15, -2.7), Vec3::new(0.9, 0.35, 0.6))], 3.0e6, vec![ModuleEffect::Derate { target: DerateTarget::Gearbox, factor: 0.0 }]), // 1
+        hullq("fuel_cells", ModuleKind::Fuel, vec![bx(Vec3::new(1.0, -0.2, 1.0), Vec3::new(0.35, 0.3, 0.6)), bx(Vec3::new(-1.0, -0.2, 1.0), Vec3::new(0.35, 0.3, 0.6))], 1.0e6, vec![ModuleEffect::Fire { power_w: 3.0e6 }]), // 2
+        hullq("ammo_hull_wet_rack", ModuleKind::Ammunition, vec![bx(Vec3::new(0.0, -0.45, -0.6), Vec3::new(0.7, 0.12, 0.8))], 1.5e6, vec![ModuleEffect::CookOff { store: 0, chance: 0.15, vent: None }]), // 3 (wet: 0.15 not ~0.8)
+        module("ammo_turret_ready_rack", ModuleKind::Ammunition, Some(j::TURRET_YAW), vec![bx(Vec3::new(-0.7, 0.2, 0.9), Vec3::new(0.3, 0.25, 0.3))], 1.0e6, vec![ModuleEffect::CookOff { store: 1, chance: 0.8, vent: None }]), // 4
+        module("crew_commander", ModuleKind::Crew(CrewRole::Commander), Some(j::TURRET_YAW), vec![bx(Vec3::new(-0.55, 0.45, 0.35), Vec3::new(0.3, 0.4, 0.3))], 1.0e3, vec![ModuleEffect::Derate { target: DerateTarget::Crew(CrewRole::Commander), factor: 0.0 }]), // 5
+        module("crew_gunner", ModuleKind::Crew(CrewRole::Gunner), Some(j::TURRET_YAW), vec![bx(Vec3::new(0.45, 0.35, -0.35), Vec3::new(0.3, 0.4, 0.3))], 1.0e3, vec![ModuleEffect::Derate { target: DerateTarget::Crew(CrewRole::Gunner), factor: 0.0 }]), // 6
+        module("crew_loader", ModuleKind::Crew(CrewRole::Loader), Some(j::TURRET_YAW), vec![bx(Vec3::new(-0.45, 0.35, -0.45), Vec3::new(0.3, 0.4, 0.3))], 1.0e3, vec![ModuleEffect::Derate { target: DerateTarget::Crew(CrewRole::Loader), factor: 0.0 }]), // 7
+        hullq("crew_driver", ModuleKind::Crew(CrewRole::Driver), vec![bx(Vec3::new(-0.55, 0.05, -2.7), Vec3::new(0.3, 0.4, 0.3))], 1.0e3, vec![ModuleEffect::Derate { target: DerateTarget::Crew(CrewRole::Driver), factor: 0.0 }]), // 8
+        hullq("crew_assistant_driver", ModuleKind::Crew(CrewRole::AssistantDriver), vec![bx(Vec3::new(0.55, 0.05, -2.7), Vec3::new(0.3, 0.4, 0.3))], 1.0e3, vec![ModuleEffect::Derate { target: DerateTarget::Crew(CrewRole::AssistantDriver), factor: 0.0 }]), // 9
+        module("gun_breech", ModuleKind::Weapon, Some(j::GUN_RECOIL), vec![bx(Vec3::new(0.0, 0.0, 0.1), Vec3::new(0.15, 0.15, 0.35))], 2.0e5, vec![ModuleEffect::Derate { target: DerateTarget::Muzzle(0), factor: 0.0 }]), // 10
+        hullq("track_left", ModuleKind::Track(Side::Left), vec![bx(Vec3::new(-1.35, -0.45, 0.0), Vec3::new(0.27, 0.43, 3.7))], 5.0e5, vec![ModuleEffect::Derate { target: DerateTarget::Track(Side::Left), factor: 0.0 }]), // 11
+        hullq("track_right", ModuleKind::Track(Side::Right), vec![bx(Vec3::new(1.35, -0.45, 0.0), Vec3::new(0.27, 0.43, 3.7))], 5.0e5, vec![ModuleEffect::Derate { target: DerateTarget::Track(Side::Right), factor: 0.0 }]), // 12
+        module("turret_ring", ModuleKind::TurretRing, Some(j::TURRET_YAW), vec![bx(Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.08, 1.0))], 8.0e5, vec![ModuleEffect::Derate { target: DerateTarget::Joint(j::TURRET_YAW), factor: 0.0 }]), // 13
+    ];
+    c.sensors = vec![SensorDef { name: "m70_telescope".into(), kind: SensorKind::DaySight, body: Some(j::GUN_PITCH), pose: Transform::from_pos(Vec3::new(0.30, 0.15, -0.35)), fov_rad: deg(10.0), boresight_to: Some(0) }];
+    RigV2 { rig, muzzles, aim_channel, servo_ext, combat: c }
+}
+
+/// The Leopard with the M3 data attached: what differs from the Sherman is the stabilised sight gimbals as sensors, the ammunition split
+/// with a blow-off panel, add-on skirts and ERA that are modules with mass.
+pub fn leopard_v2() -> RigV2 {
+    use crate::leopard::{j, m};
+    let mut rig = crate::leopard::leopard_2a5();
+    // Independent aim channels: the commander's periscope (1) and the loader's MG (2) are yaw/pitch pairs of their own.
+    rig.articulation[j::CDR_SIGHT_YAW].role = JointRole::TurretYaw;
+    rig.articulation[j::CDR_SIGHT_PITCH].role = JointRole::GunPitch;
+    rig.articulation[j::LOADER_MG_YAW].role = JointRole::TurretYaw;
+    rig.articulation[j::LOADER_MG_PITCH].role = JointRole::GunPitch;
+    let staged_muzzles = std::mem::take(&mut rig.muzzles);
+    let muzzles = vec![
+        MuzzleV2 { name: "main_120mm".into(), joint: Some(j::GUN_RECOIL), pose: staged_muzzles[m::MAIN].pose, caliber_m: 0.120, weapon: weapon(&LEOPARD_120, "de_rh120_l44", 0, FireCycle::Single { reload_s: 5.5 }, vec![0, 1], 0.25) },
+        MuzzleV2 { name: "coax_mg3".into(), joint: Some(j::GUN_PITCH), pose: staged_muzzles[m::COAX].pose, caliber_m: 0.00762, weapon: weapon(&MG_762, "de_mg3", 1, FireCycle::Auto { rounds_per_min: 1_000.0 }, vec![2], 1.2) },
+        MuzzleV2 { name: "loader_mg3".into(), joint: Some(j::LOADER_MG_PITCH), pose: staged_muzzles[m::LOADER_MG].pose, caliber_m: 0.00762, weapon: weapon(&MG_762, "de_mg3", 2, FireCycle::Auto { rounds_per_min: 1_000.0 }, vec![2], 3.0) },
+    ];
+    // Channels: 0 = gunner/gun (the sight head is slaved, not commanded), 1 = commander's periscope (hunter-killer), 2 = loader's MG.
+    let aim_channel = vec![0, 0, 0, 0, 1, 1, 2, 2];
+    let electric = |lat| Some(ServoExt { actuator: Actuator::Electric, latency_s: lat, fallback_rate: deg(1.0) });
+    let human = |role| Some(ServoExt { actuator: Actuator::Human(role), latency_s: 0.25, fallback_rate: 0.0 });
+    let servo_ext = vec![electric(0.01), electric(0.01), None, electric(0.005), electric(0.01), electric(0.005), human(CrewRole::Loader), human(CrewRole::Loader)];
+    let mut c = CombatDef { materials: materials(), ..CombatDef::default() };
+    let stow = crate::leopard::leopard_stowage();
+    // 0 bustle rack (15, ready, behind blow-off panel), 1 hull rack (27, slower), 2 MG belts, 3 skirt mass, 4 ERA mass
+    c.mass_items.push(MassItemDef { name: stow[0].name.into(), kind: MassKind::Ammunition, body: stow[0].body, pos_m: stow[0].pos_m, full_mass_kg: 15.0 * 21.4, rounds: 15, handling_s: 0.0, module: None });
+    c.mass_items.push(MassItemDef { name: stow[1].name.into(), kind: MassKind::Ammunition, body: stow[1].body, pos_m: stow[1].pos_m, full_mass_kg: 27.0 * 21.4, rounds: 27, handling_s: 6.0, module: None });
+    c.mass_items.push(MassItemDef { name: "mg3_belts".into(), kind: MassKind::Ammunition, body: None, pos_m: Vec3::new(0.6, 0.2, 0.0), full_mass_kg: 130.0, rounds: 4_750, handling_s: 0.0, module: None });
+    c.mass_items.push(MassItemDef { name: "side_skirts".into(), kind: MassKind::AddOn, body: None, pos_m: Vec3::new(0.0, -0.1, 0.3), full_mass_kg: 2_400.0, rounds: 0, handling_s: 0.0, module: Some(3) });
+    c.mass_items.push(MassItemDef { name: "era_tiles".into(), kind: MassKind::AddOn, body: Some(j::TURRET_YAW), pos_m: Vec3::new(0.0, 0.5, -1.7), full_mass_kg: 900.0, rounds: 0, handling_s: 0.0, module: Some(4) });
+    // Modules: 0 bustle ammunition, 1 blow-off panel, 2 hull ammunition, 3 skirts, 4 ERA, 5 engine, 6 crew_loader
+    c.modules = vec![
+        module("ammo_bustle_rack", ModuleKind::Ammunition, Some(j::TURRET_YAW), vec![bx(Vec3::new(0.0, 0.55, 1.55), Vec3::new(1.0, 0.3, 0.3))], 1.0e6, vec![ModuleEffect::CookOff { store: 0, chance: 0.8, vent: Some(1) }]),
+        module("bustle_blow_off_panels", ModuleKind::BlowOffPanel, Some(j::TURRET_YAW), vec![bx(Vec3::new(0.0, 0.92, 1.55), Vec3::new(0.9, 0.03, 0.28))], 2.0e4, vec![]),
+        module("ammo_hull_rack", ModuleKind::Ammunition, None, vec![bx(Vec3::new(-0.7, 0.0, -2.6), Vec3::new(0.35, 0.35, 0.5))], 1.5e6, vec![ModuleEffect::CookOff { store: 1, chance: 0.5, vent: None }]),
+        module("side_skirts", ModuleKind::Skirt, None, vec![bx(Vec3::new(1.70, -0.10, 0.30), Vec3::new(0.05, 0.35, 3.0)), bx(Vec3::new(-1.70, -0.10, 0.30), Vec3::new(0.05, 0.35, 3.0))], 3.0e5, vec![]),
+        module("era_tiles", ModuleKind::Era, Some(j::TURRET_YAW), vec![bx(Vec3::new(0.0, 0.5, -1.7), Vec3::new(1.2, 0.3, 0.1))], 5.0e4, vec![]),
+        module("engine", ModuleKind::Engine, None, vec![bx(Vec3::new(0.0, -0.05, 2.35), Vec3::new(1.0, 0.5, 0.9))], 6.0e6, vec![ModuleEffect::Derate { target: DerateTarget::EnginePower, factor: 0.0 }]),
+        module("crew_loader", ModuleKind::Crew(CrewRole::Loader), Some(j::TURRET_YAW), vec![bx(Vec3::new(0.6, 0.45, 0.2), Vec3::new(0.3, 0.4, 0.3))], 1.0e3, vec![ModuleEffect::Derate { target: DerateTarget::Crew(CrewRole::Loader), factor: 0.0 }]),
+    ];
+    // The turret-front array: ERA, outer plate, composite core, back plate, each a slab sloped 30 deg: 'spaced and composite arrays are several solids'.
+    let n = Vec3::new(0.0, 0.5, -0.866);
+    c.armour = vec![
+        slab("turret_array_outer", Some(j::TURRET_YAW), Vec3::new(0.0, 0.55, -1.9), n, [1.6, 0.45], 60.0, 0, None),
+        slab("turret_array_core", Some(j::TURRET_YAW), Vec3::new(0.0, 0.55, -1.7), n, [1.6, 0.45], 350.0, 2, None),
+        slab("turret_array_back", Some(j::TURRET_YAW), Vec3::new(0.0, 0.55, -1.4), n, [1.6, 0.45], 50.0, 0, None),
+        slab("skirt_right", None, Vec3::new(1.70, -0.10, 0.30), Vec3::X, [3.0, 0.35], 40.0, 3, Some(3)),
+        slab("era_front", Some(j::TURRET_YAW), Vec3::new(0.0, 0.5, -1.95), n, [1.2, 0.3], 30.0, 4, Some(4)),
+        slab("bustle_blow_off", Some(j::TURRET_YAW), Vec3::new(0.0, 0.92, 1.55), Vec3::Y, [0.9, 0.28], 6.0, 0, Some(1)),
+    ];
+    c.sensors = vec![
+        SensorDef { name: "gunner_sight_head".into(), kind: SensorKind::DaySight, body: Some(j::GUNNER_SIGHT), pose: Transform::from_pos(Vec3::new(0.0, 0.10, -0.15)), fov_rad: deg(8.0), boresight_to: Some(0) },
+        SensorDef { name: "gunner_thermal".into(), kind: SensorKind::Thermal, body: Some(j::GUNNER_SIGHT), pose: Transform::from_pos(Vec3::new(0.0, 0.05, -0.15)), fov_rad: deg(5.0), boresight_to: Some(0) },
+        SensorDef { name: "commander_periscope".into(), kind: SensorKind::Periscope, body: Some(j::CDR_SIGHT_PITCH), pose: Transform::from_pos(Vec3::new(0.0, 0.05, -0.1)), fov_rad: deg(20.0), boresight_to: None },
+    ];
+    RigV2 { rig, muzzles, aim_channel, servo_ext, combat: c }
+}
+
+// =====================================================================================================================
+// The six questions, re-asked with the proposed data
+// =====================================================================================================================
+
+fn body_frame(r: &RigV2, body: Option<usize>, qs: &[f64]) -> Transform {
+    frame_of(&r.rig, body, qs)
+}
+
+/// Muzzle pose in the hull frame (`joint: None` = the hull).
+pub fn muzzle_pose_v2(r: &RigV2, muzzle: usize, qs: &[f64]) -> Transform {
+    let m = &r.muzzles[muzzle];
+    body_frame(r, m.joint, qs).compose(&m.pose)
+}
+
+#[derive(Clone, Debug)]
+pub struct SolidHit {
+    pub solid: usize,
+    pub t_in: f64,
+    /// Line-of-sight thickness: the chord of the ray through the solid.
+    pub los_thickness_m: f64,
+    pub rha_kinetic_m: f64,
+    pub rha_chemical_m: f64,
+}
+
+/// (3) Every armour solid the ray crosses, nearest first, skipping solids whose module is in `destroyed`.
+pub fn armour_along_ray(r: &RigV2, qs: &[f64], o: Vec3, d: Vec3, destroyed: &[usize]) -> Vec<SolidHit> {
+    let mut hits = Vec::new();
+    for (i, a) in r.combat.armour.iter().enumerate() {
+        if a.module.is_some_and(|m| destroyed.contains(&m)) {
+            continue;
+        }
+        let pose = body_frame(r, a.body, qs).compose(&a.pose);
+        if let Some((t0, t1)) = ray_solid(o, d, &pose, &a.shape) {
+            let chord = t1 - t0;
+            let mat = &r.combat.materials[a.material];
+            hits.push(SolidHit { solid: i, t_in: t0, los_thickness_m: chord, rha_kinetic_m: chord * mat.rha_kinetic, rha_chemical_m: chord * mat.rha_chemical });
+        }
+    }
+    hits.sort_by(|a, b| a.t_in.total_cmp(&b.t_in));
+    hits
+}
+
+#[derive(Clone, Debug)]
+pub struct ModuleHit {
+    pub module: usize,
+    pub t_in: f64,
+    pub chord_m: f64,
+}
+
+/// (4) The modules a penetrator crosses after `from_t` metres along the ray, in order.
+pub fn modules_along_ray(r: &RigV2, qs: &[f64], o: Vec3, d: Vec3, from_t: f64) -> Vec<ModuleHit> {
+    let mut hits = Vec::new();
+    for (mi, m) in r.combat.modules.iter().enumerate() {
+        let frame = body_frame(r, m.body, qs);
+        for v in &m.volumes {
+            let pose = frame.compose(&v.pose);
+            if let Some((t0, t1)) = ray_solid(o, d, &pose, &v.shape) {
+                if t1 > from_t {
+                    hits.push(ModuleHit { module: mi, t_in: t0.max(from_t), chord_m: t1 - t0.max(from_t) });
+                }
+            }
+        }
+    }
+    hits.sort_by(|a, b| a.t_in.total_cmp(&b.t_in));
+    hits
+}
+
+#[derive(Clone, Debug)]
+pub struct AmmoShift {
+    pub d_mass_kg: f64,
+    /// Change of the whole vehicle's COM (hull frame).
+    pub d_com_vehicle_m: Vec3,
+    /// Change of the carrying body's own COM, in that body's frame (the turret's balance about its ring).
+    pub d_com_body_m: Vec3,
+}
+
+/// (5) COM shift from removing `rounds` rounds from mass item `item` (with the item's mass already inside its body, per the convention).
+pub fn ammo_shift(r: &RigV2, qs: &[f64], item: usize, rounds: u32) -> AmmoShift {
+    let it = &r.combat.mass_items[item];
+    let per_round = it.full_mass_kg / it.rounds.max(1) as f64;
+    let dm = per_round * rounds as f64;
+    let comp = composite(&r.rig, qs);
+    let p_hull = body_frame(r, it.body, qs).apply_point(it.pos_m);
+    let new_com = (comp.com_m * comp.mass_kg - p_hull * dm) * (1.0 / (comp.mass_kg - dm));
+    let d_body = match it.body {
+        None => (r.rig.hull.com_m * r.rig.hull.mass_kg - it.pos_m * dm) * (1.0 / (r.rig.hull.mass_kg - dm)) - r.rig.hull.com_m,
+        Some(j) => {
+            let b = &r.rig.articulation[j].body;
+            (b.com_m * b.mass_kg - it.pos_m * dm) * (1.0 / (b.mass_kg - dm)) - b.com_m
+        }
+    };
+    AmmoShift { d_mass_kg: -dm, d_com_vehicle_m: new_com - comp.com_m, d_com_body_m: d_body }
+}
+
+/// Mass shed when a set of modules is destroyed (add-on armour leaving).
+pub fn mass_shed_by_modules(r: &RigV2, destroyed: &[usize]) -> f64 {
+    r.combat.mass_items.iter().filter(|i| i.module.is_some_and(|m| destroyed.contains(&m))).map(|i| i.full_mass_kg).sum()
+}
+
+/// `PhysRig::rig_hash()` as the contract should define it (CapabilityTable::rig_hash has no definition today): FNV over the serialised
+/// numbers. Equal rigs hash equal; any degraded number changes it.
+pub fn rig_hash(rig: &PhysRig) -> u64 {
+    let mut h = StateHasher::new();
+    h.write_str(&serde_json::to_string(rig).expect("serialisable rig"));
+    h.finish()
+}
+
+/// The effects `degrade()` could not put into the rig (weapons, sensors, crew): COMBAT's weapon state and the AI's observation carry them.
+#[derive(Clone, Debug)]
+pub struct Degraded {
+    pub rig: PhysRig,
+    pub outside_the_rig: Vec<DerateTarget>,
+}
+
+/// (4, continued) Damage as a pure rig transform, the shape COMBAT's brief proposes: engine health scales the torque curve at every rpm,
+/// a thrown track zeroes that side's output, a jammed ring zeroes its servo; everything else is bit-identical.
+pub fn degrade(r: &RigV2, destroyed: &[usize]) -> Degraded {
+    let mut rig = r.rig.clone();
+    let mut outside = Vec::new();
+    for &mi in destroyed {
+        for ef in &r.combat.modules[mi].effects {
+            let ModuleEffect::Derate { target, factor } = *ef else { continue };
+            match target {
+                DerateTarget::EnginePower => rig.drivetrain.engine.torque_curve.iter_mut().for_each(|p| p.1 *= factor),
+                DerateTarget::Gearbox => rig.drivetrain.outputs.iter_mut().for_each(|o| o.efficiency *= factor),
+                DerateTarget::Brakes => rig.drivetrain.brakes.iter_mut().for_each(|b| b.max_torque_nm *= factor),
+                DerateTarget::Track(side) => {
+                    let sprockets: Vec<usize> = rig.tracks.iter().filter(|t| t.side == side).map(|t| t.sprocket).collect();
+                    for o in rig.drivetrain.outputs.iter_mut().filter(|o| sprockets.contains(&o.station)) {
+                        o.efficiency *= factor;
+                    }
+                }
+                DerateTarget::Joint(j) => {
+                    if let Some(s) = rig.articulation[j].servo.as_mut() {
+                        s.max_rate *= factor;
+                        s.max_accel *= factor;
+                        s.max_effort *= factor;
+                    }
+                }
+                other => outside.push(other),
+            }
+        }
+    }
+    Degraded { rig, outside_the_rig: outside }
+}
+
+// ------------------------------------------------------------------------------------------------ proposed validate() additions
+
+/// The checks the staged `validate()` does not make and that would have caught real mistakes in the staged stand-in itself (and, in
+/// the first draft of the Leopard rig above, in its author).
+pub fn validate_extra(r: &RigV2) -> Result<(), Vec<String>> {
+    let rig = &r.rig;
+    let mut e = Vec::new();
+    let qs = vec![0.0; rig.articulation.len()];
+    if r.aim_channel.len() != rig.articulation.len() || (!r.servo_ext.is_empty() && r.servo_ext.len() != rig.articulation.len()) {
+        e.push("per-joint lists do not match the articulation".to_string());
+    }
+    if r.aim_channel.iter().any(|&c| c as usize >= AIM_CHANNELS) {
+        e.push("aim channel out of range".to_string());
+    }
+    // Muzzle direction must be along the recoil axis of the joint it sits on (and recoil must be rearward = muzzle dir reversed).
+    for m in &r.muzzles {
+        if let Some(j) = m.joint {
+            if j >= rig.articulation.len() {
+                e.push(format!("muzzle {}: joint {j} out of range", m.name));
+                continue;
+            }
+            let jd = &rig.articulation[j];
+            if jd.kind == JointKind::Prismatic && jd.role == JointRole::Recoil {
+                let dir = m.pose.apply_dir(Vec3::FORWARD);
+                if dir.dot(-jd.axis) < 0.999 {
+                    e.push(format!("muzzle {}: bore direction is not along the recoil axis of {}", m.name, jd.name));
+                }
+            }
+        }
+        if m.weapon.trigger >= 8 {
+            e.push(format!("muzzle {}: trigger {} out of range", m.name, m.weapon.trigger));
+        }
+        for s in &m.weapon.stores {
+            if r.combat.mass_items.get(*s).is_none_or(|i| i.kind != MassKind::Ammunition) {
+                e.push(format!("muzzle {}: store {s} is not an ammunition item", m.name));
+            }
+        }
+    }
+    for (i, j) in rig.articulation.iter().enumerate() {
+        if let Some((lo, hi)) = j.limits {
+            if lo > hi {
+                e.push(format!("joint {} limits reversed", j.name));
+            }
+            if let Some(rc) = j.servo.as_ref().and_then(|s| s.recoil.as_ref()) {
+                if (rc.stroke_m - hi).abs() > 1e-9 {
+                    e.push(format!("joint {}: RecoilDef.stroke_m {} != limits.1 {}", j.name, rc.stroke_m, hi));
+                }
+            }
+        }
+        if let Some(s) = &j.servo {
+            if !(0.0..=1.0).contains(&s.stabiliser_rejection) {
+                e.push(format!("joint {}: stabiliser_rejection outside [0,1]", j.name));
+            }
+            if s.recoil.is_none() && j.kind == JointKind::Revolute && s.max_effort > 0.0 {
+                let inertia = inertia_about_axis(&subtree_rigid(rig, i, &qs), j.axis);
+                if s.max_accel > s.max_effort / inertia * 1.001 {
+                    e.push(format!("joint {}: max_accel {:.2} rad/s^2 is unreachable: max_effort {:.0} / inertia {:.0} = {:.2}", j.name, s.max_accel, s.max_effort, inertia, s.max_effort / inertia));
+                }
+            }
+        }
+        if let Some(Some(ServoExt { actuator: Actuator::Human(role), .. })) = r.servo_ext.get(i) {
+            if !r.combat.modules.iter().any(|m| m.kind == ModuleKind::Crew(*role)) {
+                e.push(format!("joint {}: operated by {role:?} but no such crew module exists", j.name));
+            }
+        }
+    }
+    // Static coherence: the springs must carry the sprung weight (hull + articulation).
+    let preload: f64 = rig.stations.iter().map(|s| s.suspension.preload_n).sum();
+    let weight = sprung_mass_kg(rig) * scalar::G;
+    if (preload - weight).abs() > 0.01 * weight {
+        e.push(format!("sum of preloads {preload:.0} N does not carry the sprung weight {weight:.0} N"));
+    }
+    // Index sanity for the combat data.
+    let nj = rig.articulation.len();
+    for a in &r.combat.armour {
+        if a.body.is_some_and(|b| b >= nj) || a.material >= r.combat.materials.len() || a.module.is_some_and(|m| m >= r.combat.modules.len()) {
+            e.push(format!("armour {}: bad index", a.name));
+        }
+    }
+    for m in &r.combat.modules {
+        if m.body.is_some_and(|b| b >= nj) {
+            e.push(format!("module {}: bad body", m.name));
+        }
+        for ef in &m.effects {
+            if let ModuleEffect::CookOff { store, vent, .. } = ef {
+                if *store >= r.combat.mass_items.len() || vent.is_some_and(|v| v >= r.combat.modules.len()) {
+                    e.push(format!("module {}: bad cook-off reference", m.name));
+                }
+            }
+        }
+    }
+    if e.is_empty() {
+        Ok(())
+    } else {
+        Err(e)
+    }
+}
