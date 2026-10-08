@@ -2,7 +2,7 @@
 
 *ARCH keeps this current so a restarted or compacted coordinator can resume from the repo alone. If you are a fresh ARCH session: read `CLAUDE.md`, `docs/brief/BRIEF.md`, `RULES.md`, then this file, then each lane's status file.*
 
-**Updated:** 2026-10-08 (end of the Launch Kit session) | **Integration branch:** `integration` (exists, at the green contract-0.1.0 commit d6ac1ab) | **Contract tag:** none yet (0.1.0 draft live; the 0.1.1 hardening batch is decided and partly drafted: `docs/architecture/CONTRACT-0.1.1-PLAN.md`) | **Phase:** Wave 0, the Launch Kit, **launch on hold until the batch is applied and `contract-v0.1` is tagged**
+**Updated:** 2026-10-08 | **Integration branch:** `integration` at the merge commit f8f5e5d (contract 0.1.1; CI green on Linux and Windows) | **Contract tag:** `contract-v0.1` (set at f8f5e5d) | **Phase:** Wave 0, the Launch Kit: contract tagged; **launch on hold** (card C-008) until the rehearsal, the owner summary and the owner's go
 
 **Control Room (the owner's live view):** https://claude.ai/artifact/RerESUqi3CaJCzifhQCZCd (private; republish with `python3 -I tools/control_room/build.py <out.html>` then the Artifact tool, same file path). Decision-card answers live in the artifact's database collection `cards` (document id = card id, fields `choice`, `text`, `answeredAt`); read them at each check-in with `ArtifactData` (`list` on `cards`), copy them into `docs/decisions/QUEUE.md` as ANSWERED, and write `appliedAt` back to the document.
 
@@ -55,7 +55,7 @@ See `docs/decisions/QUEUE.md` (C-001 to C-012 open, all with defaults).
 6. Governor: pause launches if integration CI has been red for more than 2 h or more than 5 PRs wait for review.
 
 ## Next actions
-1. Contract 0.1.1 is APPLIED on `claude/sharp-babbage-d702f7` (rig, command, frame, ports, validation; `def.rs` is FORGE's first CCR). Open a PR into `integration`, merge when `guards` and `rust` are green and the Linux+Windows `integration` run passes, then tag `contract-v0.1` (`git tag contract-v0.1 <merge commit>` and push the tag).
-2. Edit the lane briefs listed at the end of that plan; run the rehearsal (one small lane session, see `LAUNCH.md`); republish the Control Room; send the owner the C0 summary.
+1. DONE: contract 0.1.1 applied, merged into `integration` (PR 2), `integration` green on Linux and Windows, tag `contract-v0.1` pushed.
+2. Run the rehearsal (one small lane session, see `LAUNCH.md`, and have it list which `mcp__` tools it has and report the cost); republish the Control Room; send the owner the C0 summary. The lane-brief edits for contract 0.1.1 are done.
 3. Launch rank 1 only when the owner says go or card C-008 is answered. Open owner cards: C-001 to C-014 (defaults apply); C-013 (settings rules) needs the owner's word in chat; C-014 (GitHub branch protection) is a two-minute owner action.
 4. Housekeeping: the stale remote branch `lane/chassis/bad-pr-test` (PR #1 closed) could not be deleted through the git proxy; delete it from GitHub. `reference/prototype-v0/` deletion needs the owner's word.
