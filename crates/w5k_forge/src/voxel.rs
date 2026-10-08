@@ -65,7 +65,7 @@ impl Grid {
 pub fn bounds(pieces: &[Piece]) -> (V3, V3) {
     let mut lo = v3(f64::MAX, f64::MAX, f64::MAX);
     let mut hi = v3(f64::MIN, f64::MIN, f64::MIN);
-    for p in pieces {
+    for p in pieces.iter().filter(|p| !p.is_scenery()) {
         let (a, b) = p.poly.aabb();
         lo = lo.min(a);
         hi = hi.max(b);
@@ -108,6 +108,9 @@ pub fn voxelise(pieces: &[Piece], res: u32) -> Grid {
     const WALL: u8 = 4;
     let mut bits = vec![0u8; n];
     for (pi, p) in pieces.iter().enumerate() {
+        if p.is_scenery() {
+            continue;
+        }
         let inner = p.inner();
         let (a, b) = p.poly.aabb();
         let lo_c = ((a - origin) / cell).arr().map(|v| v.floor().max(0.0) as usize);

@@ -8,9 +8,9 @@
 //! Part space: x = 0 is the track's centre line, the mount is on its inner face (-X), the socket height is y = 0.
 
 use super::style::{self, p};
-use super::{stat, Family, Param, Role, Scale, Stat, Values};
+use super::{ctx, stat, Family, Host, Param, Role, Scale, Stat, Values};
 use crate::geom::V3;
-use crate::schema::{Axis, Category, Function, Locomotion, PartDef, SizeClass, SocketDef, SocketKind, Slot};
+use crate::schema::{MaterialLibrary, Axis, Category, Function, Locomotion, PartDef, SizeClass, SocketDef, SocketKind, Slot};
 use crate::Built;
 
 pub struct Track;
@@ -18,16 +18,18 @@ pub struct Track;
 /// Allowable average ground pressure used to rate a track's load (Pa).
 const RATED_PRESSURE: f64 = 150_000.0;
 
-fn ctx(v: &Values, k: &str, default: f64) -> f64 {
-    v.get(k).copied().unwrap_or(default)
-}
-
 impl Family for Track {
     fn id(&self) -> &'static str {
         "track"
     }
     fn name(&self) -> &'static str {
         "Track unit"
+    }
+    fn fits(&self) -> &'static [SocketKind] {
+        &[SocketKind::Gear, SocketKind::Station]
+    }
+    fn host(&self) -> Option<Host> {
+        Some(Host { hull: "hull_bastion", hull_params: &[], socket: "gear_*" })
     }
     fn params(&self) -> Vec<Param> {
         vec![
@@ -67,7 +69,7 @@ impl Family for Track {
         ]
     }
 
-    fn generate(&self, v: &Values) -> PartDef {
+    fn generate(&self, v: &Values, _lib: &MaterialLibrary) -> PartDef {
         let w = v["width_m"];
         let lt = ctx(v, "ctx.length", 6.0);
         let top = ctx(v, "ctx.top", 0.3);

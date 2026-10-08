@@ -11,13 +11,14 @@
 
 pub mod engine;
 pub mod hull;
+pub mod mounts;
 pub mod style;
 pub mod track;
 pub mod turret;
 
 use std::collections::BTreeMap;
 
-use crate::schema::{MaterialLibrary, PartDef};
+use crate::schema::{MaterialLibrary, PartDef, SocketKind};
 use crate::Built;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,14 +81,39 @@ pub fn stat(name: &str, value: f64, unit: &str) -> Stat {
     Stat { name: name.into(), value, unit: unit.into() }
 }
 
+/// Where a family is shown in sweeps and tests: a hull family (with slider values) and the socket pattern it
+/// attaches to.
+#[derive(Clone, Copy, Debug)]
+pub struct Host {
+    pub hull: &'static str,
+    pub hull_params: &'static [(&'static str, f64)],
+    pub socket: &'static str,
+}
+
+/// A context hint (`ctx.*`) read from the values, with a default for when the family is shown on its own.
+pub fn ctx(v: &Values, key: &str, default: f64) -> f64 {
+    v.get(key).copied().unwrap_or(default)
+}
+
 pub trait Family: Sync + Send {
     fn id(&self) -> &'static str;
     fn name(&self) -> &'static str;
     fn params(&self) -> Vec<Param>;
-    /// The part these slider values produce.
-    fn generate(&self, v: &Values) -> PartDef;
+    /// The part these slider values produce. `lib` supplies material properties (density, strength, stiffness).
+    fn generate(&self, v: &Values, lib: &MaterialLibrary) -> PartDef;
     /// Performance figures from the values and the measured part.
     fn performance(&self, v: &Values, built: &Built) -> Vec<Stat>;
+    /// Kinds of hull socket this family attaches to (empty for hulls).
+    fn fits(&self) -> &'static [SocketKind] {
+        &[]
+    }
+    /// A hull and socket to show this family on (for sweeps and tests); `None` for hulls.
+    fn host(&self) -> Option<Host> {
+        None
+    }
+    /// Size the sliders so this one component can carry `load_kg` (its share of the vehicle's weight), keeping
+    /// the other sliders. Used by the design roller and by auto-balance. The default leaves the sliders alone.
+    fn fit_to_load(&self, _v: &mut Values, _load_kg: f64, _lib: &MaterialLibrary) {}
 
     fn defaults(&self) -> Values {
         self.params().iter().map(|p| (p.id.to_string(), p.default)).collect()
@@ -106,7 +132,7 @@ pub trait Family: Sync + Send {
 /// Mass of the generated part from exact piece volumes (no voxels, so it is fast enough for dragging sliders).
 /// Overlaps between pieces are counted twice, which is a small error for well-made families.
 pub fn mass_estimate(fam: &dyn Family, v: &Values, lib: &MaterialLibrary) -> f64 {
-    let def = fam.generate(v);
+    let def = fam.generate(v, lib);
     crate::build::build_part(&def)
         .iter()
         .map(|p| lib.materials.get(&p.mat).map(|m| m.density).unwrap_or(7850.0) * p.material_volume().0)

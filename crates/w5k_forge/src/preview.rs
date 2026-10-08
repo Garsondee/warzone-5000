@@ -324,13 +324,35 @@ pub fn stats_lines(st: &StatsFile, grid_m: f64) -> Vec<(String, Rgb)> {
         (format!("area m2: front {:.2}  side {:.2}  top {:.2}", a.at(0.0, 0.0).area_m2, a.at(90.0, 0.0).area_m2, a.at(0.0, 90.0).area_m2), TEXT),
     ];
     if let Some(v) = &st.vehicle {
+        const AMBER: Rgb = [0.95, 0.62, 0.15];
         out.push((format!("power {} kW   draw {} kW   load {}", kw_text(v.power_kw), kw_text(v.draw_kw), mass_text(v.load_kg)), TEXT));
-        out.push((format!("top speed {:.0} km/h ({})   {:.1} kW/t", v.top_speed_kmh, v.speed_limited_by, v.power_to_weight_kw_t), TEXT));
-        let hover = if v.hover_kw > 0.0 { format!("   hover {} kW", kw_text(v.hover_kw)) } else { String::new() };
-        let hover = if v.ground_pressure_kpa > 0.0 { format!("{hover}   ground {:.0} kPa", v.ground_pressure_kpa) } else { hover };
-        out.push((format!("{:?}{hover}", v.locomotion), TEXT));
+        out.push((format!("top speed {:.0} km/h ({})   {:.1} kW/t   turns {:.0} deg/s", v.top_speed_kmh, v.speed_limited_by, v.power_to_weight_kw_t, v.turn_rate_dps), TEXT));
+        let mut mv = format!("{} {:?}", v.movement, v.locomotion);
+        if v.lift_kw > 0.0 {
+            mv += &format!("   lift {} kW", kw_text(v.lift_kw));
+        }
+        if v.ground_pressure_kpa > 0.0 {
+            mv += &format!("   ground {:.0} kPa", v.ground_pressure_kpa);
+        }
+        if v.step_m > 0.0 {
+            mv += &format!("   steps {:.2} m", v.step_m);
+        }
+        out.push((mv, TEXT));
+        if !v.weapons.is_empty() {
+            out.push((
+                format!("firepower {} kW   volley {:.1} MJ   pen {:.0} mm   range {:.1} km", kw_text(v.firepower_kw), v.alpha_mj, v.best_pen_mm, v.range_km),
+                TEXT,
+            ));
+        }
+        out.push((format!("sees {:.1} km from {:.1} m   recoil {:.2} m/s", v.sight_km, v.eye_height_m, v.recoil_mps), TEXT));
+        if v.repair_kg_s > 0.0 {
+            out.push((format!("repairs {:.0} kg/s within {:.1} m", v.repair_kg_s, v.repair_reach_m), TEXT));
+        }
         for p in &v.problems {
             out.push((format!("! {p}"), WARN));
+        }
+        for w in &v.warnings {
+            out.push((format!("~ {w}"), AMBER));
         }
     }
     out

@@ -74,6 +74,8 @@ pub fn direction(azimuth_deg: f64, elevation_deg: f64) -> V3 {
 struct Target {
     centre: V3,
     radius: f64,
+    lo: V3,
+    hi: V3,
     outer: Vec<Plane>,
     /// Inset planes of a shell piece (`None` for solid pieces).
     inner: Option<Vec<Plane>>,
@@ -82,11 +84,12 @@ struct Target {
     hardness: f64,
 }
 
-pub fn armour_table(pieces: &[Piece], lib: &MaterialLibrary) -> ArmourTable {
-    // Pieces made of non-protective materials (guns, engines, electronics) are transparent here.
-    let targets: Vec<Target> = pieces
+/// Pieces prepared for ray casting. Pieces made of non-protective materials (guns, engines, electronics) and
+/// scenery are transparent here.
+fn targets_of(pieces: &[Piece], lib: &MaterialLibrary) -> Vec<Target> {
+    pieces
         .iter()
-        .filter(|p| lib.materials.get(&p.mat).map(|m| m.armour).unwrap_or(true))
+        .filter(|p| !p.is_scenery() && lib.materials.get(&p.mat).map(|m| m.armour).unwrap_or(true))
         .map(|p| {
             let (lo, hi) = p.poly.aabb();
             let centre = (lo + hi) * 0.5;
@@ -94,16 +97,19 @@ pub fn armour_table(pieces: &[Piece], lib: &MaterialLibrary) -> ArmourTable {
             Target {
                 centre,
                 radius,
+                lo,
+                hi,
                 outer: p.convex.planes.clone(),
                 inner: p.inner().map(|c| c.planes),
                 vital: p.vital,
                 hardness: lib.materials.get(&p.mat).map(|m| m.hardness).unwrap_or(1.0),
             }
         })
-        .collect();
-    let (lo, hi) = crate::voxel::bounds(pieces);
-    let centre = (lo + hi) * 0.5;
-    let radius = (hi - lo).len() * 0.5;
+        .collect()
+}
+
+pub fn armour_table(pieces: &[Piece], lib: &MaterialLibrary) -> ArmourTable {
+    let targets = targets_of(pieces, lib);
 
     // Rows are independent, so each elevation runs on its own thread; the result does not depend on scheduling.
     let rows = std::thread::scope(|s| {
@@ -113,7 +119,7 @@ pub fn armour_table(pieces: &[Piece], lib: &MaterialLibrary) -> ArmourTable {
                 let targets = &targets;
                 s.spawn(move || {
                     (0..AZIMUTHS)
-                        .map(|a| cast_direction(targets, centre, radius, direction(a as f64 * 360.0 / AZIMUTHS as f64, el)))
+                        .map(|a| cast_direction(targets, direction(a as f64 * 360.0 / AZIMUTHS as f64, el), RAYS_ACROSS))
                         .collect::<Vec<_>>()
                 })
             })
@@ -123,18 +129,70 @@ pub fn armour_table(pieces: &[Piece], lib: &MaterialLibrary) -> ArmourTable {
     ArmourTable { elevations: ELEVATIONS.to_vec(), azimuths: AZIMUTHS, rows }
 }
 
-/// Fire a square grid of parallel rays travelling along `-f` through the bounding sphere.
-fn cast_direction(targets: &[Target], centre: V3, radius: f64, f: V3) -> DirStats {
+/// The four directions the vehicle sheet reads: from the front, the right side, the rear and from above.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ArmourSummary {
+    pub front: DirStats,
+    pub side: DirStats,
+    pub rear: DirStats,
+    pub top: DirStats,
+}
+
+impl ArmourSummary {
+    pub fn from_table(t: &ArmourTable) -> ArmourSummary {
+        ArmourSummary { front: *t.at(0.0, 0.0), side: *t.at(90.0, 0.0), rear: *t.at(180.0, 0.0), top: *t.at(0.0, 90.0) }
+    }
+}
+
+/// A fast armour summary: only the four directions of [`ArmourSummary`], with fewer rays. About a hundred times
+/// cheaper than the full table, and accurate to a few per cent: for sampling thousands of designs.
+pub fn quick(pieces: &[Piece], lib: &MaterialLibrary) -> ArmourSummary {
+    let targets = targets_of(pieces, lib);
+    const N: usize = 40;
+    ArmourSummary {
+        front: cast_direction(&targets, direction(0.0, 0.0), N),
+        side: cast_direction(&targets, direction(90.0, 0.0), N),
+        rear: cast_direction(&targets, direction(180.0, 0.0), N),
+        top: cast_direction(&targets, direction(0.0, 90.0), N),
+    }
+}
+
+/// Fire a grid of parallel rays travelling along `-f` over the vehicle's projected outline (about `n` x `n` rays,
+/// laid out over the outline's bounding rectangle so long, thin vehicles are sampled as finely as compact ones).
+fn cast_direction(targets: &[Target], f: V3, n: usize) -> DirStats {
+    if targets.is_empty() {
+        return DirStats::default();
+    }
     let up = if f.y.abs() < 0.99 { v3(0.0, 1.0, 0.0) } else { v3(1.0, 0.0, 0.0) };
     let u = up.cross(f).norm();
     let w = f.cross(u);
-    let spacing = 2.0 * radius / RAYS_ACROSS as f64;
-    let half = RAYS_ACROSS as f64 / 2.0;
+    // Bounding rectangle of the projection (from the pieces' bounding boxes) and the overall extent.
+    let (mut u0, mut u1, mut w0, mut w1) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
+    let (mut lo, mut hi) = (v3(f64::MAX, f64::MAX, f64::MAX), v3(f64::MIN, f64::MIN, f64::MIN));
+    for t in targets {
+        lo = lo.min(t.lo);
+        hi = hi.max(t.hi);
+        for k in 0..8 {
+            let c = v3(if k & 1 == 0 { t.lo.x } else { t.hi.x }, if k & 2 == 0 { t.lo.y } else { t.hi.y }, if k & 4 == 0 { t.lo.z } else { t.hi.z });
+            let (pu, pw) = (c.dot(u), c.dot(w));
+            u0 = u0.min(pu);
+            u1 = u1.max(pu);
+            w0 = w0.min(pw);
+            w1 = w1.max(pw);
+        }
+    }
+    let radius = (hi - lo).len() * 0.5;
+    let centre = (lo + hi) * 0.5;
+    let (ru, rw) = ((u1 - u0).max(1e-6), (w1 - w0).max(1e-6));
+    let spacing = (ru * rw / (n * n) as f64).sqrt();
+    let (nu, nw) = (((ru / spacing).ceil() as usize).max(1), ((rw / spacing).ceil() as usize).max(1));
+    let (du, dw) = (ru / nu as f64, rw / nw as f64);
+    let (cu, cw) = (centre.dot(u), centre.dot(w));
     let mut hit = 0usize;
     let mut thick: Vec<f64> = Vec::new();
-    for j in 0..RAYS_ACROSS {
-        for i in 0..RAYS_ACROSS {
-            let (x, y) = ((i as f64 + 0.5 - half) * spacing, (j as f64 + 0.5 - half) * spacing);
+    for j in 0..nw {
+        for i in 0..nu {
+            let (x, y) = (u0 + (i as f64 + 0.5) * du - cu, w0 + (j as f64 + 0.5) * dw - cw);
             let o = centre + u * x + w * y + f * (radius * 2.0);
             match cast_ray(targets, o, -f) {
                 Ray::Miss => {}
@@ -150,7 +208,7 @@ fn cast_direction(targets: &[Target], centre: V3, radius: f64, f: V3) -> DirStat
     let mean = if thick.is_empty() { 0.0 } else { thick.iter().sum::<f64>() / thick.len() as f64 };
     let weak = if thick.is_empty() { 0.0 } else { thick[thick.len() / 10] };
     let median = if thick.is_empty() { 0.0 } else { thick[thick.len() / 2] };
-    let ray_area = spacing * spacing;
+    let ray_area = du * dw;
     DirStats {
         area_m2: hit as f64 * ray_area,
         vital_m2: thick.len() as f64 * ray_area,

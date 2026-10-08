@@ -23,6 +23,16 @@ pub struct Assembly {
     pub pieces: Vec<Piece>,
     pub sockets: Vec<PlacedSocket>,
     pub errors: Vec<String>,
+    /// For each part, which part and socket it hangs from (the hull has none).
+    pub placements: Vec<Placement>,
+}
+
+/// Where a part hangs.
+#[derive(Clone, Debug)]
+pub struct Placement {
+    pub part_index: usize,
+    pub parent: Option<usize>,
+    pub socket: String,
 }
 
 fn frame(n: V3, f: V3) -> (V3, V3, V3) {
@@ -51,7 +61,9 @@ impl Forge {
             a.errors.push(format!("unknown hull part '{}'", design.hull));
             return a;
         };
-        place(self, hull, Xform::IDENTITY, &mut a);
+        let x = Xform::new(M3::IDENTITY, V3 { x: 0.0, y: design.lift_m, z: 0.0 });
+        place(self, hull, x, &mut a);
+        a.placements.push(Placement { part_index: 0, parent: None, socket: String::new() });
         attach_children(self, 0, &design.attach, &mut a);
         a
     }
@@ -89,11 +101,23 @@ fn attach_children(forge: &Forge, parent: usize, list: &[Attach], a: &mut Assemb
         };
         let x = align(sock.at, sock.normal, sock.forward, at.spin, mount, at.mirror);
         let idx = place(forge, child, x, a);
+        a.placements.push(Placement { part_index: idx, parent: Some(parent), socket: at.socket.clone() });
         attach_children(forge, idx, &at.children, a);
     }
 }
 
-/// Totals and budget checks for an assembled vehicle.
+/// One weapon on a vehicle, as the sheet lists it.
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct WeaponLine {
+    pub name: String,
+    pub kind: String,
+    pub energy_mj: f64,
+    pub shots_per_min: f64,
+    pub penetration_mm: f64,
+    pub range_km: f64,
+}
+
+/// Totals, budgets and performance of an assembled vehicle (see `Forge::make_sheet`).
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct VehicleSheet {
     pub mass_kg: f64,
@@ -108,15 +132,78 @@ pub struct VehicleSheet {
     /// What sets the top speed: "power" (the power balance) or "running gear" (a locomotion part's limit).
     #[serde(default)]
     pub speed_limited_by: String,
-    /// Power needed just to hover (rotorcraft), kW.
-    #[serde(default)]
-    pub hover_kw: f64,
+    /// Power spent holding the vehicle up (rotors, air cushion or anti-gravity), kW.
+    #[serde(default, alias = "hover_kw")]
+    pub lift_kw: f64,
     /// Weight over ground contact area (kPa); 0 when the running gear does not report contact. Soft soil gives way
     /// somewhere around 50-100 kPa; a tank presses about 90.
     #[serde(default)]
     pub ground_pressure_kpa: f64,
     pub power_to_weight_kw_t: f64,
+    /// Things that make the design invalid (it cannot be fielded).
     pub problems: Vec<String>,
+    /// Things that make it worse but legal.
+    #[serde(default)]
+    pub warnings: Vec<String>,
+    /// "ground", "rail", "hover" or "air".
+    #[serde(default)]
+    pub movement: String,
+    #[serde(default)]
+    pub length_m: f64,
+    #[serde(default)]
+    pub width_m: f64,
+    #[serde(default)]
+    pub height_m: f64,
+    /// How far the hull is raised on its running gear (m).
+    #[serde(default)]
+    pub lift_height_m: f64,
+    /// Typical (median) steel-equivalent armour seen from the front, side, rear and above (mm), and the front's weak spots.
+    #[serde(default)]
+    pub armour_front_mm: f64,
+    #[serde(default)]
+    pub armour_side_mm: f64,
+    #[serde(default)]
+    pub armour_rear_mm: f64,
+    #[serde(default)]
+    pub armour_top_mm: f64,
+    #[serde(default)]
+    pub armour_front_weak_mm: f64,
+    #[serde(default)]
+    pub side_area_m2: f64,
+    #[serde(default)]
+    pub top_area_m2: f64,
+    /// How fast it can turn on the spot or in its tightest turn (degrees per second).
+    #[serde(default)]
+    pub turn_rate_dps: f64,
+    /// Tallest obstacle it crosses (m).
+    #[serde(default)]
+    pub step_m: f64,
+    #[serde(default)]
+    pub weapons: Vec<WeaponLine>,
+    /// Energy it can deliver per second, all weapons firing (kW); energy weapons are limited by spare power.
+    #[serde(default)]
+    pub firepower_kw: f64,
+    /// Energy of one volley of every weapon (MJ).
+    #[serde(default)]
+    pub alpha_mj: f64,
+    #[serde(default)]
+    pub best_pen_mm: f64,
+    /// Longest weapon range (km).
+    #[serde(default)]
+    pub range_km: f64,
+    /// Height of its highest sensor above the ground (m) and how far it sees (km), horizon included.
+    #[serde(default)]
+    pub eye_height_m: f64,
+    #[serde(default)]
+    pub sight_km: f64,
+    /// Speed the biggest gun's recoil gives the whole vehicle (m/s).
+    #[serde(default)]
+    pub recoil_mps: f64,
+    /// Repair rigs: structure restored per second (kg/s) and reach (m).
+    #[serde(default)]
+    pub repair_kg_s: f64,
+    #[serde(default)]
+    pub repair_reach_m: f64,
 }
 
 /// Fraction of engine power (after what other systems draw) that ends up pushing the vehicle along.
@@ -130,8 +217,12 @@ pub fn drive_efficiency(l: Locomotion) -> f64 {
         Locomotion::AntiGrav => 0.7,
         Locomotion::Rotor => 0.5,
         Locomotion::Jet => 0.6,
+        Locomotion::Rail => 0.92,
     }
 }
+
+/// Efficiency of the fans that pump an air cushion.
+pub const FAN_EFFICIENCY: f64 = 0.7;
 
 /// Ideal hover power of rotors from actuator-disc (momentum) theory: lifting weight `w` (N) through total
 /// disc area `area` (m^2) accelerates air downward, costing w^1.5 / sqrt(2 rho A). Real rotors reach about

@@ -4,6 +4,10 @@ use crate::convex::{Convex, Polyhedron};
 use crate::geom::{v3, Xform, M3, V3};
 use crate::schema::{Axis, Node, PartDef, Slot};
 
+/// Material name of pieces that are drawn but are not part of the vehicle: rails and sleepers under a train,
+/// for example. They have no mass or armour and do not count toward bounds or the voxel grid.
+pub const SCENERY: &str = "scenery";
+
 /// Bevel only edges sharper than this (so cylinder side segments stay crisp facets).
 const BEVEL_MIN_ANGLE: f64 = 40.0;
 
@@ -23,6 +27,10 @@ pub struct Piece {
 }
 
 impl Piece {
+    pub fn is_scenery(&self) -> bool {
+        self.mat == SCENERY
+    }
+
     fn new(points: Vec<V3>, chamfer: f64, mat: &str, slot: Slot, shell: Option<f64>) -> Option<Piece> {
         let base = Convex::from_points(&points);
         if base.planes.len() < 4 {

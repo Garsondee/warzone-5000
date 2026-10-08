@@ -14,7 +14,7 @@
 use super::{stat, style, Family, Param, Role, Scale, Stat, Values};
 use crate::convex::Convex;
 use crate::geom::{v3, Plane, V3};
-use crate::schema::{Axis, Category, Function, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
+use crate::schema::{MaterialLibrary, Axis, Category, Function, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
 use crate::Built;
 
 pub struct TankTurret;
@@ -329,6 +329,10 @@ impl Family for TankTurret {
         "Gun turret"
     }
 
+    fn fits(&self) -> &'static [SocketKind] {
+        &[SocketKind::TurretRing]
+    }
+
     fn params(&self) -> Vec<Param> {
         vec![
             Param {
@@ -411,7 +415,7 @@ impl Family for TankTurret {
         ]
     }
 
-    fn generate(&self, v: &Values) -> PartDef {
+    fn generate(&self, v: &Values, _lib: &MaterialLibrary) -> PartDef {
         let l = layout(v);
         let g = l.gun;
         let mut shapes = Vec::new();
@@ -532,7 +536,7 @@ impl Family for TankTurret {
                 forward: [0.0, 0.0, -1.0],
                 hints: Default::default(),
             }],
-            function: Function { draw_kw: 0.5 + 2.0 * l.w * l.w, ..Default::default() },
+            function: Function { draw_kw: 0.5 + 2.0 * l.w * l.w, ring_m: 2.0 * l.ring_r, ..Default::default() },
         }
     }
 

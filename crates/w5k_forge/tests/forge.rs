@@ -357,5 +357,56 @@ fn rotorcraft_pay_hover_power() {
     assert!(rel(a / b, 2f64.sqrt()) < 1e-12);
     let f = Forge::load(&content_dir()).unwrap();
     let (_, _, sheet) = f.build_design(&f.designs["drone_scout"]);
-    assert!(sheet.hover_kw > 0.1 && sheet.hover_kw < sheet.power_kw, "hover {} of {}", sheet.hover_kw, sheet.power_kw);
+    assert!(sheet.lift_kw > 0.1 && sheet.lift_kw < sheet.power_kw, "hover {} of {}", sheet.lift_kw, sheet.power_kw);
+}
+
+#[test]
+fn quick_path_agrees_with_the_full_build() {
+    let f = Forge::load(&content_dir()).unwrap();
+    for id in ["lancer_mk1", "bastion_twin", "dreadnought_trio", "lancer_scout"] {
+        let d = &f.designs[id];
+        let (_, _, full) = f.build_design(d);
+        let (_, quick) = f.quick_design(d);
+        assert!(rel(quick.mass_kg, full.mass_kg) < 0.10, "{id}: mass {} vs {}", quick.mass_kg, full.mass_kg);
+        assert!(rel(quick.top_speed_kmh.max(1.0), full.top_speed_kmh.max(1.0)) < 0.15, "{id}: speed {} vs {}", quick.top_speed_kmh, full.top_speed_kmh);
+        assert!(rel(quick.frontal_m2, full.frontal_m2) < 0.12, "{id}: frontal {} vs {}", quick.frontal_m2, full.frontal_m2);
+        assert!(rel(quick.armour_front_mm.max(1.0), full.armour_front_mm.max(1.0)) < 0.25, "{id}: front armour {} vs {}", quick.armour_front_mm, full.armour_front_mm);
+        assert_eq!(quick.problems, full.problems, "{id}");
+    }
+}
+
+#[test]
+fn fit_checks_reject_oversized_parts() {
+    // A 450 kW diesel does not fit the low Lancer hull; a turret wider than the ring is refused.
+    let mut f = Forge::load(&content_dir()).unwrap();
+    let d: w5k_forge::schema::DesignDef = ron::from_str(
+        r#"#![enable(implicit_some)]
+        (id: "x", name: "x", hull: "hull_lancer", hull_params: { "height_m": 0.6, "length_m": 3.5, "width_m": 1.5 },
+         attach: [
+            (socket: "gear_*", family: "track"),
+            (socket: "engine", family: "engine", params: { "power_kw": 2000 }),
+            (socket: "turret", family: "turret_gun", params: { "calibre_mm": 300 }),
+         ])"#,
+    )
+    .unwrap();
+    let d = f.instantiate(&d).unwrap();
+    let (_, sheet) = f.quick_design(&d);
+    assert!(sheet.problems.iter().any(|p| p.contains("does not fit")), "{:?}", sheet.problems);
+    assert!(sheet.problems.iter().any(|p| p.contains("turret ring")), "{:?}", sheet.problems);
+}
+
+#[test]
+fn wildcards_expand_and_mirror_left_sides() {
+    let mut f = Forge::load(&content_dir()).unwrap();
+    let d = f.instantiate(&f.designs["dreadnought_trio"].clone()).unwrap();
+    let tracks: Vec<_> = d.attach.iter().filter(|a| a.socket.starts_with("station_")).collect();
+    assert_eq!(tracks.len(), 6, "three stations on each side");
+    assert!(tracks.iter().all(|a| a.mirror == a.socket.starts_with("station_l")));
+    // A pattern that matches nothing is an error, and so is a family on the wrong kind of socket.
+    let bad: w5k_forge::schema::DesignDef = ron::from_str(r#"#![enable(implicit_some)]
+        (id: "b", name: "b", hull: "hull_lancer", attach: [(socket: "nothing_*", family: "track")])"#).unwrap();
+    assert!(f.instantiate(&bad).is_err());
+    let wrong: w5k_forge::schema::DesignDef = ron::from_str(r#"#![enable(implicit_some)]
+        (id: "w", name: "w", hull: "hull_lancer", attach: [(socket: "engine", family: "track")])"#).unwrap();
+    assert!(f.instantiate(&wrong).unwrap_err().contains("does not fit"));
 }

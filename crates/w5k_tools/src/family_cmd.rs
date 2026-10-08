@@ -18,7 +18,7 @@ const LOCKED: Rgb = [0.45, 0.47, 0.5];
 const BG: Rgb = [0.018, 0.019, 0.022];
 
 fn build(lib: &MaterialLibrary, fam: &dyn Family, v: &Values) -> Built {
-    let def = fam.generate(v);
+    let def = fam.generate(v, lib);
     let id = def.id.clone();
     let forge = Forge::from_parts(lib.clone(), vec![def]).unwrap_or_else(|e| panic!("{e}"));
     forge.build_part(&id).expect("built")

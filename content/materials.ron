@@ -8,12 +8,13 @@
 //           Mass efficiency (protection per kg) is hardness / (density / 7850).
 (
     materials: {
-        "steel":       (density: 7850, hardness: 1.0),   // structural / rolled homogeneous armour
-        "hard_steel":  (density: 7850, hardness: 1.25),  // high-hardness plate: same weight, more protection
-        "aluminium":   (density: 2700, hardness: 0.33),  // light hulls: thick, weak per mm, about steel per kg
-        "titanium":    (density: 4500, hardness: 0.8),   // expensive: 1.4x steel per kg
-        "ceramic":     (density: 3900, hardness: 1.6),   // composite inserts: 3.2x steel per kg, brittle later
-        "composite":   (density: 1800, hardness: 0.3),   // airframes and drone bodies
+        // strength_mpa: working strength for load-bearing structures (legs, masts); modulus_gpa: stiffness (buckling).
+        "steel":       (density: 7850, hardness: 1.0,  strength_mpa: 350, modulus_gpa: 200),  // structural / rolled homogeneous armour
+        "hard_steel":  (density: 7850, hardness: 1.25, strength_mpa: 700, modulus_gpa: 200),  // high-hardness plate: same weight, more protection
+        "aluminium":   (density: 2700, hardness: 0.33, strength_mpa: 240, modulus_gpa: 70),   // light hulls: thick, weak per mm, about steel per kg
+        "titanium":    (density: 4500, hardness: 0.8,  strength_mpa: 800, modulus_gpa: 110),  // expensive: 1.4x steel per kg
+        "ceramic":     (density: 3900, hardness: 1.6,  strength_mpa: 300, modulus_gpa: 370),  // composite inserts: 3.2x steel per kg, brittle later
+        "composite":   (density: 1800, hardness: 0.3,  strength_mpa: 550, modulus_gpa: 90),   // airframes, drone bodies, long light legs
         "rubber":      (density: 1100, hardness: 0.02),  // tyres, track pads
         "glass":       (density: 2500, hardness: 0.15),  // optics and canopies
         "machinery":   (density: 1600, hardness: 0.2, armour: false),  // engines, gearboxes: a filled engine bay
@@ -23,6 +24,8 @@
         // the real thing would.
         "running_gear": (density: 900, hardness: 0.12),  // track pods: links, wheels, suspension and air
         "fittings":    (density: 600, hardness: 0.05),   // stowage, fenders, lights and other detail
+        // Not part of the vehicle: rails and sleepers drawn under a train. No mass, no armour, no bounds.
+        "scenery":     (density: 0, hardness: 0, armour: false),
     },
     // Faction palettes. Each follows a 60-30-10 structure: Primary is the dominant body colour (about 60% of the
     // surface), Secondary a darker colour from a neighbouring hue (about 30%), Trim a complementary accent used

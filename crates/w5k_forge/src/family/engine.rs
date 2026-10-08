@@ -4,7 +4,7 @@
 
 use super::style::{self, p};
 use super::{stat, Family, Param, Role, Scale, Stat, Values};
-use crate::schema::{Axis, Category, Function, PartDef, SizeClass, SocketDef, SocketKind, Slot};
+use crate::schema::{MaterialLibrary, Axis, Category, Function, PartDef, SizeClass, SocketDef, SocketKind, Slot};
 use crate::Built;
 
 pub struct Engine;
@@ -23,6 +23,9 @@ impl Family for Engine {
     }
     fn name(&self) -> &'static str {
         "Power plant"
+    }
+    fn fits(&self) -> &'static [SocketKind] {
+        &[SocketKind::Internal]
     }
     fn params(&self) -> Vec<Param> {
         vec![
@@ -51,7 +54,7 @@ impl Family for Engine {
         ]
     }
 
-    fn generate(&self, v: &Values) -> PartDef {
+    fn generate(&self, v: &Values, _lib: &MaterialLibrary) -> PartDef {
         let pw = v["power_kw"];
         let tech = tech_of(v);
         let mass = pw / TECH[tech].1;

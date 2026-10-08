@@ -9,12 +9,11 @@
 //! Hull space is vehicle space: the ground is y = 0, forward is -Z. Sockets carry `hints` that size what attaches:
 //! tracks learn their length and height, turrets their largest ring, engines their bay.
 
-use std::collections::BTreeMap;
-
+use super::mounts::{self, sock as socket, Chassis};
 use super::style::{self, p, Quad};
 use super::{stat, Family, Param, Role, Scale, Stat, Values};
 use crate::geom::V3;
-use crate::schema::{Category, Function, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
+use crate::schema::{MaterialLibrary, Category, Function, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
 use crate::Built;
 
 fn param(id: &'static str, name: &'static str, unit: &'static str, min: f64, max: f64, default: f64, role: Role, help: &'static str) -> Param {
@@ -29,18 +28,6 @@ fn common_params(len: (f64, f64, f64), wid: (f64, f64, f64), hgt: (f64, f64, f64
         param("front_mm", "Front armour", "mm", 5.0, 250.0, 80.0, Role::Budgeted, "Plate thickness on the front faces (effective protection also depends on their slope)."),
         param("side_mm", "Side armour", "mm", 5.0, 150.0, 35.0, Role::Budgeted, "Plate thickness everywhere else."),
     ]
-}
-
-fn socket(name: &str, kind: SocketKind, at: V3, normal: V3, forward: V3, hints: &[(&str, f64)]) -> SocketDef {
-    SocketDef {
-        name: name.into(),
-        kind,
-        size: SizeClass::Medium,
-        at: at.arr(),
-        normal: normal.arr(),
-        forward: forward.arr(),
-        hints: hints.iter().map(|(k, v)| (k.to_string(), *v)).collect::<BTreeMap<_, _>>(),
-    }
 }
 
 /// Extra front armour as a solid slab just behind a face: from `d1` to `d2` inward, shrunk toward the face's
@@ -122,10 +109,11 @@ impl Family for Lancer {
         let mut v = common_params((3.0, 14.0, 6.5), (1.4, 4.5, 2.4), (0.6, 2.2, 1.05));
         v.push(param("glacis", "Glacis", "", 0.0, 1.0, 0.55, Role::Free, "Longer, flatter glacis: more effective front armour, less room inside."));
         v.push(param("nose", "Nose", "", 0.0, 1.0, 0.5, Role::Free, "Blunt to pointed. Pointed noses angle the front plates for side shots too."));
+        v.push(param("stations", "Stations", "", 2.0, 8.0, 3.0, Role::Free, "Mounting stations along each side: wheels, legs, pods and rotor arms attach to them."));
         v
     }
 
-    fn generate(&self, v: &Values) -> PartDef {
+    fn generate(&self, v: &Values, _lib: &MaterialLibrary) -> PartDef {
         let (l, w, h) = (v["length_m"], v["width_m"], v["height_m"]);
         let (tf, ts) = (v["front_mm"] / 1000.0, v["side_mm"] / 1000.0);
         let (glacis, nose) = (v["glacis"], v["nose"]);
@@ -187,12 +175,10 @@ impl Family for Lancer {
 
         let z_ring = -l / 2.0 + lg + 0.4 * (l - lg - 0.12 * h);
         let s_y = track_top / 2.0;
-        let track_hints = [("ctx.length", 0.94 * l), ("ctx.top", track_top - s_y), ("ctx.bottom", s_y)];
-        let x_side = w / 2.0;
-        let sockets = vec![
+        let stations = v["stations"].round().clamp(2.0, 8.0) as usize;
+        let ch = Chassis { z0: -l / 2.0 + 0.12 * l, z1: l / 2.0 - 0.04 * l, y_under: yb, y_side: s_y, track_top, half_w: w / 2.0, width: w, stations, gear: Some((0.02 * l, 0.94 * l)) };
+        let mut sockets = vec![
             socket("turret", SocketKind::TurretRing, p(0.0, yt, z_ring), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.ring_max", 0.8 * 0.9 * w)]),
-            socket("track_r", SocketKind::Locomotion, p(x_side, s_y, 0.02 * l), p(1.0, 0.0, 0.0), p(0.0, 0.0, -1.0), &track_hints),
-            socket("track_l", SocketKind::Locomotion, p(-x_side, s_y, 0.02 * l), p(-1.0, 0.0, 0.0), p(0.0, 0.0, -1.0), &track_hints),
             socket(
                 "engine",
                 SocketKind::Internal,
@@ -201,7 +187,10 @@ impl Family for Lancer {
                 p(0.0, 0.0, -1.0),
                 &[("ctx.bay_length", 0.35 * l), ("ctx.bay_width", 0.8 * w), ("ctx.bay_height", 0.85 * h)],
             ),
+            socket("mast_1", SocketKind::Mast, p(-0.32 * w, yt, l / 2.0 - 0.2 * l), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.5 * w)]),
+            socket("mast_2", SocketKind::Mast, p(0.32 * w, yt, l / 2.0 - 0.2 * l), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.5 * w)]),
         ];
+        sockets.extend(mounts::running_gear(&ch));
         hull_part(format!("hull_lancer_{l:.1}m"), format!("Lancer hull {l:.1} m"), size_class(l), shapes, sockets)
     }
 
@@ -225,10 +214,11 @@ impl Family for Bastion {
         let mut v = common_params((4.0, 16.0, 7.0), (2.0, 6.0, 2.8), (1.2, 3.5, 1.8));
         v.push(param("turrets", "Turrets", "", 1.0, 2.0, 1.0, Role::Free, "One central turret, or two on the long roof."));
         v.push(param("sponson", "Sponsons", "", 0.0, 1.0, 0.7, Role::Free, "How far the upper body overhangs the tracks: more room inside, a wider target."));
+        v.push(param("stations", "Stations", "", 2.0, 8.0, 4.0, Role::Free, "Mounting stations along each side: wheels, legs, pods and rotor arms attach to them."));
         v
     }
 
-    fn generate(&self, v: &Values) -> PartDef {
+    fn generate(&self, v: &Values, _lib: &MaterialLibrary) -> PartDef {
         let (l, w, h) = (v["length_m"], v["width_m"], v["height_m"]);
         let (tf, ts) = (v["front_mm"] / 1000.0, v["side_mm"] / 1000.0);
         let over = 0.75 * v["sponson"];
@@ -295,7 +285,7 @@ impl Family for Bastion {
 
         let track_top = y_mid - 0.04;
         let s_y = track_top / 2.0;
-        let track_hints = [("ctx.length", 0.92 * l), ("ctx.top", track_top - s_y), ("ctx.bottom", s_y)];
+        let stations = v["stations"].round().clamp(2.0, 8.0) as usize;
         let ring_max = 0.8 * (wu - 0.36 * h);
         let roof_z0 = -l / 2.0 + 0.5 * h;
         let roof_z1 = l / 2.0 - 0.06 * l;
@@ -305,9 +295,12 @@ impl Family for Bastion {
             .enumerate()
             .map(|(i, z)| socket(&format!("turret_{}", i + 1), SocketKind::TurretRing, p(0.0, yt, *z), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.ring_max", ring_max)]))
             .collect();
-        sockets.push(socket("track_r", SocketKind::Locomotion, p(w / 2.0, s_y, 0.0), p(1.0, 0.0, 0.0), p(0.0, 0.0, -1.0), &track_hints));
-        sockets.push(socket("track_l", SocketKind::Locomotion, p(-w / 2.0, s_y, 0.0), p(-1.0, 0.0, 0.0), p(0.0, 0.0, -1.0), &track_hints));
         sockets.push(socket("engine", SocketKind::Internal, p(0.0, yb + ts + 0.01, 0.3 * l), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.bay_length", 0.3 * l), ("ctx.bay_width", 0.85 * w), ("ctx.bay_height", 0.9 * h)]));
+        let mast_z = roof_z1 - 0.1 * l;
+        sockets.push(socket("mast_1", SocketKind::Mast, p(-0.3 * (wu - 0.36 * h), yt, mast_z), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.5 * w)]));
+        sockets.push(socket("mast_2", SocketKind::Mast, p(0.3 * (wu - 0.36 * h), yt, mast_z), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.5 * w)]));
+        let ch = Chassis { z0: -l / 2.0 + 0.1 * l, z1: l / 2.0 - 0.03 * l, y_under: yb, y_side: s_y, track_top, half_w: w / 2.0, width: w, stations, gear: Some((0.0, 0.92 * l)) };
+        sockets.extend(mounts::running_gear(&ch));
         hull_part(format!("hull_bastion_{l:.1}m"), format!("Bastion hull {l:.1} m"), size_class(l), shapes, sockets)
     }
 
@@ -330,22 +323,25 @@ impl Family for Dreadnought {
     fn params(&self) -> Vec<Param> {
         let mut v = common_params((10.0, 60.0, 22.0), (3.0, 10.0, 6.5), (1.0, 4.0, 2.6));
         v.push(param("turrets", "Turrets", "", 1.0, 6.0, 3.0, Role::Free, "Turret rings along the deck, either side of the command tower."));
-        v.push(param("bogies", "Track sets", "", 2.0, 6.0, 3.0, Role::Free, "Track units per side. More sets spread the load and steer a long hull better."));
+        v.push(param("stations", "Stations", "", 2.0, 10.0, 4.0, Role::Free, "Mounting stations along each side (and rail bogie slots under the keel): more of them spread the load."));
+        v.push(param("prow", "Prow", "", 0.0, 1.0, 1.0, Role::Free, "From a flat, train-like front (0) to a ship's prow (1)."));
         v
     }
 
-    fn generate(&self, v: &Values) -> PartDef {
+    fn generate(&self, v: &Values, _lib: &MaterialLibrary) -> PartDef {
         let (l, w, h) = (v["length_m"], v["width_m"], v["height_m"]);
         let (tf, ts) = (v["front_mm"] / 1000.0, v["side_mm"] / 1000.0);
         let turrets = v["turrets"].round().clamp(1.0, 6.0) as usize;
-        let bogies = v["bogies"].round().clamp(2.0, 6.0) as usize;
+        let stations = v["stations"].round().clamp(2.0, 10.0) as usize;
+        let prow = v["prow"].clamp(0.0, 1.0);
         let (yb, track_top) = clearance(h);
         let yt = yb + h;
-        let bow = 0.16 * l;
+        let bow = (0.04 + 0.12 * prow) * l;
+        let nf = 1.0 - 0.7 * prow;
         // Plan: a ship-like prow tapering to a third of the width, a slightly narrowed stern.
         let prof = [
-            (-l / 2.0, yb + 0.25 * h, 0.3),    // prow, low
-            (-l / 2.0, yb + 0.65 * h, 0.3),    // prow, high
+            (-l / 2.0, yb + 0.25 * h, nf),     // prow, low
+            (-l / 2.0, yb + 0.65 * h, nf),     // prow, high
             (-l / 2.0 + bow, yt, 1.0),         // deck starts
             (l / 2.0 - 0.04 * l, yt, 0.9),     // deck ends
             (l / 2.0, yb + 0.3 * h, 0.85),     // stern
@@ -382,8 +378,6 @@ impl Family for Dreadnought {
         shapes.push(style::plate(&tower_front, tin, (0.08, 0.92), (0.62, 0.8), t, 0.0, "glass", Slot::Glow));
         shapes.push(style::plate(&tower_front, tin, (0.0, 1.0), (0.2, 0.32), t, 0.0, "fittings", Slot::Trim));
         let mast_base = p(0.0, yt + th, z_tower + 0.1 * tl);
-        shapes.push(style::cyl(0.025 * w, 1.2 * h, crate::schema::Axis::Y, 8, 0.6, mast_base + p(0.0, 0.6 * h, 0.0), "steel", Slot::Dark, None, 0.0));
-        shapes.push(style::sphere(0.04 * w, mast_base + p(0.0, 1.22 * h, 0.0), "glass", Slot::Glow));
         // Bow chevron and eyes, deck-edge glow lines, darker lower flanks, stern vents.
         shapes.push(style::plate(&bow_q, inside, (0.0, 1.0), (0.3, 0.55), t, t, "fittings", Slot::Trim));
         for u in [0.3, 0.7] {
@@ -416,18 +410,14 @@ impl Family for Dreadnought {
             .enumerate()
             .map(|(i, z)| socket(&format!("turret_{}", i + 1), SocketKind::TurretRing, p(0.0, yt, *z), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.ring_max", ring_max)]))
             .collect();
-        // Track sets along each side, under the deck between the bow and the stern.
+        // Running gear along the sides and keel, between the bow and the stern.
         let (k0, k1) = (-l / 2.0 + bow, l / 2.0 - 0.02 * l);
-        let seg = (k1 - k0) / bogies as f64;
         let s_y = track_top / 2.0;
-        let hints = [("ctx.length", 0.94 * seg), ("ctx.top", track_top - s_y), ("ctx.bottom", s_y)];
-        for b in 0..bogies {
-            let z = k0 + seg * (b as f64 + 0.5);
-            for (name, s) in [("r", 1.0), ("l", -1.0)] {
-                sockets.push(socket(&format!("track_{name}{}", b + 1), SocketKind::Locomotion, p(s * 0.9 * w / 2.0, s_y, z), p(s, 0.0, 0.0), p(0.0, 0.0, -1.0), &hints));
-            }
-        }
+        let ch = Chassis { z0: k0, z1: k1, y_under: yb, y_side: s_y, track_top, half_w: 0.9 * w / 2.0, width: w, stations, gear: Some((0.5 * (k0 + k1), 0.94 * (k1 - k0))) };
+        sockets.extend(mounts::running_gear(&ch));
         sockets.push(socket("engine", SocketKind::Internal, p(0.0, yb + ts + 0.01, 0.3 * l), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.bay_length", 0.25 * l), ("ctx.bay_width", 0.8 * w), ("ctx.bay_height", 0.9 * h)]));
+        sockets.push(socket("mast_1", SocketKind::Mast, mast_base, p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.4 * tw)]));
+        sockets.push(socket("mast_2", SocketKind::Mast, p(0.0, yt, l / 2.0 - 0.1 * l), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.4 * w)]));
         hull_part(format!("hull_dreadnought_{l:.0}m"), format!("Dreadnought hull {l:.0} m"), size_class(l), shapes, sockets)
     }
 

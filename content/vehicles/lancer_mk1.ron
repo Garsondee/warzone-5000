@@ -4,11 +4,10 @@
     id: "lancer_mk1",
     name: "Lancer Mk1",
     hull: "hull_lancer",
-    hull_params: { "length_m": 6.8, "width_m": 2.3, "height_m": 1.0, "front_mm": 90, "side_mm": 35, "glacis": 0.6, "nose": 0.6 },
+    hull_params: { "length_m": 6.8, "width_m": 2.5, "height_m": 1.15, "front_mm": 90, "side_mm": 35, "glacis": 0.6, "nose": 0.6 },
     palette: "vanguard",
     attach: [
-        (socket: "track_r", family: "track", params: { "width_m": 0.62, "wheels": 6 }),
-        (socket: "track_l", family: "track", params: { "width_m": 0.62, "wheels": 6 }, mirror: true),
+        (socket: "gear_*", family: "track", params: { "width_m": 0.62, "wheels": 6 }),
         (socket: "engine", family: "engine", params: { "power_kw": 600, "tech": 0 }),
         (socket: "turret", family: "turret_gun", params: { "calibre_mm": 90, "barrel_cal": 50, "armour_mm": 100, "slope": 0.7, "loader": 0, "ammo": 36 }),
     ],

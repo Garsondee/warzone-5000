@@ -102,6 +102,18 @@ pub enum SocketKind {
     Utility,
     Internal,
     LegHip,
+    /// Full-length mount on a hull side (track units).
+    Gear,
+    /// One of several discrete mounts along a hull side (wheels, legs, pods, rotor arms).
+    Station,
+    /// A radial hip on a round walker body (legs, pods, rotor arms).
+    Hip,
+    /// Centre-line mount under the hull (rail bogies).
+    Keel,
+    /// The whole underside (air cushions, anti-gravity plates).
+    Belly,
+    /// Top-side mount for masts and utility rigs.
+    Mast,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,6 +126,7 @@ pub enum Locomotion {
     Legs,
     Rotor,
     Jet,
+    Rail,
 }
 
 /// One node in a part's shape tree.
@@ -329,6 +342,77 @@ pub struct Function {
     /// For ground locomotion: area in contact with the ground (m^2). Weight over contact area is ground pressure.
     #[serde(default)]
     pub contact_m2: f64,
+    /// Height of the mount point above the ground when the vehicle operates (m). The assembler raises the hull to
+    /// match: legs lift it by their stance, air cushions by their skirt, anti-gravity pods by their ride height.
+    #[serde(default)]
+    pub ride_height_m: Option<f64>,
+    /// Tallest obstacle this running gear steps or floats over (m).
+    #[serde(default)]
+    pub step_m: f64,
+    /// Rail-bound running gear: the vehicle can only go where rails go.
+    #[serde(default)]
+    pub rail_bound: bool,
+    /// Air cushion: area, perimeter and leakage gap (m^2, m, m). Lift power depends on them and on the weight.
+    #[serde(default)]
+    pub cushion_area_m2: f64,
+    #[serde(default)]
+    pub cushion_perimeter_m: f64,
+    #[serde(default)]
+    pub cushion_gap_m: f64,
+    /// Anti-gravity: power cost per tonne held up (kW/t).
+    #[serde(default)]
+    pub grav_kw_per_t: f64,
+    /// Turret ring diameter (m); checked against the hull socket's `ctx.ring_max`.
+    #[serde(default)]
+    pub ring_m: f64,
+    /// Length of the contact patch along the direction of travel (m), for turning and wheelbase estimates.
+    #[serde(default)]
+    pub contact_len_m: f64,
+    /// Weapon summary.
+    #[serde(default)]
+    pub weapon: Option<WeaponFn>,
+    /// Sensor summary.
+    #[serde(default)]
+    pub sensor: Option<SensorFn>,
+    /// Repair rig: structure restored per second (kg/s) and reach (m).
+    #[serde(default)]
+    pub repair_kg_s: f64,
+    #[serde(default)]
+    pub repair_reach_m: f64,
+}
+
+/// What a weapon delivers, in physical units (the battle simulation and the vehicle sheet both read this).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct WeaponFn {
+    /// "gun", "missile" or "beam".
+    pub kind: String,
+    /// Energy delivered per shot (J): kinetic energy, warhead energy or beam burst energy.
+    pub energy_j: f64,
+    /// Shots per minute when the weapon can fire continuously (each missile counts as a shot).
+    pub shots_per_min: f64,
+    /// Armour penetration at 1 km (mm of steel).
+    pub penetration_mm: f64,
+    /// Longest effective range (m).
+    pub range_m: f64,
+    /// Recoil impulse per shot (N s).
+    pub recoil_ns: f64,
+    /// Power drawn while firing (kW): energy weapons.
+    pub burst_kw: f64,
+    /// Whether the weapon steers itself onto its target.
+    pub guided: bool,
+    /// Shots released by one trigger pull (a missile salvo); 0 counts as 1.
+    pub salvo: f64,
+}
+
+/// What a sensor sees: its own limit and its height above the vehicle's mount (the horizon grows with height).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct SensorFn {
+    /// "optical", "radar" or "combined".
+    pub kind: String,
+    /// Detection range before the horizon limit (m).
+    pub range_m: f64,
+    /// Height of the sensor head above the part's mount (m).
+    pub height_m: f64,
 }
 
 impl PartDef {
@@ -374,6 +458,12 @@ pub struct Material {
     /// hits them damages them instead (`false` makes them transparent to the armour tables).
     #[serde(default = "tru")]
     pub armour: bool,
+    /// Working strength (MPa), for structures that must carry loads (legs, masts). 0 means a weak 100 MPa.
+    #[serde(default)]
+    pub strength_mpa: f64,
+    /// Stiffness (Young's modulus, GPa), for buckling. 0 means a soft 10 GPa.
+    #[serde(default)]
+    pub modulus_gpa: f64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -403,11 +493,16 @@ pub struct DesignDef {
     pub palette: Option<String>,
     #[serde(default)]
     pub attach: Vec<Attach>,
+    /// How far the hull is raised so the running gear reaches the ground (m). Computed when a design is
+    /// instantiated from its running gear's `ride_height_m`; leave at 0 in content files.
+    #[serde(default)]
+    pub lift_m: f64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Attach {
-    /// Socket on the parent part.
+    /// Socket on the parent part. A name with one `*` (such as `station_*`) attaches to every matching socket;
+    /// sockets on the left side (negative x normal) are mirrored automatically.
     pub socket: String,
     /// A fixed part id (leave empty when `family` is given).
     #[serde(default)]
