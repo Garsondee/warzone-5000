@@ -1,7 +1,8 @@
 //! Replays: what a run looked like, in a form any viewer can play.
 //!
-//! The simulation records one [`Frame`] per tick (20 Hz). A frame is 16 bytes of integers (millimetres, milliradians,
-//! centimetres per second...), so a three-minute run is under 60 KB and the viewers never touch fixed point. The run also
+//! The simulation records one [`Frame`] per tick (20 Hz). A frame is 20 bytes of integers (millimetres, milliradians,
+//! centimetres per second, forces as a percentage of weight...), so a three-minute run is about 75 KB and the viewers never
+//! touch fixed point. The run also
 //! carries a state hash every second and at the end: replaying a recorded run on another machine must reproduce them
 //! exactly (this is how desyncs and platform differences are caught).
 
@@ -10,7 +11,7 @@ use serde::{Deserialize, Serialize};
 /// Ticks per second.
 pub const HZ: u32 = 20;
 /// Size of one encoded frame.
-pub const FRAME_BYTES: usize = 16;
+pub const FRAME_BYTES: usize = 20;
 
 /// Run state, the low nibble of [`Frame::state`].
 pub mod run_state {
@@ -35,6 +36,8 @@ pub mod limit {
     pub const SOIL: u8 = 4;
     /// The vehicle is not making progress.
     pub const STALLED: u8 = 5;
+    /// Fans, rotors or anti-gravity pods at the most thrust they can make (the airborne counterpart of `GRIP`).
+    pub const THRUST: u8 = 6;
 }
 
 /// One tick of one vehicle.
@@ -54,6 +57,14 @@ pub struct Frame {
     pub slip_pct: u8,
     /// `limit << 4 | run_state`.
     pub state: u8,
+    /// Thrust actually applied, as a percentage of the vehicle's weight.
+    pub thrust_pct: u8,
+    /// The most thrust the ground (or the running gear) allows, as a percentage of weight.
+    pub grip_pct: u8,
+    /// The slope's pull as a percentage of weight (negative when the slope pushes the vehicle along).
+    pub grade_pct: i8,
+    /// Every other resistance (rolling, air, soil) as a percentage of weight.
+    pub resist_pct: u8,
 }
 
 impl Frame {
@@ -74,6 +85,10 @@ impl Frame {
         b[12..14].copy_from_slice(&self.sink_mm.to_le_bytes());
         b[14] = self.slip_pct;
         b[15] = self.state;
+        b[16] = self.thrust_pct;
+        b[17] = self.grip_pct;
+        b[18] = self.grade_pct as u8;
+        b[19] = self.resist_pct;
         b
     }
 
@@ -86,6 +101,10 @@ impl Frame {
             sink_mm: u16::from_le_bytes([b[12], b[13]]),
             slip_pct: b[14],
             state: b[15],
+            thrust_pct: b[16],
+            grip_pct: b[17],
+            grade_pct: b[18] as i8,
+            resist_pct: b[19],
         }
     }
 }
@@ -140,7 +159,7 @@ impl Run {
         Run { id: id.to_string(), outcome: Outcome::Dns { cause: cause.to_string() }, frames: Vec::new(), checkpoint_hashes: Vec::new(), final_hash: 0 }
     }
 
-    /// All frames as one byte string (16 bytes each, little-endian).
+    /// All frames as one byte string (20 bytes each, little-endian).
     pub fn frame_bytes(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(self.frames.len() * FRAME_BYTES);
         for f in &self.frames {

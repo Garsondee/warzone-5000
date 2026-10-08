@@ -1,8 +1,11 @@
 //! `w5k trial`: put designs on a course, one at a time, and write everything a viewer needs.
 //!
 //! ```text
-//! w5k trial <content> --out DIR [--course content/courses/hill_valley.ron] [--only a,b] [--limit 180] [--mode parade]
+//! w5k trial <content> --out DIR [--course content/courses/hill_valley.ron] [--only a,b] [--limit 180] [--mode sim|parade]
 //! ```
+//!
+//! `sim` (the default) runs the physics of `w5k_sim::mover` on a spec baked from each design (`w5k_forge::mover`); `parade`
+//! drives every vehicle at its sheet speed, with no physics, as a reference lap.
 //!
 //! Output (in DIR): `scene.json` (the course and every vehicle's mesh), `replay.json` (one recorded run per vehicle),
 //! `results.json` / `results.md` (who finished, how fast, or why not) and `course.png` (the elevation profile). The page is
@@ -16,10 +19,11 @@ use w5k_forge::export::export_mesh;
 use w5k_forge::preview::palette_colours;
 use w5k_forge::raster::Rgb;
 use w5k_forge::Forge;
-use w5k_sim::trial::{parade, ParadeSpec};
-use w5k_sim::{Course, CourseDef, Outcome, Run, HZ};
+use w5k_sim::trial::{parade, run as simulate, ParadeSpec};
+use w5k_sim::{Course, CourseDef, MoverSpec, Outcome, Run, HZ};
 
 use crate::plot::{Axis, Plot};
+use crate::trial_plots::{results_png, traces_png, Lane};
 
 /// Standard base64 (RFC 4648, with padding).
 pub fn b64(data: &[u8]) -> String {
@@ -49,19 +53,22 @@ struct Entry {
     problems: Vec<String>,
     palette: [Rgb; 8],
     mesh: w5k_forge::export::ExportMesh,
+    spec: MoverSpec,
     run: Run,
 }
 
 fn entry(forge: &Forge, course: &Course, id: &str, mode: &str) -> Result<Entry, String> {
     let design = forge.designs.get(id).ok_or_else(|| format!("no design '{id}'"))?;
-    let (built, _asm, sheet) = forge.build_design(design);
-    let class = sheet.locomotion.first().map(|l| format!("{l:?}").to_lowercase()).unwrap_or_else(|| "none".into());
+    let (built, asm, sheet) = forge.build_design(design);
+    let spec = forge.mover_spec(id, &asm, &sheet);
+    let class = if sheet.locomotion.is_empty() { "none".to_string() } else { spec.class.name().to_string() };
     let run = match mode {
+        "sim" => simulate(course, &spec),
         "parade" => {
             let spec = ParadeSpec { rated_ms: sheet.top_speed_kmh / 3.6, span_m: (0.7 * sheet.length_m).clamp(1.0, 20.0), accel_ms2: 4.0 };
             parade(course, id, &spec)
         }
-        other => return Err(format!("unknown mode '{other}' (parade)")),
+        other => return Err(format!("unknown mode '{other}' (sim or parade)")),
     };
     Ok(Entry {
         id: id.to_string(),
@@ -76,6 +83,7 @@ fn entry(forge: &Forge, course: &Course, id: &str, mode: &str) -> Result<Entry, 
         problems: sheet.problems.clone(),
         palette: palette_colours(&forge.lib, design.palette.as_deref()),
         mesh: export_mesh(&built.mesh),
+        spec,
         run,
     })
 }
@@ -238,6 +246,7 @@ pub fn run(forge: &Forge, course_path: &Path, only: Option<&[String]>, limit_s: 
             "id": e.id, "name": e.name, "class": e.class, "movement": e.movement,
             "mass_kg": e.mass_kg, "power_kw": e.power_kw, "top_kmh": e.top_kmh, "ground_kpa": e.ground_kpa,
             "width_m": e.size[0], "height_m": e.size[1], "length_m": e.size[2], "problems": e.problems,
+            "spec": e.spec,
             "palette": e.palette.iter().map(|c| json!([c[0], c[1], c[2]])).collect::<Vec<_>>(),
             "mesh": {
                 "lo": e.mesh.lo, "hi": e.mesh.hi, "ground_y": e.mesh.ground_y,
@@ -295,7 +304,10 @@ pub fn run(forge: &Forge, course_path: &Path, only: Option<&[String]>, limit_s: 
     }
     let _ = std::fs::write(out.join("results.md"), md);
     course_png(&course, &out.join("course.png"));
-    println!("wrote {}", out.join("course.png").display());
+    let lanes: Vec<Lane> = order.iter().map(|e| Lane { name: &e.name, class: &e.class, run: &e.run }).collect();
+    traces_png(&lanes, &course, &out.join("traces.png"));
+    results_png(&lanes, &course, &out.join("results.png"));
+    println!("wrote course.png, traces.png and results.png in {}", out.display());
     for e in &order {
         println!("{:<22} {:<10} {}", e.id, e.class, outcome_text(&e.run.outcome));
     }

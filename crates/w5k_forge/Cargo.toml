@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 w5k_math = { path = "../w5k_math" }
+w5k_sim = { path = "../w5k_sim" }
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"
 png = "0.18"

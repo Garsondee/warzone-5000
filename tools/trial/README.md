@@ -24,6 +24,6 @@ need Playwright (`NODE_PATH=$(npm root -g)`) and ffmpeg; set `CHROME` to a Chrom
 ## Data
 
 `w5k trial` writes `scene.json` (the course profile and, per vehicle, a quantised mesh: see `crates/w5k_forge/src/export.rs`) and
-`replay.json` (16 bytes per tick per vehicle: see `crates/w5k_sim/src/replay.rs`). `build.py` deflates the binary arrays and
+`replay.json` (20 bytes per tick per vehicle: see `crates/w5k_sim/src/replay.rs`). `build.py` deflates the binary arrays and
 the page unpacks them with the browser's `DecompressionStream`. `window.__trial` exposes `select`, `camera`, `renderAt(t)` and
 `snapshot()` for scripts that drive the page.

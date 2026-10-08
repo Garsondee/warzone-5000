@@ -6,8 +6,8 @@
 
 use crate::armour::ArmourSummary;
 use crate::assemble::{self, power_balance_speed, Assembly, VehicleSheet, WeaponLine};
-use crate::geom::V3;
-use crate::schema::{Category, Locomotion};
+use crate::geom::{Xform, V3};
+use crate::schema::{Category, Function, Locomotion};
 use crate::{voxel, Forge};
 
 const G: f64 = 9.81;
@@ -43,6 +43,105 @@ fn mean(v: &[f64]) -> f64 {
     }
 }
 
+/// What an assembly's running gear adds up to. The vehicle sheet reads it for top speed and turning, and the time trial's
+/// mover bake (`mover.rs`) reads it for the physics, so the two cannot disagree about the same vehicle.
+#[derive(Clone, Debug)]
+pub struct Gear {
+    /// Each kind of running gear on the vehicle, in the order first met.
+    pub locomotion: Vec<Locomotion>,
+    /// Rolling resistance (or, for legs, cost of transport) of each piece of running gear.
+    pub rolling: Vec<f64>,
+    /// Traction coefficient of each piece of running gear that states one.
+    pub traction: Vec<f64>,
+    /// Fraction of power that reaches the ground, per piece of running gear.
+    pub efficiency: Vec<f64>,
+    /// The slowest limit any running gear states (km/h); infinite if none does.
+    pub limit_kmh: f64,
+    pub rail: bool,
+    /// Tallest obstacle each piece of running gear steps over (m).
+    pub steps: Vec<f64>,
+    /// Longest track contact patch (m).
+    pub track_len: f64,
+    /// Front-most and rear-most wheel station (z in vehicle space); `(MAX, MIN)` when there are no wheels.
+    pub wheel_z: (f64, f64),
+    /// The same for legs.
+    pub leg_z: (f64, f64),
+    /// Tallest stance of any leg (m).
+    pub stance: f64,
+    /// Altitude of flying or floating gear (m): rotors and anti-gravity pods.
+    pub altitude_m: f64,
+    /// Longest contact patch of an air cushion (m).
+    pub cushion_len: f64,
+}
+
+impl Default for Gear {
+    fn default() -> Self {
+        Gear {
+            locomotion: Vec::new(),
+            rolling: Vec::new(),
+            traction: Vec::new(),
+            efficiency: Vec::new(),
+            limit_kmh: f64::INFINITY,
+            rail: false,
+            steps: Vec::new(),
+            track_len: 0.0,
+            wheel_z: (f64::MAX, f64::MIN),
+            leg_z: (f64::MAX, f64::MIN),
+            stance: 0.0,
+            altitude_m: 0.0,
+            cushion_len: 0.0,
+        }
+    }
+}
+
+impl Gear {
+    /// Take in one part (placed by `x`); parts without running gear change nothing.
+    pub fn add(&mut self, f: &Function, x: &Xform) {
+        let Some(l) = f.locomotion else { return };
+        if !self.locomotion.contains(&l) {
+            self.locomotion.push(l);
+        }
+        let default_rolling = match l {
+            Locomotion::Wheels => 0.03,
+            Locomotion::Tracks | Locomotion::HalfTracks => 0.06,
+            Locomotion::Legs => 0.6,
+            Locomotion::Rail => 0.0015,
+            Locomotion::Hover => 0.03,
+            Locomotion::AntiGrav | Locomotion::Rotor | Locomotion::Jet => 0.0,
+        };
+        self.rolling.push(f.rolling.unwrap_or(default_rolling));
+        if let Some(t) = f.traction {
+            self.traction.push(t);
+        }
+        self.efficiency.push(assemble::drive_efficiency(l));
+        self.limit_kmh = self.limit_kmh.min(f.max_kmh.unwrap_or(f64::INFINITY));
+        self.rail |= f.rail_bound || l == Locomotion::Rail;
+        if f.step_m > 0.0 {
+            self.steps.push(f.step_m);
+        }
+        match l {
+            Locomotion::Tracks | Locomotion::HalfTracks => self.track_len = self.track_len.max(f.contact_len_m),
+            Locomotion::Wheels => {
+                let z = x.point(V3::ZERO).z;
+                self.wheel_z = (self.wheel_z.0.min(z), self.wheel_z.1.max(z));
+            }
+            Locomotion::Legs => {
+                let z = x.point(V3::ZERO).z;
+                self.leg_z = (self.leg_z.0.min(z), self.leg_z.1.max(z));
+                self.stance = self.stance.max(f.ride_height_m.unwrap_or(0.0));
+            }
+            Locomotion::Hover => self.cushion_len = self.cushion_len.max(f.contact_len_m),
+            Locomotion::Rotor | Locomotion::AntiGrav | Locomotion::Jet => self.altitude_m = self.altitude_m.max(f.ride_height_m.unwrap_or(0.0)),
+            Locomotion::Rail => {}
+        }
+    }
+
+    /// Mean of a list, zero when empty.
+    pub fn mean(v: &[f64]) -> f64 {
+        mean(v)
+    }
+}
+
 impl Forge {
     pub fn make_sheet(&self, asm: &Assembly, inp: &SheetInput) -> VehicleSheet {
         let mut s = VehicleSheet { mass_kg: inp.mass_kg, problems: asm.errors.clone(), ..Default::default() };
@@ -62,18 +161,11 @@ impl Forge {
         s.armour_top_mm = a.top.median_mm;
         s.armour_front_weak_mm = a.front.weak_mm;
 
-        let mut rolling = Vec::new();
-        let mut efficiency = Vec::new();
-        let mut gear_limit = f64::INFINITY;
+        let mut gear = Gear::default();
         let mut disc_area = 0.0;
         let mut contact = 0.0;
         let (mut cu_area, mut cu_perim, mut cu_gap, mut cu_n) = (0.0, 0.0, 0.0, 0usize);
         let (mut grav_lift, mut grav_kwt, mut grav_ride) = (0.0f64, 0.0f64, 0.0f64);
-        let mut steps = Vec::new();
-        let mut rail = false;
-        let mut track_len = 0.0f64;
-        let (mut wheel_z0, mut wheel_z1) = (f64::MAX, f64::MIN);
-        let mut stance = 0.0f64;
         let mut sensor_best: Option<(f64, f64)> = None; // (eye height, range)
         let mut weapons = Vec::new();
 
@@ -96,37 +188,7 @@ impl Forge {
                 grav_kwt += f.grav_kw_per_t * f.load_kg;
                 grav_ride = grav_ride.max(f.ride_height_m.unwrap_or(0.0));
             }
-            if let Some(l) = f.locomotion {
-                if !s.locomotion.contains(&l) {
-                    s.locomotion.push(l);
-                }
-                let default_rolling = match l {
-                    Locomotion::Wheels => 0.03,
-                    Locomotion::Tracks | Locomotion::HalfTracks => 0.06,
-                    Locomotion::Legs => 0.6,
-                    Locomotion::Rail => 0.0015,
-                    Locomotion::Hover => 0.03,
-                    Locomotion::AntiGrav | Locomotion::Rotor | Locomotion::Jet => 0.0,
-                };
-                rolling.push(f.rolling.unwrap_or(default_rolling));
-                efficiency.push(assemble::drive_efficiency(l));
-                gear_limit = gear_limit.min(f.max_kmh.unwrap_or(f64::INFINITY));
-                rail |= f.rail_bound || l == Locomotion::Rail;
-                if f.step_m > 0.0 {
-                    steps.push(f.step_m);
-                }
-                if matches!(l, Locomotion::Tracks | Locomotion::HalfTracks) {
-                    track_len = track_len.max(f.contact_len_m);
-                }
-                if matches!(l, Locomotion::Wheels) {
-                    let z = x.point(V3::ZERO).z;
-                    wheel_z0 = wheel_z0.min(z);
-                    wheel_z1 = wheel_z1.max(z);
-                }
-                if matches!(l, Locomotion::Legs) {
-                    stance = stance.max(f.ride_height_m.unwrap_or(0.0));
-                }
-            }
+            gear.add(f, x);
             if let Some(w) = &f.weapon {
                 weapons.push((id.clone(), w.clone()));
             }
@@ -142,11 +204,12 @@ impl Forge {
         }
         s.power_to_weight_kw_t = if s.mass_kg > 0.0 { s.power_kw / (s.mass_kg / 1000.0) } else { 0.0 };
         s.ground_pressure_kpa = if contact > 0.0 { weight_n / contact / 1000.0 } else { 0.0 };
-        s.step_m = steps.iter().cloned().fold(f64::INFINITY, f64::min);
+        s.locomotion = gear.locomotion.clone();
+        s.step_m = gear.steps.iter().cloned().fold(f64::INFINITY, f64::min);
         if !s.step_m.is_finite() {
             s.step_m = 0.0;
         }
-        s.movement = if rail {
+        s.movement = if gear.rail {
             "rail"
         } else if s.locomotion.iter().any(|l| matches!(l, Locomotion::Rotor | Locomotion::Jet | Locomotion::AntiGrav)) {
             "air"
@@ -234,12 +297,12 @@ impl Forge {
         let spare = (spare0 - lift_kw).max(0.0);
 
         // --- Speed: the power balance P = C m g v + 1/2 rho Cd A v^3, capped by what the running gear allows.
-        let net_kw = spare * mean(&efficiency);
-        let c1 = mean(&rolling) * weight_n;
+        let net_kw = spare * mean(&gear.efficiency);
+        let c1 = mean(&gear.rolling) * weight_n;
         let c3 = 0.5 * RHO_AIR * 0.9 * s.frontal_m2;
         let by_power = if s.locomotion.is_empty() { 0.0 } else { power_balance_speed(net_kw * 1000.0, c1, c3) * 3.6 };
-        if by_power > gear_limit {
-            s.top_speed_kmh = gear_limit;
+        if by_power > gear.limit_kmh {
+            s.top_speed_kmh = gear.limit_kmh;
             s.speed_limited_by = "running gear".into();
         } else {
             s.top_speed_kmh = by_power;
@@ -253,15 +316,15 @@ impl Forge {
             // Skid steering: turning on the spot drags the whole contact patch sideways, a resisting moment
             // of mu W L / 4 that the drive must overcome (docs/design/04-parametric-components.md).
             Some(Locomotion::Tracks | Locomotion::HalfTracks) => {
-                let l = if track_len > 0.0 { track_len } else { 0.8 * len };
+                let l = if gear.track_len > 0.0 { gear.track_len } else { 0.8 * len };
                 let m_r = 0.6 * weight_n * l / 4.0;
                 ((0.6 * net_kw * 1000.0) / m_r.max(1.0)).to_degrees().min(120.0)
             }
             Some(Locomotion::Wheels) => {
-                let wheelbase = if wheel_z1 > wheel_z0 { wheel_z1 - wheel_z0 } else { 0.5 * len };
+                let wheelbase = if gear.wheel_z.1 > gear.wheel_z.0 { gear.wheel_z.1 - gear.wheel_z.0 } else { 0.5 * len };
                 (v_ms.min(5.5) / (1.9 * wheelbase.max(0.5))).to_degrees().min(90.0)
             }
-            Some(Locomotion::Legs) => (v_ms.min(6.0) / (1.5 * stance.max(0.5))).to_degrees().min(90.0),
+            Some(Locomotion::Legs) => (v_ms.min(6.0) / (1.5 * gear.stance.max(0.5))).to_degrees().min(90.0),
             Some(Locomotion::Hover) => (45.0 * (5.0 / len).sqrt()).min(90.0),
             Some(Locomotion::AntiGrav) => (40.0 * (5.0 / len).sqrt()).min(90.0),
             Some(Locomotion::Rotor | Locomotion::Jet) => (120.0 * (3.0 / len).sqrt()).min(180.0),
@@ -308,7 +371,7 @@ impl Forge {
         if s.ground_pressure_kpa > 100.0 {
             s.warnings.push(format!("bogs down in soft ground ({:.0} kPa)", s.ground_pressure_kpa));
         }
-        if rail {
+        if gear.rail {
             s.warnings.push("rail-bound: only goes where rails go".into());
         }
         if s.range_km > s.sight_km * 1.05 && s.range_km > 0.0 {

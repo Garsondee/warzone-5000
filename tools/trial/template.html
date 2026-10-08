@@ -123,7 +123,7 @@ function inflate(s) {
 }
 var VEH = {}, RUN = {}, order = [];
 D.vehicles.forEach(function (v) { VEH[v.id] = v; });
-var CLASS_COL = { tracks: '#ffb454', halftracks: '#ffb454', wheels: '#a3e635', legs: '#ff5c8a', rail: '#cbd5e1', hover: '#38bdf8', antigrav: '#c084fc', rotor: '#34d399' };
+var CLASS_COL = { tracks: '#ffb454', halftracks: '#ffb454', wheels: '#a3e635', legs: '#ff5c8a', rail: '#cbd5e1', 'air cushion': '#38bdf8', 'anti-gravity': '#c084fc', rotor: '#34d399' };
 function classCol(v) { return CLASS_COL[v.class] || '#8e97aa'; }
 
 function decodeRuns() {
@@ -131,13 +131,19 @@ function decodeRuns() {
     return inflate(r.frames_z64).then(function (bytes) {
       var n = r.frames, dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
       var run = { id: r.id, outcome: r.outcome, n: n, hash: r.hash, s: new Float32Array(n), y: new Float32Array(n), pitch: new Float32Array(n),
-        v: new Float32Array(n), sink: new Float32Array(n), slip: new Float32Array(n), state: new Uint8Array(n), lim: new Uint8Array(n) };
+        v: new Float32Array(n), sink: new Float32Array(n), slip: new Float32Array(n), state: new Uint8Array(n), lim: new Uint8Array(n),
+        thrust: new Float32Array(n), cap: new Float32Array(n), grade: new Float32Array(n), resist: new Float32Array(n) };
       for (var i = 0; i < n; i++) {
-        var o = i * 16;
+        var o = i * 20;
         run.s[i] = dv.getInt32(o, true) / 1000; run.y[i] = dv.getInt32(o + 4, true) / 1000; run.pitch[i] = dv.getInt16(o + 8, true) / 1000;
         run.v[i] = dv.getInt16(o + 10, true) / 100; run.sink[i] = dv.getUint16(o + 12, true) / 1000; run.slip[i] = bytes[o + 14] / 100;
         run.state[i] = bytes[o + 15] & 15; run.lim[i] = bytes[o + 15] >> 4;
+        run.thrust[i] = bytes[o + 16] / 100; run.cap[i] = bytes[o + 17] / 100; run.grade[i] = dv.getInt8(o + 18) / 100; run.resist[i] = bytes[o + 19] / 100;
       }
+      var tot = [0, 0, 0, 0, 0, 0, 0, 0], running = 0;
+      for (var q = 0; q < n; q++) if (run.state[q] === 0) { tot[run.lim[q] & 7]++; running++; }
+      run.share = tot.map(function (c) { return running ? c / running : 0; });
+      run.vmax = 0; for (var q2 = 0; q2 < n; q2++) run.vmax = Math.max(run.vmax, run.v[q2]);
       run.duration = n > 1 ? (n - 1) / HZ : 0;
       RUN[r.id] = run;
     });
@@ -379,16 +385,17 @@ function selectVehicle(id) {
 }
 
 /* ---------- pose ---------- */
-var pose = { s: 0, y: 0, pitch: 0, v: 0, sink: 0, slip: 0, state: 0, lim: 0, accel: 0 };
+var pose = { s: 0, y: 0, pitch: 0, v: 0, sink: 0, slip: 0, state: 0, lim: 0, accel: 0, thrust: 0, cap: 0, grade: 0, resist: 0 };
 var prevV = 0;
 function applyPose(t) {
   var r = cur.run;
-  if (!r || r.n === 0) { pose.s = 0; pose.y = heightAt(0); pose.pitch = 0; pose.v = 0; pose.sink = 0; pose.slip = 0; pose.state = 3; pose.lim = 0; }
+  if (!r || r.n === 0) { pose.s = 0; pose.y = heightAt(0); pose.pitch = 0; pose.v = 0; pose.sink = 0; pose.slip = 0; pose.state = 3; pose.lim = 0; pose.thrust = pose.cap = pose.grade = pose.resist = 0; }
   else {
     var u = clamp(t * HZ, 0, r.n - 1), i = Math.floor(u), f = u - i, j = Math.min(i + 1, r.n - 1);
     pose.s = lerp(r.s[i], r.s[j], f); pose.y = lerp(r.y[i], r.y[j], f); pose.pitch = lerp(r.pitch[i], r.pitch[j], f);
     pose.v = lerp(r.v[i], r.v[j], f); pose.sink = lerp(r.sink[i], r.sink[j], f); pose.slip = lerp(r.slip[i], r.slip[j], f);
     pose.state = r.state[i]; pose.lim = r.lim[i];
+    pose.thrust = lerp(r.thrust[i], r.thrust[j], f); pose.cap = lerp(r.cap[i], r.cap[j], f); pose.grade = lerp(r.grade[i], r.grade[j], f); pose.resist = lerp(r.resist[i], r.resist[j], f);
     pose.accel = (r.v[j] - r.v[Math.max(i - 1, 0)]) * HZ / (j - Math.max(i - 1, 0) || 1);
   }
   vehGroup.position.set(0, pose.y - pose.sink, -pose.s);
@@ -439,7 +446,8 @@ function bannerFor(r) {
   if (o.kind === 'dnf') return { text: 'DID NOT FINISH  ' + causeText(o) + ' at ' + o.s_m.toFixed(0) + ' m', col: '#ff6b88' };
   return { text: 'DID NOT START  ' + o.cause, col: '#ffb454' };
 }
-var LIM_NAMES = ['', 'engine power', 'grip', 'speed rating', 'soft ground', 'stalled'];
+var LIM_NAMES = ['', 'engine power', 'grip', 'speed rating', 'soft ground', 'stalled', 'thrust limit'];
+var LIM_COL = ['#4d566b', '#38d6ff', '#ffb454', '#c084fc', '#c0793a', '#ff6b88', '#ff9f6b'];
 function drawHud() {
   var W = viewEl.clientWidth, H = viewEl.clientHeight, dpr = hudc.width / Math.max(1, W);
   hud.setTransform(dpr, 0, 0, dpr, 0, 0); hud.clearRect(0, 0, W, H);
@@ -493,6 +501,37 @@ function drawHud() {
   var mx = px(clamp(pose.s, C.s0, C.s0 + span)), my = py(heightAt(pose.s));
   hud.fillStyle = classCol(v); hud.beginPath(); hud.arc(mx, my, 5, 0, 6.2832); hud.fill(); hud.strokeStyle = '#fff'; hud.lineWidth = 1.5; hud.stroke();
   if (r.outcome.kind === 'dnf') { var fx = px(r.outcome.s_m); hud.strokeStyle = '#ff6b88'; hud.beginPath(); hud.moveTo(fx - 4, sy + 4); hud.lineTo(fx + 4, sy + sh - 4); hud.moveTo(fx + 4, sy + 4); hud.lineTo(fx - 4, sy + sh - 4); hud.stroke(); }
+  // Speed trace and what limited the vehicle, on the same distance axis as the profile: bright up to the playhead, dim after it.
+  if (r.n > 1) {
+    var th = clamp(H * 0.1, 26, 56), ty = sy - th - 3, rbh = 6, rby = ty - rbh - 2;
+    hud.fillStyle = 'rgba(9,11,16,0.74)'; hud.fillRect(sx, rby, sw, rbh + 2 + th);
+    var vtop = Math.max(r.vmax, v.spec ? v.spec.rated_ms * 0.5 : 1, 1) * 1.1, upto = Math.min(r.n - 1, Math.floor(state.t * HZ));
+    var pv = function (vv) { return ty + th - 3 - vv / vtop * (th - 8); };
+    for (var q = 0; q < r.n - 1; q++) {
+      if (r.state[q] !== 0) continue;
+      var xa = px(r.s[q]), xb = px(r.s[q + 1]);
+      hud.globalAlpha = q <= upto ? 0.95 : 0.3; hud.fillStyle = LIM_COL[r.lim[q] % LIM_COL.length];
+      hud.fillRect(xa, rby, Math.max(1.2, xb - xa + 0.6), rbh);
+    }
+    hud.globalAlpha = 1;
+    if (v.spec && v.spec.rated_ms < vtop) {
+      var ry = pv(v.spec.rated_ms); hud.strokeStyle = 'rgba(192,132,252,0.55)'; hud.lineWidth = 1; hud.setLineDash([4, 4]);
+      hud.beginPath(); hud.moveTo(sx, ry); hud.lineTo(sx + sw, ry); hud.stroke(); hud.setLineDash([]);
+    }
+    [[0, upto, 1], [upto, r.n - 1, 0.32]].forEach(function (seg) {
+      hud.strokeStyle = classCol(v); hud.lineWidth = 2; hud.globalAlpha = seg[2]; hud.beginPath(); var started = false;
+      for (var i3 = seg[0]; i3 <= seg[1]; i3++) {
+        if (r.state[i3] !== 0) break;
+        var X3 = px(r.s[i3]), Y3 = pv(r.v[i3]); if (started) hud.lineTo(X3, Y3); else { hud.moveTo(X3, Y3); started = true; }
+      }
+      hud.stroke();
+    });
+    hud.globalAlpha = 1; hud.shadowBlur = 0; hud.fillStyle = 'rgba(174,182,198,0.9)'; hud.textAlign = 'left'; hud.textBaseline = 'top';
+    hud.font = '500 ' + clamp(W / 90, 9, 12) + 'px "IBM Plex Mono", ui-monospace, monospace';
+    hud.fillText('speed (peak ' + Math.round(r.vmax * 3.6) + ' km/h)' + (v.spec && v.spec.rated_ms < vtop ? '   - - rating ' + Math.round(v.spec.rated_ms * 3.6) : ''), sx + 5, ty + 3);
+    hud.strokeStyle = 'rgba(255,255,255,0.4)'; hud.lineWidth = 1; hud.beginPath(); hud.moveTo(mx, rby); hud.lineTo(mx, sy + sh); hud.stroke();
+    strip.y = rby; strip.h = sy + sh - rby;
+  }
 }
 
 /* ---------- panels ---------- */
@@ -517,25 +556,44 @@ function buildResults() {
   });
 }
 function markSelected() { Array.prototype.forEach.call(el.results.children, function (li) { li.setAttribute('aria-selected', li.dataset.id === cur.id ? 'true' : 'false'); }); }
+function shareText(r) {
+  var parts = [];
+  for (var k = 1; k < LIM_NAMES.length; k++) if (r.share[k] >= 0.04) parts.push([r.share[k], '<b style="color:' + LIM_COL[k] + '">' + LIM_NAMES[k] + '</b> ' + Math.round(r.share[k] * 100) + '%']);
+  parts.sort(function (a, b) { return b[0] - a[0]; });
+  return parts.length ? 'Held back by ' + parts.map(function (p) { return p[1]; }).join(', ') + ' of the run.' : '';
+}
+function finishedWhy(v, r, o) {
+  var fin = C.checkpoints[C.checkpoints.length - 1], ideal = v.top_kmh > 0 ? fin / (v.top_kmh / 3.6) : 0, cost = o.time_s - ideal;
+  var base = ideal > 0 ? 'A lap at the sheet speed of ' + Math.round(v.top_kmh) + ' km/h would take ' + ideal.toFixed(1) + ' s; the launch, the hill and the ground ' + (cost >= 0 ? 'cost it ' + cost.toFixed(1) + ' s.' : 'gained it ' + (-cost).toFixed(1) + ' s (the descent).') : '';
+  return base + ' ' + shareText(r);
+}
 function refreshPanels() {
   var v = cur.veh, r = cur.run; if (!v) return;
   el.vname.textContent = v.name;
   el.vehicle.innerHTML = row('running gear', v.class) + row('mass', fmtMass(v.mass_kg)) + row('size (w x l)', v.width_m.toFixed(1) + ' x ' + v.length_m.toFixed(1) + ' m') +
     row('engine', (v.power_kw >= 10 ? Math.round(v.power_kw) : v.power_kw.toFixed(1)) + ' kW') + row('top speed (sheet)', Math.round(v.top_kmh) + ' km/h') +
+    (v.spec && v.spec.drive_kw > 0 ? row('power at the ground', (v.spec.drive_kw >= 10 ? Math.round(v.spec.drive_kw) : v.spec.drive_kw.toFixed(1)) + ' kW') +
+      row('speed rating', Math.round(v.spec.rated_ms * 3.6) + ' km/h') + (v.spec.grip_mu > 0 ? row('grip', v.spec.grip_mu.toFixed(2) + ' x load') : row('thrust', Math.round(v.spec.thrust_w * 100) + '% of weight')) : '') +
     (v.ground_kpa > 0 ? row('ground pressure', v.ground_kpa.toFixed(0) + ' kPa') : '');
   var o = r.outcome, w = el.why;
   w.style.display = 'block'; w.className = 'why ' + (o.kind === 'finished' ? 'ok' : 'bad');
-  if (o.kind === 'finished') w.innerHTML = '<b>Finished in ' + o.time_s.toFixed(1) + ' s.</b> This is a parade lap: the vehicle holds its rated speed, so the time is distance over speed. Physics comes next.';
+  if (o.kind === 'finished') w.innerHTML = '<b>Finished in ' + o.time_s.toFixed(1) + ' s.</b> ' + finishedWhy(v, r, o);
   else if (o.kind === 'dnf') w.innerHTML = '<b>Did not finish: ' + causeText(o) + ' at ' + o.s_m.toFixed(0) + ' m.</b> ' + (o.detail || '');
   else w.innerHTML = '<b>Did not start.</b> ' + o.cause;
 }
 var teleTick = 0;
+function forceRows(v) {
+  var kn = v.mass_kg * 9.81 / 1000;
+  function f(x) { var a = Math.abs(x * kn); return (x < 0 ? '-' : '') + (a >= 100 ? a.toFixed(0) : a.toFixed(1)) + ' kN'; }
+  return row('thrust', f(pose.thrust)) + row('most it can push', f(pose.cap)) + row('slope', f(pose.grade)) + row('rolling, air, soil', f(pose.resist));
+}
 function refreshTele() {
   var r = cur.run; if (!r) return;
   var g = Math.tan(pose.pitch) * 100;
   el.tele.innerHTML = row('speed', (pose.v * 3.6).toFixed(0) + ' km/h') + row('distance', pose.s.toFixed(0) + ' m') + row('grade', (g >= 0 ? '+' : '') + g.toFixed(1) + '%') +
     row('surface', surfLabel(surfAt(pose.s))) + row('acceleration', pose.accel.toFixed(1) + ' m/s2') + (pose.sink > 0.001 ? row('sunk in', (pose.sink * 100).toFixed(0) + ' cm') : '') +
-    (pose.slip > 0.005 ? row('slip', Math.round(pose.slip * 100) + '%') : '') + (pose.lim ? row('limited by', LIM_NAMES[pose.lim] || '-') : '');
+    (pose.slip > 0.005 ? row('slip', Math.round(pose.slip * 100) + '%') : '') + (pose.lim ? row('limited by', LIM_NAMES[pose.lim] || '-') : '') +
+    (pose.state === 0 && cur.veh ? forceRows(cur.veh) : '');
 }
 
 /* ---------- playback ---------- */

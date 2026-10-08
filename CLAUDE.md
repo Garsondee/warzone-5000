@@ -9,9 +9,11 @@
   `gallery --only a,b` (labelled designs), `roll --seed N` (random auto-fitted designs), `atlas` (every hull with every
   gear), `ladder` (one archetype across sizes), `space` (sampled possibility-space charts and CSV), `fit --spec` (auto-fit a
   design file: specs live in `content/specs/`, fitted designs in `content/vehicles/`) and `rates`/`why` (debug the fitter).
-  Time trials: `w5k trial content --out DIR` simulates every design on `content/courses/hill_valley.ron`; then
-  `python3 -I tools/trial/build.py DIR page.html` builds the 3D replay page and `node tools/trial/capture.js` records an MP4
-  (see `tools/trial/README.md`; the sim is the `w5k_sim` crate).
+  Time trials: `w5k trial content --out DIR` runs every design through the physics (`w5k_sim::mover`, fed by the forge's
+  `mover_spec`) on `content/courses/hill_valley.ron` and writes `results.png`, `traces.png`, `course.png` and the replay (`--mode
+  parade` is the physics-free reference lap); then `python3 -I tools/trial/build.py DIR page.html` builds the 3D replay page and
+  `node tools/trial/capture.js` records an MP4 (see `tools/trial/README.md`; the sim is the `w5k_sim` crate).
+  Every outcome must be explainable: the replay records what limited the vehicle each tick, and a run that ends early says why.
 - **Art direction** is in `docs/design/06-art-direction.md`; every new family decorates itself through
   `crates/w5k_forge/src/family/style.rs` so the army stays consistent.
 - **Teach the theory.** The owner has a computer graphics background and wants to learn: explain the principle

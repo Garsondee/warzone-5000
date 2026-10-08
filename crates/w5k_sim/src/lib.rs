@@ -13,8 +13,12 @@
 //! viewers, which is +s here.
 
 pub mod course;
+pub mod mover;
 pub mod replay;
+pub mod spec;
 pub mod trial;
 
 pub use course::{Course, CourseDef, SegmentDef};
+pub use mover::{Mover, MoverState};
 pub use replay::{Cause, Frame, Outcome, Run, HZ};
+pub use spec::{GearClass, MoverSpec};

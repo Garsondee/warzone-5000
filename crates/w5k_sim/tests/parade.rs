@@ -85,12 +85,12 @@ fn the_run_is_deterministic() {
 
 #[test]
 fn frames_round_trip_through_bytes() {
-    let f = Frame { s_mm: -1234, y_mm: 987_654, pitch_mrad: -321, v_cms: 1999, sink_mm: 4321, slip_pct: 37, state: 0x41 };
+    let f = Frame { s_mm: -1234, y_mm: 987_654, pitch_mrad: -321, v_cms: 1999, sink_mm: 4321, slip_pct: 37, state: 0x41, thrust_pct: 87, grip_pct: 240, grade_pct: -6, resist_pct: 12 };
     assert_eq!(Frame::from_bytes(&f.to_bytes()), f);
     assert_eq!(f.run_state(), 1);
     assert_eq!(f.limit(), 4);
     let c = course();
     let run = parade(&c, "x", &spec(20.0));
-    assert_eq!(run.frame_bytes().len(), run.frames.len() * 16);
+    assert_eq!(run.frame_bytes().len(), run.frames.len() * 20);
     let _ = Fx::ZERO;
 }

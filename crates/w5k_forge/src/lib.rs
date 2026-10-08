@@ -14,6 +14,7 @@ pub mod family;
 pub mod geom;
 pub mod gltf;
 pub mod mesh;
+pub mod mover;
 pub mod preview;
 pub mod raster;
 pub mod schema;
