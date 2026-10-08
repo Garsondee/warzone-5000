@@ -195,7 +195,23 @@ fn write_golden(path: &Path, entries: &[Entry]) -> bool {
     }
 }
 
-pub fn run(forge: &Forge, course_path: &Path, terrain_path: &Path, only: Option<&[String]>, limit_s: Option<f64>, mode: &str, golden: Option<&Path>, out: &Path) -> bool {
+/// What `w5k trial` was asked to do.
+pub struct TrialArgs<'a> {
+    pub course: &'a Path,
+    pub terrain: &'a Path,
+    /// Only these designs (all when `None`).
+    pub only: Option<&'a [String]>,
+    /// Override the course's time limit (seconds).
+    pub limit_s: Option<f64>,
+    /// `"sim"` or `"parade"`.
+    pub mode: &'a str,
+    /// Write the golden fixture here.
+    pub golden: Option<&'a Path>,
+    pub out: &'a Path,
+}
+
+pub fn run(forge: &Forge, args: &TrialArgs) -> bool {
+    let TrialArgs { course: course_path, terrain: terrain_path, only, limit_s, mode, golden, out } = *args;
     let t0 = Instant::now();
     let text = match std::fs::read_to_string(course_path) {
         Ok(t) => t,

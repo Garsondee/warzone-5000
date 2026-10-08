@@ -14,7 +14,8 @@
   parade` is the physics-free reference lap); then `python3 -I tools/trial/build.py DIR page.html` builds the 3D replay page and
   `node tools/trial/capture.js` records an MP4 (see `tools/trial/README.md`; the sim is the `w5k_sim` crate).
   Every outcome must be explainable: the replay records what limited the vehicle each tick, and a run that ends early says why.
-  `w5k soil content --design ID --out DIR` sweeps a design's hull plating and track width against the soft earth (the ladder chart);
+  `w5k soil content --design ID --out DIR` sweeps a design's hull plating and track width against the soft earth (the ladder chart), and
+  `w5k soil content --space N --out DIR` runs N sampled designs over the course (how each kind of running gear fares);
   `node tools/trial/frames.js` renders chosen moments of a run (to check an animation).
 - **Art direction** is in `docs/design/06-art-direction.md`; every new family decorates itself through
   `crates/w5k_forge/src/family/style.rs` so the army stays consistent.

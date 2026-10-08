@@ -177,6 +177,24 @@ What a few of them teach:
 * **Fliers and floaters** are the same to the bit on any soil: a test runs the army on rigid and soft versions of the course and
   requires identical hashes for every cushion, anti-gravity and rotor design.
 
+## The whole possibility space on the course
+`w5k soil content --space 1750 --out DIR` rolls and auto-fits designs exactly as `w5k space` does (every hull with every kind of running
+gear, the same share each), runs each on the course with and without the soft earth, and charts how each kind of running gear fares.
+
+![space](../assets/trial/soil_space.png)
+
+* **Tracks** usually cross (87 %), but two thirds of those pay 5 % or more of their time, and 13 % bog. The auto-fitter sizes tracks to the
+  narrowest that carries the weight, so they have no margin to spare: a design that crosses *well* has been tuned for the ground.
+* **Wheels** mostly bog (78 %): tyres sized to the pressure the design asked for are narrow patches, and a patch 0.4 m long ploughs
+  (section 7 of the theory note).
+* **Legs** cross (81 %) but are slow: 17 % run out of the 180 s clock, so for a walker the time limit is the course.
+* **Floaters and fliers** do not notice the soil (cushions 85 %, anti-gravity 98 % finish; what does not is invalid, not slow). Rail
+  designs cannot start: the course has no rails. Sixty per cent of random rotor craft cannot hover at all, which is the possibility
+  space's old finding, not the trial's.
+
+It is the first map of *where the ground matters*: a terrain that decides which kinds of design finish is a lever for balance (D10), and
+a course with different soils is a different map. (About 4 minutes on 4 cores: the fitting dominates, not the runs.)
+
 ## Things move
 Nothing here is simulated; it is *presentation derived from the replay*, so any viewer animates a recorded run the same way.
 
@@ -218,6 +236,7 @@ speed). At 24 frames a second a fast wheel can alias (the wagon-wheel effect): a
 ```bash
 cargo run --release -p w5k_tools --bin w5k -- trial content --out out/trial     # every design: results.png, traces.png, replay
 cargo run --release -p w5k_tools --bin w5k -- soil content --design lancer_mk1 --out out/soil     # weight and footprint ladders
+cargo run --release -p w5k_tools --bin w5k -- soil content --space 1750 --out out/soil     # the sampled space on the course
 python tools/trial/build.py out/trial out/trial/page.html                        # the browser page (open it)
 node tools/trial/capture.js out/trial/page.html --vehicle lancer_mk1 --out lancer.mp4     # an MP4
 ```

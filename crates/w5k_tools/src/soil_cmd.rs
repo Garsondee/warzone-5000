@@ -217,3 +217,207 @@ pub fn run_ladders(forge: &Forge, content: &Path, design_id: &str, course_path: 
     println!("wrote {}", path.display());
     true
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The whole possibility space on the course.
+
+use w5k_forge::explore::{Explorer, Spec, GEARS, HULLS};
+use w5k_forge::raster::Image;
+
+/// How a sampled design ended, for the chart.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum End {
+    /// Finished, losing under 5 % of its time to the soil.
+    Clean,
+    /// Finished, but the soil cost it 5 % or more.
+    Slowed,
+    Bogged,
+    Stalled,
+    TimedOut,
+    /// Never started: the design is invalid, or rail-bound.
+    DidNotStart,
+}
+
+const ENDS: [(End, &str, &str); 6] = [
+    (End::Clean, "finished, soil costs under 5 %", "#7ee787"),
+    (End::Slowed, "finished, slowed by the soil", "#e3c35a"),
+    (End::Bogged, "bogged in the soft earth", "#ff6b88"),
+    (End::Stalled, "stalled (not enough engine or grip)", "#ff9f43"),
+    (End::TimedOut, "timed out", "#8e97aa"),
+    (End::DidNotStart, "did not start (invalid, rail-bound)", "#3a4256"),
+];
+
+fn end_of(soft: &Outcome, dry: &Outcome) -> End {
+    match soft {
+        Outcome::Dns { .. } => End::DidNotStart,
+        Outcome::Dnf { cause, .. } => match cause {
+            w5k_sim::Cause::Bogged => End::Bogged,
+            w5k_sim::Cause::Stalled => End::Stalled,
+            w5k_sim::Cause::TimedOut => End::TimedOut,
+        },
+        Outcome::Finished { ticks, .. } => match dry.time_s() {
+            Some(d) if (*ticks as f64 / HZ as f64) < 1.05 * d => End::Clean,
+            Some(_) => End::Slowed,
+            None => End::Clean,
+        },
+    }
+}
+
+/// Sample `n` auto-fitted designs (every hull x every kind of gear gets the same share) and run each on the course, with the soft earth and
+/// with every surface rigid. Writes `soil_space.png` (how each kind of running gear fares) and `soil_space.csv`.
+pub fn run_space(forge: &Forge, course_path: &Path, terrain_path: &Path, n: usize, seed: u64, out: &Path) -> bool {
+    let load = |p: &Path| std::fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()));
+    let parsed = (|| -> Result<(CourseDef, TerrainDef), String> {
+        let c: CourseDef = ron::from_str(&load(course_path)?).map_err(|e| format!("{}: {e}", course_path.display()))?;
+        let t: TerrainDef = ron::from_str(&load(terrain_path)?).map_err(|e| format!("{}: {e}", terrain_path.display()))?;
+        Ok((c, t))
+    })();
+    let (cdef, terrain) = match parsed {
+        Ok(x) => x,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return false;
+        }
+    };
+    let (soft, dry) = match (Course::bake_with(&cdef, &terrain), Course::bake(&cdef)) {
+        (Ok(a), Ok(b)) => (a, b),
+        (Err(e), _) | (_, Err(e)) => {
+            eprintln!("error: course: {e}");
+            return false;
+        }
+    };
+    let ex = Explorer::new(forge.lib.clone());
+    let per = (n / (HULLS.len() * GEARS.len())).max(4);
+    let mut samples = Vec::new();
+    for (hi, hull) in HULLS.iter().enumerate() {
+        for (gi, gear) in GEARS.iter().enumerate() {
+            let spec = Spec { hull: Some(hull.to_string()), gear: Some(gear.to_string()), ..Default::default() };
+            samples.extend(ex.sample(seed + ((hi * GEARS.len() + gi) * per) as u64, per, &spec));
+        }
+    }
+    // Run each design on both courses, in parallel (every run is independent).
+    let threads = std::thread::available_parallelism().map(|x| x.get()).unwrap_or(4).min(8);
+    let mut rows: Vec<Option<(String, f64, f64, End)>> = (0..samples.len()).map(|_| None).collect();
+    std::thread::scope(|s| {
+        let handles: Vec<_> = (0..threads)
+            .map(|t| {
+                let (samples, soft, dry, lib) = (&samples, &soft, &dry, &forge.lib);
+                s.spawn(move || {
+                    let mut mine = Vec::new();
+                    let mut i = t;
+                    while i < samples.len() {
+                        let smp = &samples[i];
+                        let row = if smp.valid {
+                            let mut f = Forge::new(lib.clone());
+                            match f.instantiate(&smp.spec) {
+                                Ok(inst) => {
+                                    let (asm, sheet) = f.quick_design(&inst);
+                                    let spec = f.mover_spec(&format!("seed{}", smp.seed), &asm, &sheet);
+                                    let (a, b) = (run(soft, &spec), run(dry, &spec));
+                                    Some((smp.gear.clone(), sheet.ground_pressure_kpa, b.outcome.time_s().unwrap_or(0.0), end_of(&a.outcome, &b.outcome)))
+                                }
+                                Err(_) => Some((smp.gear.clone(), 0.0, 0.0, End::DidNotStart)),
+                            }
+                        } else {
+                            Some((smp.gear.clone(), 0.0, 0.0, End::DidNotStart))
+                        };
+                        mine.push((i, row));
+                        i += threads;
+                    }
+                    mine
+                })
+            })
+            .collect();
+        for h in handles {
+            for (i, r) in h.join().expect("sample thread panicked") {
+                rows[i] = r;
+            }
+        }
+    });
+    let rows: Vec<(String, f64, f64, End)> = rows.into_iter().flatten().collect();
+
+    // Count by kind of running gear.
+    let gear_label = |g: &str| match g {
+        "track" => "tracks",
+        "wheel" => "wheels",
+        "legs" => "legs",
+        "rail" => "rail",
+        "hover" => "air cushion",
+        "antigrav" => "anti-gravity",
+        _ => "rotor",
+    };
+    println!("{} designs sampled and run on the course, with and without the soft earth", rows.len());
+    let mut table: Vec<(String, [usize; 6])> = Vec::new();
+    for g in GEARS {
+        let mut c = [0usize; 6];
+        for (gear, _, _, e) in rows.iter().filter(|r| r.0 == g) {
+            let _ = gear;
+            c[ENDS.iter().position(|(k, _, _)| k == e).unwrap()] += 1;
+        }
+        println!("  {:<13} {}", gear_label(g), ENDS.iter().zip(c).map(|((_, name, _), n)| format!("{n} {}", name.split(',').next().unwrap())).collect::<Vec<_>>().join(" | "));
+        table.push((gear_label(g).to_string(), c));
+    }
+
+    // The chart: one stacked bar per kind of running gear.
+    let (w, row_h, left) = (1500usize, 44i64, 210i64);
+    let h = (150 + row_h * table.len() as i64 + 150) as usize;
+    let mut img = Image::new(w, h, crate::plot::BG);
+    img.text(24, 18, 2, "What the soft earth does to the possibility space", [0.9, 0.91, 0.94]);
+    img.text(24, 44, 1, &format!("{} auto-fitted designs, every hull with every kind of running gear, each run on the hill-and-valley course. The bars are shares of each kind.", rows.len()), [0.5, 0.52, 0.58]);
+    let bar_w = w as i64 - left - 60;
+    let top = 100i64;
+    for (i, (name, c)) in table.iter().enumerate() {
+        let y = top + row_h * i as i64;
+        let total: usize = c.iter().sum::<usize>().max(1);
+        img.text(24, y + 14, 1, &format!("{name} ({total})"), [0.8, 0.82, 0.86]);
+        let mut x = left as f64;
+        for (k, (_, _, colour)) in ENDS.iter().enumerate() {
+            let wk = bar_w as f64 * c[k] as f64 / total as f64;
+            if wk >= 1.0 {
+                img.fill_rect(x as i64, y + 4, wk as i64, row_h - 12, hex(colour), 0.95);
+                if wk > 34.0 {
+                    let ink = if ENDS[k].0 == End::DidNotStart { [0.85, 0.87, 0.92] } else { [0.02, 0.02, 0.03] };
+                    img.text(x as i64 + 6, y + 14, 1, &format!("{:.0}%", 100.0 * c[k] as f64 / total as f64), ink);
+                }
+            }
+            x += wk;
+        }
+    }
+    let ly = top + row_h * table.len() as i64 + 24;
+    for (k, (_, name, colour)) in ENDS.iter().enumerate() {
+        let (cx, cy) = (left + (k as i64 % 3) * 420, ly + (k as i64 / 3) * 24);
+        img.fill_rect(cx, cy, 12, 12, hex(colour), 1.0);
+        img.text(cx + 20, cy + 2, 1, name, [0.8, 0.82, 0.86]);
+    }
+    // The footnote reads the numbers rather than asserting them.
+    let share = |name: &str, f: &dyn Fn(&[usize; 6]) -> usize| {
+        let c = table.iter().find(|t| t.0 == name).map(|t| t.1).unwrap_or([0; 6]);
+        100.0 * f(&c) as f64 / c.iter().sum::<usize>().max(1) as f64
+    };
+    let cross = |c: &[usize; 6]| c[0] + c[1];
+    img.text(24, ly + 70, 1, &format!(
+        "Tracks: {:.0}% cross the valley, {:.0}% of them paying 5% or more in time. Wheels: {:.0}% bog. Legs: {:.0}% cross, {:.0}% run out of clock (they are slow).",
+        share("tracks", &cross),
+        100.0 * table.iter().find(|t| t.0 == "tracks").map(|t| t.1[1] as f64 / cross(&t.1).max(1) as f64).unwrap_or(0.0),
+        share("wheels", &|c| c[2]),
+        share("legs", &cross),
+        share("legs", &|c| c[4])
+    ), [0.5, 0.52, 0.58]);
+    img.text(24, ly + 86, 1, "What floats or flies does not notice the soil. The auto-fitter sizes tracks to the narrowest that carries the weight, so a design that crosses well has been tuned for the ground.", [0.5, 0.52, 0.58]);
+    if std::fs::create_dir_all(out).is_err() {
+        eprintln!("error: cannot create {}", out.display());
+        return false;
+    }
+    let path = out.join("soil_space.png");
+    if let Err(e) = img.save_png(&path) {
+        eprintln!("error: {e}");
+        return false;
+    }
+    let mut csv = String::from("gear,ground_pressure_kpa,dry_time_s,end\n");
+    for (g, kpa, t, e) in &rows {
+        csv += &format!("{g},{kpa:.1},{t:.2},{e:?}\n");
+    }
+    let _ = std::fs::write(out.join("soil_space.csv"), csv);
+    println!("wrote {}", path.display());
+    true
+}

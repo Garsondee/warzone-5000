@@ -107,18 +107,14 @@ const WORKING_SLIP: Fx = Fx::from_ratio(6, 10);
 pub const HARD_SHEAR_K: Fx = Fx::from_ratio(1, 500);
 
 impl Soil {
-    /// Convert a table entry (the one place floats enter: at load).
+    /// Convert a table entry (the one place floats enter: at load). Only exactly-rounded operations are used on the floats (a
+    /// multiplication, then the conversion); the tangent of the friction angle is taken in fixed point, not with the platform's `tan`.
     pub fn from_def(kc: f64, kphi: f64, cohesion: f64, friction_deg: f64, shear_k: f64) -> Result<Soil, String> {
         if kc < 0.0 || kphi <= 0.0 || cohesion < 0.0 || shear_k <= 0.0 || !(0.0..90.0).contains(&friction_deg) {
             return Err("soil constants must be positive (kphi, shear_k) or non-negative, and the friction angle below 90 degrees".into());
         }
-        Ok(Soil {
-            kc: Fx::from_f64(kc),
-            kphi: Fx::from_f64(kphi),
-            cohesion: Fx::from_f64(cohesion),
-            tan_phi: Fx::from_f64(friction_deg.to_radians().tan()),
-            shear_k: Fx::from_f64(shear_k),
-        })
+        let angle = Fx::from_f64(friction_deg.to_radians());
+        Ok(Soil { kc: Fx::from_f64(kc), kphi: Fx::from_f64(kphi), cohesion: Fx::from_f64(cohesion), tan_phi: angle.sin() / angle.cos(), shear_k: Fx::from_f64(shear_k) })
     }
 
     /// Feed the constants to a state hasher (regression tests of baked courses).
