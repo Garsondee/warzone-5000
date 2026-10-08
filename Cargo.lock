@@ -296,11 +296,22 @@ name = "w5k_math"
 version = "0.1.0"
 
 [[package]]
+name = "w5k_sim"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "w5k_math",
+]
+
+[[package]]
 name = "w5k_tools"
 version = "0.1.0"
 dependencies = [
  "ron",
+ "serde_json",
  "w5k_forge",
+ "w5k_sim",
 ]
 
 [[package]]

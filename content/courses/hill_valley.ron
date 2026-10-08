@@ -1,0 +1,19 @@
+// The first time trial: a concrete pad at the top of a hill, a short descent, a valley of soft earth, and a slight climb to
+// the finish. Distances are from the start line; the pad also extends 40 m behind it. Grades are rise over run.
+// Every change of grade is eased over `blend_m` metres (a vertical curve), so no segment may be shorter than that.
+(
+    name: "Hill and valley",
+    pad_behind_m: 40.0,
+    run_out_m: 100.0,
+    blend_m: 12.0,
+    time_limit_s: 180.0,
+    segments: [
+        (length_m: 30.0,  grade:  0.00, surface: "concrete"),
+        (length_m: 80.0,  grade: -0.08, surface: "concrete"),
+        (length_m: 140.0, grade:  0.00, surface: "soft_earth"),
+        (length_m: 80.0,  grade:  0.06, surface: "soft_earth"),
+        (length_m: 40.0,  grade:  0.06, surface: "concrete"),
+    ],
+    // Start, the foot of the descent (valley entry), the foot of the climb (valley exit), and the finish.
+    checkpoints_m: [0.0, 110.0, 250.0, 370.0],
+)

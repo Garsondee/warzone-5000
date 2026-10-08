@@ -9,6 +9,9 @@
   `gallery --only a,b` (labelled designs), `roll --seed N` (random auto-fitted designs), `atlas` (every hull with every
   gear), `ladder` (one archetype across sizes), `space` (sampled possibility-space charts and CSV), `fit --spec` (auto-fit a
   design file: specs live in `content/specs/`, fitted designs in `content/vehicles/`) and `rates`/`why` (debug the fitter).
+  Time trials: `w5k trial content --out DIR` simulates every design on `content/courses/hill_valley.ron`; then
+  `python3 -I tools/trial/build.py DIR page.html` builds the 3D replay page and `node tools/trial/capture.js` records an MP4
+  (see `tools/trial/README.md`; the sim is the `w5k_sim` crate).
 - **Art direction** is in `docs/design/06-art-direction.md`; every new family decorates itself through
   `crates/w5k_forge/src/family/style.rs` so the army stays consistent.
 - **Teach the theory.** The owner has a computer graphics background and wants to learn: explain the principle
