@@ -9,7 +9,7 @@
 ## Lanes
 | Lane | Rank | Session | Branch | State | Last check-in | Burn so far |
 |---|---|---|---|---|---|---|
-| ARCH | 1 | this session (stopped: owner reported about $20 of credit left) | `claude/sharp-babbage-d702f7` | contract 0.1.1 batch pending | 2026-10-08 | about $20 left at stop |
+| ARCH | 1 | this session (the owner set a credit floor; ARCH works one thing at a time) | `claude/sharp-babbage-d702f7` | contract 0.1.1 applied; PR and tag next | 2026-10-08 | about $20 left at stop |
 | CHASSIS | 1 | - | - | not launched | - | - |
 | DRIVE | 1 | - | - | not launched | - | - |
 | WORLD | 1 | - | - | not launched | - | - |
@@ -55,7 +55,7 @@ See `docs/decisions/QUEUE.md` (C-001 to C-012 open, all with defaults).
 6. Governor: pause launches if integration CI has been red for more than 2 h or more than 5 PRs wait for review.
 
 ## Next actions
-1. Apply the contract 0.1.1 batch exactly as `docs/architecture/CONTRACT-0.1.1-PLAN.md` says (drafts in `docs/architecture/contract-0.1.1-wip/`), PR it into `integration` from `claude/sharp-babbage-d702f7`, merge when green, tag `contract-v0.1`.
+1. Contract 0.1.1 is APPLIED on `claude/sharp-babbage-d702f7` (rig, command, frame, ports, validation; `def.rs` is FORGE's first CCR). Open a PR into `integration`, merge when `guards` and `rust` are green and the Linux+Windows `integration` run passes, then tag `contract-v0.1` (`git tag contract-v0.1 <merge commit>` and push the tag).
 2. Edit the lane briefs listed at the end of that plan; run the rehearsal (one small lane session, see `LAUNCH.md`); republish the Control Room; send the owner the C0 summary.
 3. Launch rank 1 only when the owner says go or card C-008 is answered. Open owner cards: C-001 to C-014 (defaults apply); C-013 (settings rules) needs the owner's word in chat; C-014 (GitHub branch protection) is a two-minute owner action.
 4. Housekeeping: the stale remote branch `lane/chassis/bad-pr-test` (PR #1 closed) could not be deleted through the git proxy; delete it from GitHub. `reference/prototype-v0/` deletion needs the owner's word.

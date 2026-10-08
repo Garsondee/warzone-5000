@@ -1,11 +1,10 @@
-# Contract 0.1.1: the pre-launch hardening batch (decided, partly drafted, NOT yet applied)
+# Contract 0.1.1: the pre-launch hardening batch (decided and APPLIED to `crates/w5k_contract`)
 
-**Status (2026-10-08, end of the Launch Kit session).** Three read-only red-teams (`docs/architecture/redteam/{wheeled,tracked,weapons}.md`) tried to write an M998, an M35 6x6, a
-Sherman, an Abrams and a Leopard 2 against contract 0.1.0 and found real gaps. ARCH decided every one of them (below). Six files of the batch were drafted and are saved in
-`docs/architecture/contract-0.1.1-wip/*.rs.txt` (they are **not** in `crates/` and do not compile together yet, because the rest of the crate and the stand-ins are not migrated).
-`crates/w5k_contract` is still exactly 0.1.0 and green; `integration` is at the green 0.1.0 commit. **Do not launch any lane until this batch is applied and tagged `contract-v0.1`.**
+**Status.** Three read-only red-teams (`docs/architecture/redteam/{wheeled,tracked,weapons}.md`) tried to write an M998, an M35 6x6, a Sherman, an Abrams and a Leopard 2 against contract 0.1.0 and found real gaps. ARCH decided every one of them
+(the conventions below) and **applied the rig, command, frame, port and validation changes** in two committed stages (the `Command`/`Frame` stage, then the rig stage with 16 mutation tests; golden unchanged). **Still open:** the `VehicleDef` (`def.rs`) additions, which are FORGE's first CCR in its settling round
+(baseline sketches in `docs/architecture/redteam/sketches/`), and the lane-brief edits (done for COMBAT, FORGE, CHASSIS, DRIVE, TRACKS, VIEWER, GODOT, ARCH). After the PR into `integration` is merged and green on Linux and Windows, tag `contract-v0.1`.
 
-## How to apply it (about half a day of ARCH work; each step ends green)
+## How it was applied (kept for the record; every step ended green)
 1. Copy the drafts into `crates/w5k_contract/src/` (drop the `.txt`): `rig.rs` (rewritten: linkages, patches, drive modes, steering law, brake extras, free turbine, joint drives, weapons,
    `PhysRig.combat`, `required_features()`, `rig_hash()`, `contact_names()`), `combat.rs` (new; PROVISIONAL types for armour, modules, mass items, sensors), `kinematics.rs` (new; forward
    kinematics, composite mass, subtree inertia), `validate.rs` (new; the consolidated `PhysRig::validate()`), `command.rs` (aim channels, level-triggered fire bits, clutch, drive mode),
