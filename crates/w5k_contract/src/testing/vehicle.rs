@@ -6,7 +6,7 @@
 use w5k_math::{scalar, Quat, StateHasher, Vec3};
 
 use crate::command::{Command, GearRequest};
-use crate::frame::{ContactFrame, VehicleFrame};
+use crate::frame::{ContactFrame, Event, VehicleFrame};
 use crate::ledger::{ForceLedger, ForceTerm};
 use crate::rig::{JointRole, PhysRig, WheelKind};
 use crate::vehicle::{LimitingFactor, StepReport, VehicleModel};
@@ -35,7 +35,10 @@ pub struct RigidBoxVehicle {
     travel: Vec<f64>,
     artic: Vec<f64>,
     recoil_vel: f64,
-    prev_fire: bool,
+    prev_fire: u8,
+    events: Vec<Event>,
+    yaw_rate: f64,
+    limiting: LimitingFactor,
     rpm: f64,
     gear: i8,
     started: bool,
@@ -88,7 +91,10 @@ impl RigidBoxVehicle {
             travel: vec![0.0; n],
             artic: vec![0.0; m],
             recoil_vel: 0.0,
-            prev_fire: false,
+            prev_fire: 0,
+            events: Vec::new(),
+            yaw_rate: 0.0,
+            limiting: LimitingFactor::None,
             rpm: 800.0,
             gear: 0,
             started: false,
@@ -168,6 +174,7 @@ impl VehicleModel for RigidBoxVehicle {
             self.speed / self.wheelbase_m * scalar::tan(self.steer_angle)
         };
         self.yaw += yaw_rate * dt_s;
+        self.yaw_rate = yaw_rate;
         let f = self.forward();
         self.x += f.x * self.speed * dt_s;
         self.z += f.z * self.speed * dt_s;
@@ -223,17 +230,24 @@ impl VehicleModel for RigidBoxVehicle {
             self.spin[i] += self.speed / s.wheel.radius_m * dt_s;
         }
         // --- articulation: slew toward the commanded angles at the servo's rate limit; recoil is a damped spring.
-        let mut fire_event = false;
-        if cmd.fire && !self.prev_fire {
+        // Trigger bits are levels; a rising edge fires (the stand-in ties muzzle `m` to trigger bit `m` until the rig names its weapons).
+        let rising = cmd.fire & !self.prev_fire;
+        if rising != 0 {
             self.recoil_vel = 3.0;
-            fire_event = true;
+            for m in 0..self.rig.muzzles.len() {
+                if rising & (1u8 << m.min(7)) != 0 {
+                    self.events.push(Event::Fired { vehicle: 0, muzzle: m as u32 });
+                }
+            }
         }
         self.prev_fire = cmd.fire;
         for (k, j) in self.rig.articulation.iter().enumerate() {
             let rate = j.servo.as_ref().map(|s| s.max_rate).unwrap_or(1.0);
             match j.role {
                 JointRole::TurretYaw | JointRole::GunPitch => {
-                    let target = if j.role == JointRole::TurretYaw { cmd.turret_yaw_rad } else { cmd.gun_pitch_rad };
+                    // The stand-in follows aim channel 0 and treats a world-frame demand like a parent-relative one.
+                    let a = cmd.aim[0];
+                    let target = if j.role == JointRole::TurretYaw { a.yaw_rad } else { a.pitch_rad };
                     if let Some(t) = target {
                         let t = match j.limits {
                             Some((lo, hi)) => scalar::clamp(t, lo, hi),
@@ -255,7 +269,6 @@ impl VehicleModel for RigidBoxVehicle {
                 JointRole::Other => {}
             }
         }
-        let _ = fire_event;
         // --- cosmetics: gearbox and rpm.
         let vv = self.speed.abs();
         self.gear = match cmd.gear {
@@ -281,6 +294,7 @@ impl VehicleModel for RigidBoxVehicle {
         } else {
             LimitingFactor::None
         };
+        self.limiting = limiting;
         StepReport { limiting, speed_m_s: self.speed.abs(), substeps: 1 }
     }
 
@@ -289,7 +303,8 @@ impl VehicleModel for RigidBoxVehicle {
         let steered: Vec<usize> =
             self.rig.stations.iter().enumerate().filter(|(_, s)| s.steer.is_some()).map(|(i, _)| i).collect();
         let mut joints: Vec<f32> = Vec::with_capacity(self.rig.joint_names().len());
-        joints.extend(self.spin.iter().map(|&a| scalar::wrap_pi(a) as f32));
+        // Spin is continuous (never wrapped): viewers interpolate it linearly.
+        joints.extend(self.spin.iter().map(|&a| a as f32));
         joints.extend(steered.iter().map(|_| self.steer_angle as f32));
         joints.extend(self.travel.iter().map(|&t| t as f32));
         joints.extend(self.artic.iter().map(|&a| a as f32));
@@ -302,15 +317,27 @@ impl VehicleModel for RigidBoxVehicle {
             pos_m: pos,
             rot,
             lin_vel_m_s: f * self.speed,
-            ang_vel_rad_s: Vec3::ZERO,
+            ang_vel_rad_s: Vec3::new(0.0, self.yaw_rate, 0.0),
             joints,
             engine_rpm: self.rpm as f32,
             gear: self.gear,
             contacts: (0..n)
-                .map(|_| ContactFrame { flags: 1, normal_force_n: weight_share, sinkage_m: 0.0, slip: 0.0 })
+                .map(|_| ContactFrame {
+                    flags: 1,
+                    normal_force_n: weight_share,
+                    sinkage_m: 0.0,
+                    slip: 0.0,
+                    material: 0,
+                })
                 .collect(),
             ledger_n: vec![],
+            limiting: self.limiting,
+            weapons: vec![],
         }
+    }
+
+    fn drain_events(&mut self, out: &mut Vec<Event>) {
+        out.append(&mut self.events);
     }
 
     fn hash_state(&self, h: &mut StateHasher) {
@@ -410,14 +437,14 @@ mod tests {
         let (rig, _) = box_tank();
         let mut v = RigidBoxVehicle::new(rig, 0.0, 0.0, 0.0);
         let w = FlatPlane::new();
-        let aim = Command { turret_yaw_rad: Some(1.0), gun_pitch_rad: Some(0.2), ..Command::NEUTRAL };
+        let aim = Command::aim_main(1.0, 0.2);
         run(&mut v, &w, aim, 3.0);
         let n = v.rig().joint_names().len();
         let f = v.frame();
         assert!((f.joints[n - 3] - 1.0).abs() < 1e-3, "turret reached 1 rad");
         assert!((f.joints[n - 2] - 0.2).abs() < 1e-3, "gun reached 0.2 rad");
         let mut l = ForceLedger::off();
-        v.step(1.0 / 60.0, &Command { fire: true, ..aim }, &w, &mut l);
+        v.step(1.0 / 60.0, &Command { fire: 1, ..aim }, &w, &mut l);
         let mut max_recoil = 0.0f32;
         for _ in 0..30 {
             v.step(1.0 / 60.0, &aim, &w, &mut l);

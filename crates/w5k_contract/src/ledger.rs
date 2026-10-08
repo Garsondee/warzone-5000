@@ -7,6 +7,7 @@ use w5k_math::Vec3;
 /// What produced a force. Add variants at the end only (the numbers appear in replays).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(u8)]
+#[non_exhaustive]
 pub enum ForceTerm {
     Gravity = 0,
     SuspensionSpring = 1,
@@ -28,9 +29,11 @@ pub enum ForceTerm {
     Recoil = 17,
     Collision = 18,
     Other = 19,
+    /// A belly or skirt ploughing soil (the proxy with `ProxyRole::Belly`).
+    BellyDrag = 20,
 }
 
-pub const FORCE_TERM_COUNT: usize = 20;
+pub const FORCE_TERM_COUNT: usize = 21;
 
 #[derive(Clone, Copy, Debug)]
 struct Row {
@@ -63,7 +66,7 @@ impl ForceLedger {
         self.rows.clear();
     }
 
-    /// Record a force (N) and torque (N m) on `body` (0 = hull, then stations, then articulation, in rig order), world frame.
+    /// Record a force (N) and a torque (N m, **about the body's own centre of mass**) on `body` (0 = hull, then stations, then articulation, in rig order), world frame.
     pub fn add(&mut self, term: ForceTerm, body: u16, force_n: Vec3, torque_nm: Vec3) {
         if self.enabled {
             self.rows.push(Row { term, body, force_n, torque_nm });
