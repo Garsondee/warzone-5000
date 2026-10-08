@@ -14,7 +14,7 @@ Things that look attractive and that we are **not** doing now. A lane that finds
 | Destruction, fracture, deformable terrain with persistent ruts | Large cost; damage degrades mobility parameters instead | After M3 |
 | LOD for far vehicles; 1,000-unit battles | Up to about 20 vehicles at full fidelity | The S7 scale spike says so |
 | New component families beyond the reference garage | Calibration first; breadth later | After M2 |
-| GDExtension beyond the S8 spike | Godot is presentation; the sim is Rust, and the reference viewer is three.js | M2 |
+| GDExtension beyond what the M1 replay player needs (poses, interpolation, telemetry) | Godot is presentation; the sim is Rust, and the reference viewer is three.js. Drive mode, the exported Windows package and an in-Godot course editor are M2 | M2 |
 | Hand-modelled hero assets; final hull art | Procedural geometry and shaders first | After M2, if the owner supplies assets |
 | Tuning a model to individual vehicles | Only global constants are tuned, on the calibration set; the held-out set stays honest | Never |
 | Fun overrides that quietly depart from reality | Allowed only as logged, owner-signed deviations | When the owner asks for one |

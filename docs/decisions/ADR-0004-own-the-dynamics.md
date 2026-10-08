@@ -9,7 +9,7 @@ undebuggable.
 
 ## Decision
 1. We write: the 6-DoF hull integrator, suspension, tyre and track contact, soil laws, powertrain and brakes, articulation and servos, ballistics and penetration, and the AI. We use **penalty (spring-damper) contacts with regularised friction** and a fixed small step; no constraint or impulse solver.
-2. Third-party code is allowed for I/O and helpers only: `serde`, `ron`, `serde_json`, `libm`, image and CLI helpers. Nothing that decides simulation results (physics engines, maths or RNG crates) without an approved decision card.
+2. Third-party code is allowed for I/O and helpers only: `serde`, `ron`, `serde_json`, `libm`, image and CLI helpers (pre-approved: `png`, for image output only: plots, contact sheets, previews; never used by a simulation crate). Nothing that decides simulation results (physics engines, maths or RNG crates) without an approved decision card.
 3. Collision queries against props: our heightfield and primitive shapes (sphere, cylinder, box, capsule) first. `parry3d-f64` may be adopted **by card**, for queries only, never its solver, if the primitives prove insufficient.
 4. Every dependency is declared once in the root `[workspace.dependencies]` (ARCH-owned); crates use `name.workspace = true`; CI rejects anything else.
 5. Every module ships a plain-language theory note (`docs/theory/<lane>.md`) so the owner can follow and edit it.

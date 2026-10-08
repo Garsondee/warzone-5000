@@ -78,4 +78,4 @@ paths = ["crates/w5k_validate/**", "content/dossier/**", "docs/validation/**", "
 paths = ["crates/w5k_combat/**", "content/combat/**", "crates/w5k_tools/src/cmd/combat.rs"]
 
 [lanes.ai]
-paths = ["crates/w5k_ai/**", "crates/w5k_tools/src/cmd/ai.rs"]
+paths = ["crates/w5k_ai/**", "content/ai/**", "crates/w5k_tools/src/cmd/ai.rs"]
