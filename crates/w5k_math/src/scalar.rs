@@ -53,6 +53,60 @@ pub fn hypot(x: f64, y: f64) -> f64 {
 pub fn cbrt(x: f64) -> f64 {
     libm::cbrt(x)
 }
+pub fn cosh(x: f64) -> f64 {
+    libm::cosh(x)
+}
+pub fn asinh(x: f64) -> f64 {
+    libm::asinh(x)
+}
+pub fn acosh(x: f64) -> f64 {
+    libm::acosh(x)
+}
+pub fn atanh(x: f64) -> f64 {
+    libm::atanh(x)
+}
+pub fn exp2(x: f64) -> f64 {
+    libm::exp2(x)
+}
+/// `exp(x) - 1`, accurate for small `x`.
+pub fn exp_m1(x: f64) -> f64 {
+    libm::expm1(x)
+}
+/// `ln(1 + x)`, accurate for small `x`.
+pub fn ln_1p(x: f64) -> f64 {
+    libm::log1p(x)
+}
+pub fn log2(x: f64) -> f64 {
+    libm::log2(x)
+}
+/// Logarithm of `x` to the given `base`.
+pub fn log(x: f64, base: f64) -> f64 {
+    libm::log(x) / libm::log(base)
+}
+/// `x` to an integer power by repeated squaring: only multiplications, in a fixed order, so it is identical everywhere
+/// (std `powi` is lowered differently by different compilers and targets, which is why it is banned).
+pub fn powi(x: f64, n: i32) -> f64 {
+    let mut base = x;
+    let mut e = n.unsigned_abs();
+    let mut acc = 1.0;
+    while e > 0 {
+        if e & 1 == 1 {
+            acc *= base;
+        }
+        base *= base;
+        e >>= 1;
+    }
+    if n < 0 {
+        1.0 / acc
+    } else {
+        acc
+    }
+}
+/// Fused multiply-add computed in software (`a * b + c` with a single rounding), so it is identical on every CPU.
+/// Use only when you genuinely need the single rounding; plain `a * b + c` is the default.
+pub fn fma(a: f64, b: f64, c: f64) -> f64 {
+    libm::fma(a, b, c)
+}
 /// Square root (exactly rounded by IEEE 754, so identical everywhere).
 pub fn sqrt(x: f64) -> f64 {
     x.sqrt()
@@ -196,5 +250,32 @@ mod tests {
         assert!(approx_eq(clamp(5.0, 0.0, 1.0), 1.0, 0.0));
         assert!(approx_eq(clamp(-5.0, 0.0, 1.0), 0.0, 0.0));
         assert!(clamp(f64::NAN, 0.0, 1.0).is_nan());
+    }
+
+    #[test]
+    fn powi_matches_repeated_multiplication_and_negative_powers() {
+        assert!(approx_eq(powi(1.5, 0), 1.0, 0.0));
+        assert!(approx_eq(powi(1.5, 1), 1.5, 0.0));
+        assert!(approx_eq(powi(2.0, 10), 1024.0, 0.0));
+        assert!(approx_eq(powi(-3.0, 3), -27.0, 0.0));
+        assert!(approx_eq(powi(2.0, -3), 0.125, 0.0));
+        assert!(approx_eq(powi(1.1, 7), pow(1.1, 7.0), 1e-12));
+        assert!(approx_eq(powi(2.0, i32::MIN + 1), 0.0, 0.0));
+    }
+
+    #[test]
+    fn the_extra_transcendentals_obey_their_identities() {
+        for &x in &[0.1, 0.5, 1.0, 2.5] {
+            assert!(approx_eq(cosh(x) * cosh(x) - sinh(x) * sinh(x), 1.0, 1e-12));
+            assert!(approx_eq(asinh(sinh(x)), x, 1e-12));
+            assert!(approx_eq(acosh(cosh(x)), x, 1e-12));
+            assert!(approx_eq(atanh(tanh(x.min(1.5))), x.min(1.5), 1e-12));
+            assert!(approx_eq(exp2(x), pow(2.0, x), 1e-12));
+            assert!(approx_eq(exp_m1(x), exp(x) - 1.0, 1e-12));
+            assert!(approx_eq(ln_1p(x), ln(1.0 + x), 1e-12));
+            assert!(approx_eq(log2(exp2(x)), x, 1e-12));
+            assert!(approx_eq(log(pow(10.0, x), 10.0), x, 1e-12));
+        }
+        assert!(approx_eq(fma(2.0, 3.0, 4.0), 10.0, 0.0));
     }
 }
