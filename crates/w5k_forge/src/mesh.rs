@@ -20,6 +20,8 @@ pub struct Mesh {
     pub ao: Vec<f32>,
     /// Which part each vertex belongs to (vehicles).
     pub part: Vec<u16>,
+    /// Which moving sub-assembly each vertex belongs to: zero if none, else one more than the joint's index in the assembly.
+    pub joint: Vec<u16>,
     pub indices: Vec<u32>,
 }
 
@@ -47,8 +49,10 @@ pub fn build_mesh(pieces: &[Piece], grid: &Grid) -> Mesh {
     for (pi, p) in pieces.iter().enumerate() {
         for f in &p.poly.faces {
             let centroid = p.poly.face_centroid(f);
+            // A face is hidden only by a piece that moves with it: something that swings away would leave a hole in what it covered.
             let covered = pieces.iter().enumerate().any(|(qi, q)| {
                 qi != pi
+                    && q.joint == p.joint
                     && inside_box(&boxes[qi], centroid)
                     && q.convex.contains(centroid, CULL_TOL)
                     && f.idx.iter().all(|&v| q.convex.contains(p.poly.verts[v], CULL_TOL))
@@ -66,6 +70,7 @@ pub fn build_mesh(pieces: &[Piece], grid: &Grid) -> Mesh {
                 m.edge.push(if f.kind == FaceKind::Bevel { 1.0 } else { 0.0 });
                 m.ao.push(ambient_occlusion(grid, v, n, ao_reach));
                 m.part.push(p.part);
+                m.joint.push(p.joint);
             }
             for k in 1..(f.idx.len() as u32 - 1) {
                 m.indices.extend_from_slice(&[base, base + k, base + k + 1]);

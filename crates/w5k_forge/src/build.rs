@@ -2,7 +2,7 @@
 
 use crate::convex::{Convex, Polyhedron};
 use crate::geom::{v3, Xform, M3, V3};
-use crate::schema::{Axis, Node, PartDef, Slot};
+use crate::schema::{Axis, Motion, Node, PartDef, Slot};
 
 /// Material name of pieces that are drawn but are not part of the vehicle: rails and sleepers under a train,
 /// for example. They have no mass or armour and do not count toward bounds or the voxel grid.
@@ -10,6 +10,31 @@ pub const SCENERY: &str = "scenery";
 
 /// Bevel only edges sharper than this (so cylinder side segments stay crisp facets).
 const BEVEL_MIN_ANGLE: f64 = 40.0;
+
+/// A moving sub-assembly of a part, in part space (see `Node::Joint`).
+#[derive(Clone, Debug)]
+pub struct JointDef {
+    pub name: String,
+    pub pivot: V3,
+    pub axis: V3,
+    pub motion: Motion,
+    /// The joint this one hangs from (an index into the part's joint list), if any.
+    pub parent: Option<u16>,
+}
+
+impl Motion {
+    /// The same motion with its points and lengths carried through a transform (positions move, lengths scale).
+    pub fn transformed(&self, x: &Xform) -> Motion {
+        let k = x.m.det().abs().cbrt();
+        let pt = |p: &[f64; 3]| x.point(V3::from_arr(*p)).arr();
+        match self {
+            Motion::Roll { radius } => Motion::Roll { radius: radius * k },
+            Motion::Spin { rps } => Motion::Spin { rps: *rps },
+            Motion::Hip { foot, stride } => Motion::Hip { foot: pt(foot), stride: stride * k },
+            Motion::Knee { foot, lift } => Motion::Knee { foot: pt(foot), lift: lift * k },
+        }
+    }
+}
 
 /// One convex piece of a part or vehicle.
 #[derive(Clone, Debug)]
@@ -24,6 +49,9 @@ pub struct Piece {
     pub part: u16,
     /// Whether the inside of this piece's shell is vital space (see `PartDef::vital`).
     pub vital: bool,
+    /// The moving sub-assembly this piece belongs to: zero for a piece that does not move, else one more than its index in the
+    /// part's joint list (or, in an assembly, in the vehicle's).
+    pub joint: u16,
 }
 
 impl Piece {
@@ -41,7 +69,7 @@ impl Piece {
         if poly.faces.len() < 4 {
             return None;
         }
-        Some(Piece { convex, poly, mat: mat.to_string(), slot, shell, part: 0, vital: true })
+        Some(Piece { convex, poly, mat: mat.to_string(), slot, shell, part: 0, vital: true, joint: 0 })
     }
 
     /// The inset region of a shell piece (every face moved inward by the shell thickness). For a convex shape
@@ -78,6 +106,7 @@ impl Piece {
             shell: self.shell.map(|s| s * x.m.det().abs().cbrt()),
             part,
             vital: self.vital,
+            joint: self.joint,
         }
     }
 }
@@ -175,28 +204,37 @@ pub fn beam_points(a: V3, b: V3, start: [f64; 2], end: [f64; 2], up: V3) -> Vec<
     p
 }
 
-/// Build all pieces of a part.
-pub fn build_part(def: &PartDef) -> Vec<Piece> {
-    let mut out = Vec::new();
+/// What building a shape tree collects: the pieces, the joints, and the joint the node being built sits in.
+#[derive(Default)]
+struct Builder {
+    out: Vec<Piece>,
+    joints: Vec<JointDef>,
+    current: u16,
+}
+
+/// Build all pieces of a part, and the moving sub-assemblies they belong to.
+pub fn build_part(def: &PartDef) -> (Vec<Piece>, Vec<JointDef>) {
+    let mut b = Builder::default();
     for n in &def.shapes {
-        build_node(n, &Xform::IDENTITY, &mut out);
+        build_node(n, &Xform::IDENTITY, &mut b);
     }
     let vital = def.vital_interior();
-    for p in &mut out {
+    for p in &mut b.out {
         p.vital = vital;
     }
-    out
+    (b.out, b.joints)
 }
 
-fn emit(points: Vec<V3>, x: &Xform, chamfer: f64, mat: &str, slot: Slot, shell: Option<f64>, out: &mut Vec<Piece>) {
+fn emit(points: Vec<V3>, x: &Xform, chamfer: f64, mat: &str, slot: Slot, shell: Option<f64>, b: &mut Builder) {
     let scale = x.m.det().abs().cbrt();
     let pts: Vec<V3> = points.into_iter().map(|p| x.point(p)).collect();
-    if let Some(piece) = Piece::new(pts, chamfer * scale, mat, slot, shell.map(|s| s * scale)) {
-        out.push(piece);
+    if let Some(mut piece) = Piece::new(pts, chamfer * scale, mat, slot, shell.map(|s| s * scale)) {
+        piece.joint = b.current;
+        b.out.push(piece);
     }
 }
 
-fn build_node(node: &Node, parent: &Xform, out: &mut Vec<Piece>) {
+fn build_node(node: &Node, parent: &Xform, out: &mut Builder) {
     match node {
         Node::Box { size, taper, shift, at, rot, mat, slot, shell, chamfer } => {
             let x = parent.compose(&local(*at, *rot));
@@ -227,6 +265,22 @@ fn build_node(node: &Node, parent: &Xform, out: &mut Vec<Piece>) {
         Node::Hull { points, at, rot, mat, slot, shell, chamfer } => {
             let x = parent.compose(&local(*at, *rot));
             emit(points.iter().map(|p| V3::from_arr(*p)).collect(), &x, *chamfer, mat, *slot, *shell, out);
+        }
+        Node::Joint { name, pivot, axis, motion, children } => {
+            let parent_joint = if out.current > 0 { Some(out.current - 1) } else { None };
+            out.joints.push(JointDef {
+                name: name.clone(),
+                pivot: parent.point(V3::from_arr(*pivot)),
+                axis: parent.dir(V3::from_arr(*axis)).norm(),
+                motion: motion.transformed(parent),
+                parent: parent_joint,
+            });
+            let saved = out.current;
+            out.current = out.joints.len() as u16;
+            for c in children {
+                build_node(c, parent, out);
+            }
+            out.current = saved;
         }
         Node::Group { at, rot, scale, children } => {
             let x = parent.compose(&Xform::new(M3::euler_deg(*rot) * M3::scale(v3(*scale, *scale, *scale)), V3::from_arr(*at)));

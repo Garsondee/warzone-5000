@@ -15,7 +15,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use serde_json::{json, Value};
-use w5k_forge::export::export_mesh;
+use w5k_forge::export::{export_joints, export_mesh, ExportJoint};
 use w5k_forge::preview::palette_colours;
 use w5k_forge::raster::Rgb;
 use w5k_forge::Forge;
@@ -53,6 +53,7 @@ struct Entry {
     problems: Vec<String>,
     palette: [Rgb; 8],
     mesh: w5k_forge::export::ExportMesh,
+    joints: Vec<ExportJoint>,
     spec: MoverSpec,
     run: Run,
     /// Seconds the same vehicle takes on the same course with every surface rigid (to show what the soil cost it); `None` when it
@@ -87,6 +88,7 @@ fn entry(forge: &Forge, course: &Course, dry_course: &Course, id: &str, mode: &s
         problems: sheet.problems.clone(),
         palette: palette_colours(&forge.lib, design.palette.as_deref()),
         mesh: export_mesh(&built.mesh),
+        joints: export_joints(&asm),
         spec,
         run,
         dry_s,
@@ -260,7 +262,7 @@ pub fn run(forge: &Forge, course_path: &Path, terrain_path: &Path, only: Option<
             "id": e.id, "name": e.name, "class": e.class, "movement": e.movement,
             "mass_kg": e.mass_kg, "power_kw": e.power_kw, "top_kmh": e.top_kmh, "ground_kpa": e.ground_kpa,
             "width_m": e.size[0], "height_m": e.size[1], "length_m": e.size[2], "problems": e.problems,
-            "spec": e.spec, "dry_s": e.dry_s,
+            "spec": e.spec, "dry_s": e.dry_s, "joints": e.joints,
             "palette": e.palette.iter().map(|c| json!([c[0], c[1], c[2]])).collect::<Vec<_>>(),
             "mesh": {
                 "lo": e.mesh.lo, "hi": e.mesh.hi, "ground_y": e.mesh.ground_y,

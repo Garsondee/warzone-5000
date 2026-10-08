@@ -10,7 +10,7 @@
 use super::style::{self, p};
 use super::{ctx, stat, Family, Host, Param, Role, Scale, Stat, Values};
 use crate::geom::V3;
-use crate::schema::{MaterialLibrary, Axis, Category, Function, Locomotion, PartDef, SizeClass, SocketDef, SocketKind, Slot};
+use crate::schema::{Axis, Category, Function, Locomotion, MaterialLibrary, Motion, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
 use crate::Built;
 
 pub struct Track;
@@ -100,17 +100,35 @@ impl Family for Track {
         let wl = 0.1 + 0.06 * w;
         for k in 0..n {
             let z = -0.4 * lt + r + (0.8 * lt - 2.0 * r) * if n > 1 { k as f64 / (n - 1) as f64 } else { 0.5 };
-            shapes.push(style::cyl(r, wl, Axis::X, 14, 1.0, p(x_out - 0.3 * wl, bot + r, z), "running_gear", Slot::Secondary, None, 0.12 * r));
-            shapes.push(style::cyl(0.38 * r, 0.04 + 0.2 * wl, Axis::X, 8, 1.0, p(x_out + 0.25 * wl, bot + r, z), "running_gear", Slot::Metal, None, 0.0));
+            let mut wheel = vec![
+                style::cyl(r, wl, Axis::X, 14, 1.0, p(x_out - 0.3 * wl, bot + r, z), "running_gear", Slot::Secondary, None, 0.12 * r),
+                style::cyl(0.38 * r, 0.04 + 0.2 * wl, Axis::X, 8, 1.0, p(x_out + 0.25 * wl, bot + r, z), "running_gear", Slot::Metal, None, 0.0),
+                // A bar across the hub, so that the turning can be seen.
+                style::bx([0.02, 0.1 * r, 0.7 * r], p(x_out + 0.25 * wl + 0.5 * (0.04 + 0.2 * wl) + 0.005, bot + r, z), "fittings", Slot::Trim, 0.0),
+            ];
             if k == 0 || k + 1 == n {
                 // Only the end wheels carry a glowing cap: a small accent, not a light show.
-                shapes.push(style::cyl(0.12 * r, 0.02 + 0.2 * wl, Axis::X, 8, 1.0, p(x_out + 0.36 * wl, bot + r, z), "fittings", Slot::Glow, None, 0.0));
+                wheel.push(style::cyl(0.12 * r, 0.02 + 0.2 * wl, Axis::X, 8, 1.0, p(x_out + 0.36 * wl, bot + r, z), "fittings", Slot::Glow, None, 0.0));
             }
+            shapes.push(Node::Joint { name: "road wheel".into(), pivot: p(x_out, bot + r, z).arr(), axis: [1.0, 0.0, 0.0], motion: Motion::Roll { radius: r }, children: wheel });
         }
         let rs = 0.42 * ht;
         // Sprocket (rear) and idler (front) sit inside the ends of the run, so the unit is exactly as long as asked.
-        shapes.push(style::cyl(rs, wl * 1.3, Axis::X, 10, 1.0, p(x_out - 0.3 * wl, bot + 0.6 * ht, 0.5 * lt - 1.02 * rs), "running_gear", Slot::Dark, None, 0.1 * rs));
-        shapes.push(style::cyl(0.9 * rs, wl * 1.2, Axis::X, 12, 1.0, p(x_out - 0.3 * wl, bot + 0.6 * ht, -0.5 * lt + 0.94 * rs), "running_gear", Slot::Secondary, None, 0.1 * rs));
+        let (z_sprocket, z_idler) = (0.5 * lt - 1.02 * rs, -0.5 * lt + 0.94 * rs);
+        shapes.push(Node::Joint {
+            name: "sprocket".into(),
+            pivot: p(x_out, bot + 0.6 * ht, z_sprocket).arr(),
+            axis: [1.0, 0.0, 0.0],
+            motion: Motion::Roll { radius: rs },
+            children: vec![style::cyl(rs, wl * 1.3, Axis::X, 10, 1.0, p(x_out - 0.3 * wl, bot + 0.6 * ht, z_sprocket), "running_gear", Slot::Dark, None, 0.1 * rs)],
+        });
+        shapes.push(Node::Joint {
+            name: "idler".into(),
+            pivot: p(x_out, bot + 0.6 * ht, z_idler).arr(),
+            axis: [1.0, 0.0, 0.0],
+            motion: Motion::Roll { radius: 0.9 * rs },
+            children: vec![style::cyl(0.9 * rs, wl * 1.2, Axis::X, 12, 1.0, p(x_out - 0.3 * wl, bot + 0.6 * ht, z_idler), "running_gear", Slot::Secondary, None, 0.1 * rs)],
+        });
         // Fender over the run.
         let fy = top + 0.06 + 0.02 * ht;
         shapes.push(style::bx([w + 0.12, 0.04 + 0.02 * ht, 0.97 * lt], p(0.02, fy, 0.0), "fittings", Slot::Secondary, 0.012));

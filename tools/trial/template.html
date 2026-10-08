@@ -140,6 +140,13 @@ function decodeRuns() {
         run.state[i] = bytes[o + 15] & 15; run.lim[i] = bytes[o + 15] >> 4;
         run.thrust[i] = bytes[o + 16] / 100; run.cap[i] = bytes[o + 17] / 100; run.grade[i] = dv.getInt8(o + 18) / 100; run.resist[i] = bytes[o + 19] / 100;
       }
+      // Distance rolled, for the wheels: the ground distance over (1 - slip), plus a slow turn in place when the gear spins without gaining
+      // ground (a bogged wheel digs). Animation is presentation only: it never feeds back into the run.
+      run.roll = new Float32Array(n);
+      for (var q0 = 1; q0 < n; q0++) {
+        var sl = run.slip[q0];
+        run.roll[q0] = run.roll[q0 - 1] + (run.s[q0] - run.s[q0 - 1]) / Math.max(0.25, 1 - sl) + (run.state[q0] === 0 ? sl * 3 / HZ : 0);
+      }
       var tot = [0, 0, 0, 0, 0, 0, 0, 0], running = 0;
       for (var q = 0; q < n; q++) if (run.state[q] === 0) { tot[run.lim[q] & 7]++; running++; }
       run.share = tot.map(function (c) { return running ? c / running : 0; });
@@ -339,7 +346,7 @@ var cur = { id: null, veh: null, run: null, mesh: null, shadow: null, R: 3, cy: 
 function buildVehicleGeometry(v, bytes) {
   var m = v.mesh, n = m.n_vertices, lo = m.lo, hi = m.hi, dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   var pos = new Float32Array(n * 3), col = new Float32Array(n * 3), flag = new Float32Array(n), ao = new Float32Array(n);
-  var attr = 6 * n, aoo = attr + n, part = aoo + n, idx = part + 2 * n, pal = v.palette;
+  var attr = 6 * n, aoo = attr + n, part = aoo + n, jnt = part + 2 * n, idx = jnt + 2 * n, pal = v.palette;
   for (var i = 0; i < n; i++) {
     for (var k = 0; k < 3; k++) pos[i * 3 + k] = lo[k] + dv.getUint16((i * 3 + k) * 2, true) / 65535 * (hi[k] - lo[k]);
     var a = bytes[attr + i], slot = a & 7, base = pal[slot];
@@ -350,30 +357,51 @@ function buildVehicleGeometry(v, bytes) {
   }
   var ni = m.n_indices, ix = m.wide ? new Uint32Array(ni) : new Uint16Array(ni);
   for (var t = 0; t < ni; t++) ix[t] = m.wide ? dv.getUint32(idx + 4 * t, true) : dv.getUint16(idx + 2 * t, true);
-  var g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
-  g.setAttribute('aFlag', new THREE.BufferAttribute(flag, 1)); g.setAttribute('aAo', new THREE.BufferAttribute(ao, 1));
-  g.setIndex(new THREE.BufferAttribute(ix, 1));
-  return g;
+  // One geometry per moving sub-assembly (joint 0 is everything that does not move), all sharing the vertex arrays. A triangle belongs
+  // to the joint of its first vertex: the forge never lets a triangle span two.
+  var attrs = { position: new THREE.BufferAttribute(pos, 3), aColor: new THREE.BufferAttribute(col, 3), aFlag: new THREE.BufferAttribute(flag, 1), aAo: new THREE.BufferAttribute(ao, 1) };
+  var buckets = {};
+  for (var t2 = 0; t2 < ni; t2 += 3) {
+    var jj = dv.getUint16(jnt + 2 * ix[t2], true);
+    (buckets[jj] || (buckets[jj] = [])).push(ix[t2], ix[t2 + 1], ix[t2 + 2]);
+  }
+  return Object.keys(buckets).map(function (k) {
+    var g = new THREE.BufferGeometry();
+    for (var name in attrs) g.setAttribute(name, attrs[name]);
+    g.setIndex(new THREE.BufferAttribute(m.wide ? new Uint32Array(buckets[k]) : new Uint16Array(buckets[k]), 1));
+    return { joint: +k, geom: g };
+  });
 }
 function loadVehicle(id) {
   var v = VEH[id];
   if (cur.ready[id]) return Promise.resolve(cur.ready[id]);
-  return inflate(v.mesh.z64).then(function (bytes) { var g = buildVehicleGeometry(v, bytes); cur.ready[id] = g; return g; });
+  return inflate(v.mesh.z64).then(function (bytes) { var groups = buildVehicleGeometry(v, bytes); cur.ready[id] = groups; return groups; });
 }
 function selectVehicle(id) {
-  return loadVehicle(id).then(function (geom) {
+  return loadVehicle(id).then(function (groups) {
     var v = VEH[id];
-    if (cur.mesh) { vehGroup.remove(cur.mesh); cur.mesh.material.dispose(); }
+    if (cur.rig) { vehGroup.remove(cur.rig); cur.mat.dispose(); }
     if (cur.shadow) { vehGroup.remove(cur.shadow); cur.shadow.material.dispose(); }
     var glow = v.palette[6], rim = [0.5 * (glow[0] + (1 - glow[0]) * 0.45), 0.5 * (glow[1] + (1 - glow[1]) * 0.45), 0.5 * (glow[2] + (1 - glow[2]) * 0.45)];
-    var mesh = new THREE.Mesh(geom, litMaterial(rim, THREE.FrontSide));
-    mesh.position.y = -v.mesh.ground_y; mesh.frustumCulled = false;
-    vehGroup.add(mesh);
+    // The rig: a pivot object per joint, nested as the joints are, with the triangles of each joint hung from its pivot.
+    var mat = litMaterial(rim, THREE.FrontSide), rig = new THREE.Group(), jobjs = [];
+    rig.position.y = -v.mesh.ground_y;
+    v.joints.forEach(function () { jobjs.push(new THREE.Object3D()); });
+    v.joints.forEach(function (j, k) {
+      var pp = j.parent >= 0 ? v.joints[j.parent].pivot : [0, 0, 0];
+      jobjs[k].position.set(j.pivot[0] - pp[0], j.pivot[1] - pp[1], j.pivot[2] - pp[2]);
+      (j.parent >= 0 ? jobjs[j.parent] : rig).add(jobjs[k]);
+    });
+    groups.forEach(function (g) {
+      var mesh = new THREE.Mesh(g.geom, mat); mesh.frustumCulled = false;
+      if (g.joint === 0) rig.add(mesh);
+      else { var jp = v.joints[g.joint - 1].pivot; mesh.position.set(-jp[0], -jp[1], -jp[2]); jobjs[g.joint - 1].add(mesh); }
+    });
+    vehGroup.add(rig);
     var sh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, opacity: 0.85, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
     sh.rotation.x = -Math.PI / 2; sh.position.y = 0.04; sh.scale.set(Math.max(1.5, v.width_m * 1.6), Math.max(1.5, v.length_m * 1.25), 1); sh.rotation.z = 0;
     vehGroup.add(sh);
-    cur.id = id; cur.veh = v; cur.run = RUN[id]; cur.mesh = mesh; cur.shadow = sh;
+    cur.id = id; cur.veh = v; cur.run = RUN[id]; cur.rig = rig; cur.mat = mat; cur.jobjs = jobjs; cur.shadow = sh;
     var lo = v.mesh.lo, hi = v.mesh.hi, h = hi[1] - lo[1];
     cur.R = clamp(0.5 * Math.max(v.length_m, v.width_m, 0.7 * h), 0.9, 70);
     cur.cy = (lo[1] + hi[1]) / 2 - v.mesh.ground_y;
@@ -400,7 +428,31 @@ function applyPose(t) {
   }
   vehGroup.position.set(0, pose.y - pose.sink, -pose.s);
   vehGroup.rotation.set(pose.pitch, 0, 0);
+  animateRig(t);
   vehGroup.updateMatrixWorld(true);
+}
+/* The joints move by laws of the replay (nothing is stored): a wheel turns by the distance it has rolled over its radius, a rotor by
+   time, a leg by where it is in the gait, which advances with the distance travelled (so a standing vehicle stands, and a slow one
+   steps slowly). Forward is -Z and every axis is oriented so that a positive angle is the natural one (see crates/w5k_forge/src/export.rs). */
+var GAIT_DUTY = 0.6, AXIS = new THREE.Vector3();
+function animateRig(t) {
+  var v = cur.veh, r = cur.run; if (!v || !cur.jobjs) return;
+  var rolled = 0;
+  if (r && r.n) { var u = clamp(t * HZ, 0, r.n - 1), i = Math.floor(u), j2 = Math.min(i + 1, r.n - 1); rolled = lerp(r.roll[i], r.roll[j2], u - i); }
+  for (var k = 0; k < v.joints.length; k++) {
+    var jd = v.joints[k], ang = 0;
+    if (jd.kind === 'roll') ang = rolled / jd.radius;
+    else if (jd.kind === 'spin') ang = 6.2832 * jd.rps * t;
+    else if (jd.stride > 0) {
+      var phi = pose.s / jd.stride + jd.phase; phi -= Math.floor(phi);
+      if (jd.kind === 'hip') {
+        if (phi < GAIT_DUTY) ang = jd.amp * (1 - 2 * phi / GAIT_DUTY);                                    /* stance: the foot goes back as the body goes over it */
+        else { var w = (phi - GAIT_DUTY) / (1 - GAIT_DUTY); ang = jd.amp * (-1 + 2 * w * w * (3 - 2 * w)); } /* swing: it comes forward */
+      } else ang = phi < GAIT_DUTY ? 0 : Math.sin(3.14159 * (phi - GAIT_DUTY) / (1 - GAIT_DUTY)) * jd.amp;  /* the knee lifts the foot in the swing */
+    }
+    AXIS.set(jd.axis[0], jd.axis[1], jd.axis[2]);
+    cur.jobjs[k].quaternion.setFromAxisAngle(AXIS, ang);
+  }
 }
 
 /* ---------- camera ---------- */

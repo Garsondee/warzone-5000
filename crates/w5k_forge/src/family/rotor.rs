@@ -14,7 +14,7 @@
 use super::mounts::{KIND_MAST, KIND_RING, KIND_STATION};
 use super::style::{self, p};
 use super::{ctx, stat, Family, Host, Param, Role, Scale, Stat, Values};
-use crate::schema::{Axis, Category, Function, Locomotion, MaterialLibrary, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
+use crate::schema::{Axis, Category, Function, Locomotion, MaterialLibrary, Motion, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
 use crate::Built;
 
 pub struct Rotor;
@@ -108,6 +108,15 @@ impl Family for Rotor {
                 ],
             }
         };
+        // Slower for bigger discs, and a pair on one mast turns opposite ways. (Presentation only: a viewer turns them at about this rate.)
+        let rps = 2.4 / (1.0 + 0.15 * r);
+        let spinning = |at: crate::geom::V3, phase: f64, slot: Slot, dir: f64| Node::Joint {
+            name: "rotor".into(),
+            pivot: at.arr(),
+            axis: [0.0, 1.0, 0.0],
+            motion: Motion::Spin { rps: dir * rps },
+            children: vec![Node::Group { at: at.arr(), rot: [0.0; 3], scale: 1.0, children: vec![blades(phase, slot)] }],
+        };
         let tip_ring = |at: crate::geom::V3, shapes: &mut Vec<Node>| {
             shapes.push(style::flat_ring(r, 0.012 + 0.006 * r, 0.006, (24.0 + 6.0 * r).min(72.0) as u32, at, "scenery", Slot::Glow));
         };
@@ -128,7 +137,7 @@ impl Family for Rotor {
             for (k, y) in levels.iter().enumerate() {
                 let at = p(0.0, *y, 0.0);
                 hub_disc(at, &mut shapes);
-                shapes.push(Node::Group { at: at.arr(), rot: [0.0; 3], scale: 1.0, children: vec![blades(if k == 0 { 0.0 } else { 180.0 / nb as f64 }, if k == 0 { Slot::Primary } else { Slot::Trim })] });
+                shapes.push(spinning(at, if k == 0 { 0.0 } else { 180.0 / nb as f64 }, if k == 0 { Slot::Primary } else { Slot::Trim }, if k == 0 { 1.0 } else { -1.0 }));
                 tip_ring(at, &mut shapes);
             }
             hub_x = 0.0;
@@ -142,7 +151,7 @@ impl Family for Rotor {
             shapes.push(style::cyl(1.2 * hub_r + 0.04, 0.2 * hub_r + 0.1, Axis::Y, 12, 1.0, p(arm, hy - 0.1, 0.0), "machinery", Slot::Secondary, None, 0.0));
             let at = p(arm, hy, 0.0);
             hub_disc(at, &mut shapes);
-            shapes.push(Node::Group { at: at.arr(), rot: [0.0; 3], scale: 1.0, children: vec![blades(0.0, Slot::Primary)] });
+            shapes.push(spinning(at, 0.0, Slot::Primary, 1.0));
             tip_ring(at, &mut shapes);
             hub_x = arm;
             hub_y = hy - 0.1;

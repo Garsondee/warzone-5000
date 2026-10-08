@@ -13,7 +13,7 @@
 use super::style::{self, p};
 use super::{ctx, stat, Family, Host, Param, Role, Scale, Stat, Values};
 use crate::geom::V3;
-use crate::schema::{Axis, Category, Function, Locomotion, MaterialLibrary, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
+use crate::schema::{Axis, Category, Function, Locomotion, MaterialLibrary, Motion, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
 use crate::Built;
 
 pub struct Wheel;
@@ -74,15 +74,17 @@ impl Family for Wheel {
         let cy = r - hip; // wheel centre relative to the mount (the lowest point of the tyre is at -hip)
         let c = p(cx, cy, 0.0);
         let mut shapes: Vec<Node> = Vec::new();
+        // What turns with the wheel: the tyre, its lugs, the rim and the hub.
+        let mut rolling: Vec<Node> = Vec::new();
         // Tyre: a hollow rubber carcass.
         let seg = if r > 1.0 { 28 } else if r > 0.4 { 22 } else { 16 };
-        shapes.push(style::cyl(r, w, Axis::X, seg, 1.0, c, "rubber", Slot::Rubber, Some((0.06 * r).max(0.008)), (0.12 * w.min(r)).min(0.1)));
+        rolling.push(style::cyl(r, w, Axis::X, seg, 1.0, c, "rubber", Slot::Rubber, Some((0.06 * r).max(0.008)), (0.12 * w.min(r)).min(0.1)));
         // Tread lugs around the circumference.
         if tread > 0.25 {
             let n = ((6.0 + 7.0 * d.max(0.3).ln().max(-0.5) + 8.0 * d.min(2.0)).round().clamp(8.0, 30.0)) as u32;
             let h = (0.03 + 0.07 * tread) * r;
             let chord = std::f64::consts::TAU * r / n as f64 * 0.45;
-            shapes.push(Node::Group {
+            rolling.push(Node::Group {
                 at: c.arr(),
                 rot: [0.0; 3],
                 scale: 1.0,
@@ -95,9 +97,12 @@ impl Family for Wheel {
             });
         }
         // Rim and hub cap with a glowing centre.
-        shapes.push(style::cyl(0.62 * r, w * 0.92, Axis::X, seg.min(18), 1.0, c, "steel", Slot::Secondary, Some(0.012 + 0.01 * r), 0.04 * r));
-        shapes.push(style::cyl(0.24 * r, 0.05 + 0.1 * r, Axis::X, 10, 1.0, c + p(w / 2.0 + 0.01, 0.0, 0.0), "steel", Slot::Metal, None, 0.0));
-        shapes.push(style::cyl(0.09 * r, 0.03 + 0.05 * r, Axis::X, 8, 1.0, c + p(w / 2.0 + 0.04 + 0.05 * r, 0.0, 0.0), "fittings", Slot::Glow, None, 0.0));
+        rolling.push(style::cyl(0.62 * r, w * 0.92, Axis::X, seg.min(18), 1.0, c, "steel", Slot::Secondary, Some(0.012 + 0.01 * r), 0.04 * r));
+        rolling.push(style::cyl(0.24 * r, 0.05 + 0.1 * r, Axis::X, 10, 1.0, c + p(w / 2.0 + 0.01, 0.0, 0.0), "steel", Slot::Metal, None, 0.0));
+        rolling.push(style::cyl(0.09 * r, 0.03 + 0.05 * r, Axis::X, 8, 1.0, c + p(w / 2.0 + 0.04 + 0.05 * r, 0.0, 0.0), "fittings", Slot::Glow, None, 0.0));
+        // A bar across the hub, so that the turning can be seen even on a smooth tyre.
+        rolling.push(style::bx([0.02, 0.07 * r, 0.44 * r], c + p(w / 2.0 + 0.01 + 0.5 * (0.05 + 0.1 * r) + 0.005, 0.0, 0.0), "fittings", Slot::Trim, 0.0));
+        shapes.push(Node::Joint { name: "wheel".into(), pivot: c.arr(), axis: [1.0, 0.0, 0.0], motion: Motion::Roll { radius: r }, children: rolling });
         // Suspension arm and a damper from the hull to the hub.
         let aw = (0.1 + 0.12 * r).min(0.5);
         shapes.push(style::beam(p(0.0, -0.04 * r, 0.0), p(gap + 0.02, cy, 0.0), [aw, aw * 0.8], p(0.0, 0.0, 1.0), "steel", Slot::Dark, 0.1 * aw));

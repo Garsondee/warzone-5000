@@ -42,7 +42,7 @@ fn extremes_generate_closed_geometry() {
     for cal in [7.62, 40.0, 406.0] {
         for (arm, slope, loader) in [(5.0, 0.0, 0.0), (250.0, 1.0, 1.0)] {
             let v = f.with(&[("calibre_mm", cal), ("armour_mm", arm), ("slope", slope), ("loader", loader), ("ammo", 4.0)]);
-            let pieces = w5k_forge::build::build_part(&f.generate(&v, &lib()));
+            let (pieces, _) = w5k_forge::build::build_part(&f.generate(&v, &lib()));
             assert!(!pieces.is_empty());
             for (i, p) in pieces.iter().enumerate() {
                 assert!(p.poly.is_closed(), "{cal} mm, {arm} mm: piece {i} not closed");
@@ -119,7 +119,7 @@ fn every_family_builds_closed_geometry_across_its_range() {
             for p in &params {
                 v.insert(p.id.to_string(), p.value_at(corner));
             }
-            let pieces = w5k_forge::build::build_part(&fam.generate(&v, &lib()));
+            let (pieces, _) = w5k_forge::build::build_part(&fam.generate(&v, &lib()));
             assert!(!pieces.is_empty(), "{} at {corner}", fam.id());
             for (i, p) in pieces.iter().enumerate() {
                 assert!(p.poly.is_closed(), "{} at {corner}: piece {i} not closed", fam.id());
@@ -134,7 +134,7 @@ fn tracks_size_themselves_to_the_hull() {
     let hull = Lancer.generate(&Lancer.defaults(), &lib());
     let sock = hull.sockets.iter().find(|s| s.name == "gear_r").unwrap();
     let v = values_for(&Track, &Default::default(), &sock.hints);
-    let pieces = w5k_forge::build::build_part(&Track.generate(&v, &lib()));
+    let (pieces, _) = w5k_forge::build::build_part(&Track.generate(&v, &lib()));
     let (lo, hi) = w5k_forge::voxel::bounds(&pieces);
     let want = sock.hints["ctx.length"];
     assert!((hi.z - lo.z) > 0.95 * want && (hi.z - lo.z) < 1.05 * want, "{} vs {want}", hi.z - lo.z);

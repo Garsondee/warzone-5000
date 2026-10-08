@@ -66,7 +66,7 @@ fn wheel_rating_follows_the_contact_patch() {
     let mut v = wheel::Wheel.defaults();
     v.insert("ctx.hip_height".into(), 0.7);
     let def = wheel::Wheel.generate(&v, &lib());
-    let pieces = w5k_forge::build::build_part(&def);
+    let (pieces, _) = w5k_forge::build::build_part(&def);
     let (lo, _) = w5k_forge::voxel::bounds(&pieces);
     assert!((lo.y + 0.7).abs() < 0.03, "{}", lo.y);
 }

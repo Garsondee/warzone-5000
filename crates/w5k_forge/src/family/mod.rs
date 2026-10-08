@@ -146,6 +146,7 @@ pub trait Family: Sync + Send {
 pub fn mass_estimate(fam: &dyn Family, v: &Values, lib: &MaterialLibrary) -> f64 {
     let def = fam.generate(v, lib);
     crate::build::build_part(&def)
+        .0
         .iter()
         .map(|p| lib.materials.get(&p.mat).map(|m| m.density).unwrap_or(7850.0) * p.material_volume().0)
         .sum()

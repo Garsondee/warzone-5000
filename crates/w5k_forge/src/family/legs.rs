@@ -17,7 +17,7 @@
 use super::style::{self, p};
 use super::{stat, Family, Host, Param, Role, Scale, Stat, Values};
 use crate::geom::V3;
-use crate::schema::{Axis, Category, Function, Locomotion, MaterialLibrary, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
+use crate::schema::{Axis, Category, Function, Locomotion, MaterialLibrary, Motion, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
 use crate::Built;
 
 pub struct Legs;
@@ -192,6 +192,8 @@ impl Family for Legs {
         let side = (ram_v / len_r).sqrt().max(0.04 * h1);
         let off = n1 * (0.1 * fb1);
         shapes.push(style::beam(hip + d1 * (0.12 * g.l1) + off, hip + d1 * (0.12 * g.l1 + len_r) + off, [side, side], z, "gun_steel", Slot::Dark, 0.0));
+        // From here down is the shin and the foot: what the knee lifts.
+        let thigh_end = shapes.len();
         shapes.push(Node::Beam { from: knee.arr(), to: ankle.arr(), size: [h2, b2], end: Some([0.7 * h2, 0.7 * b2]), up: z.arr(), mat: mat.into(), slot: Slot::Dark, shell: Some(t2), chamfer: 0.3 * t2 });
         shapes.push(fair(knee, ankle, g.s2, g.l2, 0.09, Slot::Secondary));
         // Warning band near the knee: a thin shell, so it merges with the hollow shin.
@@ -211,6 +213,13 @@ impl Family for Legs {
         shapes.push(style::cyl(0.72 * foot, g.cone_h, Axis::Y, if foot > 0.5 { 14 } else { 10 }, 0.3, p(g.ankle.0, -g.stance + g.pad_h + g.cone_h / 2.0, 0.0), "rubber", Slot::Secondary, None, 0.05 * foot));
         shapes.push(style::cyl(foot, g.pad_h, Axis::Y, if foot > 0.5 { 14 } else { 10 }, 0.85, p(g.ankle.0, -g.stance + g.pad_h / 2.0, 0.0), "rubber", Slot::Rubber, None, (0.12 * foot).min(0.06)));
         shapes.push(style::cyl(0.86 * foot, 0.03 + 0.015 * foot, Axis::Y, 14, 1.0, p(g.ankle.0, -g.stance + g.pad_h + 0.01, 0.0), "fittings", Slot::Trim, None, 0.0));
+        // The gait: the hip swings the whole leg about the vertical, and the knee lifts the shin and foot during the swing. (A viewer
+        // animates them from the distance travelled; a stride is about 1.6 times the stance.)
+        let foot_at = [g.x_out, -g.stance, 0.0];
+        let shin: Vec<Node> = shapes.split_off(thigh_end);
+        shapes.push(Node::Joint { name: "knee".into(), pivot: knee.arr(), axis: [0.0, 0.0, 1.0], motion: Motion::Knee { foot: foot_at, lift: 0.12 * g.stance }, children: shin });
+        let thigh: Vec<Node> = std::mem::take(&mut shapes);
+        shapes.push(Node::Joint { name: "hip".into(), pivot: hip.arr(), axis: [0.0, 1.0, 0.0], motion: Motion::Hip { foot: foot_at, stride: 1.6 * g.stance }, children: thigh });
 
         let contact = 0.5 * std::f64::consts::PI * foot * foot;
         PartDef {

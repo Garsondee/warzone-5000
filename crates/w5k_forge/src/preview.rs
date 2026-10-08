@@ -480,6 +480,7 @@ pub fn lineup(units: &[(&Mesh, &str)], colours: &[Rgb; 8], w: usize, h: usize) -
         all.edge.extend_from_slice(&m.edge);
         all.ao.extend_from_slice(&m.ao);
         all.part.extend_from_slice(&m.part);
+        all.joint.extend_from_slice(&m.joint);
         all.indices.extend(m.indices.iter().map(|i| i + base));
         labels.push((v3(-x - width / 2.0, 0.0, -(hi.z - lo.z) / 2.0 - 0.6), name.to_string()));
         x += width + gap;

@@ -13,7 +13,7 @@
 use super::mounts::KIND_BELLY;
 use super::style::{self, p};
 use super::{ctx, stat, Family, Host, Param, Role, Scale, Stat, Values};
-use crate::schema::{Axis, Category, Function, Locomotion, MaterialLibrary, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
+use crate::schema::{Axis, Category, Function, Locomotion, MaterialLibrary, Motion, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
 use crate::Built;
 
 pub struct Hover;
@@ -110,11 +110,12 @@ impl Family for Hover {
             let wall = 0.02 + 0.03 * rd;
             shapes.push(style::tube_z(rd, 0.5 * rd + 0.12, wall, 16, p(x, yd, z), "steel", Slot::Secondary));
             shapes.push(style::tube_z(1.04 * rd, 0.1, 1.2 * wall, 16, p(x, yd, z - 0.25 * rd - 0.04), "fittings", Slot::Glow));
-            for k in 0..3 {
-                let a = (k as f64) * 60.0;
-                shapes.push(Node::Group { at: p(x, yd, z).arr(), rot: [0.0, 0.0, a], scale: 1.0, children: vec![style::bx([1.8 * rd, 0.1 * rd + 0.02, 0.03 + 0.04 * rd], p(0.0, 0.0, 0.0), "composite", Slot::Dark, 0.0)] });
-            }
-            shapes.push(style::cyl(0.22 * rd, 0.25 * rd + 0.1, Axis::Z, 10, 1.0, p(x, yd, z), "machinery", Slot::Dark, None, 0.0));
+            // The fan: three blades across the duct and its hub, turning about the duct's axis.
+            let mut fan: Vec<Node> = (0..3)
+                .map(|k| Node::Group { at: p(x, yd, z).arr(), rot: [0.0, 0.0, (k as f64) * 60.0], scale: 1.0, children: vec![style::bx([1.8 * rd, 0.1 * rd + 0.02, 0.03 + 0.04 * rd], p(0.0, 0.0, 0.0), "composite", Slot::Dark, 0.0)] })
+                .collect();
+            fan.push(style::cyl(0.22 * rd, 0.25 * rd + 0.1, Axis::Z, 10, 1.0, p(x, yd, z), "machinery", Slot::Dark, None, 0.0));
+            shapes.push(Node::Joint { name: "fan".into(), pivot: p(x, yd, z).arr(), axis: [0.0, 0.0, 1.0], motion: Motion::Spin { rps: 3.0 }, children: fan });
             shapes.push(style::beam(p(x, 0.5 * top, l / 2.0 - 0.3), p(x, yd - 0.7 * rd, z - 0.2), [0.1 + 0.12 * rd, 0.1 + 0.12 * rd], p(0.0, 1.0, 0.0), "steel", Slot::Secondary, 0.0));
         }
         PartDef {

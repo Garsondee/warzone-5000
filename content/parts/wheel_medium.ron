@@ -8,16 +8,21 @@
     size: Medium,
     tags: ["wheels"],
     shapes: [
-        // The tyre is hollow rubber (an air-filled carcass).
-        Cylinder(radius: 0.55, length: 0.38, axis: X, segments: 16, at: (0.05, -0.45, 0), mat: "rubber", slot: Rubber, shell: 0.06, chamfer: 0.05),
-        Group(at: (0.05, -0.45, 0), children: [
-            Radial(count: 10, axis: X, phase: 0, children: [
-                Box(size: (0.36, 0.05, 0.12), at: (0, 0.56, 0), mat: "rubber", slot: Rubber, chamfer: 0.01),
+        // What turns with the wheel: the tyre, its lugs, the hub and the nuts.
+        Joint(name: "wheel", pivot: (0.05, -0.45, 0), axis: (1, 0, 0), motion: Roll(radius: 0.55), children: [
+            // The tyre is hollow rubber (an air-filled carcass).
+            Cylinder(radius: 0.55, length: 0.38, axis: X, segments: 16, at: (0.05, -0.45, 0), mat: "rubber", slot: Rubber, shell: 0.06, chamfer: 0.05),
+            Group(at: (0.05, -0.45, 0), children: [
+                Radial(count: 10, axis: X, phase: 0, children: [
+                    Box(size: (0.36, 0.05, 0.12), at: (0, 0.56, 0), mat: "rubber", slot: Rubber, chamfer: 0.01),
+                ]),
             ]),
+            // Wheel hub and nuts.
+            Cylinder(radius: 0.27, length: 0.4, axis: X, segments: 10, at: (0.06, -0.45, 0), mat: "steel", slot: Metal, shell: 0.012, chamfer: 0.015),
+            Cylinder(radius: 0.08, length: 0.06, axis: X, segments: 8, at: (0.28, -0.45, 0), mat: "steel", slot: Dark),
+            // A bar across the hub, so that the turning can be seen.
+            Box(size: (0.02, 0.05, 0.3), at: (0.32, -0.45, 0), mat: "fittings", slot: Trim),
         ]),
-        // Wheel hub and nuts.
-        Cylinder(radius: 0.27, length: 0.4, axis: X, segments: 10, at: (0.06, -0.45, 0), mat: "steel", slot: Metal, shell: 0.012, chamfer: 0.015),
-        Cylinder(radius: 0.08, length: 0.06, axis: X, segments: 8, at: (0.28, -0.45, 0), mat: "steel", slot: Dark),
         // Suspension arm from the hull to the hub.
         Box(size: (0.6, 0.14, 0.16), at: (-0.175, -0.225, 0), rot: (0, 0, -45), mat: "steel", slot: Dark, shell: 0.01, chamfer: 0.015),
     ],

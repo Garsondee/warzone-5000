@@ -252,6 +252,17 @@ pub enum Node {
         #[serde(default)]
         chamfer: f64,
     },
+    /// Marks the children as one moving sub-assembly: they keep their positions (this node moves nothing in the part), but a viewer
+    /// animates them as a unit about `pivot` along `axis`, as `motion` says. Joints nest (a knee inside a hip). Each time the
+    /// node is built (inside an `Array`, a `Mirror`) it makes a joint of its own.
+    Joint {
+        name: String,
+        pivot: [f64; 3],
+        #[serde(default = "up")]
+        axis: [f64; 3],
+        motion: Motion,
+        children: Vec<Node>,
+    },
     /// Transform a group of children.
     Group {
         #[serde(default = "zero3")]
@@ -281,6 +292,23 @@ pub enum Node {
         phase: f64,
         children: Vec<Node>,
     },
+}
+
+/// How a joint moves. Animation is presentation only: the simulation knows nothing about it, and a viewer derives every angle from
+/// the replay (distance travelled, slip, time), so any viewer can animate a recorded run the same way.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Motion {
+    /// Rolls along the ground (tyres, road wheels, sprockets): the angle is the distance rolled over `radius`, a little more when
+    /// the running gear slips.
+    Roll { radius: f64 },
+    /// Turns steadily whenever the vehicle runs (rotors, fans): revolutions per second.
+    Spin { rps: f64 },
+    /// A walking leg's hip: swings the whole leg about the vertical through the hip, fore and aft, as the gait cycles. `foot` is where
+    /// the foot rests; `stride` the distance the vehicle travels in one gait cycle.
+    Hip { foot: [f64; 3], stride: f64 },
+    /// A walking leg's knee: lifts the foot during the swing phase of the gait, by about `lift` metres. The knee turns about the
+    /// axis perpendicular to the leg's plane.
+    Knee { foot: [f64; 3], lift: f64 },
 }
 
 fn half() -> f64 {

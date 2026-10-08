@@ -26,6 +26,7 @@ fn check_round_trip(id: &str, mesh: &Mesh) {
     assert!(tol < 0.001 || extent > 65.0, "{id}: {extent} m long should quantise to under 1 mm");
     assert_eq!(u.indices, mesh.indices, "{id}");
     assert_eq!(u.part, mesh.part, "{id}");
+    assert_eq!(u.joint, mesh.joint, "{id}");
     for i in 0..mesh.positions.len() {
         assert_eq!(u.slots[i], mesh.slots[i], "{id}");
         assert_eq!(u.edge[i], mesh.edge[i] > 0.5, "{id}");
@@ -62,6 +63,7 @@ fn big_meshes_use_wide_indices() {
         m.edge.push(0.0);
         m.ao.push(1.0);
         m.part.push((i % 5) as u16);
+        m.joint.push((i % 3) as u16);
     }
     m.indices = vec![0, 69_999, 65_536];
     let e = export_mesh(&m);

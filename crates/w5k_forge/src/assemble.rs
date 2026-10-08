@@ -2,7 +2,7 @@
 
 use crate::build::Piece;
 use crate::geom::{Xform, M3, V3};
-use crate::schema::{Attach, DesignDef, Locomotion, SocketDef};
+use crate::schema::{Attach, DesignDef, Locomotion, Motion, SocketDef};
 use crate::{BuiltPart, Forge};
 
 /// A socket placed in vehicle space.
@@ -15,6 +15,19 @@ pub struct PlacedSocket {
     pub forward: V3,
 }
 
+/// A moving sub-assembly placed in vehicle space.
+#[derive(Clone, Debug)]
+pub struct JointInst {
+    /// Index of the part (in [`Assembly::parts`]) it belongs to.
+    pub part: usize,
+    pub name: String,
+    pub pivot: V3,
+    pub axis: V3,
+    pub motion: Motion,
+    /// The joint it hangs from (an index into [`Assembly::joints`]), if any.
+    pub parent: Option<usize>,
+}
+
 /// A vehicle's pieces and where each part went.
 #[derive(Clone, Debug, Default)]
 pub struct Assembly {
@@ -25,6 +38,8 @@ pub struct Assembly {
     pub errors: Vec<String>,
     /// For each part, which part and socket it hangs from (the hull has none).
     pub placements: Vec<Placement>,
+    /// Every moving sub-assembly of every part; `Piece::joint` indexes this (plus one).
+    pub joints: Vec<JointInst>,
 }
 
 /// Where a part hangs.
@@ -72,8 +87,23 @@ impl Forge {
 fn place(forge: &Forge, part: &BuiltPart, x: Xform, a: &mut Assembly) -> usize {
     let index = a.parts.len();
     a.parts.push((part.def.id.clone(), x));
+    let base = a.joints.len();
+    for j in &part.joints {
+        a.joints.push(JointInst {
+            part: index,
+            name: j.name.clone(),
+            pivot: x.point(j.pivot),
+            axis: x.dir(j.axis).norm(),
+            motion: j.motion.transformed(&x),
+            parent: j.parent.map(|p| base + p as usize),
+        });
+    }
     for p in &part.pieces {
-        a.pieces.push(p.transformed(&x, index as u16));
+        let mut q = p.transformed(&x, index as u16);
+        if q.joint > 0 {
+            q.joint += base as u16;
+        }
+        a.pieces.push(q);
     }
     for s in &part.def.sockets {
         let at = x.point(V3::from_arr(s.at));

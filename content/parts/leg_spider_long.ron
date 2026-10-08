@@ -9,21 +9,26 @@
     size: Large,
     tags: ["legs", "walker"],
     shapes: [
-        // Hip actuator.
-        Sphere(radius: 0.28, segments: 10, at: (0.15, 0, 0), mat: "machinery", slot: Dark),
-        // Femur: hip to knee, tapering box section (width across the leg plane, height in it).
-        Beam(from: (0.2, 0, 0), to: (2.6, 2.0, 0), size: (0.32, 0.36), end: (0.24, 0.26), shell: 0.025, chamfer: 0.03),
-        // Hydraulic ram along the top of the femur.
-        Beam(from: (0.18, 0.26, 0), to: (1.54, 1.36, 0), size: (0.09, 0.07), end: (0.08, 0.06), mat: "machinery", slot: Metal),
-        // Knee actuator.
-        Sphere(radius: 0.2, segments: 10, at: (2.6, 2.0, 0), mat: "machinery", slot: Dark),
-        // Tibia: knee down to the ankle.
-        Beam(from: (2.6, 2.0, 0), to: (5.0, -3.1, 0), size: (0.22, 0.26), end: (0.12, 0.12), shell: 0.02, chamfer: 0.025, slot: Secondary),
-        // Warning stripe near the knee: a thin shell, so its inside merges with the hollow tibia.
-        Beam(from: (2.77, 1.638, 0), to: (2.856, 1.457, 0), size: (0.235, 0.275), end: (0.234, 0.272), mat: "fittings", slot: Trim, shell: 0.004),
-        // Ankle and foot pad.
-        Sphere(radius: 0.11, segments: 8, at: (5.02, -3.18, 0), mat: "machinery", slot: Dark),
-        Cylinder(radius: 0.2, length: 0.1, segments: 8, taper: 0.7, at: (5.05, -3.35, 0), mat: "rubber", slot: Rubber, chamfer: 0.015),
+        // The gait: the hip swings the whole leg about the vertical, the knee lifts the shin and foot during the swing.
+        Joint(name: "hip", pivot: (0.15, 0, 0), axis: (0, 1, 0), motion: Hip(foot: (5.05, -3.4, 0), stride: 5.4), children: [
+            // Hip actuator.
+            Sphere(radius: 0.28, segments: 10, at: (0.15, 0, 0), mat: "machinery", slot: Dark),
+            // Femur: hip to knee, tapering box section (width across the leg plane, height in it).
+            Beam(from: (0.2, 0, 0), to: (2.6, 2.0, 0), size: (0.32, 0.36), end: (0.24, 0.26), shell: 0.025, chamfer: 0.03),
+            // Hydraulic ram along the top of the femur.
+            Beam(from: (0.18, 0.26, 0), to: (1.54, 1.36, 0), size: (0.09, 0.07), end: (0.08, 0.06), mat: "machinery", slot: Metal),
+            // Knee actuator.
+            Sphere(radius: 0.2, segments: 10, at: (2.6, 2.0, 0), mat: "machinery", slot: Dark),
+            Joint(name: "knee", pivot: (2.6, 2.0, 0), axis: (0, 0, 1), motion: Knee(foot: (5.05, -3.4, 0), lift: 0.4), children: [
+                // Tibia: knee down to the ankle.
+                Beam(from: (2.6, 2.0, 0), to: (5.0, -3.1, 0), size: (0.22, 0.26), end: (0.12, 0.12), shell: 0.02, chamfer: 0.025, slot: Secondary),
+                // Warning stripe near the knee: a thin shell, so its inside merges with the hollow tibia.
+                Beam(from: (2.77, 1.638, 0), to: (2.856, 1.457, 0), size: (0.235, 0.275), end: (0.234, 0.272), mat: "fittings", slot: Trim, shell: 0.004),
+                // Ankle and foot pad.
+                Sphere(radius: 0.11, segments: 8, at: (5.02, -3.18, 0), mat: "machinery", slot: Dark),
+                Cylinder(radius: 0.2, length: 0.1, segments: 8, taper: 0.7, at: (5.05, -3.35, 0), mat: "rubber", slot: Rubber, chamfer: 0.015),
+            ]),
+        ]),
     ],
     sockets: [
         (name: "mount", kind: Mount, size: Large, at: (0, 0, 0), normal: (-1, 0, 0), forward: (0, 1, 0)),

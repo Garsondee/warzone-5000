@@ -52,6 +52,8 @@ pub struct Built {
 pub struct BuiltPart {
     pub def: PartDef,
     pub pieces: Vec<Piece>,
+    /// The part's moving sub-assemblies (in part space); each piece names its own by index.
+    pub joints: Vec<build::JointDef>,
     /// Made by a parametric family for a design (not a content file).
     pub generated: bool,
 }
@@ -223,14 +225,14 @@ impl Forge {
                 return Err(format!("part '{}' uses unknown material '{p}'", def.id));
             }
         }
-        let pieces = build::build_part(&def);
+        let (pieces, joints) = build::build_part(&def);
         if pieces.is_empty() {
             return Err(format!("part '{}' produced no geometry", def.id));
         }
         if self.parts.contains_key(&def.id) {
             return Err(format!("duplicate part id '{}'", def.id));
         }
-        self.parts.insert(def.id.clone(), BuiltPart { def, pieces, generated: false });
+        self.parts.insert(def.id.clone(), BuiltPart { def, pieces, joints, generated: false });
         Ok(())
     }
 
@@ -360,7 +362,7 @@ fn collect_materials(def: &PartDef) -> Vec<String> {
                     out.push(mat.clone());
                 }
             }
-            Group { children, .. } | Mirror { children, .. } | Array { children, .. } | Radial { children, .. } => {
+            Group { children, .. } | Joint { children, .. } | Mirror { children, .. } | Array { children, .. } | Radial { children, .. } => {
                 for c in children {
                     walk(c, out);
                 }
