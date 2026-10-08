@@ -101,5 +101,19 @@ Recommendation: (a): Windows minutes cost double on private repositories.
 Cost of being wrong: a Windows-only break is found at merge, not at PR time.
 Default: (a).
 
+### C-013  Extra permission rules for unattended lane sessions
+Asked by: ARCH | Date: 2026-10-08 | Status: OPEN
+Options: (a) leave `.claude/settings.json` as the tooling agent wrote it and let lanes ask for a missing rule through an interface request; (b) also add rules to it: deny `git push` to `main` and `integration` (lanes open pull requests, ARCH merges), allow `python3 -I assets/*` and `python3 -B -I *` (the LOOK lane's tests), `cargo bench *` and `cargo doc *`, and plain `rm` plus a few harmless shell commands (`echo`, `printf`, `chmod`, `tee`, `test`, `stat`, `du`, `cut`, `tr`, `basename`, `dirname`, `realpath`, `which`, `date`, `pwd`); recursive `rm` stays refused.
+Recommendation: (b). ARCH could not apply it: the auto-mode classifier treats an edit to this session's own permission file as self-modification, so it needs your word in chat ("apply C-013 b"), after which ARCH makes the edit. In Auto mode lanes are rarely stopped by prompts anyway, so the cost of waiting is small; the push deny rules are the part that matters.
+Cost of being wrong: (a) a lane could push straight to `integration` (CI and review would still see it afterwards), or stall on a prompt in a non-Auto mode.
+Default: (a).
+
+### C-014  GitHub branch protection on `main` and `integration` (two minutes in your GitHub settings)
+Asked by: ARCH | Date: 2026-10-08 | Status: OPEN
+Options: (a) you switch it on: for `main` and `integration` require a pull request and the status checks `guards` and `rust`, and restrict who may push (steps in `docs/swarm/GUARDRAILS.md`, "Limits worth knowing"); (b) leave it off and rely on the lane tool guard, the permission rules and ARCH's review.
+Recommendation: (a): it is the only protection that does not depend on a session behaving, and ARCH has no tool to set it.
+Cost of being wrong: (b) one stray direct push to `integration` has to be found and reverted by ARCH at the next check-in.
+Default: (b).
+
 ## Answered cards
 *(none yet; the owner's four scoping answers are recorded as ADR-0001 to ADR-0004.)*

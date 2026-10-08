@@ -15,6 +15,9 @@ ARCH merges a lane PR into `integration` only when **every** line below is true.
 - [ ] Every PROVISIONAL(C-nnn) tag points at an open card
 ```
 
+## Who opened it
+A pull request whose head is one of the `[unrestricted]` heads in `ownership.toml` (`arch/*`, `integration`, ARCH's own session branch) must be one **ARCH itself opened**. Branch names are self-declared, so if a lane session opened a PR from such a head to get around the lane guard, do not merge it: close it, and note it in the lane's status file and `STATE.md`. Likewise any lane PR that touches a `[protected]` path is closed, not merged, whatever the CI result says.
+
 ## The reviewer
 A fresh, read-only session that sees the diff and this checklist, **not the author's reasoning**, so it is not anchored. It reports: what it checked, what it could not check, and any finding. A red-circle finding blocks the merge; a nit can ride the next PR.
 

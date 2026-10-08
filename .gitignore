@@ -2,3 +2,5 @@
 **/target/
 *.png.tmp
 /out/
+__pycache__/
+*.pyc

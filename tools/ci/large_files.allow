@@ -1,0 +1,11 @@
+# Files that are allowed to be bigger (or of a type) than tools/ci/media_lint.py normally permits.
+#
+# One repo-relative path per line, forward slashes, exact match. A '#' starts a comment. Blank lines are ignored.
+# A listed path is exempt from every media rule (size caps, forbidden extensions, the 8 MB total).
+#
+# Only ARCH edits this file (tools/ci/** belongs to ARCH in docs/swarm/ownership.toml). A lane that needs an exception
+# files an interface request (docs/swarm/requests/<lane>-<topic>.md) saying what the file is and why it cannot be a
+# smaller still image, a RON/CSV table or a CI artifact. Clips are CI artifacts, not git objects.
+#
+# Example (remove the '#' to activate):
+# reference/manuals/m998-tm-9-2320-280-10.pdf

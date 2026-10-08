@@ -1,0 +1,71 @@
+# The full test run on every merge into `integration` or `main`, on Linux AND Windows.
+#
+# In plain English: the pull-request gate (pr.yml) only tests what a pull request touches, on Linux. This workflow tests
+# EVERYTHING after each merge, in two build modes (debug, which catches integer overflow, and release, which is what the
+# game ships), on both operating systems. The golden hash chains in the tests must come out identical on Linux and
+# Windows; that is the cross-platform determinism check. Then it runs the first-light scenario (a real truck through
+# design, physics, replay and viewer) and keeps its output as a downloadable artifact: open the run on GitHub and look
+# under "Artifacts".
+#
+# If this goes red, ARCH stops launching new lane work until it is green again (docs/swarm/GUARDRAILS.md). It can also be
+# started by hand from the Actions tab (workflow_dispatch).
+
+name: integration
+
+on:
+  push:
+    branches: [integration, main]
+  workflow_dispatch:
+
+# One run per branch at a time. A newer push waits (it does not cancel the run in progress), so every merge is tested.
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Tests (debug build)
+        run: cargo test --workspace --locked
+
+      - name: Tests (release build)
+        run: cargo test --workspace --release --locked
+
+      - name: First-light scenario
+        run: cargo run --release --locked -p w5k_tools --bin w5k -- scenario first-light --out out/first-light
+
+      - name: Keep the first-light output
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: first-light-${{ matrix.os }}
+          path: out/first-light
+          if-no-files-found: warn
+
+      # TODO(lane GODOT): build the Windows package here and upload it as an artifact. This step is only a placeholder:
+      # it runs only on the Windows runner and only once game/project.godot exists. The real commands (Godot export
+      # preset, the w5k_godot library, the artifact upload) are lane GODOT's to specify. Because .github/** belongs to
+      # ARCH, lane GODOT files an interface request (docs/swarm/requests/godot-windows-package.md) and ARCH wires the
+      # steps in. Do not invent a Godot build before spike S8 has reported.
+      - name: Windows package (placeholder, owned by lane GODOT)
+        if: ${{ matrix.os == 'windows-latest' && hashFiles('game/project.godot') != '' }}
+        run: echo "TODO(lane GODOT) - game/project.godot exists but the Windows package build is not specified yet"

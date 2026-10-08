@@ -52,4 +52,4 @@ pub use world::{GroundSample, Material, MaterialId, MaterialTable, PropRef, RayH
 pub const CONTRACT_VERSION: &str = "0.1.0";
 
 /// Density of air at sea level, 15 C (ISA), in kg/m^3: a defined reference value.
-pub const AIR_DENSITY_KG_M3: f64 = 1.225;
+pub const AIR_DENSITY_KG_M3: f64 = 1.225; // const-ok: ISA sea-level standard atmosphere, a defined reference value

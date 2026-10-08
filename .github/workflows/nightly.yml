@@ -1,0 +1,73 @@
+# The slow, once-a-day checks: a fuzz of 1,000 random designs and the validation dashboard.
+#
+# In plain English: some checks take too long to run on every pull request. Every night this workflow builds the tools in
+# release mode, throws 1,000 randomly generated vehicle designs at the physics (looking for crashes, NaNs and designs the
+# solver rejects), and writes the validation dashboard (a single web page: traffic lights per vehicle and quantity,
+# the design-impact matrix). Both are kept as a downloadable artifact on the run.
+#
+# STATUS: placeholder. The command `w5k validation nightly` does not exist yet; lane VALIDATION writes it. Until then
+# both steps are marked continue-on-error, so this workflow stays green while doing nothing useful; the last step prints
+# which steps really worked. The argument shapes below are a guess: VALIDATION decides the real ones and asks ARCH
+# (.github/** is ARCH's) to update this file with an interface request.
+#
+# NOTE FOR THE OWNER: GitHub runs scheduled workflows only from the repository's DEFAULT branch. While `main` is the
+# default branch and stays at its initial commit, this schedule will not fire. Either make `integration` the default
+# branch (Settings > Branches), or start this workflow by hand on `integration` (it also has workflow_dispatch).
+
+name: nightly
+
+on:
+  schedule:
+    - cron: "23 3 * * *" # every day at 03:23 UTC (an off-peak minute: GitHub delays jobs queued on the hour)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validation:
+    name: nightly validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Fuzz 1,000 random designs (placeholder)
+        id: fuzz
+        # remove continue-on-error when lane VALIDATION lands the command
+        continue-on-error: true
+        run: cargo run --release --locked -p w5k_tools --bin w5k -- validation nightly fuzz --designs 1000 --out out/nightly/fuzz
+
+      - name: Validation dashboard (placeholder)
+        id: dashboard
+        # remove continue-on-error when lane VALIDATION lands the command
+        continue-on-error: true
+        run: cargo run --release --locked -p w5k_tools --bin w5k -- validation nightly dashboard --out out/nightly/dashboard
+
+      - name: Keep the nightly output
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-${{ github.run_id }}
+          path: out/nightly
+          if-no-files-found: ignore
+
+      - name: Say plainly what worked
+        if: ${{ !cancelled() }}
+        env:
+          FUZZ_OUTCOME: ${{ steps.fuzz.outcome }}
+          DASHBOARD_OUTCOME: ${{ steps.dashboard.outcome }}
+        run: |
+          {
+            echo "### Nightly validation"
+            echo "- fuzz of 1,000 designs: **$FUZZ_OUTCOME**"
+            echo "- validation dashboard: **$DASHBOARD_OUTCOME**"
+            echo "A 'failure' here while the workflow is green means the command is still a placeholder (continue-on-error)."
+          } >> "$GITHUB_STEP_SUMMARY"

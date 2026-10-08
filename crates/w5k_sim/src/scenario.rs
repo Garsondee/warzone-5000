@@ -7,7 +7,7 @@ use w5k_contract::{ForceLedger, VehicleModel, WorldQuery};
 use w5k_math::StateHasher;
 
 /// The fixed outer tick of the simulation (Hz). Vehicles split it into their own substeps.
-pub const TICK_HZ: f64 = 60.0;
+pub const TICK_HZ: f64 = 60.0; // const-ok: the fixed outer tick, a design decision (ADR-0002)
 
 /// What a run did, in a few numbers a human (and a golden test) can read.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -54,14 +54,22 @@ impl FirstLightParts {
             world: Box::new(BumpStrip::standard()),
             vehicle: Box::new(RigidBoxVehicle::new(rig, 0.0, 0.0, 0.0)),
             driver: ScriptedCommands::first_light(),
-            duration_s: 40.0,
+            duration_s: 40.0, // const-ok: length of the scripted first-light drive
         }
     }
 }
 
 /// Run the first-light scenario with the given parts.
 pub fn first_light(mut p: FirstLightParts) -> ScenarioResult {
-    run(&mut *p.vehicle, &*p.world, &p.driver, p.duration_s, 30.0, &p.name, &p.course)
+    run(
+        &mut *p.vehicle,
+        &*p.world,
+        &p.driver,
+        p.duration_s,
+        30.0, /* const-ok: replay frame rate (Hz) */
+        &p.name,
+        &p.course,
+    )
 }
 
 /// Step `model` for `duration_s` seconds at [`TICK_HZ`] under `script`, recording `record_hz` frames per second.

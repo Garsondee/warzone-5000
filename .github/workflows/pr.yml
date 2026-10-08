@@ -1,0 +1,164 @@
+# The gate every pull request into `integration` or `main` must pass before ARCH reviews it.
+#
+# In plain English: when a lane opens or updates a pull request, two jobs run on GitHub's machines.
+#
+#   guards  Fast rules about WHAT changed (about a minute): the pull request touches only its own lane's files, adds no
+#           unapproved dependency, contains no bare physical constant in Rust, no oversized media, no silent change to a
+#           "golden" file, and no crate is over its line budget. It also runs the unit tests of these checks.
+#   rust    The Rust build checks (a few minutes): formatting, clippy with the bans in clippy.toml (no std maths, no wall
+#           clock, no HashMap), then the tests of the crates the pull request touches (and the crates that depend on
+#           them), and always the first-light scenario test.
+#
+# A pull request that fails either job is not merged. docs/swarm/GUARDRAILS.md explains every check, how to satisfy it
+# and how to get an exception. The title and description are re-checked when they are edited (the lane guard reads a
+# `CCR:` prefix in the title, the golden guard reads a `Golden-Change:` line in the description).
+#
+# Two safety rules that hold for every step below:
+#   1. Text that people control (pull-request title, description, branch name) is NEVER pasted into a shell command. It
+#      is passed in an environment variable and used quoted, so a title such as  "; rm -rf /  stays plain text.
+#   2. The checks that judge a pull request are taken from the branch it is going into, not from the pull request, so a
+#      pull request cannot loosen the rules it is judged by.
+
+name: pr
+
+on:
+  pull_request:
+    branches: [integration, main]
+    types: [opened, synchronize, reopened, edited]
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
+  # The branch this pull request is going into, as a git ref (the checkouts below fetch the full history, so it exists).
+  BASE: origin/${{ github.base_ref }}
+
+jobs:
+  guards:
+    name: guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Take the checks from the target branch
+        # If the target branch has no tools/ci yet (the very first pull request that adds the checks), use this pull
+        # request's own copy instead.
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          dest="$RUNNER_TEMP/checks-from-$BASE_REF"
+          mkdir -p "$dest"
+          if git archive "origin/$BASE_REF" tools/ci 2>/dev/null | tar -x -C "$dest" && [ -f "$dest/tools/ci/lane_guard.py" ]; then
+            echo "CI_DIR=$dest/tools/ci" >> "$GITHUB_ENV"
+            echo "Using the checks from origin/$BASE_REF"
+          else
+            echo "CI_DIR=$GITHUB_WORKSPACE/tools/ci" >> "$GITHUB_ENV"
+            echo "::notice::origin/$BASE_REF has no tools/ci yet; using the checks from this pull request"
+          fi
+
+      - name: Lane guard (a pull request may only touch its own lane's files)
+        if: ${{ !cancelled() }}
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BRANCH: ${{ github.head_ref }}
+          PR_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          THIS_REPO: ${{ github.repository }}
+        run: |
+          branch="$PR_BRANCH"
+          # A branch in a fork could be named `integration` to look like a trusted head, so a fork's branch is tagged.
+          if [ "$PR_REPO" != "$THIS_REPO" ]; then branch="fork/$PR_BRANCH"; fi
+          python3 -I "$CI_DIR/lane_guard.py" --base "$BASE" --head HEAD --branch="$branch" --title="$PR_TITLE"
+
+      - name: Media lint (small images only, no video or archives)
+        if: ${{ !cancelled() }}
+        run: python3 -I "$CI_DIR/media_lint.py" --base "$BASE" --head HEAD
+
+      - name: Dependency lint (no dependency that ARCH has not approved)
+        if: ${{ !cancelled() }}
+        run: python3 -I "$CI_DIR/deps_lint.py" --root .
+
+      - name: Line budget (every crate within its size cap)
+        if: ${{ !cancelled() }}
+        run: python3 -I "$CI_DIR/line_budget.py" --root .
+
+      - name: Constants lint (no bare physical constants in Rust)
+        if: ${{ !cancelled() }}
+        run: python3 -I "$CI_DIR/constants_lint.py" --root .
+
+      - name: Golden guard (goldens change only on purpose)
+        if: ${{ !cancelled() }}
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr_body.txt"
+          python3 -I "$CI_DIR/golden_guard.py" --base "$BASE" --head HEAD --body-file "$RUNNER_TEMP/pr_body.txt"
+
+      - name: Unit tests of the checks themselves
+        if: ${{ !cancelled() }}
+        run: python3 -I -m unittest discover -s tools/ci/tests
+
+      - name: Lane Python tests (assets/tests, the LOOK lane)
+        if: ${{ !cancelled() && hashFiles('assets/tests/**/*.py') != '' }}
+        run: python3 -B -I -m unittest discover -s assets/tests
+
+  rust:
+    name: rust
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Formatting (fix with `cargo fmt --all`)
+        run: cargo fmt --all -- --check
+
+      - name: Clippy, with the bans from clippy.toml
+        if: ${{ !cancelled() }}
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Which crates does this pull request affect?
+        id: affected
+        if: ${{ !cancelled() }}
+        run: |
+          args="$(python3 -I tools/ci/affected.py --base "$BASE" --head HEAD)"
+          echo "args=$args" >> "$GITHUB_OUTPUT"
+          echo "cargo test selection: ${args:-nothing (no crate changed)}"
+
+      - name: Tests of the affected crates
+        if: ${{ !cancelled() && steps.affected.outputs.args != '' }}
+        env:
+          AFFECTED_ARGS: ${{ steps.affected.outputs.args }}
+        # AFFECTED_ARGS is "-p crate -p crate" or "--workspace", made by affected.py from crate names only; it is
+        # deliberately left unquoted so the shell splits it into separate arguments.
+        run: cargo test --locked $AFFECTED_ARGS
+
+      - name: First-light scenario (always)
+        if: ${{ !cancelled() }}
+        run: cargo test --locked -p w5k_sim --test first_light
