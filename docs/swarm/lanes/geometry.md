@@ -48,5 +48,9 @@ Needs: FORGE (assembles the `RenderRig`; agree part API and datum); VALIDATION (
 ## Tripwires specific to this lane
 A mesh not closed in CI (never weaken the test); a dimension or vertex typed in Rust instead of a `Param` or template; fixing a dimension test by editing the expected number instead of the shape; `HashMap`, threads or std trig in generation; `png` inside `w5k_geo`, UVs, textures, animation or LOD; a budget breach; editing FORGE's or VIEWER's files (file a request).
 
+## Owner's answers that apply to you (2026-10-08, card C-002)
+- The aim is original hull designs built on real hull-shape logic (glacis and slope angles, sponsons, turret-ring and track-envelope proportions), not copies of real silhouettes. Matching a dossier's dimensions within 3% is for the validation builds; keep the generators parametric enough to produce new hulls.
+- The world is fiction: no real insignia, nameplates or national markings in geometry.
+
 ## Done
 M1 acceptance passes in CI, theory note and README written, images in `media/`, status file has the handoff note, you have idled.

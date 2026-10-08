@@ -44,5 +44,9 @@ Needs: the model APIs and rigs from the physics lanes and FORGE; the PNG plotter
 ## Tripwires specific to this lane
 A figure from memory; a source you could not open (mark it UNVERIFIED, do not cite it as if read); tuning anything per vehicle; hiding or softening a red; a dashboard needing the network; a tolerance changed without a card.
 
+## Owner's answers that apply to you (2026-10-08, cards C-001 and C-002)
+- Dossiers stay real vehicles: that is where published numbers live. The game never shows real names, so keep the mapping from a dossier to a game vehicle's fictional id in `content/dossier/`, not in the vehicle files.
+- The garage should end up covering every role (recon, personnel carrier, light, medium, heavy and main battle tank, assault gun or tank destroyer, self-propelled artillery, recovery, utility truck), not only assault vehicles. After the first three dossiers, spread the next ones across roles and eras (very late WW2 to today); it is the vehicle builder that is being exercised.
+
 ## Done
 M1 acceptance passes in CI, the theory note is written, the status file has the handoff note, you have idled; M2 held-out scoring is a follow-up task.

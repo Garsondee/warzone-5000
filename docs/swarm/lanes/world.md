@@ -40,5 +40,8 @@ Needs: soil sources from VALIDATION; mesh export conventions from VIEWER and GOD
 ## Tripwires specific to this lane
 An RNG stream consumed in query order (queries must be pure functions); a soil number without a source; a query allocating memory; a generator result depending on iteration order of a hash map (use ordered containers); a binary larger than 20 MB in git.
 
+## Owner's answers that apply to you (2026-10-08, card C-003)
+- The courses are built by us, not hand-authored by the owner, so the tooling is the product: generator parameters, validators and lint (reachability, slopes, soil sanity), preview renders, and a course diff that shows what a change did. An in-Godot course editor is a very long-term milestone and not on your list.
+
 ## Done
 M1 acceptance passes in CI, the theory note is written, the status file has the handoff note, you have idled; richer course features for M2 come as follow-up tasks.
