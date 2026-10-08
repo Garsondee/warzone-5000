@@ -97,6 +97,28 @@ pub fn eye(at: V3, n: V3, r: f64, out: &mut Vec<Node>) {
     out.push(sphere(0.75 * r, at + axis * (0.45 * r), "glass", Slot::Glow));
 }
 
+/// A flat ring (annulus) in the horizontal plane around `at`: `n` boxes around a circle of radius `r`.
+pub fn flat_ring(r: f64, width: f64, height: f64, n: u32, at: V3, mat: &str, slot: Slot) -> Node {
+    let chord = std::f64::consts::TAU * r / n as f64 * 1.05;
+    Node::Group {
+        at: at.arr(),
+        rot: [0.0; 3],
+        scale: 1.0,
+        children: vec![Node::Radial { count: n, axis: Axis::Y, phase: 0.0, children: vec![bx([width, height, chord], p(r, 0.0, 0.0), mat, slot, 0.0)] }],
+    }
+}
+
+/// An open tube along Z (a duct): `n` boxes around a circle of radius `r`, each `len` long and `thick` deep.
+pub fn tube_z(r: f64, len: f64, thick: f64, n: u32, at: V3, mat: &str, slot: Slot) -> Node {
+    let chord = std::f64::consts::TAU * r / n as f64 * 1.08;
+    Node::Group {
+        at: at.arr(),
+        rot: [0.0; 3],
+        scale: 1.0,
+        children: vec![Node::Radial { count: n, axis: Axis::Z, phase: 0.0, children: vec![bx([thick, chord, len], p(r, 0.0, 0.0), mat, slot, 0.0)] }],
+    }
+}
+
 /// Shorthand for a point.
 pub fn p(x: f64, y: f64, z: f64) -> V3 {
     v3(x, y, z)

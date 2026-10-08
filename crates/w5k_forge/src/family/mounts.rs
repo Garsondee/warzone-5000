@@ -39,17 +39,35 @@ pub struct Chassis {
     pub gear: Option<(f64, f64)>,
 }
 
-/// A socket with hints.
-pub fn sock(name: &str, kind: SocketKind, at: V3, normal: V3, forward: V3, hints: &[(&str, f64)]) -> SocketDef {
-    SocketDef {
-        name: name.into(),
-        kind,
-        size: SizeClass::Medium,
-        at: at.arr(),
-        normal: normal.arr(),
-        forward: forward.arr(),
-        hints: hints.iter().map(|(k, v)| (k.to_string(), *v)).collect::<BTreeMap<_, _>>(),
+/// Numeric code of a socket kind, passed to families as the hint `ctx.kind` (families that must build different
+/// geometry for different kinds of mount read it).
+pub fn kind_code(kind: SocketKind) -> f64 {
+    match kind {
+        SocketKind::Station => KIND_STATION,
+        SocketKind::Keel => KIND_KEEL,
+        SocketKind::Belly => KIND_BELLY,
+        SocketKind::Gear => KIND_GEAR,
+        SocketKind::Hip => KIND_HIP,
+        SocketKind::Mast => KIND_MAST,
+        SocketKind::TurretRing => KIND_RING,
+        SocketKind::Internal => KIND_INTERNAL,
+        _ => 9.0,
     }
+}
+pub const KIND_STATION: f64 = 0.0;
+pub const KIND_KEEL: f64 = 1.0;
+pub const KIND_BELLY: f64 = 2.0;
+pub const KIND_GEAR: f64 = 3.0;
+pub const KIND_HIP: f64 = 4.0;
+pub const KIND_MAST: f64 = 5.0;
+pub const KIND_RING: f64 = 6.0;
+pub const KIND_INTERNAL: f64 = 7.0;
+
+/// A socket with hints (and the `ctx.kind` code).
+pub fn sock(name: &str, kind: SocketKind, at: V3, normal: V3, forward: V3, hints: &[(&str, f64)]) -> SocketDef {
+    let mut h: BTreeMap<String, f64> = hints.iter().map(|(k, v)| (k.to_string(), *v)).collect();
+    h.insert("ctx.kind".into(), kind_code(kind));
+    SocketDef { name: name.into(), kind, size: SizeClass::Medium, at: at.arr(), normal: normal.arr(), forward: forward.arr(), hints: h }
 }
 
 /// Segment centres along the underbody: `n` equal segments of the span `[z0, z1]`.
@@ -82,8 +100,8 @@ pub fn running_gear(c: &Chassis) -> Vec<SocketDef> {
         out.push(sock(&format!("station_r{}", i + 1), SocketKind::Station, p(c.half_w, c.y_side, *z), p(1.0, 0.0, 0.0), fwd, &hints));
         out.push(sock(&format!("station_l{}", i + 1), SocketKind::Station, p(-c.half_w, c.y_side, *z), p(-1.0, 0.0, 0.0), fwd, &hints));
     }
-    let keel_hints = [("ctx.hip_height", c.y_under), ("ctx.spacing", seg), ("ctx.length", 0.94 * seg), ("ctx.width", c.width), ("ctx.stations", n as f64)];
     for (i, z) in zs.iter().enumerate() {
+        let keel_hints = [("ctx.hip_height", c.y_under), ("ctx.spacing", seg), ("ctx.length", 0.94 * seg), ("ctx.width", c.width), ("ctx.stations", n as f64), ("ctx.index", i as f64)];
         out.push(sock(&format!("keel_{}", i + 1), SocketKind::Keel, p(0.0, c.y_under, *z), p(0.0, -1.0, 0.0), fwd, &keel_hints));
     }
     out.push(sock(
@@ -92,7 +110,7 @@ pub fn running_gear(c: &Chassis) -> Vec<SocketDef> {
         p(0.0, c.y_under, 0.5 * (c.z0 + c.z1)),
         p(0.0, -1.0, 0.0),
         fwd,
-        &[("ctx.length", c.z1 - c.z0), ("ctx.width", c.width), ("ctx.hip_height", c.y_under)],
+        &[("ctx.length", c.z1 - c.z0), ("ctx.width", c.width), ("ctx.hip_height", c.y_under), ("ctx.top", (c.track_top - c.y_under).max(0.3))],
     ));
     out
 }

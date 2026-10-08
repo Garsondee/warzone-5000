@@ -32,7 +32,7 @@ fn common_params(len: (f64, f64, f64), wid: (f64, f64, f64), hgt: (f64, f64, f64
 
 /// Extra front armour as a solid slab just behind a face: from `d1` to `d2` inward, shrunk toward the face's
 /// centre so it stays inside the hull (it is invisible; only the armour rays and the mass see it).
-fn inner_slab(q: &Quad, inside: V3, d1: f64, d2: f64, shrink: f64) -> Option<Node> {
+fn inner_slab(q: &Quad, inside: V3, d1: f64, d2: f64, shrink: f64, mat: &str) -> Option<Node> {
     if d2 - d1 < 0.001 {
         return None;
     }
@@ -44,7 +44,7 @@ fn inner_slab(q: &Quad, inside: V3, d1: f64, d2: f64, shrink: f64) -> Option<Nod
         pts.push(k - n * d1);
         pts.push(k - n * d2);
     }
-    Some(style::hull(pts, "hard_steel", Slot::Primary, None, 0.0))
+    Some(style::hull(pts, mat, Slot::Primary, None, 0.0))
 }
 
 fn hull_part(id: String, name: String, size: SizeClass, shapes: Vec<Node>, sockets: Vec<SocketDef>) -> PartDef {
@@ -81,7 +81,8 @@ fn clearance(h: f64) -> (f64, f64) {
 
 fn hull_stats(v: &Values, built: &Built) -> Vec<Stat> {
     let m = &built.mass;
-    let (l, w) = (v["length_m"], v["width_m"]);
+    let l = v.get("length_m").copied().unwrap_or(2.0 * v.get("radius_m").copied().unwrap_or(1.0));
+    let w = v.get("width_m").copied().unwrap_or(l);
     vec![
         stat("hull mass", m.mass_kg / 1000.0, "t"),
         stat("internal volume", m.internal_m3, "m3"),
@@ -142,7 +143,7 @@ impl Family for Lancer {
         let rear_q: Quad = [pt(1, -1.0), pt(1, 1.0), pt(2, 1.0), pt(2, -1.0)];
         // Front armour beyond the side thickness, behind the glacis and the nose.
         for q in [&glacis_q, &nose_q] {
-            if let Some(s) = inner_slab(q, inside, ts - 0.002, tf, 0.12) {
+            if let Some(s) = inner_slab(q, inside, ts - 0.002, tf, 0.12, "hard_steel") {
                 shapes.push(s);
             }
         }
@@ -258,7 +259,7 @@ impl Family for Bastion {
             [upper[o], upper[o + 1], upper[o + 2], upper[o + 3]]
         };
         for q in [&front_up, &front_low] {
-            if let Some(slab) = inner_slab(q, inside, ts - 0.002, tf, 0.1) {
+            if let Some(slab) = inner_slab(q, inside, ts - 0.002, tf, 0.1, "hard_steel") {
                 shapes.push(slab);
             }
         }
@@ -355,7 +356,7 @@ impl Family for Dreadnought {
         let bow_q: Quad = [pt(1, -1.0), pt(1, 1.0), pt(2, 1.0), pt(2, -1.0)];
         let deck_q: Quad = [pt(2, -1.0), pt(2, 1.0), pt(3, 1.0), pt(3, -1.0)];
         let side = |s: f64| -> Quad { [pt(5, s), pt(6, s), pt(3, s), pt(2, s)] };
-        if let Some(slab) = inner_slab(&bow_q, inside, ts - 0.002, tf, 0.12) {
+        if let Some(slab) = inner_slab(&bow_q, inside, ts - 0.002, tf, 0.12, "hard_steel") {
             shapes.push(slab);
         }
         let t = (0.01 * w).max(0.015);
@@ -423,5 +424,288 @@ impl Family for Dreadnought {
 
     fn performance(&self, v: &Values, built: &Built) -> Vec<Stat> {
         hull_stats(v, built)
+    }
+}
+
+// ------------------------------------------------------------------------------------------------ Strider
+
+/// A round, armoured carapace on a ring of hips: the body of walkers (and, on its belly, hover or anti-gravity craft).
+/// It has no tracks or rails; its hips take legs, pods and rotor arms.
+pub struct Strider;
+
+fn ring(radius: f64, y: f64, n: usize) -> Vec<V3> {
+    (0..n)
+        .map(|k| {
+            let phi = (k as f64 + 0.5) / n as f64 * std::f64::consts::TAU;
+            p(radius * phi.sin(), y, -radius * phi.cos())
+        })
+        .collect()
+}
+
+impl Family for Strider {
+    fn id(&self) -> &'static str {
+        "hull_strider"
+    }
+    fn name(&self) -> &'static str {
+        "Strider hull"
+    }
+    fn params(&self) -> Vec<Param> {
+        vec![
+            Param { id: "radius_m", name: "Radius", unit: "m", min: 0.4, max: 14.0, default: 1.6, scale: Scale::Log, role: Role::Budgeted, help: "Body radius. A wide body takes big turret rings and engines." },
+            Param { id: "height_m", name: "Height", unit: "m", min: 0.3, max: 8.0, default: 1.1, scale: Scale::Log, role: Role::Budgeted, help: "Body height: room inside against a bigger target." },
+            param("front_mm", "Front armour", "mm", 5.0, 250.0, 60.0, Role::Budgeted, "Plate thickness on the front facets."),
+            param("side_mm", "Side armour", "mm", 5.0, 150.0, 30.0, Role::Budgeted, "Plate thickness everywhere else."),
+            param("stations", "Leg pairs", "", 2.0, 5.0, 4.0, Role::Free, "Hips on each side: 4 to 10 legs."),
+            param("head", "Sensor head", "", 0.0, 1.0, 0.6, Role::Free, "How far the sensor head juts out at the front."),
+            param("dome", "Dome", "", 0.0, 1.0, 0.5, Role::Free, "A flat shield or a tall dome: the dome has more room and a bigger shadow."),
+        ]
+    }
+
+    fn generate(&self, v: &Values, _lib: &MaterialLibrary) -> PartDef {
+        let (r, h) = (v["radius_m"], v["height_m"]);
+        let (tf, ts) = (v["front_mm"] / 1000.0, v["side_mm"] / 1000.0);
+        let pairs = v["stations"].round().clamp(2.0, 5.0) as usize;
+        let (head, dome) = (v["head"], v["dome"]);
+        let (yb, _) = clearance(h);
+        let n = 12usize;
+        let (y_wst, y_sh) = (yb + 0.38 * h, yb + 0.7 * h);
+        let y_top = yb + h * (0.88 + 0.12 * dome);
+        let r_top = (0.62 - 0.3 * dome) * r;
+        let bot = ring(0.72 * r, yb, n);
+        let wst = ring(r, y_wst, n);
+        let sh = ring(0.84 * r, y_sh, n);
+        let top = ring(r_top, y_top, n);
+        let pts: Vec<V3> = bot.iter().chain(&wst).chain(&sh).chain(&top).cloned().collect();
+        let inside = p(0.0, yb + 0.5 * h, 0.0);
+        let ch = (0.4 * ts + 0.01 * r).min(0.08);
+        let mut shapes = vec![style::hull(pts, "steel", Slot::Primary, Some(ts), ch)];
+        // Front armour: slabs behind the front facets of the upper body.
+        let front_up: Quad = [wst[n - 1], wst[0], sh[0], sh[n - 1]];
+        let front_cap: Quad = [sh[n - 1], sh[0], top[0], top[n - 1]];
+        for q in [&front_up, &front_cap] {
+            if let Some(slab) = inner_slab(q, inside, ts - 0.002, tf, 0.12, "hard_steel") {
+                shapes.push(slab);
+            }
+        }
+        // Design language: a dark-blue lower belt, a glowing waist, a chevron, a sensor head with eyes, vents.
+        let t = (0.012 * r).max(0.01);
+        for k in 0..n {
+            let q: Quad = [bot[k], bot[(k + 1) % n], wst[(k + 1) % n], wst[k]];
+            shapes.push(style::plate(&q, inside, (0.0, 1.0), (0.0, 1.0), t, t, "fittings", Slot::Secondary));
+            let mid = (wst[k] + wst[(k + 1) % n]) * 0.5;
+            let radial = p(mid.x, 0.0, mid.z).norm();
+            shapes.push(style::glow_line(wst[k] + radial * (0.4 * t), wst[(k + 1) % n] + radial * (0.4 * t), radial, 0.012 + 0.004 * r));
+        }
+        shapes.push(style::plate(&front_up, inside, (0.05, 0.95), (0.4, 0.62), t, 0.5 * t, "fittings", Slot::Trim));
+        let rear_cap: Quad = [sh[n / 2 - 1], sh[n / 2], top[n / 2], top[n / 2 - 1]];
+        style::vents(&rear_cap, inside, (0.25, 0.75), (0.15, 0.85), 4, t, &mut shapes);
+        // Sensor head: a tapered block at the front with three pairs of eyes.
+        let hz = -(r + 0.04 * r + 0.22 * r * head);
+        let (hw, hh) = (0.34 * r, 0.3 * h);
+        let hy = yb + 0.5 * h;
+        let hpts = vec![
+            p(-hw / 2.0, hy - hh / 2.0, hz),
+            p(hw / 2.0, hy - hh / 2.0, hz),
+            p(-hw / 2.0, hy + hh / 2.0, hz),
+            p(hw / 2.0, hy + hh / 2.0, hz),
+            p(-hw, hy - hh * 0.6, -0.8 * r),
+            p(hw, hy - hh * 0.6, -0.8 * r),
+            p(-hw, hy + hh * 0.75, -0.8 * r),
+            p(hw, hy + hh * 0.75, -0.8 * r),
+        ];
+        shapes.push(style::hull(hpts, "steel", Slot::Secondary, Some(ts.max(0.01)), (0.5 * ts).min(0.05)));
+        let face = p(0.0, 0.0, -1.0);
+        for (dx, dy, er) in [(0.26, 0.22, 0.13), (0.12, -0.05, 0.09), (0.32, -0.2, 0.06)] {
+            for s in [-1.0, 1.0] {
+                style::eye(p(s * dx * hw, hy + dy * hh, hz), face, er * hh.min(hw), &mut shapes);
+            }
+        }
+        // Hip ring under the waist.
+        shapes.push(style::cyl(0.62 * r, 0.12 * h, crate::schema::Axis::Y, 12, 1.0, p(0.0, yb + 0.02 * h, 0.0), "machinery", Slot::Dark, None, 0.0));
+
+        // Sockets: hips on the waist, a turret on top, masts behind it, the engine and the belly.
+        let y_hip = y_wst - 0.05 * h;
+        let r_hip = 0.97 * r;
+        let spacing = 2.0 * r * ((154.0f64 - 26.0).to_radians() / (pairs as f64 - 1.0) / 2.0).sin();
+        let mut sockets: Vec<SocketDef> = Vec::new();
+        for i in 0..pairs {
+            let th = (26.0 + 128.0 * i as f64 / (pairs as f64 - 1.0)).to_radians();
+            for (name, side) in [("r", 1.0), ("l", -1.0)] {
+                let nrm = p(side * th.sin(), 0.0, -th.cos());
+                // Tangent to the ring, pointing forward: the leg's plane is the vertical plane through `nrm`.
+                let fwd = p(-side * th.cos(), 0.0, -th.sin());
+                sockets.push(socket(
+                    &format!("station_{name}{}", i + 1),
+                    SocketKind::Hip,
+                    p(r_hip * nrm.x, y_hip, r_hip * nrm.z),
+                    nrm,
+                    fwd,
+                    &[("ctx.hip_height", y_hip), ("ctx.spacing", spacing), ("ctx.length", 0.9 * spacing), ("ctx.hull_width", 2.0 * r), ("ctx.stations", pairs as f64)],
+                ));
+            }
+        }
+        let roof_y = |rho: f64| y_top - (rho - r_top).max(0.0) / (0.84 * r - r_top).max(1e-6) * (y_top - y_sh);
+        sockets.push(socket("turret_1", SocketKind::TurretRing, p(0.0, y_top, 0.04 * r), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.ring_max", 1.8 * r_top)]));
+        sockets.push(socket("mast_1", SocketKind::Mast, p(-0.3 * r, roof_y(0.5 * r), 0.42 * r), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.4 * r)]));
+        sockets.push(socket("mast_2", SocketKind::Mast, p(0.3 * r, roof_y(0.5 * r), 0.42 * r), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.4 * r)]));
+        sockets.push(socket(
+            "engine",
+            SocketKind::Internal,
+            p(0.0, yb + ts + 0.01, 0.05 * r),
+            p(0.0, 1.0, 0.0),
+            p(0.0, 0.0, -1.0),
+            &[("ctx.bay_length", 1.0 * r), ("ctx.bay_width", 1.0 * r), ("ctx.bay_height", 0.7 * h)],
+        ));
+        sockets.push(socket("belly", SocketKind::Belly, p(0.0, yb, 0.0), p(0.0, -1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.length", 1.4 * r), ("ctx.width", 1.4 * r), ("ctx.hip_height", yb)]));
+        hull_part(format!("hull_strider_{r:.1}m"), format!("Strider hull {r:.1} m"), size_class(2.0 * r), shapes, sockets)
+    }
+
+    fn performance(&self, v: &Values, built: &Built) -> Vec<Stat> {
+        let mut s = hull_stats(v, built);
+        s.pop();
+        s
+    }
+}
+
+// ------------------------------------------------------------------------------------------------ Skiff
+
+/// A flat-bottomed craft with an arrowhead bow and a raised cabin: the body of air-cushion boats, rotor gunships and
+/// anti-gravity cruisers. It rides low and light, with a wide underside for cushions and plates, side stations for
+/// pods, rotor arms, legs or wheels, and a foredeck ring for one turret.
+pub struct Skiff;
+
+impl Family for Skiff {
+    fn id(&self) -> &'static str {
+        "hull_skiff"
+    }
+    fn name(&self) -> &'static str {
+        "Skiff hull"
+    }
+    fn params(&self) -> Vec<Param> {
+        let mut v = common_params((3.0, 60.0, 9.0), (1.4, 24.0, 3.4), (0.4, 7.0, 1.1));
+        v.push(param("sweep", "Sweep", "", 0.0, 1.0, 0.6, Role::Free, "A blunt barge bow to a sharp arrowhead: a sharper bow cuts the frontal area and pushes the shoulders aft."));
+        v.push(param("cabin", "Cabin", "", 0.0, 1.0, 0.5, Role::Free, "A flat deck or a tall central cabin: room and eye height against a taller target."));
+        v.push(param("stations", "Stations", "", 2.0, 6.0, 3.0, Role::Free, "Mounting stations along each side: wheels, legs, pods and rotor arms attach to them."));
+        v
+    }
+
+    fn generate(&self, v: &Values, _lib: &MaterialLibrary) -> PartDef {
+        let (l, w, h) = (v["length_m"], v["width_m"], v["height_m"]);
+        let (tf, ts) = (v["front_mm"] / 1000.0, v["side_mm"] / 1000.0);
+        let (sweep, cabin) = (v["sweep"], v["cabin"]);
+        let yb = 0.1 + 0.1 * h;
+        let yt = yb + h;
+        let yd = yb + h * (0.62 - 0.3 * cabin);
+        let hw = 0.5 * w;
+        let z_nose = -l / 2.0;
+        let z_sh = z_nose + l * (0.5 - 0.3 * sweep);
+        let z_tail = l / 2.0;
+        let nw = hw * (0.03 + 0.34 * (1.0 - sweep));
+        let y_bow = yb + 0.72 * (yd - yb);
+        // Hull body: a flat underside, a raked foredeck and parallel sides aft of the shoulders.
+        let mut pts = Vec::new();
+        for s in [-1.0, 1.0] {
+            pts.push(p(s * 0.9 * nw, yb, z_nose));
+            pts.push(p(s * 0.9 * hw, yb, z_sh));
+            pts.push(p(s * 0.9 * hw, yb, z_tail));
+            pts.push(p(s * nw, y_bow, z_nose));
+            pts.push(p(s * hw, yd, z_sh));
+            pts.push(p(s * hw, yd, z_tail));
+        }
+        let inside = p(0.0, yb + 0.4 * (yd - yb), 0.0);
+        let ch = (0.4 * ts + 0.01 * w).min(0.08);
+        let mut shapes = vec![style::hull(pts, "composite", Slot::Primary, Some(ts), ch)];
+        let fore_q: Quad = [p(-nw, y_bow, z_nose), p(nw, y_bow, z_nose), p(hw, yd, z_sh), p(-hw, yd, z_sh)];
+        let aft_q: Quad = [p(-hw, yd, z_sh), p(hw, yd, z_sh), p(hw, yd, z_tail), p(-hw, yd, z_tail)];
+        if let Some(s) = inner_slab(&fore_q, inside, ts - 0.002, tf, 0.1, "composite") {
+            shapes.push(s);
+        }
+        // The cabin: a raked, tapering block amidships.
+        let z_c0 = z_nose + l * 0.52;
+        let z_c1 = z_tail - 0.14 * l;
+        let (cb0, cb1) = (0.6 * hw, 0.4 * hw);
+        let rake = 0.7 * (yt - yd);
+        let cpts = vec![
+            p(-cb0, yd - 0.02, z_c0),
+            p(cb0, yd - 0.02, z_c0),
+            p(-cb0, yd - 0.02, z_c1),
+            p(cb0, yd - 0.02, z_c1),
+            p(-cb1, yt, z_c0 + rake),
+            p(cb1, yt, z_c0 + rake),
+            p(-0.92 * cb1, yt, z_c1 - 0.05 * l),
+            p(0.92 * cb1, yt, z_c1 - 0.05 * l),
+        ];
+        shapes.push(style::hull(cpts, "composite", Slot::Primary, Some(ts.max(0.01)), (0.4 * ts).min(0.05)));
+        let c_inside = p(0.0, 0.5 * (yd + yt), 0.5 * (z_c0 + z_c1));
+        let wind_q: Quad = [p(-cb0, yd, z_c0), p(cb0, yd, z_c0), p(cb1, yt, z_c0 + rake), p(-cb1, yt, z_c0 + rake)];
+        let t = (0.012 * w).max(0.01);
+        // Design language: a glowing visor on the cabin, a chevron on the foredeck, Secondary strips along the
+        // aft deck, glow lines along the deck edges, vents behind the cabin, and two swept tail fins.
+        shapes.push(style::plate(&wind_q, c_inside, (0.08, 0.92), (0.42, 0.85), 0.6 * t, 0.0, "glass", Slot::Glow));
+        shapes.push(style::plate(&wind_q, c_inside, (0.0, 1.0), (0.0, 0.3), t, 0.5 * t, "fittings", Slot::Secondary));
+        shapes.push(style::plate(&fore_q, inside, (0.2, 0.8), (0.3, 0.5), t, 0.4 * t, "fittings", Slot::Trim));
+        shapes.push(style::plate(&fore_q, inside, (0.28, 0.72), (0.56, 0.74), t, 0.4 * t, "fittings", Slot::Secondary));
+        for u in [(0.0, 0.14), (0.86, 1.0)] {
+            shapes.push(style::plate(&aft_q, inside, u, (0.0, 1.0), t, t, "fittings", Slot::Secondary));
+        }
+        for u in [0.03, 0.97] {
+            shapes.push(style::glow_line(style::at(&fore_q, u, 0.04), style::at(&fore_q, u, 0.96), p(0.0, 1.0, 0.0), 0.012 + 0.004 * w));
+            shapes.push(style::glow_line(style::at(&aft_q, u, 0.02), style::at(&aft_q, u, 0.98), p(0.0, 1.0, 0.0), 0.012 + 0.004 * w));
+        }
+        let vz = |z: f64| (z - z_sh) / (z_tail - z_sh);
+        style::vents(&aft_q, inside, (0.3, 0.7), (vz(z_c1) + 0.05, 0.97), 4, t, &mut shapes);
+        let (fa, fb) = (z_tail - 0.3 * l, z_tail - 0.02 * l);
+        let fy = yt + 0.45 * (yt - yd);
+        for s in [-1.0, 1.0] {
+            let (x0, x1) = (s * 0.52 * hw, s * (0.52 * hw + 0.05 * w + 0.02));
+            let (x2, x3) = (s * (0.52 * hw + 0.18 * w), s * (0.52 * hw + 0.18 * w + 0.04 * w));
+            let fin = vec![p(x0, yd, fa), p(x1, yd, fa), p(x0, yd, fb), p(x1, yd, fb), p(x2, fy, fb - 0.02 * l), p(x3, fy, fb - 0.02 * l)];
+            shapes.push(style::hull(fin, "composite", Slot::Secondary, None, 0.0));
+            shapes.push(style::beam(p(x2, fy, fb - 0.02 * l), p(x2, fy, fb - 0.02 * l + 0.012), [0.05, 0.05], p(0.0, 1.0, 0.0), "fittings", Slot::Glow, 0.0));
+        }
+
+        // Sockets.
+        let z_ring = z_nose + 0.26 * l;
+        let f_ring = ((z_ring - z_nose) / (z_sh - z_nose)).clamp(0.0, 1.0);
+        let w_ring = 2.0 * (nw + (hw - nw) * f_ring);
+        let y_ring = y_bow + (yd - y_bow) * f_ring;
+        let ring_max = (0.72 * w_ring).min(1.7 * (z_c0 - z_ring));
+        let n_st = v["stations"].round().clamp(2.0, 6.0) as usize;
+        let y_side = yb + 0.35 * (yd - yb);
+        let half_w = hw * (0.9 + 0.1 * 0.35);
+        let ch = Chassis { z0: z_sh + 0.04 * l, z1: z_tail - 0.03 * l, y_under: yb, y_side, track_top: yd, half_w, width: 0.9 * w, stations: n_st, gear: None };
+        let mut sockets = vec![
+            socket("turret", SocketKind::TurretRing, p(0.0, y_ring, z_ring), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.ring_max", ring_max)]),
+            socket(
+                "engine",
+                SocketKind::Internal,
+                p(0.0, yb + ts + 0.01, 0.5 * (z_c0 + z_c1) + 0.08 * l),
+                p(0.0, 1.0, 0.0),
+                p(0.0, 0.0, -1.0),
+                &[("ctx.bay_length", 0.3 * l), ("ctx.bay_width", 0.58 * w), ("ctx.bay_height", 0.8 * (yt - yb))],
+            ),
+            socket("hub", SocketKind::Mast, p(0.0, yt, 0.5 * (z_c0 + rake + z_c1 - 0.05 * l)), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.6 * w), ("ctx.top", 0.0)]),
+            socket("mast_1", SocketKind::Mast, p(-0.55 * cb1, yt, z_c1 - 0.18 * l), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.4 * w)]),
+            socket("mast_2", SocketKind::Mast, p(0.55 * cb1, yt, z_c1 - 0.18 * l), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.4 * w)]),
+        ];
+        let mut run = mounts::running_gear(&ch);
+        // The cushion or plate covers the underside from the bow's quarter point aft, an equal-area rectangle.
+        let area = 0.5 * (2.0 * nw + 2.0 * hw) * 0.9 * (z_sh - z_nose) + 2.0 * hw * 0.9 * (z_tail - z_sh);
+        let (b_w, b_l) = (1.8 * hw * 0.97, area / (1.8 * hw));
+        for s in run.iter_mut() {
+            if s.name == "belly" {
+                s.at = p(0.0, yb, z_tail - 0.5 * b_l).arr();
+                s.hints.insert("ctx.length".into(), b_l);
+                s.hints.insert("ctx.width".into(), b_w);
+            }
+        }
+        sockets.extend(run);
+        hull_part(format!("hull_skiff_{l:.1}m"), format!("Skiff hull {l:.1} m"), size_class(l), shapes, sockets)
+    }
+
+    fn performance(&self, v: &Values, built: &Built) -> Vec<Stat> {
+        let mut s = hull_stats(v, built);
+        s.pop();
+        s
     }
 }

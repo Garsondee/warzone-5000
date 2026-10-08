@@ -7,6 +7,7 @@
 //! ```
 
 mod family_cmd;
+mod host_sweep;
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -18,7 +19,7 @@ use w5k_forge::raster::Image;
 use w5k_forge::{Built, Forge, StatsFile};
 
 fn usage() -> ! {
-    eprintln!("usage:\n  w5k render <content-dir> --out <dir> [--only id,id,...]\n  w5k check <content-dir>\n  w5k family <content-dir> --out <dir>\n  w5k lineup <content-dir> --out <dir> [--only design,design,...]");
+    eprintln!("usage:\n  w5k render <content-dir> --out <dir> [--only id,id,...]\n  w5k check <content-dir>\n  w5k family <content-dir> --out <dir>\n  w5k sweeps <content-dir> --out <dir> [--only family,family]\n  w5k view <content-dir> --design id --out file.png [--az 40 --el 20 --focus x,y,z --radius r --size WxH]\n  w5k lineup <content-dir> --out <dir> [--only design,design,...]");
     std::process::exit(2)
 }
 
@@ -27,6 +28,14 @@ struct Args {
     out: Option<PathBuf>,
     only: Option<Vec<String>>,
     palette: Option<String>,
+    /// Any other `--key value` pair (for example `--az 40` for `w5k view`).
+    opts: std::collections::BTreeMap<String, String>,
+}
+
+impl Args {
+    fn num(&self, key: &str, default: f64) -> f64 {
+        self.opts.get(key).and_then(|v| v.parse().ok()).unwrap_or(default)
+    }
 }
 
 fn parse(rest: &[String]) -> Args {
@@ -34,17 +43,21 @@ fn parse(rest: &[String]) -> Args {
     let mut out = None;
     let mut only = None;
     let mut palette = None;
+    let mut opts = std::collections::BTreeMap::new();
     let mut it = rest.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--out" => out = Some(PathBuf::from(it.next().unwrap_or_else(|| usage()))),
             "--only" => only = Some(it.next().unwrap_or_else(|| usage()).split(',').map(|s| s.trim().to_string()).collect()),
             "--palette" => palette = Some(it.next().unwrap_or_else(|| usage()).clone()),
-            s if s.starts_with("--") => usage(),
+            s if s.starts_with("--") => {
+                let v = it.next().unwrap_or_else(|| usage()).clone();
+                opts.insert(s.trim_start_matches("--").to_string(), v);
+            }
             s => content = Some(PathBuf::from(s)),
         }
     }
-    Args { content: content.unwrap_or_else(|| usage()), out, only, palette }
+    Args { content: content.unwrap_or_else(|| usage()), out, only, palette, opts }
 }
 
 fn main() {
@@ -59,12 +72,65 @@ fn main() {
         "render" => render(&forge, a.out.as_deref().unwrap_or_else(|| usage()), a.only.as_deref()),
         "check" => check(&forge),
         "family" => family_cmd::run(&forge, a.out.as_deref().unwrap_or_else(|| usage())),
+        "sweeps" => {
+            let out = a.out.as_deref().unwrap_or_else(|| usage());
+            std::fs::create_dir_all(out).ok();
+            host_sweep::run(&forge.lib, out, a.only.as_deref());
+            true
+        }
+        "view" => view(&forge, &a),
         "lineup" => lineup(&forge, a.out.as_deref().unwrap_or_else(|| usage()), a.only.as_deref(), a.palette.as_deref()),
         "factions" => factions(&forge, a.out.as_deref().unwrap_or_else(|| usage()), a.only.as_deref()),
         _ => usage(),
     };
     if !ok {
         std::process::exit(1);
+    }
+}
+
+/// One large view of a design: `w5k view <content> --design id --out file.png [--az 40 --el 20 --focus x,y,z
+/// --radius r --size 1100x800 --palette name]`.
+fn view(forge: &Forge, a: &Args) -> bool {
+    let Some(id) = a.opts.get("design") else { usage() };
+    let Some(d) = forge.designs.get(id) else {
+        eprintln!("error: no design '{id}'");
+        return false;
+    };
+    let (built, _, _) = forge.build_design(d);
+    let pal = a.palette.clone().or_else(|| d.palette.clone());
+    let colours = preview::palette_colours(&forge.lib, pal.as_deref());
+    let mut fr = Frame::of(&built.mesh);
+    if let Some(f) = a.opts.get("focus") {
+        let v: Vec<f64> = f.split(',').filter_map(|x| x.parse().ok()).collect();
+        if v.len() == 3 {
+            fr.centre = w5k_forge::geom::v3(v[0], v[1], v[2]);
+        }
+    }
+    if let Some(r) = a.opts.get("radius").and_then(|r| r.parse::<f64>().ok()) {
+        fr.radius = r;
+        fr.grid = preview::nice_step(r / 2.0);
+    }
+    let (w, h) = a
+        .opts
+        .get("size")
+        .and_then(|s| s.split_once('x'))
+        .and_then(|(w, h)| Some((w.parse::<usize>().ok()?, h.parse::<usize>().ok()?)))
+        .unwrap_or((1100, 800));
+    let img = preview::render_view_wh(&built.mesh, &colours, &fr, a.num("az", 35.0), a.num("el", 22.0), w, h);
+    let path = match &a.out {
+        Some(p) if p.extension().is_some() => p.clone(),
+        Some(p) => {
+            std::fs::create_dir_all(p).ok();
+            p.join(format!("{id}_view.png"))
+        }
+        None => usage(),
+    };
+    match img.save_png(&path) {
+        Ok(()) => true,
+        Err(e) => {
+            eprintln!("error: {e}");
+            false
+        }
     }
 }
 

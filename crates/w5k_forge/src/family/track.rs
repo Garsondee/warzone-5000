@@ -29,7 +29,7 @@ impl Family for Track {
         &[SocketKind::Gear, SocketKind::Station]
     }
     fn host(&self) -> Option<Host> {
-        Some(Host { hull: "hull_bastion", hull_params: &[], socket: "gear_*" })
+        Some(Host { hull: "hull_bastion", hull_params: &[], socket: "gear_*", kw_per_t: 18.0 })
     }
     fn params(&self) -> Vec<Param> {
         vec![

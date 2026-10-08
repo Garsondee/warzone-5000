@@ -14,7 +14,7 @@
 use super::{stat, style, Family, Param, Role, Scale, Stat, Values};
 use crate::convex::Convex;
 use crate::geom::{v3, Plane, V3};
-use crate::schema::{MaterialLibrary, Axis, Category, Function, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
+use crate::schema::{MaterialLibrary, Axis, Category, Function, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot, WeaponFn};
 use crate::Built;
 
 pub struct TankTurret;
@@ -536,7 +536,21 @@ impl Family for TankTurret {
                 forward: [0.0, 0.0, -1.0],
                 hints: Default::default(),
             }],
-            function: Function { draw_kw: 0.5 + 2.0 * l.w * l.w, ring_m: 2.0 * l.ring_r, ..Default::default() },
+            function: Function {
+                draw_kw: 0.5 + 2.0 * l.w * l.w,
+                ring_m: 2.0 * l.ring_r,
+                weapon: Some(WeaponFn {
+                    kind: "gun".into(),
+                    energy_j: g.energy_j,
+                    shots_per_min: 60.0 / l.reload_s(v["loader"]),
+                    penetration_mm: penetration_mm(&g, velocity_at(&g, 1000.0)),
+                    // Effective range: where drag has taken a third off the muzzle velocity.
+                    range_m: (0.41 * 4500.0 * (g.shell_kg / (g.d * g.d)) / (7.0 / (0.075 * 0.075))).clamp(300.0, 20000.0),
+                    recoil_ns: g.recoil_ns,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
         }
     }
 

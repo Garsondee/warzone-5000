@@ -181,6 +181,11 @@ impl Forge {
                     s.problems.push(format!("turret ring {:.2} m is wider than the {:.2} m ring on '{}'", f.ring_m, max, pl.socket));
                 }
             }
+            if let Some(&max) = sock.hints.get("ctx.mast_max") {
+                if f.mast_m > max * 1.001 {
+                    s.problems.push(format!("{} needs a {:.2} m mount but '{}' is only {:.2} m wide", part.def.name, f.mast_m, pl.socket, max));
+                }
+            }
             if part.def.category == Category::Engine {
                 let (lo, hi) = voxel::bounds(&part.pieces);
                 let d = hi - lo;

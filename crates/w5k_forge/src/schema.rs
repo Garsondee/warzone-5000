@@ -374,6 +374,9 @@ pub struct Function {
     /// Sensor summary.
     #[serde(default)]
     pub sensor: Option<SensorFn>,
+    /// Width of the base a mast-mounted part needs (m); checked against the hull socket's `ctx.mast_max`.
+    #[serde(default)]
+    pub mast_m: f64,
     /// Repair rig: structure restored per second (kg/s) and reach (m).
     #[serde(default)]
     pub repair_kg_s: f64,

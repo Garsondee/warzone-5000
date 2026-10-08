@@ -9,12 +9,22 @@
 //! * **Budgeted**: they compete for the part's mass. With "hold mass" on, moving one makes the unlocked
 //!   budgeted sliders give way so the mass stays put ([`set_slider`]); locked sliders never move.
 
+pub mod antigrav;
+pub mod beam;
 pub mod engine;
 pub mod hull;
+pub mod hover;
+pub mod legs;
+pub mod rail;
+pub mod repair;
+pub mod rotor;
+pub mod sensor;
+pub mod missile;
 pub mod mounts;
 pub mod style;
 pub mod track;
 pub mod turret;
+pub mod wheel;
 
 use std::collections::BTreeMap;
 
@@ -88,6 +98,8 @@ pub struct Host {
     pub hull: &'static str,
     pub hull_params: &'static [(&'static str, f64)],
     pub socket: &'static str,
+    /// Installed power per tonne of the whole vehicle in sweeps (a flier needs far more than a tank).
+    pub kw_per_t: f64,
 }
 
 /// A context hint (`ctx.*`) read from the values, with a default for when the family is shown on its own.
@@ -214,6 +226,18 @@ pub fn all() -> Vec<Box<dyn Family>> {
         Box::new(hull::Dreadnought),
         Box::new(track::Track),
         Box::new(engine::Engine),
+        Box::new(hull::Strider),
+        Box::new(wheel::Wheel),
+        Box::new(legs::Legs),
+        Box::new(rail::Rail),
+        Box::new(hover::Hover),
+        Box::new(hull::Skiff),
+        Box::new(antigrav::AntiGrav),
+        Box::new(rotor::Rotor),
+        Box::new(missile::Missile),
+        Box::new(beam::Beam),
+        Box::new(sensor::Sensor),
+        Box::new(repair::Repair),
     ]
 }
 
