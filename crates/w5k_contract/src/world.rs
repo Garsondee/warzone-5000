@@ -35,7 +35,9 @@ pub struct Material {
     pub mu_peak: f64,
     /// Sliding friction coefficient.
     pub mu_slide: f64,
-    /// Rolling resistance coefficient of a hard wheel on it (dimensionless).
+    /// The rolling-resistance coefficient this *surface adds* to the tyre's own (`TyreDef::rolling_coeff`, the hysteresis loss on a smooth hard
+    /// surface): 0 on smooth asphalt, larger on loose or rough firm ground. On soft ground the soil law (sinkage, compaction resistance) replaces it,
+    /// so a surface with `soil: Some(..)` normally carries 0 here. Total = tyre + surface; the CHASSIS design note may refine it by CCR.
     pub rolling_coeff: f64,
     /// RMS height of micro-roughness the heightfield does not resolve, m (adds ride excitation).
     pub roughness_rms_m: f64,

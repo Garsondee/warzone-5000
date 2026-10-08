@@ -158,13 +158,14 @@ impl VehicleModel for RigidBoxVehicle {
             v_new = 0.0;
         }
         self.speed = v_new;
-        // --- lateral: bicycle model for wheels, pivot rate for tracks. Positive steer = right = negative yaw.
-        let target_steer = cmd.steer * self.max_steer_rad;
+        // --- lateral: bicycle model for wheels, pivot rate for tracks. `steer_angle` follows the yaw convention (positive = left, like the
+        // steer joint coordinate), so a command of +1 (full right) asks for a negative angle and a negative yaw rate.
+        let target_steer = -cmd.steer * self.max_steer_rad;
         self.steer_angle = Self::lag(self.steer_angle, target_steer, dt_s, 0.15);
         let yaw_rate = if self.tracked {
             -cmd.steer * 0.6 * if self.speed.abs() < 0.5 { 1.0 } else { 0.7 }
         } else {
-            -self.speed / self.wheelbase_m * scalar::tan(self.steer_angle)
+            self.speed / self.wheelbase_m * scalar::tan(self.steer_angle)
         };
         self.yaw += yaw_rate * dt_s;
         let f = self.forward();

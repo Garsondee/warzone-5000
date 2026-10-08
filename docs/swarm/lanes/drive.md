@@ -30,7 +30,7 @@ unit, brakes with heat, fuel. The owner will see a dyno curve, a shift diagram, 
 8. `DrivePort` implementation built from any `DrivetrainDef` (the truck and the tank in the dummy rigs both work); `w5k drive bench <engine|shift|brake|launch> --out DIR` writes CSV and, once VIEWER's plotter exists, PNGs.
 
 ## Acceptance for M1  (CI on Linux and Windows)
-All the tests above; state hash identical on both platforms; at most 10 us per powertrain step; no NaN across a fuzz of 200 random but valid `DrivetrainDef`s (or a rejection with a reason).
+All the tests above; state hash identical on both platforms; at most 8 us per powertrain step (the milestone budget is 30 us per vehicle-tick end to end: CHASSIS 20, DRIVE 8, glue 2); no NaN across a fuzz of 200 random but valid `DrivetrainDef`s (or a rejection with a reason).
 The owner will see: a dyno curve (torque and power against rpm), a shift diagram, a table of speed per gear against the M998, a launch trace, a brake-fade plot.
 
 ## Theory to explain in `docs/theory/drive.md`
@@ -40,7 +40,7 @@ Power is torque times angular speed (the hyperbola of force against speed); a ge
 Wheel and ground contact (CHASSIS, TRACKS); driveline torsional wobble and gear lash (NOT-MODELLED); electric drives beyond a torque-speed map placeholder; engine thermal limits and cooling (M3); ABS.
 
 ## Needs from others / gives to others
-Needs: wheel and sprocket inertia from CHASSIS; the real `DrivetrainDef`s from FORGE; M998 figures from VALIDATION. Gives: a `DrivePort` implementation to ARCH's glue, speed-per-gear and fuel-range figures to VALIDATION.
+Needs: nothing from CHASSIS at build time (wheel and sprocket inertia are in the rig, `WheelDef::inertia_kg_m2`; CHASSIS integrates the wheels and hands you `ShaftState`s); the real `DrivetrainDef`s from FORGE; M998 figures from VALIDATION. Gives: a `DrivePort` implementation to ARCH's glue, speed-per-gear and fuel-range figures to VALIDATION.
 
 ## Tripwires specific to this lane
 A coupling that needs more than 8 substeps; a torque that reverses a stopped shaft; an efficiency or ratio written as a bare number; tuning anything to a single vehicle; modelling the NOT-MODELLED list.

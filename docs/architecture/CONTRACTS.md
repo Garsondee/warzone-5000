@@ -42,10 +42,11 @@ driven by position, normal and the per-vertex `edge` and `cavity` flags.
 **Ports.** All three are plain traits so each physics lane can be tested alone.
 - `DrivePort::step(dt, inputs, shafts, torque_out)`: one call per substep. `shafts` carries each driven output's speed, reflected inertia and the vehicle speed; `torque_out` receives the net torque (drive minus brake) per output. Contract: never reverse a stopped shaft by braking alone.
 - `SuspensionElement::step(compression, rate, dt)` returns the force along the strut and its parts (spring, damper, bump stop) for the ledger.
+- **Steering sign:** the steer angle of a station, and its joint coordinate, follow the yaw convention (positive = left); a driver's `Command::steer = +1` (full right) therefore produces a **negative** steer angle and a negative yaw rate.
 - `ContactElement::step(input)` takes the patch kinematics in the contact frame (penetration and rate, velocities over the ground, the rolling member's surface speed, the ground material) and returns forces and the self-aligning moment, the shaft reaction torque, sinkage, slip and a saturation flag.
 
 **WorldQuery.** Deterministic and side-effect free (`&self`): vehicles are stepped against an immutable world. `height_m`, `normal`, `material_id_at`, `raycast`, `props_in_aabb`, `bounds`. A `Material` is the runtime flattening of a `MaterialDef` (every number a `Param` in RON);
-soft ground carries Bekker-Wong `SoilParams` in SI.
+soft ground carries Bekker-Wong `SoilParams` in SI. **Rolling resistance:** total = `TyreDef::rolling_coeff` (the tyre's own hysteresis loss on a smooth hard surface) + `Material::rolling_coeff` (what the surface adds: 0 on smooth asphalt, more on loose firm ground); on soft ground the soil law's compaction resistance replaces the surface term (so soft materials carry 0). The CHASSIS design note may refine this by CCR.
 
 **ForceLedger.** Bodies are numbered hull = 0, then stations, then articulation joints, in rig order. Forces are world-frame, N and N m. Switched off in bulk runs (`ForceLedger::off()`); then `add` costs a branch.
 
@@ -54,7 +55,7 @@ For each substep of length `dt / substeps`:
 1. Wheel and sample positions from the hull pose and each station's travel; probe the world for height, normal and material.
 2. Suspension: compression and rate per station, then `SuspensionElement::step`; reaction on the hull and the unsprung mass.
 3. Contact: `ContactElement::step` per tyre or track sample; rotate the contact-frame force to the world; apply at the contact point; the vertical force carries the unsprung mass.
-4. Powertrain: gather `ShaftState`, `DrivePort::step`, integrate each wheel or sprocket (`J d(omega)/dt = T_drive - shaft_reaction`).
+4. Powertrain: gather `ShaftState` (speed from the station, inertia from `WheelDef::inertia_kg_m2`, vehicle speed), `DrivePort::step` returns the net torque per output, and **the chassis (station dynamics) integrates each wheel or sprocket's spin**: `J d(omega)/dt = T_shaft - shaft_reaction` (the tyre's `shaft_reaction_nm` plus rolling resistance). DRIVE never integrates a wheel; it only sees speeds and returns torques.
 5. Gravity, aero drag, anti-roll; articulation servos and their reaction wrenches on the hull.
 6. Sum the wrench on the hull about its centre of mass and integrate with semi-implicit Euler (velocity first; `Quat::integrate_world` for orientation); integrate unsprung travel the same way.
 7. Record every term in the ledger; flush decaying state (`scalar::flush_tiny`).

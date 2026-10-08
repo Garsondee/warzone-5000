@@ -26,10 +26,11 @@ and plots of the same motion against analytic answers. You build the *chassis* i
 4. `hull`: the 6-DoF rigid body with wrench accumulation, world-frame inertia and the gyroscopic term; semi-implicit Euler with `Quat::integrate_world`. `free_fall_matches_g_t_squared_over_2`, `torque_free_spin_conserves_angular_momentum`, `spring_supported_hull_conserves_energy_to_0p1_percent`.
 5. `wheeled` assembly: four stations on `BumpStrip` with `ConstantTorquePowertrain` (and later DRIVE's real one). `truck_rests_at_the_design_ride_height_within_5mm`, `axle_loads_match_com_position` (`F_front = m g b / L`), `braking_load_transfer_matches_m_a_h_over_L`, `steady_turn_lateral_load_transfer_matches_m_ay_h_over_track`, `braking_distance_matches_v2_over_2mu_g`, `low_speed_turn_radius_matches_ackermann_L_over_tan_delta`, `step_steer_yaw_rate_settles_without_oscillation_below_the_critical_speed`, `truck_crosses_the_speed_hump_at_20kmh_without_bottoming_out`.
 6. The ledger: every term recorded; `ledger_net_force_equals_mass_times_acceleration` (to 1e-9, per body).
-7. The glue API (agreed in the design note) and `w5k chassis bench <name> --out DIR` (CSV traces and a small PNG per bench via VIEWER's plotter once it lands; CSV until then).
+7. Wheel and hub dynamics: **you integrate each wheel's spin** (`J d(omega)/dt = T_shaft - shaft_reaction`, with `T_shaft` the net torque DRIVE's `DrivePort` returns and the reaction from your tyre model), each station's travel and steer, and you build the `ShaftState`s that DRIVE reads (inertia comes from the rig's `WheelDef::inertia_kg_m2`).
+8. The glue API (agreed in the design note) and `w5k chassis bench <name> --out DIR` (CSV traces and a small PNG per bench via VIEWER's plotter once it lands; CSV until then).
 
 ## Acceptance for M1  (CI must pass these on Linux and Windows)
-All the tests above; at most 30 us per vehicle-tick for the 4x4 at its substep count (measure with a release-profile bench and report it); no NaN across the fuzz of 200 random sliders in range (ride frequency 0.8-3 Hz, damping ratio 0.1-0.8, wheelbase 2-4 m, mass 1-5 t) or a rejection with a stated reason; state hash identical on Linux and Windows.
+All the tests above; at most 20 us per vehicle-tick for the chassis alone on the 4x4 at its substep count (the milestone budget is 30 us end to end: DRIVE 8, glue 2; measure with a release-profile bench and report it); no NaN across the fuzz of 200 random sliders in range (ride frequency 0.8-3 Hz, damping ratio 0.1-0.8, wheelbase 2-4 m, mass 1-5 t) or a rejection with a stated reason; state hash identical on Linux and Windows.
 The owner will see: the truck over the hump (replay through the reference viewer), force vectors at the contact patches, traces of travel, pitch and load transfer against the closed form.
 
 ## Theory to explain in `docs/theory/chassis.md`
@@ -39,7 +40,7 @@ Spring-mass-damper, ride frequency and damping ratio (graphics analogy: a critic
 Tracked contact and soil (TRACKS), the powertrain (DRIVE), terrain (WORLD), anti-lock braking, tyre temperature or wear, wheel-hop beyond what unsprung mass gives, flexible bodies, any rendering. Do not invent a constraint solver.
 
 ## Needs from others / gives to others
-Needs: DRIVE's `DrivePort`; WORLD's `WorldQuery`; FORGE's HMMWV rig; VIEWER's plotter; VALIDATION's M998 figures (suspension frequency, braking, wheelbase). Gives: the chassis API to ARCH's glue; `SuspensionElement` implementations that TRACKS reuses for road wheels.
+Needs: DRIVE's `DrivePort`; WORLD's `WorldQuery`; FORGE's HMMWV rig; VIEWER's plotter; VALIDATION's M998 figures (suspension frequency, braking, wheelbase). Gives: the chassis API to ARCH's glue (wheel spin, travel and steer state, shaft states for DRIVE); `SuspensionElement` implementations that TRACKS reuses for road wheels.
 
 ## Tripwires specific to this lane
 A rig needing more than 8 substeps (stop, write it up: this is spike S1's kill criterion); any constant tuned to one vehicle; any banned maths call; modelling something listed in `NOT-MODELLED.md`; a result you cannot explain from the ledger.

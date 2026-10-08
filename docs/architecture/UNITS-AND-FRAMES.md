@@ -48,6 +48,6 @@ Angles from `to_ypr()` are what a driver would read on an inclinometer: heading,
 `RenderRig` nodes bind to these by index (`JointBinding::index`) with an explicit axis, so a viewer needs no knowledge of the rig beyond its `RenderRig`.
 
 ## A worked example
-A truck at the origin facing forward (-Z) with `steer = +1` (full right) at 10 m/s: its yaw rate is `-(v / wheelbase) tan(steer angle)`, negative. After 3 s its heading has rotated
+A truck at the origin facing forward (-Z) with `steer = +1` (full right) at 10 m/s: the steer angle `delta` follows the yaw convention (positive = left), so `delta = -delta_max`, and the low-speed yaw rate is `(v / wheelbase) tan(delta)`, which is negative. After 3 s its heading has rotated
 clockwise seen from above, its position has moved toward +X, and `to_ypr()` returns a negative yaw. The test `steering_right_turns_the_heading_clockwise_seen_from_above`
 in `w5k_contract::testing::vehicle` asserts exactly this; if a lane's model disagrees, the lane's model is wrong.

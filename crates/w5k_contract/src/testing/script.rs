@@ -31,8 +31,8 @@ impl ScriptedCommands {
             go(1.0, 0.9, 0.0),  // launch
             go(5.0, 0.30, 0.0), // cruise toward the speed hump
             go(14.0, 0.30, 0.0),
-            go(20.0, 0.30, -0.25), // gentle right (steer is positive to the right)
-            go(23.0, 0.30, 0.25),  // gentle left
+            go(20.0, 0.30, 0.25),  // gentle right (steer is +1 = full right)
+            go(23.0, 0.30, -0.25), // gentle left
             go(26.0, 0.30, 0.0),
             (30.0, Command { brake: 0.8, ..Command::NEUTRAL }), // brake to a stop
             (40.0, Command { brake: 1.0, parking_brake: true, ..Command::NEUTRAL }),

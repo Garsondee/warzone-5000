@@ -12,7 +12,7 @@ pub fn standard_materials() -> MaterialTable {
         name: "asphalt".into(),
         mu_peak: 0.9,
         mu_slide: 0.8,
-        rolling_coeff: 0.015,
+        rolling_coeff: 0.0,
         roughness_rms_m: 0.002,
         soil: None,
     });
@@ -20,7 +20,7 @@ pub fn standard_materials() -> MaterialTable {
         name: "dirt".into(),
         mu_peak: 0.65,
         mu_slide: 0.55,
-        rolling_coeff: 0.04,
+        rolling_coeff: 0.025,
         roughness_rms_m: 0.015,
         soil: None,
     });
@@ -28,7 +28,7 @@ pub fn standard_materials() -> MaterialTable {
         name: "mud".into(),
         mu_peak: 0.45,
         mu_slide: 0.4,
-        rolling_coeff: 0.12,
+        rolling_coeff: 0.0, // the soil law supplies the compaction resistance
         roughness_rms_m: 0.03,
         soil: Some(SoilParams {
             n: 0.8,

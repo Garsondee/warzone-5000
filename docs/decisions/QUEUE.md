@@ -2,7 +2,7 @@
 
 Anything that is the owner's to decide and that no document already settles becomes a **card** here. Nobody blocks on a card: work
 continues on the **default** and is tagged `PROVISIONAL(card-id)` in the code, the design note or the PR until the owner answers.
-ARCH keeps this file current; lanes add cards by opening a PR that adds a card (or by writing one in their status file for ARCH to lift).
+ARCH keeps this file current. Lanes do not edit it: they write the card in their status file under "Cards needed" and ARCH lifts it here and numbers it.
 
 ## Card format
 ```

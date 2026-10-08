@@ -18,7 +18,7 @@ replay be verified, and a bug be reproduced. Floats are allowed; surprises are n
 Exactly rounded operations are fine everywhere: `+ - * /`, `sqrt`, `abs`, `min`, `max`, `floor`, `ceil`, `round`, comparisons.
 
 ## Goldens
-- A golden is a hash chain of the simulation state, one entry per simulated second (`ReplayHeader::state_hashes`), stored in `tests/golden/*.json`.
+- A golden is a hash chain of the simulation state, one entry per simulated second (`ReplayHeader::state_hashes`), stored in `crates/<crate>/tests/golden/*.json`; each lane owns the goldens in its own crate, ARCH owns the first-light golden in `w5k_sim`.
 - CI compares the **same file** on Linux and Windows. A mismatch is a regression or a non-portable call; find the call (look for a banned method or an unordered iteration).
 - A golden changes **only on purpose**: `W5K_BLESS=1 cargo test -p <crate> --test <name>`, and the PR description contains `Golden-Change: <why>`. CI's golden guard
   rejects a PR that touches a golden without that line. Never bless to make a failing test pass.

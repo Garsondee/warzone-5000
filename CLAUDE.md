@@ -44,14 +44,17 @@ the product: design choices (suspension, gearbox, tracks, hull, turret) must cha
 - One writer per path: `docs/swarm/ownership.toml` says who owns what, and the CI **lane guard** rejects a PR that touches
   another lane's files. Need something from another lane? File an *interface request* `docs/swarm/requests/<yourlane>-<topic>.md`.
 - Branch `lane/<lane>/<topic>`, PR into **`integration`** (never `main`; `main` moves only at an owner-approved milestone).
-- **Your first PR is a one-page design note** (plus your risk spike, plus any CCRs), then you build. Update
-  `docs/swarm/status/<lane>.md` with every PR (done, blocked, next, cards needed).
+- **Your first PR is a one-page design note** (plus your risk spike, plus the CCRs you expect, written as text in the note). Open it, then keep
+  building: do not wait for the merge. Start with the steps of your brief that need only your own crate and `w5k_math`; anything that depends on a
+  CCR answer waits for `contract-v0.2`, and if the review changes something you used you adapt. Update `docs/swarm/status/<lane>.md` with every PR
+  (done, blocked, next, cards needed).
 - **Merge gate** (`docs/swarm/MERGE-GATE.md`): an analytic-oracle test or a validation entry (or an `UNVALIDATED` tag with a source),
   a theory note, golden and impact-matrix diffs explained, and an image or clip. Tests are named as physics sentences
   (`braking_distance_matches_v2_over_2mu_g`).
 - **No new dependency** without an approved card (CI checks that every dependency is `workspace = true`). PRs stay under 400 lines.
-- **Tripwires: stop and write a note** if you are about to: exceed 400 lines in a PR; add a dependency; write a constant without
-  provenance; touch a contract without a CCR; delete tests; work outside your brief; or refactor "while you are there".
+- **Tripwires: stop and write a note in your status file** (the full list is `docs/swarm/RULES.md` section 8): a PR over 400 changed lines of
+  non-test code; a new dependency; a constant without provenance; a contract touched without a CCR; deleting tests; work outside your brief;
+  a refactor "while you are there"; a result you cannot explain from the force ledger.
 - Push work in progress at least hourly (containers are ephemeral). When your mission's deliverables pass, stop, write the handoff note,
   and idle; do not invent more work.
 
