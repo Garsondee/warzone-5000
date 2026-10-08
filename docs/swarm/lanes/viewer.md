@@ -9,6 +9,8 @@ Think of the replay as a G-buffer for time: written once, read by many passes.
 `crates/w5k_replay/**`, `tools/viewer/**`, `crates/w5k_tools/src/cmd/viewer.rs`; always `docs/swarm/status/viewer.md`, `docs/swarm/requests/viewer-*.md`, `docs/theory/viewer.md`, `docs/lanes/viewer/**`, `spikes/viewer/**`.
 
 ## You read, never edit
+**Contract 0.1.1 note.** `Frame` now carries contact material, `limiting`, weapon state and `projectiles`, and `VehicleHeader` a `livery`; revolute joint coordinates are continuous (interpolate linearly); the contact frame is right-handed (y = left). Reserve an extension block and a version for projectiles and weapon state in your encoding; the aim-joint quantum must be finer than the gun-laying error you plot (16 bits over 2 pi, 0.1 mrad, at least).
+
 `crates/w5k_contract` (`Frame`, `ReplayHeader`, `VehicleFrame`, `RenderRig`, `JointBinding`, `ForceTerm`), `docs/architecture/CONTRACTS.md` and `UNITS-AND-FRAMES.md`; the prototype viewer for ideas only (`reference/prototype-v0/tools/trial/{template.html,build.py,capture.js,frames.js}`: QUARRY, re-write, do not copy blindly).
 
 ## Stand-ins you start on

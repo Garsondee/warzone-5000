@@ -13,7 +13,7 @@ workspace = true
 w5k_math.workspace = true
 serde.workspace = true
 libm.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
 ron.workspace = true

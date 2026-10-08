@@ -1,7 +1,7 @@
 //! The scenario runner: step a vehicle through a world under a scripted driver and record what happened.
 
 use serde::Serialize;
-use w5k_contract::frame::{Frame, ReplayHeader, VehicleHeader, WorldHeader, REPLAY_VERSION};
+use w5k_contract::frame::{Event, Frame, ReplayHeader, VehicleHeader, WorldHeader, REPLAY_VERSION};
 use w5k_contract::testing::{BumpStrip, RigidBoxVehicle, ScriptedCommands};
 use w5k_contract::{ForceLedger, VehicleModel, WorldQuery};
 use w5k_math::StateHasher;
@@ -105,9 +105,11 @@ pub fn run(
     let n_steer = model.rig().stations.iter().filter(|st| st.steer.is_some()).count();
     let travel_range = (n_st + n_steer)..(2 * n_st + n_steer);
     let mut last = model.frame().pos_m;
+    let mut pending: Vec<Event> = Vec::new();
     for k in 0..ticks {
         let cmd = script.at(k as f64 * dt);
         let rep = model.step(dt, &cmd, world, &mut ledger);
+        model.drain_events(&mut pending);
         let mut f = model.frame();
         f.vehicle = 0;
         s.distance_m += (f.pos_m - last).length();
@@ -124,7 +126,12 @@ pub fn run(
             for t in &f.joints[travel_range.clone()] {
                 s.max_abs_travel_m = s.max_abs_travel_m.max(t.abs() as f64);
             }
-            frames.push(Frame { t_s: (k + 1) as f64 * dt, vehicles: vec![f], events: vec![] });
+            frames.push(Frame {
+                t_s: (k + 1) as f64 * dt,
+                vehicles: vec![f],
+                events: std::mem::take(&mut pending),
+                projectiles: vec![],
+            });
         }
         if (k + 1) % (TICK_HZ as usize) == 0 {
             model.hash_state(&mut chain);
@@ -142,8 +149,9 @@ pub fn run(
             rig_id: rig.id.clone(),
             joint_names: names,
             contact_names: rig.stations.iter().map(|st| st.name.clone()).collect(),
+            livery: None,
         }],
-        world: WorldHeader { course: course.into(), seed: 0 },
+        world: WorldHeader { course: course.into(), seed: 0, terrain: None },
         state_hashes,
     };
     let mut h = StateHasher::new();

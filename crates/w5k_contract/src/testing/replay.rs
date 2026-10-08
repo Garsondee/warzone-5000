@@ -4,7 +4,7 @@
 use w5k_math::StateHasher;
 
 use crate::command::Command;
-use crate::frame::{ContactFrame, Frame, ReplayHeader, VehicleHeader, WorldHeader, REPLAY_VERSION};
+use crate::frame::{ContactFrame, Event, Frame, ReplayHeader, VehicleHeader, WorldHeader, REPLAY_VERSION};
 use crate::ledger::ForceLedger;
 use crate::render::RenderRig;
 use crate::rig::PhysRig;
@@ -37,14 +37,21 @@ pub fn run_stand_in(
     let mut frames = Vec::new();
     let mut state_hashes = Vec::new();
     let mut chain = StateHasher::new();
+    let mut pending: Vec<Event> = Vec::new();
     for k in 0..ticks {
         let t = k as f64 * dt;
         let cmd: Command = script.at(t);
         v.step(dt, &cmd, world, &mut ledger);
+        v.drain_events(&mut pending);
         if (k + 1) % every == 0 {
             let mut f = v.frame();
             f.vehicle = 0;
-            frames.push(Frame { t_s: (k + 1) as f64 * dt, vehicles: vec![f], events: vec![] });
+            frames.push(Frame {
+                t_s: (k + 1) as f64 * dt,
+                vehicles: vec![f],
+                events: std::mem::take(&mut pending),
+                projectiles: vec![],
+            });
         }
         if (k + 1) % (tick_hz as usize) == 0 {
             v.hash_state(&mut chain);
@@ -68,8 +75,9 @@ pub fn run_stand_in(
             rig_id: rig.id.clone(),
             joint_names: rig.joint_names(),
             contact_names: rig.stations.iter().map(|s| s.name.clone()).collect(),
+            livery: None,
         }],
-        world: WorldHeader { course: course.into(), seed: 0 },
+        world: WorldHeader { course: course.into(), seed: 0, terrain: None },
         state_hashes,
     };
     let mut h = StateHasher::new();

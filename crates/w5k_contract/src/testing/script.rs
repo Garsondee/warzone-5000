@@ -2,7 +2,7 @@
 
 use w5k_math::{scalar, StateHasher};
 
-use crate::command::{Command, GearRequest};
+use crate::command::{AimDemand, Command, GearRequest};
 use crate::ports::{DriveInputs, DrivePort, DriveTelemetry, ShaftState};
 
 /// A driver that replays keyframes: each `(t_s, Command)` holds from `t_s` until the next key.
@@ -42,16 +42,9 @@ impl ScriptedCommands {
     /// A slow drive on flat ground while the turret slews through a full circle and the gun elevates and fires. 40 s long.
     pub fn tank_demo() -> ScriptedCommands {
         let aim = |t: f64, yaw: f64, pitch: f64, fire: bool| {
-            (
-                t,
-                Command {
-                    throttle: 0.2,
-                    turret_yaw_rad: Some(yaw),
-                    gun_pitch_rad: Some(pitch),
-                    fire,
-                    ..Command::NEUTRAL
-                },
-            )
+            let mut c = Command { throttle: 0.2, fire: u8::from(fire), ..Command::NEUTRAL };
+            c.aim[0] = AimDemand::relative(yaw, pitch);
+            (t, c)
         };
         ScriptedCommands::new(vec![
             aim(0.0, 0.0, 0.0, false),
@@ -148,7 +141,7 @@ mod tests {
             p.step(
                 dt,
                 &inputs,
-                &[ShaftState { omega_rad_s: omega, inertia_kg_m2: j, vehicle_speed_m_s: 0.0 }],
+                &[ShaftState { omega_rad_s: omega, inertia_kg_m2: j, vehicle_speed_m_s: 0.0, ..ShaftState::default() }],
                 &mut out,
             );
             omega += out[0] / j * dt;

@@ -1,0 +1,329 @@
+//! Compile-checked SKETCHES of the proposed contract changes, and the extra `validate()` rules they imply. This is not part of the
+//! contract (the staged tree is read-only for the red team); it exists so each "proposed minimal CCR" in REPORT.md is a type that
+//! actually compiles, serialises, and is exercised by a test against the two tanks.
+
+use serde::{Deserialize, Serialize};
+use w5k_contract::rig::*;
+use w5k_math::{Mat3, Vec3};
+
+use crate::analysis::G;
+use crate::common::sprung_mass_and_com;
+
+// ------------------------------------------------------------------------------------------------------------------ BOGIE
+
+/// CCR-1. A rigid beam that carries several stations on ONE sprung pivot (VVSS bogie, M35 tandem walking beam, 6x6 bogie axle).
+/// `PhysRig` gains `#[serde(default)] pub linkages: Vec<LinkageDef>`. Member stations keep their own travel coordinate (so the
+/// frame, the render rig and `joint_names()` do not change), but their own `suspension` must be `Rigid`: the spring, damper and
+/// bump stop live here and act on the pivot coordinate.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct LinkageDef {
+    pub name: String,
+    /// `(station index, lever ratio)`. Pivot travel = sum(lever_i * travel_i); station i receives lever_i * pivot force. Sum of levers = 1.
+    pub members: Vec<(usize, f64)>,
+    pub suspension: SuspensionDef,
+    /// The beam may not rock further than this difference between any two members' travel (hard stop at `suspension.bump_stop.rate_n_m`), m.
+    pub rock_limit_m: f64,
+}
+
+/// Reference semantics of the sketch: the stiffness matrix of a linear pivot spring `k_s` acting through the lever ratios.
+pub fn linkage_k_matrix(l: &LinkageDef, k_s: f64) -> Vec<Vec<f64>> {
+    let n = l.members.len();
+    (0..n).map(|i| (0..n).map(|j| k_s * l.members[i].1 * l.members[j].1).collect()).collect()
+}
+
+// ------------------------------------------------------------------------------------------------------------------- STEER
+
+/// CCR-2. Replaces the bare `ratio` semantics of `DriveNode::SteerUnit` by an additive `law` (`#[serde(default)]`; `ratio` stays the unit's
+/// own input reduction, documented as such).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct SteerLaw {
+    /// Fractional speed difference between the two outputs at full demand, (v_outer - v_inner) / (v_outer + v_inner), one entry per
+    /// forward gear (index = gear - 1, the last entry repeats). Empty = the kind's default. Kinematic units (clutch-brake, double
+    /// differential) are fixed ratios; a hydrostatic unit instead sets `diff_speed_rad_s`.
+    pub diff_ratio_by_gear: Vec<f64>,
+    /// Discrete steering stages as fractions of the full-demand difference (a double-differential Tiger II has two fixed radii per gear:
+    /// `[0.5, 1.0]`); empty = continuous.
+    pub detents: Vec<f64>,
+    /// Hydrostatic: the speed difference between the outputs (rad/s at the sprocket) at full demand, independent of output speed.
+    pub diff_speed_rad_s: Option<f64>,
+    /// The unit is fed from the engine side and so steers with the gearbox in neutral (pivot steer).
+    pub works_in_neutral: bool,
+    /// Largest torque the unit can put across the two outputs, N m at the sprockets (pump/motor limit, or the steering-brake capacity).
+    pub max_steer_torque_nm: f64,
+    /// For clutch-brake and controlled-differential units: the brakes (indices into `DrivetrainDef::brakes`) that realise the steering.
+    pub steer_brakes: Option<[usize; 2]>,
+}
+
+// ------------------------------------------------------------------------------------------------------------------- BRAKE
+
+/// CCR-6. Which shaft `BrakeDef::max_torque_nm` acts on, whether the steering demand drives it, and its self-energising asymmetry.
+/// `BrakeDef` gains three `#[serde(default)]` fields (additive: `parking: bool` stays): `location`, `steering`, `reverse_torque_factor`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum BrakeLocation {
+    /// On the driven station's shaft (after the final drive). Today's implicit reading in `box_truck`.
+    #[default]
+    AtStation,
+    /// On the shaft before the output's `final_drive_ratio` (a Sherman steering brake, an Abrams final-drive-input brake).
+    BeforeFinalDrive,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BrakeExtras {
+    pub location: BrakeLocation,
+    /// The steering demand (`DriveInputs::steer`) applies this brake on its side (clutch-brake, controlled-differential units).
+    pub steering: bool,
+    /// Torque factor for the direction of rotation that de-energises a band brake (1.0 = a disc).
+    pub reverse_torque_factor: f64,
+}
+
+impl Default for BrakeExtras {
+    fn default() -> Self {
+        BrakeExtras { location: BrakeLocation::AtStation, steering: false, reverse_torque_factor: 1.0 }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------- TRACK, BELLY
+
+/// CCR-3. `TrackDef` additions (all `#[serde(default)]`; 0 = unknown, consumer falls back to today's guesses).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct TrackExtras {
+    /// Closed loop length of the belt along its pitch line, m. `total_mass_kg()` and the belt's reflected inertia use
+    /// `mass_per_m_kg * belt_length_m` (today `contact_length_m`, the one part of the belt with no kinetic energy).
+    pub belt_length_m: f64,
+    /// Belt thickness under the road wheels, m: the ground plane is this far below the lowest road-wheel bottoms.
+    pub thickness_m: f64,
+    /// Running resistance of the track system on hard ground: `F = (c0 + c1 * v) * N`, dimensionless and s/m.
+    pub resist_c0: f64,
+    pub resist_c1_s_m: f64,
+    /// Number of sprocket teeth; the pitch radius is `pitch_m / (2 sin(pi / n))` (`WheelDef::radius_m` is the pitch radius).
+    pub sprocket_teeth: u8,
+}
+
+/// CCR-5. Vertical compliance of the road wheel rubber in series with the belt pad, per road wheel (the number substeps are baked from).
+/// `TrackDef` gains `#[serde(default)] pub wheel_contact: WheelContact`.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct WheelContact {
+    pub vertical_stiffness_n_m: f64,
+    pub vertical_damping_ns_m: f64,
+}
+
+/// CCR-4. `CollisionProxy` gains `#[serde(default)] pub role: ProxyRole`; `PhysRig` gains `#[serde(default)] pub ground_y_m: Option<f64>`
+/// (hull-frame height of the ground plane at the design ride height) and `ForceTerm::BellyDrag = 20` is appended to the ledger.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum ProxyRole {
+    #[default]
+    Hull,
+    /// The plate that ploughs soil: clearance and plan area come from this proxy's lowest face and its footprint.
+    Belly,
+    Skirt,
+    Other,
+}
+
+// ------------------------------------------------------------------------------------------------------- engine and damper
+
+/// CCR-9. `EngineDef` additions (`#[serde(default)]`): a free-turbine output stalls at 0 rpm (no idle floor), lags the throttle, and burns
+/// fuel at idle.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct EngineExtras {
+    pub free_output: bool,
+    pub response_time_s: f64,
+    pub idle_fuel_kg_s: f64,
+}
+
+/// CCR-12. `DamperDef` gains `friction_n` (dry friction, regularised by the solver); `BumpStopDef` gains `damping_ns_m` and `hard_limit`
+/// (what happens at `bump_travel_m`: a rigid clamp with restitution `restitution`).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct DamperExtras {
+    pub friction_n: f64,
+    pub stop_damping_ns_m: f64,
+    pub hard_limit: bool,
+    pub restitution: f64,
+}
+
+// ------------------------------------------------------------------------------------------------------------- validate()
+
+/// CCR-8: the structural checks `validate()` should have for tracked rigs. Returns every problem found (empty = fine).
+pub fn validate_tracked(rig: &PhysRig) -> Vec<String> {
+    let mut e = Vec::new();
+    let n = rig.stations.len();
+    let mut sides = Vec::new();
+    for (ti, t) in rig.tracks.iter().enumerate() {
+        if t.sprocket >= n || t.idler >= n {
+            e.push(format!("track {ti}: sprocket/idler index out of range"));
+            continue;
+        }
+        if !t.stations.contains(&t.sprocket) || !t.stations.contains(&t.idler) {
+            e.push(format!("track {ti}: sprocket and idler must be in `stations`"));
+        }
+        if rig.stations[t.sprocket].wheel.kind != WheelKind::Sprocket {
+            e.push(format!("track {ti}: `sprocket` is not a Sprocket station"));
+        }
+        if rig.stations[t.idler].wheel.kind != WheelKind::Idler {
+            e.push(format!("track {ti}: `idler` is not an Idler station"));
+        }
+        if t.stations.iter().any(|&s| s >= n || rig.stations[s].side != t.side) {
+            e.push(format!("track {ti}: a listed station is out of range or on the other side"));
+        }
+        if !(t.width_m > 0.0 && t.pitch_m > 0.0 && t.contact_length_m > 0.0 && t.mass_per_m_kg > 0.0 && t.tension_n >= 0.0) {
+            e.push(format!("track {ti}: width, pitch, contact length and mass per metre must be positive, tension non-negative"));
+        }
+        sides.push(t.side);
+    }
+    for s in [Side::Left, Side::Right] {
+        if sides.iter().filter(|&&x| x == s).count() > 1 {
+            e.push(format!("more than one track on side {s:?}"));
+        }
+    }
+    // steering unit: exactly [left, right] outputs
+    fn find_unit(n: &DriveNode) -> Option<&DriveNode> {
+        match n {
+            DriveNode::SteerUnit { .. } => Some(n),
+            DriveNode::Diff { children, .. } => children.iter().find_map(find_unit),
+            DriveNode::Output(_) => None,
+        }
+    }
+    if let Some(DriveNode::SteerUnit { children, .. }) = find_unit(&rig.drivetrain.driveline) {
+        let leaves: Vec<Option<usize>> = children.iter().map(|c| if let DriveNode::Output(i) = c { Some(*i) } else { None }).collect();
+        if leaves.len() != 2 || leaves.iter().any(|l| l.is_none()) {
+            e.push("SteerUnit needs exactly two Output children".into());
+        } else {
+            let st = |o: usize| rig.drivetrain.outputs.get(o).and_then(|o| rig.stations.get(o.station)).map(|s| s.side);
+            if st(leaves[0].unwrap()) != Some(Side::Left) || st(leaves[1].unwrap()) != Some(Side::Right) {
+                e.push("SteerUnit children must be [left, right] by the sides of the stations they drive".into());
+            }
+        }
+    }
+    // every output reached exactly once, and the two links (station.drive_output, outputs[i].station) agree
+    let mut reached = vec![0usize; rig.drivetrain.outputs.len()];
+    fn leaves_of(n: &DriveNode, out: &mut Vec<usize>) {
+        match n {
+            DriveNode::Output(i) => out.push(*i),
+            DriveNode::Diff { children, .. } | DriveNode::SteerUnit { children, .. } => children.iter().for_each(|c| leaves_of(c, out)),
+        }
+    }
+    let mut ls = Vec::new();
+    leaves_of(&rig.drivetrain.driveline, &mut ls);
+    for l in ls {
+        if l < reached.len() {
+            reached[l] += 1;
+        }
+    }
+    if reached.iter().any(|&c| c != 1) {
+        e.push("every output must be reached exactly once by the driveline".into());
+    }
+    for (i, o) in rig.drivetrain.outputs.iter().enumerate() {
+        if o.station < n && rig.stations[o.station].drive_output != Some(i) {
+            e.push(format!("output {i}: station {} does not point back at it", o.station));
+        }
+    }
+    for (si, s) in rig.stations.iter().enumerate() {
+        if let Some(o) = s.drive_output {
+            if rig.drivetrain.outputs.get(o).map(|x| x.station) != Some(si) {
+                e.push(format!("station {si}: drive_output {o} does not point back at it"));
+            }
+        }
+    }
+    for (bi, b) in rig.drivetrain.brakes.iter().enumerate() {
+        if b.station < n && rig.stations[b.station].drive_output.is_none() && !rig.tracks.is_empty() {
+            e.push(format!("brake {bi}: tracked vehicles brake the sprockets; station {} is not driven", b.station));
+        }
+    }
+    // stations
+    let mut names = std::collections::BTreeSet::new();
+    for (i, s) in rig.stations.iter().enumerate() {
+        if !names.insert(s.name.clone()) {
+            e.push(format!("station {i}: duplicate name {}", s.name));
+        }
+        if !matches!(s.suspension.spring, SpringKind::Rigid) && !(s.unsprung_mass_kg > 0.0) {
+            e.push(format!("station {i}: a sprung station needs a positive unsprung mass"));
+        }
+        if (s.bump_dir.length() - 1.0).abs() > 1e-6 {
+            e.push(format!("station {i}: bump_dir is not a unit vector"));
+        }
+        match &s.suspension.spring {
+            SpringKind::Table { points } => {
+                if points.is_empty() || points.windows(2).any(|w| !(w[1].0 > w[0].0)) || points.iter().any(|p| !p.0.is_finite() || !p.1.is_finite()) {
+                    e.push(format!("station {i}: Table points must be non-empty, finite and strictly ascending"));
+                }
+            }
+            SpringKind::Torsion { rate_nm_rad, arm_length_m, rest_arm_angle_rad } => {
+                if !(*rate_nm_rad > 0.0 && *arm_length_m > 0.0 && rest_arm_angle_rad.abs() < 1.5) {
+                    e.push(format!("station {i}: Torsion needs positive rate and arm length and |rest angle| < pi/2"));
+                }
+            }
+            SpringKind::Linear { rate_n_m } if !(*rate_n_m >= 0.0 && rate_n_m.is_finite()) => e.push(format!("station {i}: bad linear rate")),
+            _ => {}
+        }
+    }
+    for (i, a) in rig.anti_roll.iter().enumerate() {
+        if !(a.rate_n_m >= 0.0 && a.rate_n_m.is_finite()) {
+            e.push(format!("anti-roll {i}: rate must be finite and >= 0 (use a LinkageDef for coupled stations)"));
+        }
+        if a.left_station < n && a.right_station < n && rig.stations[a.left_station].side == rig.stations[a.right_station].side {
+            e.push(format!("anti-roll {i}: the two stations must be on opposite sides"));
+        }
+    }
+    // bodies
+    let pd = |m: &Mat3| {
+        let a = m.m;
+        a[0][0] > 0.0 && a[0][0] * a[1][1] - a[0][1] * a[1][0] > 0.0 && m.det() > 0.0 && a[0][0] + a[1][1] >= a[2][2] && a[1][1] + a[2][2] >= a[0][0] && a[0][0] + a[2][2] >= a[1][1]
+    };
+    if !(pd(&rig.hull.inertia_kg_m2) && rig.hull.com_m.is_finite() && rig.hull.mass_kg.is_finite()) {
+        e.push("hull inertia must be positive definite with the triangle inequalities, com finite".into());
+    }
+    // static equilibrium: the near-vertical sprung stations carry the sprung weight within 5 %
+    let (m_sprung, _) = sprung_mass_and_com(rig);
+    let carried: f64 = rig.stations.iter().filter(|s| s.bump_dir.y > 0.7).map(|s| s.suspension.preload_n).sum();
+    if rig.stations.iter().any(|s| s.bump_dir.y > 0.7 && !matches!(s.suspension.spring, SpringKind::Rigid)) && (carried - m_sprung * G).abs() > 0.05 * m_sprung * G {
+        e.push(format!("static equilibrium: sum of vertical preloads {:.0} N vs sprung weight {:.0} N", carried, m_sprung * G));
+    }
+    e
+}
+
+/// The broken variants used by the VALID probe: `(what is wrong, how to break an Abrams)`. Each one passes today's `validate()`.
+#[allow(clippy::type_complexity)]
+pub fn broken_variants() -> Vec<(&'static str, Box<dyn Fn(&mut PhysRig)>)> {
+    vec![
+        ("track.sprocket = 9999", Box::new(|r| r.tracks[0].sprocket = 9999)),
+        ("track.idler = 9999", Box::new(|r| r.tracks[0].idler = 9999)),
+        (
+            "sprocket not in track.stations",
+            Box::new(|r| {
+                let sp = r.tracks[0].sprocket;
+                r.tracks[0].stations.retain(|&s| s != sp);
+            }),
+        ),
+        ("left track lists a right-side station", Box::new(|r| r.tracks[0].stations[1] = 14)),
+        ("two tracks on the same side", Box::new(|r| r.tracks[1].side = Side::Left)),
+        (
+            "steer unit children reversed",
+            Box::new(|r| {
+                if let DriveNode::SteerUnit { children, .. } = &mut r.drivetrain.driveline {
+                    children.reverse();
+                }
+            }),
+        ),
+        ("output 1 never reached by the driveline", Box::new(|r| r.drivetrain.driveline = DriveNode::Output(0))),
+        ("drive_output on the wrong station", Box::new(|r| r.stations[8].drive_output = Some(1))),
+        ("output.station not the station that points at it", Box::new(|r| r.drivetrain.outputs[0].station = 1)),
+        ("brake on a return roller", Box::new(|r| r.drivetrain.brakes[0].station = 9)),
+        ("sprung road wheel with zero unsprung mass", Box::new(|r| r.stations[1].unsprung_mass_kg = 0.0)),
+        ("hull inertia diag(-1,-1,1) (det > 0, not positive definite)", Box::new(|r| r.hull.inertia_kg_m2 = Mat3::diagonal(-1.0, -1.0, 1.0))),
+        ("hull com NaN", Box::new(|r| r.hull.com_m = Vec3::new(f64::NAN, 0.0, 0.0))),
+        ("every preload zero (no static equilibrium)", Box::new(|r| r.stations.iter_mut().for_each(|s| s.suspension.preload_n = 0.0))),
+        ("duplicate station names", Box::new(|r| r.stations[2].name = r.stations[1].name.clone())),
+        ("Table spring empty", Box::new(|r| r.stations[1].suspension.spring = SpringKind::Table { points: vec![] })),
+        ("Table spring not ascending", Box::new(|r| r.stations[1].suspension.spring = SpringKind::Table { points: vec![(0.1, 5.0), (-0.1, 1.0)] })),
+        ("Torsion arm length 0", Box::new(|r| r.stations[1].suspension.spring = SpringKind::Torsion { rate_nm_rad: 1.0, arm_length_m: 0.0, rest_arm_angle_rad: 0.0 })),
+        ("bump_dir (0,0,0.6) (not unit)", Box::new(|r| r.stations[1].bump_dir = Vec3::new(0.0, 0.0, 0.6))),
+        (
+            "track width 0, pitch negative, samples 2",
+            Box::new(|r| {
+                r.tracks[0].width_m = 0.0;
+                r.tracks[0].pitch_m = -1.0;
+                r.tracks[0].samples = 2;
+            }),
+        ),
+        ("negative anti-roll rate on a same-side pair (the bogie hack's shape)", Box::new(|r| r.anti_roll.push(AntiRollDef { left_station: 1, right_station: 2, rate_n_m: -1.0 }))),
+    ]
+}

@@ -2,14 +2,14 @@
 
 *ARCH keeps this current so a restarted or compacted coordinator can resume from the repo alone. If you are a fresh ARCH session: read `CLAUDE.md`, `docs/brief/BRIEF.md`, `RULES.md`, then this file, then each lane's status file.*
 
-**Updated:** 2026-10-08 (Launch Kit in progress) | **Integration branch:** `integration` (not yet created) | **Contract tag:** none yet (v0.1.0 draft) | **Phase:** Wave 0, the Launch Kit
+**Updated:** 2026-10-08 (end of the Launch Kit session) | **Integration branch:** `integration` (exists, at the green contract-0.1.0 commit d6ac1ab) | **Contract tag:** none yet (0.1.0 draft live; the 0.1.1 hardening batch is decided and partly drafted: `docs/architecture/CONTRACT-0.1.1-PLAN.md`) | **Phase:** Wave 0, the Launch Kit, **launch on hold until the batch is applied and `contract-v0.1` is tagged**
 
 **Control Room (the owner's live view):** https://claude.ai/artifact/RerESUqi3CaJCzifhQCZCd (private; republish with `python3 -I tools/control_room/build.py <out.html>` then the Artifact tool, same file path). Decision-card answers live in the artifact's database collection `cards` (document id = card id, fields `choice`, `text`, `answeredAt`); read them at each check-in with `ArtifactData` (`list` on `cards`), copy them into `docs/decisions/QUEUE.md` as ANSWERED, and write `appliedAt` back to the document.
 
 ## Lanes
 | Lane | Rank | Session | Branch | State | Last check-in | Burn so far |
 |---|---|---|---|---|---|---|
-| ARCH | 1 | this session | `claude/sharp-babbage-d702f7` | writing the Launch Kit | - | see session meter |
+| ARCH | 1 | this session (the owner set a credit floor; ARCH works one thing at a time) | `claude/sharp-babbage-d702f7` | contract 0.1.1 applied; PR and tag next | 2026-10-08 | about $20 left at stop |
 | CHASSIS | 1 | - | - | not launched | - | - |
 | DRIVE | 1 | - | - | not launched | - | - |
 | WORLD | 1 | - | - | not launched | - | - |
@@ -44,6 +44,7 @@ See `docs/decisions/QUEUE.md` (C-001 to C-012 open, all with defaults).
 | Time (UTC) | Sessions active | Notes |
 |---|---|---|
 | 2026-10-08 16:00 | 1 (this session) | meter ~ $204 after ~20 h |
+| 2026-10-08 18:05 | 1 (this session) | owner warned of about $20 of credit left; ARCH stopped new work and left the tree green; no lanes launched, no background agents running |
 
 ## Check-in routine (hourly while any lane is active)
 1. List lane sessions (status, usage) and read each `docs/swarm/status/<lane>.md`.
@@ -54,4 +55,7 @@ See `docs/decisions/QUEUE.md` (C-001 to C-012 open, all with defaults).
 6. Governor: pause launches if integration CI has been red for more than 2 h or more than 5 PRs wait for review.
 
 ## Next actions
-- Finish the Launch Kit (see the task list in the coordinator session); get permission to move the old prototype tree out of the root; copy the staged workspace in; create `integration`; rehearsal; rank 1.
+1. Contract 0.1.1 is APPLIED on `claude/sharp-babbage-d702f7` (rig, command, frame, ports, validation; `def.rs` is FORGE's first CCR). Open a PR into `integration`, merge when `guards` and `rust` are green and the Linux+Windows `integration` run passes, then tag `contract-v0.1` (`git tag contract-v0.1 <merge commit>` and push the tag).
+2. Edit the lane briefs listed at the end of that plan; run the rehearsal (one small lane session, see `LAUNCH.md`); republish the Control Room; send the owner the C0 summary.
+3. Launch rank 1 only when the owner says go or card C-008 is answered. Open owner cards: C-001 to C-014 (defaults apply); C-013 (settings rules) needs the owner's word in chat; C-014 (GitHub branch protection) is a two-minute owner action.
+4. Housekeeping: the stale remote branch `lane/chassis/bad-pr-test` (PR #1 closed) could not be deleted through the git proxy; delete it from GitHub. `reference/prototype-v0/` deletion needs the owner's word.

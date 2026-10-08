@@ -4,10 +4,15 @@
 
 use w5k_math::{scalar, Mat3, Quat, Transform, Vec3};
 
+use crate::combat::CombatDef;
 use crate::def::*;
 use crate::param::Param;
 use crate::render::*;
 use crate::rig::*;
+use crate::rig::{
+    Actuator, BrakeLocation, BrakeSite, FireCycle, JointDrive, ProxyRole, RecoilDef, ServoDef, StabiliserDef, SteerLaw,
+    WeaponDef, WheelContact,
+};
 
 // ------------------------------------------------------------------------------------------------------------ mesh helpers
 
@@ -146,7 +151,7 @@ fn tyre() -> TyreDef {
     TyreDef {
         vertical_stiffness_n_m: 250_000.0,
         vertical_damping_ns_m: 1_500.0,
-        mu_peak_ref: 0.95,
+        mu_scale: 1.05,
         slip_stiffness: 12.0,
         cornering_stiffness_per_rad: 8.0,
         relaxation_length_m: 0.3,
@@ -157,7 +162,7 @@ fn tyre() -> TyreDef {
 }
 
 fn damper(bump: f64, rebound: f64) -> DamperDef {
-    DamperDef { bump_ns_m: bump, rebound_ns_m: rebound, knee_speed_m_s: 0.0, post_knee_ratio: 1.0 }
+    DamperDef { bump_ns_m: bump, rebound_ns_m: rebound, knee_speed_m_s: 0.0, post_knee_ratio: 1.0, friction_n: 0.0 }
 }
 
 fn engine(curve: Vec<(f64, f64)>, idle: f64, redline: f64, inertia: f64, kind: EngineKind) -> EngineDef {
@@ -170,6 +175,9 @@ fn engine(curve: Vec<(f64, f64)>, idle: f64, redline: f64, inertia: f64, kind: E
         drag_const_nm: 12.0,
         drag_per_rpm_nm: 0.006,
         bsfc_best_g_kwh: 240.0,
+        free_output: false,
+        response_time_s: 0.0,
+        idle_fuel_kg_s: 0.0,
     }
 }
 
@@ -184,6 +192,14 @@ fn brake(station: usize, max_torque_nm: f64, parking: bool) -> BrakeDef {
         fade_end_k: 900.0,
         fade_floor: 0.55,
         parking,
+        service: true,
+        location: BrakeLocation::AtStation,
+        site: BrakeSite::Wheel,
+        steering: false,
+        reverse_torque_factor: 1.0,
+        apply_time_s: 0.0,
+        release_time_s: 0.0,
+        circuit: 0,
     }
 }
 
@@ -320,7 +336,14 @@ pub fn box_truck() -> (PhysRig, RenderRig) {
                 spring: SpringKind::Linear { rate_n_m: 32_000.0 },
                 preload_n: 4_900.0,
                 damper: damper(2_200.0, 3_200.0),
-                bump_stop: BumpStopDef { engage_m: 0.09, rate_n_m: 120_000.0, progression: 1.0 },
+                bump_stop: BumpStopDef {
+                    engage_m: 0.09,
+                    rate_n_m: 120_000.0,
+                    progression: 1.0,
+                    damping_ns_m: 0.0,
+                    hard_limit: false,
+                    restitution: 0.0,
+                },
             },
             steer: steered.then_some(SteerDef { max_angle_rad: 0.55, ackermann: 1.0 }),
             wheel: WheelDef {
@@ -329,14 +352,18 @@ pub fn box_truck() -> (PhysRig, RenderRig) {
                 width_m: 0.26,
                 inertia_kg_m2: 1.4,
                 tyre: Some(tyre()),
+                patches_x_m: vec![],
             },
             drive_output: Some(out),
+            arm_pivot_m: None,
         });
     }
     let axle_diff = |a: usize, b: usize| DriveNode::Diff {
         kind: DiffKind::Open,
         ratio: 3.73,
         bias: 0.0,
+        split: vec![],
+        efficiency: 1.0,
         children: vec![DriveNode::Output(a), DriveNode::Output(b)],
     };
     let drivetrain = DrivetrainDef {
@@ -363,6 +390,8 @@ pub fn box_truck() -> (PhysRig, RenderRig) {
             kind: DiffKind::Open,
             ratio: 1.0,
             bias: 0.0,
+            split: vec![],
+            efficiency: 1.0,
             children: vec![axle_diff(0, 1), axle_diff(2, 3)],
         },
         outputs: (0..4).map(|i| OutputDef { station: i, final_drive_ratio: 1.0, efficiency: 0.97 }).collect(),
@@ -372,9 +401,15 @@ pub fn box_truck() -> (PhysRig, RenderRig) {
             brake(2, 1_500.0, true),
             brake(3, 1_500.0, true),
         ],
+        modes: vec![],
+        default_mode: 0,
     };
     let rig = PhysRig {
         id: "box_truck".into(),
+        // The datum is 0.7282 m above the ground: the free 0.4 m wheel centred 0.35 m below the datum overlaps it by the static tyre deflection (4,900 N sprung share + 55 kg unsprung over 250 kN/m = 21.8 mm).
+        ride_height_m: 0.7282,
+        linkages: vec![],
+        combat: CombatDef::default(),
         hull: solid("hull", 2_000.0, Vec3::new(0.0, -0.05, 0.1), Vec3::new(2.0 * half_x, 2.0 * half_y, 2.0 * half_z)),
         stations,
         anti_roll: vec![
@@ -391,12 +426,16 @@ pub fn box_truck() -> (PhysRig, RenderRig) {
                 shape: ProxyShape::Box { half_m: Vec3::new(half_x, half_y, half_z) },
                 pose: Transform::IDENTITY,
                 attached_to: None,
+                attached_station: None,
+                role: ProxyRole::Hull,
             },
             CollisionProxy {
                 name: "cabin".into(),
                 shape: ProxyShape::Box { half_m: Vec3::new(0.95, 0.4, 1.0) },
                 pose: Transform::from_pos(Vec3::new(0.0, 0.9, -0.6)),
                 attached_to: None,
+                attached_station: None,
+                role: ProxyRole::Hull,
             },
         ],
         muzzles: vec![],
@@ -451,15 +490,30 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
             let suspension = match kind {
                 WheelKind::RoadWheel => SuspensionDef {
                     spring: SpringKind::Torsion { rate_nm_rad: 28_000.0, arm_length_m: 0.45, rest_arm_angle_rad: 0.35 },
-                    preload_n: 14_000.0,
+                    // Ten road wheels carry the 44 t sprung mass (hull, turret, cradle, barrel): 431.5 kN / 10.
+                    preload_n: 43_150.0,
                     damper: damper(18_000.0, 24_000.0),
-                    bump_stop: BumpStopDef { engage_m: 0.17, rate_n_m: 900_000.0, progression: 1.5 },
+                    bump_stop: BumpStopDef {
+                        engage_m: 0.17,
+                        rate_n_m: 4_000_000.0,
+                        progression: 1.0,
+                        damping_ns_m: 20_000.0,
+                        hard_limit: false,
+                        restitution: 0.0,
+                    },
                 },
                 _ => SuspensionDef {
                     spring: SpringKind::Rigid,
                     preload_n: 0.0,
                     damper: damper(0.0, 0.0),
-                    bump_stop: BumpStopDef { engage_m: 0.0, rate_n_m: 0.0, progression: 0.0 },
+                    bump_stop: BumpStopDef {
+                        engage_m: 0.0,
+                        rate_n_m: 0.0,
+                        progression: 0.0,
+                        damping_ns_m: 0.0,
+                        hard_limit: false,
+                        restitution: 0.0,
+                    },
                 },
             };
             stations.push(StationDef {
@@ -470,15 +524,24 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
                 bump_dir: Vec3::Y,
                 bump_travel_m: if *kind == WheelKind::RoadWheel { 0.25 } else { 0.0 },
                 droop_travel_m: if *kind == WheelKind::RoadWheel { 0.1 } else { 0.0 },
-                unsprung_mass_kg: if *kind == WheelKind::RoadWheel { 320.0 } else { 450.0 },
+                // A rigid (spin-only) station is part of the hull: its mass is in `hull.mass_kg`.
+                unsprung_mass_kg: if *kind == WheelKind::RoadWheel { 320.0 } else { 0.0 },
                 suspension,
                 steer: None,
-                wheel: WheelDef { kind: *kind, radius_m: *radius, width_m: 0.3, inertia_kg_m2: 6.0, tyre: None },
+                wheel: WheelDef {
+                    kind: *kind,
+                    radius_m: *radius,
+                    width_m: 0.3,
+                    inertia_kg_m2: 6.0,
+                    tyre: None,
+                    patches_x_m: vec![],
+                },
                 drive_output: if *kind == WheelKind::Sprocket {
                     Some(if side == Side::Left { 0 } else { 1 })
                 } else {
                     None
                 },
+                arm_pivot_m: None,
             });
         }
     }
@@ -488,7 +551,8 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
         .map(|&(side, first)| TrackDef {
             name: if side == Side::Left { "track_l".into() } else { "track_r".into() },
             side,
-            stations: (first..first + per_side).collect(),
+            // Loop order: the sprocket, the top run to the idler, then the ground run back through the road wheels.
+            stations: std::iter::once(first + per_side - 1).chain(first..first + per_side - 1).collect(),
             sprocket: first + per_side - 1,
             idler: first,
             width_m: 0.55,
@@ -497,7 +561,14 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
             mass_per_m_kg: 85.0,
             samples: 12,
             shoe_mu_scale: 1.0,
+            shoe_mu_scale_soft: None,
             tension_n: 20_000.0,
+            belt_length_m: 11.4,
+            thickness_m: 0.07,
+            resist_c0: 0.05,
+            resist_c1_s_m: 0.0,
+            sprocket_teeth: 11,
+            wheel_contact: WheelContact { vertical_stiffness_n_m: 4_000_000.0, vertical_damping_ns_m: 20_000.0 },
         })
         .collect();
     let drivetrain = DrivetrainDef {
@@ -523,6 +594,7 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
         driveline: DriveNode::SteerUnit {
             kind: SteerUnitKind::ControlledDifferential,
             ratio: 1.0,
+            law: SteerLaw::default(),
             children: vec![DriveNode::Output(0), DriveNode::Output(1)],
         },
         outputs: vec![
@@ -530,6 +602,8 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
             OutputDef { station: 2 * per_side - 1, final_drive_ratio: 5.0, efficiency: 0.96 },
         ],
         brakes: vec![brake(per_side - 1, 14_000.0, true), brake(2 * per_side - 1, 14_000.0, true)],
+        modes: vec![],
+        default_mode: 0,
     };
     let turret_anchor = Vec3::new(0.0, 0.6, 0.2);
     let gun_anchor = Vec3::new(0.0, 0.35, -1.4);
@@ -543,16 +617,19 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
             axis: Vec3::Y,
             limits: None,
             body: solid("turret", 12_000.0, Vec3::new(0.0, 0.5, 0.1), Vec3::new(2.8, 0.9, 3.6)),
-            servo: Some(ServoDef {
-                max_rate: 0.7,
-                max_accel: 1.2,
-                max_effort: 40_000.0,
-                kp: 60_000.0,
-                kd: 12_000.0,
-                stabiliser_rejection: 0.9,
-                stabiliser_bandwidth_hz: 3.0,
-                recoil: None,
+            drive: JointDrive::Servo(ServoDef {
+                max_rate_si: 0.7,
+                // 40 kN m over the 53,458 kg m^2 of turret, cradle and barrel gives at most 0.748 rad/s^2.
+                max_accel_si: 0.7,
+                max_effort_si: 40_000.0,
+                kp_si: 60_000.0,
+                kd_si: 80_000.0,
+                actuator: Actuator::Hydraulic,
+                latency_s: 0.05,
+                fallback_rate_si: 0.0,
+                stabiliser: Some(StabiliserDef { rejection: 0.9, bandwidth_hz: 3.0, latency_s: 0.01 }),
             }),
+            aim_channel: 0,
         },
         JointDef {
             name: "gun_pitch".into(),
@@ -563,16 +640,18 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
             axis: Vec3::X,
             limits: Some((-0.14, 0.35)),
             body: solid("gun_cradle", 2_800.0, Vec3::new(0.0, 0.0, -0.6), Vec3::new(0.5, 0.5, 1.5)),
-            servo: Some(ServoDef {
-                max_rate: 0.35,
-                max_accel: 1.0,
-                max_effort: 12_000.0,
-                kp: 30_000.0,
-                kd: 6_000.0,
-                stabiliser_rejection: 0.9,
-                stabiliser_bandwidth_hz: 3.0,
-                recoil: None,
+            drive: JointDrive::Servo(ServoDef {
+                max_rate_si: 0.35,
+                max_accel_si: 0.9,
+                max_effort_si: 12_000.0,
+                kp_si: 30_000.0,
+                kd_si: 26_000.0,
+                actuator: Actuator::Hydraulic,
+                latency_s: 0.05,
+                fallback_rate_si: 0.0,
+                stabiliser: Some(StabiliserDef { rejection: 0.9, bandwidth_hz: 3.0, latency_s: 0.01 }),
             }),
+            aim_channel: 0,
         },
         JointDef {
             name: "gun_recoil".into(),
@@ -583,20 +662,23 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
             axis: Vec3::Z,
             limits: Some((0.0, 0.35)),
             body: solid("barrel", 1_200.0, Vec3::new(0.0, 0.0, -2.5), Vec3::new(0.15, 0.15, 5.0)),
-            servo: Some(ServoDef {
-                max_rate: 6.0,
-                max_accel: 200.0,
-                max_effort: 500_000.0,
-                kp: 0.0,
-                kd: 0.0,
-                stabiliser_rejection: 0.0,
-                stabiliser_bandwidth_hz: 0.0,
-                recoil: Some(RecoilDef { spring_n_m: 150_000.0, damper_ns_m: 30_000.0, stroke_m: 0.35 }),
+            // A passive recuperator: a spring that holds the barrel in battery (above m g sin(35 deg) = 4 kN) and a buffer.
+            drive: JointDrive::Recoil(RecoilDef {
+                stroke_m: 0.35,
+                spring: SpringKind::Linear { rate_n_m: 150_000.0 },
+                preload_n: 20_000.0,
+                damper_ns_m: 30_000.0,
+                damper_quad_ns2_m2: 0.0,
             }),
+            aim_channel: 0,
         },
     ];
     let rig = PhysRig {
         id: "box_tank".into(),
+        // Road-wheel bottoms (centre -0.45, radius 0.38) plus the 0.07 m belt put the ground 0.90 m below the datum.
+        ride_height_m: 0.90,
+        linkages: vec![],
+        combat: CombatDef::default(),
         hull: solid("hull", 28_000.0, Vec3::new(0.0, -0.15, 0.2), Vec3::new(3.0, 1.2, 7.0)),
         stations,
         anti_roll: vec![],
@@ -610,19 +692,33 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
                 shape: ProxyShape::Box { half_m: Vec3::new(1.5, 0.6, 3.5) },
                 pose: Transform::IDENTITY,
                 attached_to: None,
+                attached_station: None,
+                role: ProxyRole::Hull,
             },
             CollisionProxy {
                 name: "turret".into(),
                 shape: ProxyShape::Box { half_m: Vec3::new(1.4, 0.4, 1.8) },
                 pose: Transform::from_pos(Vec3::new(0.0, 0.4, 0.1)),
                 attached_to: Some(0),
+                attached_station: None,
+                role: ProxyRole::Other,
             },
         ],
         muzzles: vec![MuzzleDef {
             name: "main_gun".into(),
-            joint: 2,
+            joint: Some(2),
             pose: Transform::new(Vec3::new(0.0, 0.0, -4.9), Quat::IDENTITY),
             caliber_m: 0.12,
+            // Placeholder numbers (an 8 kg shell at 1.65 km/s): the right order of magnitude, not a dossier.
+            weapon: WeaponDef {
+                catalogue_id: "stand_in_120mm".into(),
+                trigger: 0,
+                projectile_mass_kg: 8.0,
+                muzzle_velocity_m_s: 1_650.0,
+                recoil_impulse_factor: 1.5,
+                dispersion_mrad: 0.3,
+                cycle: FireCycle::Single { reload_s: 6.0 },
+            },
         }],
         integration: IntegrationDef { substeps: 6 },
     };
@@ -881,5 +977,178 @@ mod tests {
                 assert!(n.dot(centroid - c) > -1e-9, "axis {axis}: triangle winds inward");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod validation_tests {
+    use super::*;
+    use w5k_math::scalar;
+
+    fn errors(rig: &PhysRig) -> Vec<String> {
+        rig.validate().err().unwrap_or_default()
+    }
+
+    fn breaks(what: &str, mut rig: PhysRig, mutate: impl Fn(&mut PhysRig), needle: &str) {
+        mutate(&mut rig);
+        let e = errors(&rig);
+        assert!(e.iter().any(|m| m.contains(needle)), "{what}: expected an error containing {needle:?}, got {e:?}");
+    }
+
+    #[test]
+    fn validate_rejects_every_kind_of_broken_rig_and_says_why() {
+        let (truck, _) = box_truck();
+        let (tank, _) = box_tank();
+        breaks("sprocket index", tank.clone(), |r| r.tracks[0].sprocket = 999, "out of range");
+        breaks(
+            "steer unit children reversed",
+            tank.clone(),
+            |r| {
+                if let DriveNode::SteerUnit { children, .. } = &mut r.drivetrain.driveline {
+                    children.reverse();
+                }
+            },
+            "[left, right]",
+        );
+        breaks(
+            "no static equilibrium",
+            tank.clone(),
+            |r| r.stations.iter_mut().for_each(|s| s.suspension.preload_n = 0.0),
+            "static equilibrium",
+        );
+        breaks(
+            "duplicate station names",
+            truck.clone(),
+            |r| r.stations[1].name = r.stations[0].name.clone(),
+            "duplicate station name",
+        );
+        breaks(
+            "negative inertia",
+            truck.clone(),
+            |r| r.hull.inertia_kg_m2 = Mat3::diagonal(-1.0, -1.0, 1.0),
+            "positive-definite",
+        );
+        breaks(
+            "recoil limits contradict the stroke",
+            tank.clone(),
+            |r| r.articulation[2].limits = Some((0.0, 0.2)),
+            "limits must be (0, stroke_m)",
+        );
+        breaks(
+            "servo acceleration the effort cannot deliver",
+            tank.clone(),
+            |r| {
+                if let JointDrive::Servo(s) = &mut r.articulation[0].drive {
+                    s.max_accel_si = 5.0;
+                }
+            },
+            "exceeds what max_effort_si allows",
+        );
+        breaks(
+            "bore along the recoil axis",
+            tank.clone(),
+            |r| {
+                r.muzzles[0].pose =
+                    Transform::new(Vec3::new(0.0, 0.0, -4.9), w5k_math::Quat::from_axis_angle(Vec3::Y, scalar::PI))
+            },
+            "opposite to the recoil axis",
+        );
+        breaks("too many substeps", truck.clone(), |r| r.integration.substeps = 1000, "substeps");
+        breaks("no ride height", truck.clone(), |r| r.ride_height_m = 0.0, "ride_height_m");
+        breaks("wheel buried in the ground", truck.clone(), |r| r.ride_height_m = 0.5, "overlaps");
+        breaks(
+            "rigid station carrying mass",
+            tank.clone(),
+            |r| r.stations[0].unsprung_mass_kg = 10.0,
+            "part of the hull",
+        );
+        breaks(
+            "a table that disagrees with its preload",
+            truck.clone(),
+            |r| r.stations[0].suspension.spring = SpringKind::Table { points: vec![(-0.1, 1_000.0), (0.1, 12_000.0)] },
+            "TOTAL force",
+        );
+        breaks(
+            "a linkage member that has its own spring",
+            truck.clone(),
+            |r| {
+                let sus = r.stations[0].suspension.clone();
+                r.linkages.push(LinkageDef {
+                    name: "beam".into(),
+                    members: vec![(0, 0.5), (1, 0.5)],
+                    suspension: sus,
+                    rock_limit_m: None,
+                });
+            },
+            "must have SpringKind::Rigid",
+        );
+        breaks(
+            "a negative anti-roll rate",
+            truck.clone(),
+            |r| r.anti_roll[0].rate_n_m = -1.0,
+            "rate must be finite and >= 0",
+        );
+        breaks(
+            "a track that does not start at the sprocket",
+            tank.clone(),
+            |r| r.tracks[0].stations.rotate_left(1),
+            "loop order",
+        );
+        assert!(truck.validate().is_ok() && tank.validate().is_ok());
+    }
+
+    #[test]
+    fn optional_features_are_listed_so_a_solver_can_refuse_what_it_does_not_implement() {
+        let (truck, _) = box_truck();
+        let (tank, _) = box_tank();
+        assert!(truck.required_features().is_empty());
+        assert!(tank.required_features().contains(&crate::rig::feature::TRACK_RESISTANCE));
+        let mut t = truck.clone();
+        t.stations[0].wheel.patches_x_m = vec![-0.15, 0.15];
+        assert!(t.required_features().contains(&crate::rig::feature::MULTI_PATCH_WHEELS));
+    }
+
+    #[test]
+    fn the_rig_hash_survives_a_json_round_trip_and_changes_with_one_number() {
+        let (tank, _) = box_tank();
+        let back: PhysRig = serde_json::from_str(&serde_json::to_string(&tank).unwrap()).unwrap();
+        assert_eq!(back, tank, "float_roundtrip makes JSON exact");
+        assert_eq!(back.rig_hash(), tank.rig_hash());
+        let mut damaged = tank.clone();
+        damaged.drivetrain.engine.torque_curve[2].1 *= 0.5;
+        assert_ne!(damaged.rig_hash(), tank.rig_hash());
+    }
+
+    #[test]
+    fn contact_names_list_one_entry_per_patch_and_per_track_sample() {
+        let (truck, _) = box_truck();
+        let (tank, _) = box_tank();
+        assert_eq!(truck.contact_names(), vec!["fl", "fr", "rl", "rr"]);
+        assert_eq!(tank.contact_names().len(), 24);
+        let mut t = truck;
+        t.stations[0].wheel.patches_x_m = vec![-0.15, 0.15];
+        assert_eq!(t.contact_names()[..3], ["fl.0".to_string(), "fl.1".to_string(), "fr".to_string()]);
+    }
+
+    #[test]
+    fn forward_kinematics_swings_the_muzzle_left_when_the_turret_yaws_positive() {
+        let (tank, _) = box_tank();
+        let q = [1.0, 0.0, 0.0];
+        let p = tank.muzzle_pose_in_hull(0, &q).pos;
+        // T + R_y(yaw) (G + muzzle offset) with T = (0, 0.6, 0.2), G = (0, 0.35, -1.4), muzzle (0, 0, -4.9).
+        let (s, c) = (scalar::sin(1.0), scalar::cos(1.0));
+        assert!(
+            (p.x - (-6.3 * s)).abs() < 1e-9 && (p.y - 0.95).abs() < 1e-9 && (p.z - (0.2 - 6.3 * c)).abs() < 1e-9,
+            "{p:?}"
+        );
+        assert!(p.x < 0.0, "a positive yaw turns the nose left (toward -X)");
+    }
+
+    #[test]
+    fn the_composite_mass_and_the_sprung_mass_add_up() {
+        let (tank, _) = box_tank();
+        let m = tank.composite_mass(&[0.0, 0.0, 0.0]);
+        assert!((m.mass_kg - (28_000.0 + 10.0 * 320.0 + 16_000.0)).abs() < 1e-9);
+        assert!((tank.sprung_mass_kg() - 44_000.0).abs() < 1e-9);
     }
 }

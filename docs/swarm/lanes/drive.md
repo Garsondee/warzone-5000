@@ -9,6 +9,8 @@ unit, brakes with heat, fuel. The owner will see a dyno curve, a shift diagram, 
 `crates/w5k_drive/**`, `content/physics/drive/**`, `crates/w5k_tools/src/cmd/drive.rs`; always `docs/swarm/status/drive.md`, `docs/swarm/requests/drive-*.md`, `docs/theory/drive.md`, `docs/lanes/drive/**`, `spikes/drive/**`.
 
 ## You read, never edit
+**Contract 0.1.1 note.** Read the section for your lane in `docs/architecture/redteam/` (what the red-teams found and the numbers behind it) and `docs/architecture/CONTRACT-0.1.1-PLAN.md` (the conventions). `PhysRig::required_features()` lists the optional rig features a rig uses: refuse a rig that needs one you do not implement yet, never ignore it.
+
 `crates/w5k_contract` (`DrivePort`, `DriveInputs`, `ShaftState`, `DriveTelemetry`, `DrivetrainDef` and its parts in `rig.rs`), `docs/architecture/*`, `docs/validation/METHOD.md`, `docs/theory/the-physics-of-a-time-trial.md` (power versus force; the style we want).
 
 ## Stand-ins you start on

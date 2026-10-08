@@ -9,6 +9,8 @@ and plots of the same motion against analytic answers. You build the *chassis* i
 `crates/w5k_chassis/**`, `content/physics/chassis/**`, `crates/w5k_tools/src/cmd/chassis.rs`; always `docs/swarm/status/chassis.md`, `docs/swarm/requests/chassis-*.md`, `docs/theory/chassis.md`, `docs/lanes/chassis/**`, `spikes/chassis/**`.
 
 ## You read, never edit
+**Contract 0.1.1 note.** Read the section for your lane in `docs/architecture/redteam/` (what the red-teams found and the numbers behind it) and `docs/architecture/CONTRACT-0.1.1-PLAN.md` (the conventions). `PhysRig::required_features()` lists the optional rig features a rig uses: refuse a rig that needs one you do not implement yet, never ignore it.
+
 `crates/w5k_contract` (pin the tag; until `contract-v0.2`, the 0.1.0 draft), `crates/w5k_math`, `docs/architecture/{CONTRACTS,UNITS-AND-FRAMES,DETERMINISM}.md`, `docs/validation/METHOD.md`, `docs/theory/the-physics-of-a-time-trial.md` (a model of the explanatory style we want), `docs/brief/*`.
 
 ## Stand-ins you start on

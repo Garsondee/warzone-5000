@@ -178,7 +178,7 @@ class TheRealBudgetsFile(unittest.TestCase):
             self.skipTest("docs/swarm/budgets.toml not available (set W5K_BUDGETS)")
         default, overrides = line_budget.read_budgets(path)
         self.assertEqual(default, 8000)
-        self.assertEqual(overrides, {"w5k_math": 2500, "w5k_contract": 4000, "w5k_sim": 5000, "w5k_tools": 6000})
+        self.assertEqual(overrides, {"w5k_math": 2500, "w5k_contract": 7000, "w5k_sim": 5000, "w5k_tools": 6000})
 
 
 if __name__ == "__main__":
