@@ -42,5 +42,10 @@ Needs: GEOMETRY's shapes and mass integrals; VALIDATION's dossier numbers; CHASS
 ## Tripwires specific to this lane
 A slider that has no effect on any rig field (a dead lever: report it); a rig field set from a bare constant; a figure for a real vehicle written from memory instead of the dossier; a compile that silently clamps an out-of-range slider (reject with a reason instead).
 
+## Owner's answers that apply to you (2026-10-08, cards C-001 and C-002)
+- Game vehicles have fictional ids and names; real vehicles are validation references only. Keep the link to a real vehicle in the dossier mapping (`content/dossier/`, VALIDATION's), never in `VehicleDef` or the compile.
+- The reference garage spans every role (recon, personnel carrier, light, medium, heavy and main battle tank, assault gun or tank destroyer, self-propelled artillery, recovery, utility truck) and eras from very late WW2 onward; the purpose is to exercise the designer-level sliders and the compile, not to copy vehicles.
+- Exotic materials, propulsion and weapons come later: new components and materials must enter as data (catalogue entries and `Param`s), never as special cases in the compile.
+
 ## Done
 M1 acceptance passes in CI, the theory note is written, the status file has the handoff note, you have idled.

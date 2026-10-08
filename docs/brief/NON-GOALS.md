@@ -18,3 +18,4 @@ Things that look attractive and that we are **not** doing now. A lane that finds
 | Hand-modelled hero assets; final hull art | Procedural geometry and shaders first | After M2, if the owner supplies assets |
 | Tuning a model to individual vehicles | Only global constants are tuned, on the calibration set; the held-out set stays honest | Never |
 | Fun overrides that quietly depart from reality | Allowed only as logged, owner-signed deviations | When the owner asks for one |
+| A game about the real Earth: real nations, factions, insignia or vehicle names in game content | The owner (C-002): the setting is fiction. Real vehicles are validation references only; game vehicles get fictional names and original hulls built on real hull-shape logic | The owner reopens it |

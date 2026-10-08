@@ -47,5 +47,8 @@ Needs: GEOMETRY (flagged meshes, a coarser `detail`); VIEWER (the hook, from M1:
 ## Tripwires specific to this lane
 A pattern that reads world position, time or UVs; `fract(sin())` hashes or any libm call in the reference; a shader changed without the reference and its test (drift); a palette colour without a source or outside the chroma band; a vendor table, photograph or pattern artwork copied in; a committed image over 400 KB, a texture asset or a video; a stateful particle simulation; editing VIEWER's or GODOT's files; a new npm or Python dependency.
 
+## Owner's answers that apply to you (2026-10-08, card C-002)
+- The world is fiction, not Earth: factions and insignia are invented (no real national markings or flags). Camouflage pattern styles are fine as generators, but name them by look (woodland, desert, splinter, fleck), not by army.
+
 ## Done
 M1 deliverables pass (tests in CI or pasted), theory note written, status file has the handoff note, you have idled.

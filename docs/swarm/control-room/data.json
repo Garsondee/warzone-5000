@@ -4,8 +4,8 @@
   "strip": [
     {
       "k": "Phase",
-      "v": "Wave 0 done",
-      "s": "Launch Kit finished: contract pinned, guards proven, rehearsal passed. Fan-out waits for your go (card C-008)",
+      "v": "Ready for Saturday",
+      "s": "Wave 0 done; your four answers are applied. Rank 1 launches on your go (card C-008), planned for Saturday morning",
       "state": "wait"
     },
     {
@@ -54,7 +54,7 @@
       "rank": 1,
       "state": "waiting for your go",
       "mission": "Contracts, CI and guardrails, the integration spine, merges, reviews. Writes no feature code.",
-      "last": "Wave 0 finished: contract 0.1.1 pinned (f8f5e5d), guards proven, rehearsal merged (PR 3). Idle until you say go or the usage window resets."
+      "last": "Applied your answers (era, garage, courses, models) to the brief, non-goals and five lane briefs; Saturday checklist and launch sheet are in the repo. Idle until you say go."
     },
     {
       "name": "CHASSIS",
@@ -213,6 +213,11 @@
       "t": "2026-10-08 18:55",
       "sessions": "1 of 13",
       "note": "Launch rehearsal passed. One small CHASSIS session cloned, branched, wrote its status file, ran the math tests, pushed and opened PR 3; the lane guard and CI passed and ARCH merged it ($0.23 for the whole session). It tried to force-push and was refused, as designed. Fixes made: the launch prompt now says how to sign commits and never to amend; the contract pin is a commit id. Rank 1 is not launched; it waits for your go."
+    },
+    {
+      "t": "2026-10-08 19:55",
+      "sessions": "1 of 13",
+      "note": "Your four answers are applied (C-001 era, C-002 garage, C-003 courses, C-007 models); the page shows each with my reading of it, so please check I read you right. Docs only, about $1 to $1.5 of your remaining $8. Nothing launched."
     }
   ],
   "footer": "Defaults apply to every open card until you answer it."

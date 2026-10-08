@@ -11,7 +11,7 @@ Only ARCH starts lane sessions. Everything a lane needs is in the repo, so the l
 - source: `https://github.com/Garsondee/warzone-5000`, `source_revision: integration`
 - `outcome_branch: lane/<lane>/<topic>` (the first topic is `settling`)
 - title: `W5K <LANE>: <mission in five words>`; tags: `swarm:w5k`, `lane:<lane>`, `rank:<n>`
-- model: the card C-007 default (the coordinator's model), `permission_mode`: not above ARCH's own (Auto if the owner has enabled it)
+- model: always pass it explicitly (a session otherwise inherits its launcher's model, which would put a lane on ARCH's stronger tier). Per the owner's answer to C-007, lanes run on the default tier and ARCH on the strongest; the exact names are in the owner's note on that card in the Control Room database. A stalled lane is not upgraded without asking the owner. `permission_mode`: not above ARCH's own (Auto if the owner has enabled it)
 - prompt (verbatim, with the lane filled in):
 ```
 You are lane <LANE> of the warzone-5000 swarm: one of thirteen Claude sessions building a realistic ground-vehicle simulator in parallel.
@@ -23,6 +23,18 @@ You are lane <LANE> of the warzone-5000 swarm: one of thirteen Claude sessions b
 4. Keep docs/swarm/status/<lane>.md current with every PR. Push work in progress at least hourly. When your milestone deliverables pass, write the handoff note in your status file and stop; do not invent more work.
 5. If you are blocked on a decision that is the owner's, write a decision card, take the default, tag the work PROVISIONAL(card-id) and carry on. If a message from the owner reaches you directly, record it in your status file under "Owner instructions received".
 ```
+
+## Launch sheet (order, rank, title, branch; tags are `swarm:w5k`, `lane:<lane>`, `rank:<n>`)
+| Order | Lane | Rank | Title | Branch |
+|---|---|---|---|---|
+| 1 (then gate G1) | CHASSIS | 1 | `W5K CHASSIS: ride, grip and handling` | `lane/chassis/settling` |
+| 2 | DRIVE | 1 | `W5K DRIVE: engine, gearbox, brakes` | `lane/drive/settling` |
+| 3 | FORGE | 1 | `W5K FORGE: design to physics rigs` | `lane/forge/settling` |
+| 4 | WORLD | 1 | `W5K WORLD: the obstacle course` | `lane/world/settling` |
+| 5 | VIEWER | 1 | `W5K VIEWER: replay and browser viewer` | `lane/viewer/settling` |
+| 6 | VALIDATION | 1 | `W5K VALIDATION: dossiers and impact matrix` | `lane/validation/settling` |
+| 7 to 11 (after rank 1's first healthy hour) | GEOMETRY, LOOK, TRACKS, GODOT, COMBAT | 2 | `W5K GEOMETRY: hulls, turrets, wheels, tracks`; `W5K LOOK: camouflage, materials, dust`; `W5K TRACKS: tracked running gear, soft soil`; `W5K GODOT: front end and Windows build`; `W5K COMBAT: ballistics, damage, turret servos` | `lane/<lane>/settling` |
+| 12 (after `contract-v0.2`) | AI | 3 | `W5K AI: perception, planner, driver` | `lane/ai/settling` |
 
 ## After the launch
 Record the session id, branch, time and rank in `STATE.md`; subscribe to the lane's PRs if useful; the hourly check-in does the rest (`RULES.md` section 10).

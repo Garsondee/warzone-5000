@@ -19,6 +19,11 @@ changes nothing is a dead lever; an effect nobody can influence is wasted comple
 - **Validated against real vehicles.** A reference garage of parametric builds that mimic real ones (M998 HMMWV, M113, M4A3 Sherman for
   calibration; M1A1, Leopard 2A5, T-72B, M35, Tiger II held out). Published figures within stated bands; every number carries its
   provenance (`SPEC / MEASURED / ESTIMATE / TUNED`). The claim we make is "inside the envelope of what is published", not "exact".
+- **Real numbers, fictional world** (owner, C-002). The game does not take place on the real Earth. Real vehicles are the *validation
+  references* (that is where published numbers live); what a player sees has fictional names and, over time, original hulls built on real
+  hull-shape logic. The garage covers every role (recon, personnel carrier, light, medium, heavy and main battle tanks, assault gun or tank
+  destroyer, self-propelled artillery, recovery, utility truck), not only assault vehicles: its job is to exercise the vehicle builder and
+  to get semi-realistic results before anything exotic is tried.
 - **Dynamics we write ourselves**: a 6-degree-of-freedom hull, per-wheel suspension, tyre and track contact (including soft ground),
   a real powertrain (engine torque map, clutch or torque converter, gearbox, differentials or steering unit, brakes with heat),
   and an articulated turret and gun (the turret rotates while the cannon pitches and recoils). Everything is explainable through the
@@ -37,10 +42,21 @@ changes nothing is a dead lever; an effect nobody can influence is wasted comple
 | Control | We own the important code (dynamics, contact, powertrain, AI); third-party code only for I/O and queries |
 
 ## Assumed until the owner says otherwise (each is a decision card with this default)
-Era: modern-ish (c. 1950s to today). Product order: vehicle lab, then proving ground and course, then targets, then AI skirmish; the
+Era: see the next section (the owner's answer, C-001). Product order: vehicle lab, then proving ground and course, then targets, then AI skirmish; the
 draft / command-point / shop loop is parked. The owner can drive any vehicle through the same `Command` interface the AI uses. World:
 about 2 km square, 1 m heightfield, courses are data made by a procedural generator first. Art: procedural PBR camo and weathering plus
 a lofted hull-geometry kit. "Adapts" means tactics and learned capability estimates, not machine learning.
+
+## The long-term fiction, and what it changes now (the owner's answer, C-001)
+The single-player game, if we ever get there: an early-Cold-War military suddenly finds itself fighting off an alien invasion. The player's
+group has a programme for rapidly constructing and prototyping new vehicles against enemies who use exotic materials and technology. So the
+design baseline is tank design from very late WW2 and the early Cold War, and the technology we model runs from there to today and onwards
+into the futuristic.
+- **Changes now:** the era baseline moves earlier than "c. 1950s" (the reference set mixes eras on purpose), and the world is fiction, not Earth.
+- **Does not change now:** the scope decision above. Realistic ground vehicles come first, and the realistic slice is how we get semi-realistic
+  results *before* trying anything exotic. Exotic materials, propulsion and weapons are parked, not deleted, and the architecture must let them
+  in as data (new materials, new components), never as special cases inside a solver. They are revisited by owner decision once the realistic
+  slice has been tested (M4 at the earliest).
 
 ## The path (milestones; numeric exit criteria in `docs/swarm/RULES.md` and each lane brief)
 1. **M1 First light**: an M998-class 4x4 truck on a bump strip: engine map, torque converter, 4-speed automatic, diffs, brakes with

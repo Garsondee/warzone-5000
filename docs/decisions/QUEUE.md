@@ -17,27 +17,6 @@ Answer: <owner's decision, when given>
 
 ## Open cards
 
-### C-001  What era is the game?
-Asked by: ARCH | Date: 2026-10-08 | Status: OPEN
-Options: (a) modern-ish, c. 1950s to today, mixed-era reference set; (b) WW2 only; (c) both, as separate content packs.
-Recommendation: (a). The physics must generalise (leaf springs and manual boxes are a subset of the machinery torsion bars and automatics need), so the reference set mixes eras; the game's era can be narrowed later.
-Cost of being wrong: low until M2 (the content catalogue), moderate after.
-Default: (a).
-
-### C-002  Which real vehicles are in the reference garage?
-Asked by: ARCH | Status: OPEN
-Options: (a) calibration M998 HMMWV, M113A3, M4A3 Sherman; held out M1A1 Abrams, Leopard 2A5, T-72B, M35 6x6, Tiger II; (b) the owner's own list.
-Recommendation: (a): well-documented civilian-adjacent vehicles first, tanks held out.
-Cost of being wrong: dossier research is redone for swapped vehicles (days).
-Default: (a).
-
-### C-003  How are courses authored?
-Asked by: ARCH | Status: OPEN
-Options: (a) data files made by a procedural generator first, an in-Godot editor later; (b) a Godot editor plugin from the start; (c) hand-built in Blender.
-Recommendation: (a): testable and reproducible; the editor follows once the format settles.
-Cost of being wrong: the editor is built later than wanted.
-Default: (a).
-
 ### C-004  Art pipeline
 Asked by: ARCH | Status: OPEN
 Options: (a) procedural PBR camo and weathering plus a lofted hull-geometry kit; hand-modelled hero assets optional later; (b) hand-modelled assets from the start.
@@ -58,13 +37,6 @@ Options: (a) parked in the archive, revisited at M5; (b) deleted.
 Recommendation: (a).
 Cost of being wrong: low.
 Default: (a).
-
-### C-007  Which model do the lanes run on?
-Asked by: ARCH | Status: OPEN
-Options: (a) the same as the coordinator for every lane; (b) a stronger model for CHASSIS, TRACKS and ARCH, the default for the rest; (c) the default everywhere, upgraded when a lane stalls twice.
-Recommendation: (c): measure first; the burn is reported at every check-in.
-Cost of being wrong: money, or time lost to a lane that stalls.
-Default: (c).
 
 ### C-008  Hold the fan-out until the weekly usage window resets (about 10 Oct 02:00 UTC)?
 Asked by: ARCH | Status: OPEN
@@ -116,4 +88,36 @@ Cost of being wrong: (b) one stray direct push to `integration` has to be found 
 Default: (b).
 
 ## Answered cards
-*(none yet; the owner's four scoping answers are recorded as ADR-0001 to ADR-0004.)*
+*(the owner's four scoping answers are recorded as ADR-0001 to ADR-0004; the cards below were answered in the Control Room on 2026-10-08.)*
+
+### C-001  What era is the game?
+Asked by: ARCH | Date: 2026-10-08 | Status: ANSWERED (2026-10-08, other): baseline is very late WW2 and early Cold War tank design, with the technology we model running from there to today and onwards into the futuristic; the long-term single-player fiction is an early-Cold-War military fighting an alien invasion with a rapid vehicle-prototyping programme. Realistic ground vehicles stay the scope now; exotic technology comes later, as data.
+Options: (a) modern-ish, c. 1950s to today, mixed-era reference set; (b) WW2 only; (c) both, as separate content packs.
+Recommendation: (a). The physics must generalise (leaf springs and manual boxes are a subset of the machinery torsion bars and automatics need), so the reference set mixes eras; the game's era can be narrowed later.
+Cost of being wrong: low until M2 (the content catalogue), moderate after.
+Default: (a).
+Answer: If we ever get to my idea for the single player version of this game try to imagine an early cold war era military which suddenly finds itself fighting off an alien invasion. Players are part of a group who have access to a new program designed to rapidly construct and prototype new vehicles in an effort to defeat opponents who are using exotic materials and technology. So as a rough guide think about tank design from very late WW2, early Cold War but we have to consider the full tech from that point to today and onwards into futuristic tech.
+
+### C-002  Which real vehicles are in the reference garage?
+Asked by: ARCH | Status: ANSWERED (2026-10-08, other): a slice of vehicles in every role, not only assault, to exercise the vehicle builder and get semi-realistic results before exotic technology. The game is fiction, not the real Earth: fictional vehicle names, archetypes based on real vehicles for physics grounding, ideally original hulls built on real hull-shape logic. Validation dossiers stay real vehicles.
+Options: (a) calibration M998 HMMWV, M113A3, M4A3 Sherman; held out M1A1 Abrams, Leopard 2A5, T-72B, M35 6x6, Tiger II; (b) the owner's own list.
+Recommendation: (a): well-documented civilian-adjacent vehicles first, tanks held out.
+Cost of being wrong: dossier research is redone for swapped vehicles (days).
+Default: (a).
+Answer: We should do a whole slice of vehicles from all different roles not just assault but the primary reason for doing this is to fully flex and test the vehicle building and also so that we can test those vehicles and get semi-realistic results before then trying much more exotic or unusual technology. We do not need or want this to be a game about the real earth, it takes place in fiction, so real vehicle names aren't what we need but archetypes based on real world vehicles are ideal to try and give some good physics grounding. Ideally we'd have our own fictional hull designs but those would be based off using the same hull shape logic that you might find in the real world.
+
+### C-003  How are courses authored?
+Asked by: ARCH | Status: ANSWERED (2026-10-08, by note): default (a) stands. We build the courses ourselves, so the tooling must be strong (generator, checks, previews); an editor is a very long-term milestone.
+Options: (a) data files made by a procedural generator first, an in-Godot editor later; (b) a Godot editor plugin from the start; (c) hand-built in Blender.
+Recommendation: (a): testable and reproducible; the editor follows once the format settles.
+Cost of being wrong: the editor is built later than wanted.
+Default: (a).
+Answer: Ideally you'd build them yourself which means you'd need strong tools for helping you to do that. An editor is a very long term milestone.
+
+### C-007  Which model do the lanes run on?
+Asked by: ARCH | Status: ANSWERED (2026-10-08, other): ARCH runs on the strongest model tier and every lane on the default tier; a stalled lane is not upgraded without asking. The lane model is passed explicitly at launch (a session otherwise inherits its launcher's model). The exact names are in the owner's note on this card in the Control Room database.
+Options: (a) the same as the coordinator for every lane; (b) a stronger model for CHASSIS, TRACKS and ARCH, the default for the rest; (c) the default everywhere, upgraded when a lane stalls twice.
+Recommendation: (c): measure first; the burn is reported at every check-in.
+Cost of being wrong: money, or time lost to a lane that stalls.
+Default: (c).
+Answer: See the owner's note on this card in the Control Room database (cards/C-007); the repository carries no model names.

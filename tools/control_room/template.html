@@ -79,13 +79,13 @@ button { font: inherit; color: inherit; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .btn.primary:hover { filter: brightness(1.08); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn:focus-visible, .opt:focus-visible, summary:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 10px; }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.btn:focus-visible, .opt:focus-visible, summary:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .card.answered { background: transparent; }
 .card-top { display: flex; gap: 10px; align-items: baseline; }
 .cid { font-family: var(--f-mono); font-size: 12px; color: var(--accent); flex: none; }
-.card h3 { font-size: 18px; letter-spacing: 0.03em; text-transform: none; font-weight: 600; line-height: 1.2; }
+.card h3 { font-size: 20px; letter-spacing: 0.03em; text-transform: none; font-weight: 600; line-height: 1.2; }
 .opts { display: flex; flex-wrap: wrap; gap: 6px; }
 .opt { border: 1px solid var(--line); background: var(--bg); border-radius: 4px; padding: 5px 9px; cursor: pointer; text-align: left; font-size: 13px; line-height: 1.35; max-width: 100%; }
 .opt:hover { border-color: var(--ink-2); }
@@ -97,10 +97,20 @@ button { font: inherit; color: inherit; }
 .opt:disabled { cursor: default; }
 .card details { font-size: 13px; color: var(--ink-2); }
 .card summary { cursor: pointer; }
-.card details p { margin-top: 4px; }
-.result { font-size: 12px; color: var(--ink-2); font-family: var(--f-mono); }
+.card details p { margin-top: 4px; max-width: 80ch; }
+.result { font-size: 12px; color: var(--ink-2); font-family: var(--f-mono); max-width: 110ch; }
 .other { display: flex; gap: 6px; }
-.other input { flex: 1; min-width: 0; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px; font: inherit; font-size: 13px; }
+/* the notes boxes: roomy on purpose (about ten lines before they grow), 16 px type so phones do not zoom on focus */
+.notes { display: flex; flex-direction: column; gap: 6px; }
+.notes-h { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.notes-h label { font-family: var(--f-display); text-transform: uppercase; letter-spacing: 0.08em; font-size: 13px; color: var(--ink-2); }
+.count { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.count.warn { color: var(--st-wait); } .count.full { color: var(--st-block); }
+.notes textarea { display: block; width: 100%; min-height: 15rem; max-height: 70vh; resize: vertical; overflow-y: auto; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; font: inherit; font-size: 16px; line-height: 1.55; }
+.notes textarea:disabled { opacity: 0.6; cursor: not-allowed; }
+.notes-f { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 30px; }
+.state { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); }
+.state.ok { color: var(--st-run); } .state.err { color: var(--st-block); }
 .hint { font-size: 13px; color: var(--ink-2); }
 
 /* lane board */
@@ -142,7 +152,7 @@ th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--lin
 th { font-family: var(--f-display); text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; color: var(--ink-2); font-weight: 600; }
 tr:last-child td { border-bottom: 0; }
 footer { font-size: 12px; color: var(--ink-2); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-@media (max-width: 520px) { h1 { font-size: 32px; } .stamp { text-align: left; } }
+@media (max-width: 520px) { h1 { font-size: 32px; } .stamp { text-align: left; } .card { padding: 12px; } }
 @media (prefers-reduced-motion: no-preference) { .btn, .opt { transition: background 0.12s, border-color 0.12s; } }
 </style>
 
@@ -159,7 +169,7 @@ footer { font-size: 12px; color: var(--ink-2); display: flex; justify-content: s
 
   <section class="needs" aria-labelledby="needs-h">
     <div class="needs-head">
-      <h2 id="needs-h">Needs you <span class="badge" id="needs-count"></span><small id="needs-sub">Nothing blocks on these: each has a default and the work goes ahead on it.</small></h2>
+      <h2 id="needs-h">Needs you <span class="badge" id="needs-count"></span><small id="needs-sub">Nothing blocks on these: each has a default and the work goes ahead on it. Write as much as you like in the boxes; they save by themselves.</small></h2>
       <div id="needs-actions"></div>
     </div>
     <div class="cards" id="cards"></div>
@@ -277,121 +287,282 @@ footer { font-size: 12px; color: var(--ink-2); display: flex; justify-content: s
   $("foot-left").textContent = D.footer || "";
 
   // ---- decision cards (answers live in the artifact database; defaults apply until someone answers)
-  var answers = {};
-  var db = null, canWrite = false, busy = false;
+  // ---- needs you: choices and notes. What the owner types is kept in the shared database when this view has one.
+  // Each card is built once and then patched, so an update from the database never rebuilds (and never wipes) a box that is being typed in.
+  var NOTES_MAX = 60000;    // a database document holds 256 KiB; 60,000 characters at 4 bytes each is 240,000 bytes, so the cap can never be hit
+  var AUTOSAVE_MS = 1500;   // one write per pause in typing
+  var DRAFT_KEY = "w5k-control-room-draft:";
   var cards = D.cards || [];
+  var answers = {};         // cards/<id>, as last seen or last written
+  var general = null;       // notes/general, the same
+  var db = null, canWrite = false, confirming = false;
+  var views = {};           // card id (or "general") -> its DOM parts, built once
+  var drafts = {};          // id -> text typed and not yet saved
+  var timers = {}, flags = {}, queues = {}, ready = {}, adopted = {};
 
   function fmtTime(iso) { try { return new Date(iso).toISOString().replace("T", " ").slice(0, 16) + " UTC"; } catch (e) { return ""; } }
+  function nowIso() { return new Date().toISOString(); }
+  function isOpen(c) { return /^OPEN/.test(c.status); }
+  function docOf(id) { return id === "general" ? general : answers[id]; }
+  function pathOf(id) { return (id === "general" ? "notes/" : "cards/") + id; }
+  function savedText(id) { var d = docOf(id); return (d && d.text) || ""; }
+  function hasChoice(c) { var a = answers[c.id]; return !!(a && a.choice); }
 
   function answerLabel(c, a) {
-    if (!a) return "";
-    if (a.choice === "other") return "Your answer: " + (a.text || "");
+    if (a.choice === "other") return "None of the options: your notes are the answer";
     var o = c.options.filter(function (x) { return x.key === a.choice; })[0];
-    return o ? "(" + o.key + ") " + o.text : a.choice;
+    return (o ? "(" + o.key + ") " + o.text : a.choice) + (a.text ? " + your notes" : "");
+  }
+  function resultLine(c, a) {
+    if (a && a.choice) return answerLabel(c, a) + " · answered " + fmtTime(a.answeredAt) + (a.appliedAt ? " · applied by ARCH " + fmtTime(a.appliedAt) : " · ARCH applies it at the next check-in");
+    if (a && a.text) return "Notes saved " + fmtTime(a.notesAt) + " · no choice yet, so the work proceeds on the default (" + c.defaultKey + "); ARCH reads your notes at the next check-in.";
+    return "No answer yet: the work proceeds on the default (" + c.defaultKey + ").";
   }
 
-  async function save(card, choice, text) {
-    if (!db || busy) return;
-    busy = true; renderCards();
+  // a copy of what is typed, in this browser, in case the tab is closed before the database has it
+  function stash(id, text) {
     try {
-      var body = { choice: choice, answeredAt: new Date().toISOString() };
-      if (text) body.text = text;
-      await db.doc("cards/" + card.id).set(body);
-    } catch (e) {
-      if (e && e.code === "invalid_argument") { canWrite = false; }
-      $("db-hint").hidden = false;
-      $("db-hint").textContent = "That answer could not be saved here (" + ((e && e.code) || "error") + "). You can also answer in the chat with ARCH.";
-    }
-    busy = false; renderCards();
+      if (text == null) localStorage.removeItem(DRAFT_KEY + id);
+      else localStorage.setItem(DRAFT_KEY + id, JSON.stringify({ t: nowIso(), v: text }));
+    } catch (e) { /* storage can be blocked: the draft then lives only in this view */ }
+  }
+  function unstash(id) { try { var s = localStorage.getItem(DRAFT_KEY + id); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+
+  function sizeBox(ta) {
+    ta.style.height = "auto";
+    ta.style.height = Math.min(ta.scrollHeight + 2, Math.round(window.innerHeight * 0.7)) + "px";
+  }
+  function paintCount(v) {
+    var n = v.ta.value.length;
+    v.count.textContent = n.toLocaleString("en-US") + " / " + NOTES_MAX.toLocaleString("en-US") + (n >= NOTES_MAX ? " · limit reached: anything beyond it was cut off" : "");
+    v.count.className = "count" + (n >= NOTES_MAX ? " full" : (n >= NOTES_MAX * 0.9 ? " warn" : ""));
+  }
+  function setState(id, kind, text) {
+    var v = views[id]; if (!v || !v.state) return;
+    v.state.className = "state" + (kind ? " " + kind : "");
+    v.state.textContent = text;
+    v.save.hidden = drafts[id] === undefined;
   }
 
-  var confirming = false;
-  async function acceptAll() {
-    var open = cards.filter(function (c) { return !answers[c.id] && /^OPEN/.test(c.status); });
-    for (var i = 0; i < open.length; i++) { await save(open[i], open[i].defaultKey); }
-    confirming = false; renderCards();
+  // ---- writing: one write at a time per document, always starting from the latest known body (set() replaces the whole document)
+  function remember(id, body) {
+    if (id === "general") { general = body; return; }
+    if (body) answers[id] = body; else delete answers[id];
+  }
+  function write(id, patch) {
+    var path = pathOf(id);
+    var run = function () {
+      var body = Object.assign({}, docOf(id) || {}, patch);
+      delete body.appliedAt;                       // the owner changed something: ARCH applies it again
+      Object.keys(body).forEach(function (k) { if (body[k] === null) delete body[k]; });
+      var empty = !body.choice && !body.text;      // nothing left to keep: remove the document
+      return (empty ? db.doc(path).delete() : db.doc(path).set(body)).then(function () { remember(id, empty ? null : body); });
+    };
+    var next = (queues[path] || Promise.resolve()).then(run, run);
+    queues[path] = next.catch(function () {});
+    return next;
+  }
+  function fail(id, e) {
+    var code = (e && e.code) || "error";
+    if (code === "invalid_argument") canWrite = false;
+    setState(id, "err", "Not saved (" + code + "). What you typed is still here: copy it, or tell ARCH in the chat.");
+  }
+  function saveChoice(c, key) {
+    if (!db || !canWrite) return;
+    var a = answers[c.id];
+    if (a && a.choice === key) return;
+    write(c.id, { choice: key, answeredAt: nowIso() }).catch(function (e) { fail(c.id, e); }).then(function () { update(); });
+  }
+  function onType(id) {
+    var v = views[id];
+    drafts[id] = v.ta.value;
+    stash(id, v.ta.value);
+    sizeBox(v.ta); paintCount(v);
+    setState(id, "", canWrite ? "Typing… it saves by itself" : "Not connected: what you type stays here until you reload");
+    clearTimeout(timers[id]);
+    timers[id] = setTimeout(function () { flush(id); }, AUTOSAVE_MS);
+  }
+  function flush(id) {
+    clearTimeout(timers[id]);
+    if (!db || !canWrite || drafts[id] === undefined) return;
+    var text = drafts[id];
+    if (text === savedText(id)) { delete drafts[id]; stash(id, null); setState(id, "ok", "Saved"); return; }
+    if (flags[id]) { flags[id] = "again"; return; }       // a write for this box is in flight: save again when it ends
+    flags[id] = "busy";
+    setState(id, "", "Saving…");
+    write(id, text ? { text: text, notesAt: nowIso() } : { text: null }).then(function () {
+      if (drafts[id] === text) { delete drafts[id]; stash(id, null); setState(id, "ok", "Saved " + nowIso().slice(11, 16) + " UTC"); }
+    }, function (e) { fail(id, e); }).then(function () {
+      var again = flags[id] === "again";
+      delete flags[id];
+      if (again || (drafts[id] !== undefined && drafts[id] !== text && canWrite)) timers[id] = setTimeout(function () { flush(id); }, AUTOSAVE_MS);
+      update();
+    });
+  }
+  // a draft kept in this browser is saved once the database has been read, unless the database already has it or something newer
+  function adoptDrafts() {
+    Object.keys(views).forEach(function (id) {
+      var v = views[id];
+      if (adopted[id] || !v.ta || !(id === "general" ? ready.notes : ready.cards)) return;
+      adopted[id] = true;
+      var s = unstash(id), d = docOf(id);
+      if (!s || typeof s.v !== "string") return;
+      if (s.v === savedText(id) || (d && d.notesAt && s.t && d.notesAt > s.t)) { stash(id, null); return; }
+      drafts[id] = s.v; v.ta.value = s.v; sizeBox(v.ta);
+      setState(id, "", "Restored an unsaved draft from this browser; saving…");
+      timers[id] = setTimeout(function () { flush(id); }, AUTOSAVE_MS);
+    });
   }
 
-  function renderCards() {
+  // ---- building (once) and painting (every update)
+  function buildNotes(id, placeholder) {
+    var v = views[id];
+    var wrap = el("div", "notes");
+    var head = el("div", "notes-h");
+    var lab = el("label", "", "Your notes"); lab.setAttribute("for", "notes-" + id);
+    v.count = el("span", "count");
+    head.appendChild(lab); head.appendChild(v.count);
+    var ta = v.ta = el("textarea");
+    ta.id = "notes-" + id; ta.maxLength = NOTES_MAX; ta.rows = 9; v.placeholder = placeholder; ta.placeholder = placeholder;
+    ta.addEventListener("input", function () { onType(id); });
+    ta.addEventListener("blur", function () { flush(id); });
+    var foot = el("div", "notes-f");
+    v.state = el("span", "state"); v.state.setAttribute("aria-live", "polite");
+    v.save = el("button", "btn", "Save now"); v.save.hidden = true; v.save.onclick = function () { flush(id); };
+    foot.appendChild(v.state); foot.appendChild(v.save);
+    wrap.appendChild(head); wrap.appendChild(ta); wrap.appendChild(foot);
+    return wrap;
+  }
+  function buildCards() {
     var list = $("cards"); list.textContent = "";
-    var open = cards.filter(function (c) { return /^OPEN/.test(c.status); });
-    var pending = open.filter(function (c) { return !answers[c.id]; });
-    $("needs-count").textContent = pending.length + " open";
-    $("needs-count").hidden = pending.length === 0;
-    var act = $("needs-actions"); act.textContent = "";
-    if (canWrite && pending.length) {
-      if (!confirming) {
-        var b = el("button", "btn primary", "Accept all " + pending.length + " defaults");
-        b.onclick = function () { confirming = true; renderCards(); };
-        act.appendChild(b);
-      } else {
-        var wrap = el("span", "other");
-        var yes = el("button", "btn primary", "Confirm: accept defaults for " + pending.length + " cards"); yes.disabled = busy; yes.onclick = acceptAll;
-        var no = el("button", "btn", "Cancel"); no.onclick = function () { confirming = false; renderCards(); };
-        wrap.appendChild(yes); wrap.appendChild(no); act.appendChild(wrap);
-      }
-    }
-    open.concat(cards.filter(function (c) { return !/^OPEN/.test(c.status); })).forEach(function (c) {
-      var a = answers[c.id];
-      var closed = !/^OPEN/.test(c.status);
-      var box = el("div", "card" + ((a || closed) ? " answered" : ""));
+    cards.filter(isOpen).concat(cards.filter(function (c) { return !isOpen(c); })).forEach(function (c) {
+      var box = el("div", "card");
       var top = el("div", "card-top");
       top.appendChild(el("span", "cid", c.id));
       top.appendChild(el("h3", "", c.title));
       box.appendChild(top);
-      if (closed) {
+      var v = views[c.id] = { box: box, open: isOpen(c), btns: [] };
+      if (!v.open) {
+        box.className = "card answered";
         box.appendChild(el("p", "result", c.status));
-      } else {
-        var opts = el("div", "opts");
-        c.options.forEach(function (o) {
-          var isDefault = o.key === c.defaultKey;
-          var b = el("button", "opt" + (isDefault ? " rec" : "") + (a && a.choice === o.key ? " chosen" : ""));
-          b.appendChild(el("span", "key", "(" + o.key + ")"));
-          b.appendChild(document.createTextNode(o.text));
-          if (isDefault) b.appendChild(el("span", "tag", "default"));
-          b.disabled = !canWrite || busy;
-          b.onclick = function () { save(c, o.key); };
-          opts.appendChild(b);
-        });
-        box.appendChild(opts);
-        if (canWrite) {
-          var other = el("div", "other");
-          var inp = el("input"); inp.type = "text"; inp.id = "other-" + c.id; inp.placeholder = "Something else: write it here"; inp.setAttribute("aria-label", "Other answer for " + c.id);
-          var go = el("button", "btn", "Send"); go.disabled = busy;
-          go.onclick = function () { if (inp.value.trim()) save(c, "other", inp.value.trim()); };
-          other.appendChild(inp); other.appendChild(go); box.appendChild(other);
-        }
-        var det = el("details");
-        det.appendChild(el("summary", "", "Why, and what a wrong call costs"));
-        det.appendChild(el("p", "", "Recommendation: " + c.recommendation));
-        det.appendChild(el("p", "", "If wrong: " + c.cost));
-        box.appendChild(det);
-        if (a) {
-          var r = answerLabel(c, a) + " · answered " + fmtTime(a.answeredAt) + (a.appliedAt ? " · applied by ARCH " + fmtTime(a.appliedAt) : " · ARCH applies it at the next check-in");
-          box.appendChild(el("p", "result", r));
-        } else {
-          box.appendChild(el("p", "result", "No answer yet: the work proceeds on the default (" + c.defaultKey + ")."));
-        }
+        list.appendChild(box);
+        return;
       }
+      var opts = el("div", "opts");
+      c.options.forEach(function (o) {
+        var b = el("button", "opt" + (o.key === c.defaultKey ? " rec" : ""));
+        b.appendChild(el("span", "key", "(" + o.key + ")"));
+        b.appendChild(document.createTextNode(o.text));
+        if (o.key === c.defaultKey) b.appendChild(el("span", "tag", "default"));
+        b.onclick = function () { saveChoice(c, o.key); };
+        v.btns.push({ key: o.key, el: b });
+        opts.appendChild(b);
+      });
+      var other = el("button", "opt");
+      other.appendChild(el("span", "key", "(other)"));
+      other.appendChild(document.createTextNode("None of these: my notes are the answer"));
+      other.onclick = function () { saveChoice(c, "other"); };
+      v.btns.push({ key: "other", el: other });
+      opts.appendChild(other);
+      box.appendChild(opts);
+      var det = el("details");
+      det.appendChild(el("summary", "", "Why, and what a wrong call costs"));
+      det.appendChild(el("p", "", "Recommendation: " + c.recommendation));
+      det.appendChild(el("p", "", "If wrong: " + c.cost));
+      box.appendChild(det);
+      box.appendChild(buildNotes(c.id, "Write as much as you like: reasons, limits, a different answer, questions for ARCH. It saves by itself."));
+      v.result = el("p", "result");
+      box.appendChild(v.result);
       list.appendChild(box);
     });
+    var g = el("div", "card");
+    var gt = el("div", "card-top");
+    gt.appendChild(el("span", "cid", "NOTES"));
+    gt.appendChild(el("h3", "", "Anything else for ARCH"));
+    g.appendChild(gt);
+    views.general = { box: g, open: true, btns: [] };
+    g.appendChild(buildNotes("general", "Not about one card: priorities, worries, ideas, a change of direction. It saves by itself."));
+    list.appendChild(g);
+    Object.keys(views).forEach(function (id) { if (views[id].ta) { paintCount(views[id]); sizeBox(views[id].ta); } });
   }
-  renderCards();
+  function syncBox(id) {
+    var v = views[id], saved = savedText(id);
+    v.ta.disabled = !canWrite;
+    v.ta.placeholder = canWrite ? v.placeholder : "Sign in to write here, or tell ARCH in the chat.";
+    if (drafts[id] === undefined && v.ta.value !== saved) {          // nothing unsaved in this box: follow the database
+      var sel = document.activeElement === v.ta ? [v.ta.selectionStart, v.ta.selectionEnd] : null;
+      v.ta.value = saved;
+      if (sel) v.ta.setSelectionRange(Math.min(sel[0], saved.length), Math.min(sel[1], saved.length));
+      sizeBox(v.ta);
+    }
+    var d = docOf(id);
+    if (!v.state.textContent && d && d.notesAt) setState(id, "ok", "Saved " + fmtTime(d.notesAt));
+    paintCount(v);
+  }
+  function paintCard(c) {
+    var v = views[c.id];
+    if (!v || !v.open) return;
+    var a = answers[c.id], chosen = a && a.choice;
+    v.box.className = "card" + (chosen ? " answered" : "");
+    v.btns.forEach(function (b) { b.el.classList.toggle("chosen", chosen === b.key); b.el.disabled = !canWrite; });
+    syncBox(c.id);
+    v.result.textContent = resultLine(c, a);
+  }
+  function paintActions(pending) {
+    var act = $("needs-actions"); act.textContent = "";
+    if (!canWrite || !pending.length) return;
+    if (!confirming) {
+      var b = el("button", "btn primary", "Accept all " + pending.length + " defaults");
+      b.onclick = function () { confirming = true; update(); };
+      act.appendChild(b);
+    } else {
+      var wrap = el("span", "other");
+      var yes = el("button", "btn primary", "Confirm: accept defaults for " + pending.length + " cards"); yes.onclick = acceptAll;
+      var no = el("button", "btn", "Cancel"); no.onclick = function () { confirming = false; update(); };
+      wrap.appendChild(yes); wrap.appendChild(no); act.appendChild(wrap);
+    }
+  }
+  function update() {
+    var pending = cards.filter(function (c) { return isOpen(c) && !hasChoice(c); });
+    $("needs-count").textContent = pending.length + " open";
+    $("needs-count").hidden = pending.length === 0;
+    paintActions(pending);
+    cards.forEach(paintCard);
+    if (views.general) syncBox("general");
+  }
+  async function acceptAll() {
+    var todo = cards.filter(function (c) { return isOpen(c) && !hasChoice(c); });
+    confirming = false; update();
+    for (var i = 0; i < todo.length; i++) {
+      try { await write(todo[i].id, { choice: todo[i].defaultKey, answeredAt: nowIso() }); }
+      catch (e) { fail(todo[i].id, e); break; }
+      update();
+    }
+  }
+
+  buildCards();
+  update();
+  window.addEventListener("resize", function () { Object.keys(views).forEach(function (id) { if (views[id].ta) sizeBox(views[id].ta); }); });
 
   // Light up the shared answers when the database capability resolves; the page works without it.
   (async function () {
     try {
       db = window.claude && window.claude.use ? await window.claude.use("db") : null;
       var user = window.claude && window.claude.use ? await window.claude.use("user") : null;
-      if (!db) { $("db-hint").hidden = false; $("db-hint").textContent = "Answering from this page needs a signed-in view. Read-only here: you can still answer in the chat with ARCH."; renderCards(); return; }
+      if (!db) { $("db-hint").hidden = false; $("db-hint").textContent = "Answering from this page needs a signed-in view. Read-only here: you can still answer in the chat with ARCH."; update(); return; }
       var can = user && user.can ? user.can("data.write") : null;
       canWrite = can !== false;
       db.collection("cards").onSnapshot(function (snap) {
         var next = {};
         snap.docs.forEach(function (d) { if (d.exists) next[d.id] = d.data(); });
-        answers = next; renderCards();
+        answers = next; ready.cards = true; adoptDrafts(); update();
       }, function () { /* terminal error: keep what is shown */ });
-      renderCards();
+      db.collection("notes").onSnapshot(function (snap) {
+        general = null;
+        snap.docs.forEach(function (d) { if (d.exists && d.id === "general") general = d.data(); });
+        ready.notes = true; adoptDrafts(); update();
+      }, function () { /* terminal error: keep what is shown */ });
+      update();
     } catch (e) { /* no database in this view: stay read-only */ }
   })();
 })();
