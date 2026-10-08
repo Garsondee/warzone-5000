@@ -4,32 +4,32 @@
   "strip": [
     {
       "k": "Phase",
-      "v": "Wave 0",
-      "s": "Launch Kit nearly done: guardrails proven, contract hardening batch pending, launch on hold",
-      "state": "run"
-    },
-    {
-      "k": "Contract",
-      "v": "0.1.0 draft",
-      "s": "settles to v0.2 after the first design notes",
+      "v": "Wave 0 done",
+      "s": "Launch Kit finished: contract pinned, guards proven, rehearsal passed. Fan-out waits for your go (card C-008)",
       "state": "wait"
     },
     {
+      "k": "Contract",
+      "v": "0.1.1",
+      "s": "pinned at f8f5e5d on integration; settles to v0.2 after the first design notes",
+      "state": "run"
+    },
+    {
       "k": "First light",
-      "v": "green on stand-ins",
-      "s": "one truck over a bump strip, every merge",
+      "v": "green, Linux and Windows",
+      "s": "hash chain identical on both; every merge",
       "state": "run"
     },
     {
       "k": "Sessions",
       "v": "1 of 13",
-      "s": "ARCH only; lanes launch in three ranks",
+      "s": "ARCH only. The rehearsal lane finished ($0.23); no real lane launched",
       "state": "run"
     },
     {
       "k": "Usage",
-      "v": "$204 / 20 h",
-      "s": "this session's meter; weekly warning resets 10 Oct 02:00 UTC",
+      "v": "$204+ / 20 h",
+      "s": "meter at the last report; the owner set a floor; weekly reset 10 Oct 02:00 UTC",
       "state": "wait"
     }
   ],
@@ -52,16 +52,17 @@
       "name": "ARCH",
       "squad": "platform",
       "rank": 1,
-      "state": "building",
+      "state": "waiting for your go",
       "mission": "Contracts, CI and guardrails, the integration spine, merges, reviews. Writes no feature code.",
-      "last": "Guards proven on GitHub (bad PR rejected), Linux and Windows CI green, red-teams done. Contract 0.1.1 batch decided; applying it is the next step."
+      "last": "Wave 0 finished: contract 0.1.1 pinned (f8f5e5d), guards proven, rehearsal merged (PR 3). Idle until you say go or the usage window resets."
     },
     {
       "name": "CHASSIS",
       "squad": "dynamics",
       "rank": 1,
       "state": "not launched",
-      "mission": "A wheeled vehicle that rides, grips and handles: hull, suspension, tyres, steering."
+      "mission": "A wheeled vehicle that rides, grips and handles: hull, suspension, tyres, steering.",
+      "last": "Rehearsal only: a small session round-tripped its status file through PR 3 (lane guard and CI green, merged, $0.23). The real lane is not launched."
     },
     {
       "name": "DRIVE",
@@ -145,8 +146,8 @@
     {
       "id": "W0",
       "name": "Launch Kit",
-      "state": "in progress",
-      "criteria": "Done: briefs, guards proven by a bad PR, Linux+Windows hash identical (S2). To do: contract 0.1.1, rehearsal lane, launch (on hold, card C-008)."
+      "state": "done",
+      "criteria": "Done: 13 briefs, guards proven by a bad PR, Linux and Windows hashes identical (S2), contract 0.1.1 merged and green, launch rehearsal passed (PR 3: lane guard and CI green, merged, $0.23). Waiting: your go to launch rank 1 (card C-008), or the usage reset (10 Oct 02:00 UTC)."
     },
     {
       "id": "S",
@@ -202,6 +203,16 @@
       "t": "2026-10-08 18:05",
       "sessions": "1 of 13",
       "note": "Owner warned of about $20 of credit left: ARCH stopped and left the repository green. Handoff: docs/architecture/CONTRACT-0.1.1-PLAN.md and docs/swarm/STATE.md."
+    },
+    {
+      "t": "2026-10-08 18:25",
+      "sessions": "1 of 13",
+      "note": "Contract 0.1.1 merged into integration (PR 2) and green on Linux and Windows. Next: the launch rehearsal; no lane launched."
+    },
+    {
+      "t": "2026-10-08 18:55",
+      "sessions": "1 of 13",
+      "note": "Launch rehearsal passed. One small CHASSIS session cloned, branched, wrote its status file, ran the math tests, pushed and opened PR 3; the lane guard and CI passed and ARCH merged it ($0.23 for the whole session). It tried to force-push and was refused, as designed. Fixes made: the launch prompt now says how to sign commits and never to amend; the contract pin is a commit id. Rank 1 is not launched; it waits for your go."
     }
   ],
   "footer": "Defaults apply to every open card until you answer it."

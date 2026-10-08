@@ -7,7 +7,7 @@ and CCRs) hardens it into v0.2; it freezes at M1 (first light).
 ## Changing a contract (CCR)
 A contract change request is a PR titled `CCR: <what>` that touches `crates/w5k_contract/**` and this file (and, if it breaks users, makes the mechanical
 migration edits in the lanes that use it; ARCH reviews every line). Additive, optional fields are a minor bump; anything that breaks a user is a major bump with a
-migration of the goldens. ARCH tags the commit `contract-vX.Y`. **Lanes pin the tag they build against and upgrade deliberately.** Until M1 the contract is a
+migration of the goldens. ARCH names the commit `contract-vX.Y` under *Contract pin* in `docs/swarm/STATE.md` (the git proxy refuses to push tags, so the commit id is the pin). **Lanes pin the version they build against and upgrade deliberately.** Until M1 the contract is a
 draft: file a CCR early rather than work around a gap.
 
 ## The contracts
@@ -71,5 +71,5 @@ For each substep of length `dt / substeps`:
 7. Record every term in the ledger; flush decaying state (`scalar::flush_tiny`).
 
 ## Change log
-- **0.1.1** (pre-launch hardening, three red-teams): `Command` has 4 aim channels, level-triggered fire bits, a clutch and a drive mode; `Frame` carries contact material, livery, a terrain link, the limiting factor, weapon state, projectiles and a richer `Hit`; `PhysRig` gains linkages, `ride_height_m`, multi-patch wheels, drive modes, steering laws, brake extras, free turbines, dry friction, hard bump limits, `JointDrive`, weapons on muzzles, provisional combat data, forward kinematics, `required_features()`, `rig_hash()`, `contact_names()`; a consolidated `validate()`; `ArticulationPort`; `VehicleModel::{drain_events, swap_rig}`; the contact frame is right-handed (y = left) and slip is normalised; tyre friction is `mu_peak * mu_scale`; spin is continuous; `serde_json` round-trips floats exactly; `#[non_exhaustive]` on the enums that will grow. Golden unchanged.
+- **0.1.1** (pre-launch hardening, three red-teams): `Command` has 4 aim channels, level-triggered fire bits, a clutch and a drive mode; `Frame` carries contact material, livery, a terrain link, the limiting factor, weapon state, projectiles and a richer `Hit`; `PhysRig` gains linkages, `ride_height_m`, multi-patch wheels, drive modes, steering laws, brake extras, free turbines, dry friction, hard bump limits, `JointDrive`, weapons on muzzles, provisional combat data, forward kinematics, `required_features()`, `rig_hash()`, `contact_names()`; a consolidated `validate()`; `ArticulationPort`; `VehicleModel::{drain_events, swap_rig}`; the contact frame is right-handed (y = left) and slip is normalised; tyre friction is `mu_peak * mu_scale`; spin is continuous; `serde_json` round-trips floats exactly; `#[non_exhaustive]` on the enums that will grow. Golden unchanged. **`contract-v0.1` is commit `f8f5e5d`** on `integration` (merged and green on Linux and Windows); lanes pin that commit.
 - **0.1.0** (Launch Kit): first draft. All of the above, with stand-ins, two dummy rigs, canned replays and the first-light spine.
