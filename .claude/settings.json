@@ -2,6 +2,10 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
+      "Bash(python3 -I assets/*)", "Bash(python3 -B -I *)", "Bash(cargo bench *)", "Bash(cargo doc *)", "Bash(rm *)",
+      "Bash(echo *)", "Bash(printf *)", "Bash(chmod *)", "Bash(tee *)", "Bash(test *)", "Bash(stat *)", "Bash(du *)",
+      "Bash(cut *)", "Bash(tr *)", "Bash(basename *)", "Bash(dirname *)", "Bash(realpath *)", "Bash(which *)",
+      "Bash(date *)", "Bash(pwd *)",
       "Bash(cargo build *)",
       "Bash(cargo check *)",
       "Bash(cargo test *)",
@@ -88,6 +92,10 @@
       "mcp__github__issue_read"
     ],
     "deny": [
+      "Bash(git push origin main*)", "Bash(git push origin integration*)",
+      "Bash(git push origin HEAD:main*)", "Bash(git push origin HEAD:integration*)",
+      "Bash(git push * main)", "Bash(git push * integration)",
+      "Bash(git push * HEAD:main)", "Bash(git push * HEAD:integration)",
       "Bash(git push --force*)",
       "Bash(git push -f*)",
       "Bash(git push -uf*)",
