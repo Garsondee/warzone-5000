@@ -6,8 +6,10 @@
    - `cargo run --release -p w5k_tools --bin w5k -- render content --out out` renders every part and vehicle into `out\`;
    - `cargo run --release -p w5k_tools --bin w5k -- family content --out out` renders the parametric family sheets.
 2. **Godot 4.6.2**: download the standard (not .NET) build from https://godotengine.org/download/archive/4.6.2-stable/.
-   The Godot project (`game/`) and the Rust GDExtension arrive in milestone M2; the extension is built with
-   `cargo build --release -p w5k_godot`.
+   The Godot project (`game/`) and the Rust GDExtension start at M1 as a replay player (the GODOT lane's `game/README.md` has the
+   exact steps once it lands); drive mode and the exported Windows package are M2. The extension is built with
+   `cargo build --release -p w5k_godot --features godot` (the Godot binding sits behind an optional feature, so
+   `cargo test --workspace` never builds it).
 3. **Viewing GLB files in Blender**: File > Import > glTF 2.0, pick a `.glb` from the render output. To see the colours,
    switch the viewport to Solid shading and set Color to *Attribute* (it uses `COLOR_0`). Each part's sockets appear as
    empties named `socket_<name>`.
