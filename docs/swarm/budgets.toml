@@ -19,7 +19,7 @@ max_lines = 8000
 max_lines = 2500
 
 [crates.w5k_contract]
-max_lines = 4000
+max_lines = 7000
 
 [crates.w5k_sim]
 max_lines = 5000

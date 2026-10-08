@@ -141,7 +141,7 @@ mod tests {
             p.step(
                 dt,
                 &inputs,
-                &[ShaftState { omega_rad_s: omega, inertia_kg_m2: j, vehicle_speed_m_s: 0.0 }],
+                &[ShaftState { omega_rad_s: omega, inertia_kg_m2: j, vehicle_speed_m_s: 0.0, ..ShaftState::default() }],
                 &mut out,
             );
             omega += out[0] / j * dt;

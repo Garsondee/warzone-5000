@@ -8,7 +8,7 @@ use w5k_math::{scalar, Quat, StateHasher, Vec3};
 use crate::command::{Command, GearRequest};
 use crate::frame::{ContactFrame, Event, VehicleFrame};
 use crate::ledger::{ForceLedger, ForceTerm};
-use crate::rig::{JointRole, PhysRig, WheelKind};
+use crate::rig::{JointDrive, JointRole, PhysRig, WheelKind};
 use crate::vehicle::{LimitingFactor, StepReport, VehicleModel};
 use crate::world::WorldQuery;
 
@@ -242,7 +242,10 @@ impl VehicleModel for RigidBoxVehicle {
         }
         self.prev_fire = cmd.fire;
         for (k, j) in self.rig.articulation.iter().enumerate() {
-            let rate = j.servo.as_ref().map(|s| s.max_rate).unwrap_or(1.0);
+            let rate = match &j.drive {
+                JointDrive::Servo(sv) => sv.max_rate_si,
+                _ => 1.0,
+            };
             match j.role {
                 JointRole::TurretYaw | JointRole::GunPitch => {
                     // The stand-in follows aim channel 0 and treats a world-frame demand like a parent-relative one.

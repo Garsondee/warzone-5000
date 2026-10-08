@@ -11,11 +11,12 @@ pub struct RenderRig {
     pub nodes: Vec<RenderNode>,
     pub meshes: Vec<MeshPart>,
     pub material_slots: Vec<MaterialSlot>,
-    /// Number of joint coordinates a frame carries for this rig (largest `JointBinding::index` + 1).
+    /// Number of joint coordinates a frame carries for this rig: `PhysRig::joint_names().len()` (a coordinate may be unbound, e.g. a spare).
     pub joint_count: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum NodeRole {
     Hull,
     Turret,
@@ -65,6 +66,7 @@ pub struct RenderNode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum SlotKind {
     /// Painted armour: takes the camo pattern.
     Paint,
@@ -117,6 +119,11 @@ impl RenderRig {
             }
         }
         for (i, m) in self.meshes.iter().enumerate() {
+            if !(m.edge.is_empty() || m.edge.len() == m.positions.len())
+                || !(m.cavity.is_empty() || m.cavity.len() == m.positions.len())
+            {
+                e.push(format!("mesh {i} ({}): edge and cavity must be empty or one value per vertex", m.name));
+            }
             if m.node >= self.nodes.len() {
                 e.push(format!("mesh {i} ({}): node {} out of range", m.name, m.node));
             }

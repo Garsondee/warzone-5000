@@ -22,20 +22,23 @@
 //! | [`testing`] | stand-ins for every neighbour, so each lane can start on day one |
 
 pub mod capability;
+pub mod combat;
 pub mod command;
 pub mod def;
 pub mod frame;
+pub mod kinematics;
 pub mod ledger;
 pub mod param;
 pub mod ports;
 pub mod render;
 pub mod rig;
 pub mod testing;
+mod validate;
 pub mod vehicle;
 pub mod world;
 
 pub use capability::CapabilityTable;
-pub use command::{Command, GearRequest};
+pub use command::{AimDemand, AimFrame, Command, GearRequest, AIM_CHANNELS};
 pub use frame::{ContactFrame, Event, Frame, ReplayHeader, VehicleFrame, VehicleHeader};
 pub use ledger::{ForceLedger, ForceTerm};
 pub use param::{Param, Provenance};
@@ -49,7 +52,7 @@ pub use vehicle::{LimitingFactor, StepReport, VehicleModel};
 pub use world::{GroundSample, Material, MaterialId, MaterialTable, PropRef, RayHit, SoilParams, WorldQuery};
 
 /// The version of this contract. Bump the minor for additive changes, the major for breaking ones; tag the commit `contract-vX.Y`.
-pub const CONTRACT_VERSION: &str = "0.1.0";
+pub const CONTRACT_VERSION: &str = "0.1.1";
 
 /// Density of air at sea level, 15 C (ISA), in kg/m^3: a defined reference value.
 pub const AIR_DENSITY_KG_M3: f64 = 1.225; // const-ok: ISA sea-level standard atmosphere, a defined reference value
