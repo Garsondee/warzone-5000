@@ -1,0 +1,28 @@
+# Line budgets: the most lines of code each crate may hold.
+#
+# tools/ci/line_budget.py reads this file. It counts the non-blank, non-comment lines of crates/<crate>/src/**/*.rs (tests
+# inside src count too) and fails the pull request when a crate is over its budget. A crate close to its budget (90%) shows
+# WARN in the table so the lane can plan a split before it hurts.
+#
+# Why: a crate that keeps growing is a crate nobody can hold in their head, and a lane that is "nearly done" with a 20,000
+# line crate is usually a lane that has drifted. A budget forces the question "should this be two crates, or smaller?"
+# while it is cheap to answer.
+#
+# Crates without their own entry use [default]. Only ARCH edits this file (it is under docs/swarm/**); a lane that needs a
+# larger budget files an interface request (docs/swarm/requests/<lane>-<topic>.md) and ARCH answers with a decision card.
+
+[default]
+max_lines = 8000
+
+# Overrides. Smaller than the default on purpose: these crates are shared by everyone and must stay easy to read.
+[crates.w5k_math]
+max_lines = 2500
+
+[crates.w5k_contract]
+max_lines = 4000
+
+[crates.w5k_sim]
+max_lines = 5000
+
+[crates.w5k_tools]
+max_lines = 6000

@@ -1,0 +1,15 @@
+[package]
+name = "w5k_sim"
+description = "Deterministic simulation core for warzone-5000: terrain, movement, time trials and replays"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+w5k_math = { path = "../w5k_math" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"
+ron = "0.12"

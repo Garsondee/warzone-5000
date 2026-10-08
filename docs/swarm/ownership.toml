@@ -1,0 +1,72 @@
+# Who may edit what. The one machine-readable statement of lane ownership.
+#
+# The lane guard (tools/ci/lane_guard.py) reads this file. A pull request from a branch named `lane/<name>/<topic>` may change
+# only files matched by [common] (with {lane} replaced by the lane name) and by its own [lanes.<name>] table.
+# Globs are repo-relative; `**` crosses directories, `*` does not cross `/`.
+#
+# A PR whose title starts with `CCR:` (contract change request) may additionally touch [ccr].paths and make mechanical
+# migration edits anywhere; ARCH reviews those line by line.
+#
+# Heads that are not lane branches: only the entries in [unrestricted].heads may change anything; every other head fails the guard.
+# Editing this file is ARCH-only (it is in [lanes.arch].paths).
+
+[unrestricted]
+heads = ["claude/sharp-babbage-d702f7", "integration", "arch/*"]
+
+[common]
+paths = [
+  "docs/swarm/status/{lane}.md",
+  "docs/swarm/requests/{lane}-*.md",
+  "docs/theory/{lane}.md",
+  "docs/lanes/{lane}/**",
+  "spikes/{lane}/**",
+  "Cargo.lock",
+]
+
+[ccr]
+paths = ["crates/w5k_contract/**", "docs/architecture/CONTRACTS.md"]
+
+[lanes.arch]
+paths = [
+  "crates/w5k_math/**", "crates/w5k_contract/**", "crates/w5k_vehicle/**", "crates/w5k_sim/**",
+  "crates/w5k_tools/Cargo.toml", "crates/w5k_tools/src/main.rs", "crates/w5k_tools/src/cmd/mod.rs", "crates/w5k_tools/src/cmd/arch.rs",
+  "Cargo.toml", "clippy.toml", "rustfmt.toml", "CLAUDE.md", "README.md", ".gitignore", ".github/**", ".claude/**", "tools/ci/**",
+  "docs/README.md", "docs/dev-environment.md", "docs/brief/**", "docs/architecture/**", "docs/decisions/**", "docs/swarm/**",
+  "docs/research/**", "docs/assets/**", "docs/archive/**", "docs/theory/the-physics-of-a-time-trial.md", "reference/**", "content/fixtures/**",
+]
+
+[lanes.chassis]
+paths = ["crates/w5k_chassis/**", "content/physics/chassis/**", "crates/w5k_tools/src/cmd/chassis.rs"]
+
+[lanes.drive]
+paths = ["crates/w5k_drive/**", "content/physics/drive/**", "crates/w5k_tools/src/cmd/drive.rs"]
+
+[lanes.tracks]
+paths = ["crates/w5k_terramech/**", "content/physics/tracks/**", "crates/w5k_tools/src/cmd/tracks.rs"]
+
+[lanes.world]
+paths = ["crates/w5k_world/**", "content/world/**", "crates/w5k_tools/src/cmd/world.rs"]
+
+[lanes.forge]
+paths = ["crates/w5k_forge/**", "content/parts/**", "content/vehicles/**", "crates/w5k_tools/src/cmd/forge.rs"]
+
+[lanes.geometry]
+paths = ["crates/w5k_geo/**", "crates/w5k_tools/src/cmd/geometry.rs"]
+
+[lanes.look]
+paths = ["assets/**", "docs/art/**", "crates/w5k_tools/src/cmd/look.rs"]
+
+[lanes.viewer]
+paths = ["crates/w5k_replay/**", "tools/viewer/**", "crates/w5k_tools/src/cmd/viewer.rs"]
+
+[lanes.godot]
+paths = ["crates/w5k_godot/**", "game/**", "crates/w5k_tools/src/cmd/godot.rs"]
+
+[lanes.validation]
+paths = ["crates/w5k_validate/**", "content/dossier/**", "docs/validation/**", "crates/w5k_tools/src/cmd/validation.rs"]
+
+[lanes.combat]
+paths = ["crates/w5k_combat/**", "content/combat/**", "crates/w5k_tools/src/cmd/combat.rs"]
+
+[lanes.ai]
+paths = ["crates/w5k_ai/**", "crates/w5k_tools/src/cmd/ai.rs"]

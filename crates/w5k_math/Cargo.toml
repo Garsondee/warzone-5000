@@ -1,9 +1,17 @@
 [package]
 name = "w5k_math"
-description = "Deterministic fixed-point maths, RNG and state hashing for the warzone-5000 simulation"
+description = "f64 + libm maths: Vec3, Quat, Mat3, Transform, interpolation, Pcg32, state hasher."
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
+libm.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

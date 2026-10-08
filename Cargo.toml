@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
-members = ["crates/w5k_math", "crates/w5k_forge", "crates/w5k_sim", "crates/w5k_tools"]
+members = ["crates/*"]
+exclude = ["reference", "spikes"]
 
 [workspace.package]
 edition = "2021"
@@ -8,7 +9,36 @@ version = "0.1.0"
 license = "UNLICENSED"
 publish = false
 
-# Tests and tools do real geometry work; keep debug builds reasonably fast.
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ron = "0.12"
+libm = "0.2"
+w5k_math = { path = "crates/w5k_math" }
+w5k_contract = { path = "crates/w5k_contract" }
+w5k_chassis = { path = "crates/w5k_chassis" }
+w5k_drive = { path = "crates/w5k_drive" }
+w5k_terramech = { path = "crates/w5k_terramech" }
+w5k_vehicle = { path = "crates/w5k_vehicle" }
+w5k_world = { path = "crates/w5k_world" }
+w5k_geo = { path = "crates/w5k_geo" }
+w5k_forge = { path = "crates/w5k_forge" }
+w5k_replay = { path = "crates/w5k_replay" }
+w5k_validate = { path = "crates/w5k_validate" }
+w5k_combat = { path = "crates/w5k_combat" }
+w5k_ai = { path = "crates/w5k_ai" }
+w5k_sim = { path = "crates/w5k_sim" }
+w5k_godot = { path = "crates/w5k_godot" }
+
+# Lints every crate inherits (`[lints] workspace = true`). Non-portable maths is banned by clippy.toml.
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+float_cmp = "warn"
+dbg_macro = "deny"
+
+# Tests do real numerical work; keep debug builds reasonably fast.
 [profile.dev]
 opt-level = 1
 

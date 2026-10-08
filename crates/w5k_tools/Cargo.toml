@@ -1,17 +1,33 @@
 [package]
 name = "w5k_tools"
-description = "Command-line tools for warzone-5000: render part previews, export GLB, bake stats"
+description = "The w5k command line: one module per lane in src/cmd/."
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 publish.workspace = true
+
+[lints]
+workspace = true
 
 [[bin]]
 name = "w5k"
 path = "src/main.rs"
 
 [dependencies]
-w5k_forge = { path = "../w5k_forge" }
-w5k_sim = { path = "../w5k_sim" }
-ron = "0.12"
-serde_json = "1"
+w5k_math.workspace = true
+w5k_contract.workspace = true
+w5k_chassis.workspace = true
+w5k_drive.workspace = true
+w5k_terramech.workspace = true
+w5k_vehicle.workspace = true
+w5k_world.workspace = true
+w5k_geo.workspace = true
+w5k_forge.workspace = true
+w5k_replay.workspace = true
+w5k_validate.workspace = true
+w5k_combat.workspace = true
+w5k_ai.workspace = true
+w5k_sim.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ron.workspace = true

@@ -1,0 +1,16 @@
+[package]
+name = "w5k_replay"
+description = "Replay v2 writer and reader (the interface between the simulation and every viewer)."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+w5k_math.workspace = true
+w5k_contract.workspace = true
+serde.workspace = true
+serde_json.workspace = true

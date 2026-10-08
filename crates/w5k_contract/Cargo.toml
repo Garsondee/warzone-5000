@@ -1,0 +1,19 @@
+[package]
+name = "w5k_contract"
+description = "Data, traits, ports and test doubles shared by every lane (VehicleDef, PhysRig, RenderRig, Command, Frame, WorldQuery, ...)."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+w5k_math.workspace = true
+serde.workspace = true
+libm.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+ron.workspace = true

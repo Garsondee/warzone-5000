@@ -1,0 +1,16 @@
+[package]
+name = "w5k_godot"
+description = "Godot 4.6 front end bridge (skeleton until the S8 spike reports)."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+w5k_math.workspace = true
+w5k_contract.workspace = true
+w5k_replay.workspace = true
+w5k_sim.workspace = true
