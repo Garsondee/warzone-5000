@@ -5,31 +5,31 @@
     {
       "k": "Phase",
       "v": "Wave 0",
-      "s": "Launch Kit nearly done: guardrails proven, contract hardening batch pending, launch on hold",
+      "s": "Launch Kit: contract merged and green; rehearsal next; launch on hold (card C-008)",
       "state": "run"
     },
     {
       "k": "Contract",
-      "v": "0.1.0 draft",
-      "s": "settles to v0.2 after the first design notes",
-      "state": "wait"
+      "v": "0.1.1",
+      "s": "pinned at f8f5e5d on integration; settles to v0.2 after the first design notes",
+      "state": "run"
     },
     {
       "k": "First light",
-      "v": "green on stand-ins",
-      "s": "one truck over a bump strip, every merge",
+      "v": "green, Linux and Windows",
+      "s": "hash chain identical on both; every merge",
       "state": "run"
     },
     {
       "k": "Sessions",
       "v": "1 of 13",
-      "s": "ARCH only; lanes launch in three ranks",
+      "s": "ARCH only; no lane launched (card C-008 holds the fan-out)",
       "state": "run"
     },
     {
       "k": "Usage",
-      "v": "$204 / 20 h",
-      "s": "this session's meter; weekly warning resets 10 Oct 02:00 UTC",
+      "v": "$204+ / 20 h",
+      "s": "meter at the last report; the owner set a floor; weekly reset 10 Oct 02:00 UTC",
       "state": "wait"
     }
   ],
@@ -54,7 +54,7 @@
       "rank": 1,
       "state": "building",
       "mission": "Contracts, CI and guardrails, the integration spine, merges, reviews. Writes no feature code.",
-      "last": "Guards proven on GitHub (bad PR rejected), Linux and Windows CI green, red-teams done. Contract 0.1.1 batch decided; applying it is the next step."
+      "last": "Contract 0.1.1 merged (f8f5e5d); integration green on Linux and Windows. Next: the launch rehearsal."
     },
     {
       "name": "CHASSIS",
@@ -146,7 +146,7 @@
       "id": "W0",
       "name": "Launch Kit",
       "state": "in progress",
-      "criteria": "Done: briefs, guards proven by a bad PR, Linux+Windows hash identical (S2). To do: contract 0.1.1, rehearsal lane, launch (on hold, card C-008)."
+      "criteria": "Done: 13 briefs, guards proven by a bad PR, Linux and Windows hashes identical (S2), contract 0.1.1 merged and green. To do: launch rehearsal, owner summary, launch (on hold, card C-008)."
     },
     {
       "id": "S",
@@ -202,6 +202,11 @@
       "t": "2026-10-08 18:05",
       "sessions": "1 of 13",
       "note": "Owner warned of about $20 of credit left: ARCH stopped and left the repository green. Handoff: docs/architecture/CONTRACT-0.1.1-PLAN.md and docs/swarm/STATE.md."
+    },
+    {
+      "t": "2026-10-08 18:25",
+      "sessions": "1 of 13",
+      "note": "Contract 0.1.1 merged into integration (PR 2) and green on Linux and Windows. Next: the launch rehearsal; no lane launched."
     }
   ],
   "footer": "Defaults apply to every open card until you answer it."
