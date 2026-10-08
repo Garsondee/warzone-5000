@@ -2,6 +2,31 @@
 
 Short records of decisions that are expensive to reverse. Newest first. Each entry: what, why, alternatives, consequences.
 
+## D6 (2026-10-08): Components are parametric families, written as generators
+- **What:** each component (turret, hull, engine, locomotion, sensor) is a *family* with sliders. A family is Rust code that
+  turns slider values into an ordinary part tree; the forge then measures the real geometry. Sliders are free, budgeted
+  (coupled through the part's mass by a solver that respects locks) or physically opposed. See
+  [../design/04-parametric-components.md](../design/04-parametric-components.md).
+- **Why:** the owner's revised concept: fewer tech items, a far larger design space, and balance found by the player.
+  Generators keep stats honest (measured, not tabulated) and can follow real scaling laws.
+- **Alternatives:** fixed part libraries (rejected: tech bloat, no design space); expressions inside RON part files
+  (simpler for modders, too weak for sizing loops and conditional geometry); an embedded scripting language such as Rhai
+  (worth revisiting when modding matters; the family interface is designed so a scripted family can implement it).
+- **Consequences:** a design is (family id, slider values) per component, plus attachments; the fixed RON parts remain for
+  hulls and props until their families exist. Interactive use needs a fast mass estimate (done) and background
+  measurement.
+
+## D5 (2026-10-08): An async auto-battler; the deterministic simulation stays, lockstep does not lead
+- **What:** the game is a design-first async auto-battler ([../design/05-game-loop.md](../design/05-game-loop.md)). A battle
+  is a pure function of (roster A, roster B, map, seed). The simulation stays deterministic (fixed point, seeded RNG,
+  ordered iteration) for replays, server verification and pricing benchmarks. Live lockstep PvP is no longer a milestone.
+- **Why:** owner's revised loop: players design, test against bots, then send rosters into hands-off battles against
+  other players' snapshots.
+- **Alternatives:** keep live RTS control with lockstep (dropped by the owner); a non-deterministic simulation with
+  recorded replays (bigger replays, no cheap verification, no reproducible pricing).
+- **Consequences:** the battle AI becomes the central risk and moves earlier in the roadmap; a backend for snapshot pools
+  and verification comes late and is small; D3's fixed-point rules still apply.
+
 ## D4 (2026-10-07): Parts are authored as primitive trees and simulated as voxels
 - **What:** parts are written as trees of parametric convex primitives (box, wedge, cylinder, frustum..., with chamfer and taper)
   plus mirror/array/radial operators. For statistics they are voxelised. A `blocks` grid primitive (shaped voxels) will be added
@@ -12,7 +37,7 @@ Short records of decisions that are expensive to reverse. Newest first. Each ent
   artefacts); general mesh booleans (a large, fragile project).
 - **Consequences:** concave shapes are made by combining convex pieces ("kitbashing"); stats are baked at content-build time.
 
-## D3 (2026-10-07): Online multiplayer is core; deterministic lockstep with fixed point
+## D3 (2026-10-07): Online multiplayer is core; deterministic lockstep with fixed point (amended by D5)
 - **What:** the gameplay simulation is deterministic: Q32.32 fixed point, fixed tick, seeded RNG, ordered iteration, state
   hashes. See [../design/02-determinism-rules.md](../design/02-determinism-rules.md).
 - **Why:** owner's decision that multiplayer is core from day one; lockstep is the standard RTS approach and needs bit-identical

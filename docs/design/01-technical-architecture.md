@@ -29,9 +29,9 @@
 **The rule:** gameplay truth lives only in the Rust simulation. Godot may embellish (detailed IK, ragdolls, particles) but its
 results never flow back into the simulation.
 
-> **Theory note: why separate simulation from presentation?** In lockstep multiplayer, players' machines exchange only their
-> *commands*, and each machine runs the full simulation itself. For that to work, every machine must compute exactly the same
-> result from the same commands, down to the last bit. Rendering, by contrast, can differ freely: one player can have a
+> **Theory note: why separate simulation from presentation?** A battle is stored and shared as its *inputs* (rosters, map,
+> seed), and each machine that shows it runs the full simulation itself. For that to work, every machine must compute exactly
+> the same result from the same inputs, down to the last bit. Rendering, by contrast, can differ freely: one player can have a
 > better graphics card or look at a different part of the map. Keeping the two in separate layers makes it impossible for a
 > visual detail (camera position, frame rate, a physics-engine ragdoll) to change the game.
 

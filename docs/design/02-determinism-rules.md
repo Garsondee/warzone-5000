@@ -1,7 +1,8 @@
 # Determinism Rules
 
-Online multiplayer uses **deterministic lockstep**: players exchange only commands, every machine simulates the whole game,
-and the results must match bit for bit. These rules apply to **every crate that affects gameplay** (`w5k_math`, `w5k_sim`, and
+A battle is a pure function of its inputs (two rosters, a map and a seed). Replays are stored as those inputs and
+re-simulated; a server verifies results by re-running them; pricing benchmarks must give the same answer everywhere. All
+of that needs the simulation to produce bit-identical results on every machine (decisions D3 and D5). These rules apply to **every crate that affects gameplay** (`w5k_math`, `w5k_sim`, and
 any part of `w5k_forge` whose output the simulation consumes at runtime).
 
 ## The rules

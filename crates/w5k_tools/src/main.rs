@@ -3,7 +3,10 @@
 //! ```text
 //! w5k render <content-dir> --out <dir> [--only id,id,...]   contact sheets, GLB and stats for parts and vehicles
 //! w5k check  <content-dir>                                 build everything and report problems
+//! w5k family <content-dir> --out <dir>                     sweep and slider-coupling sheets for parametric families
 //! ```
+
+mod family_cmd;
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -15,7 +18,7 @@ use w5k_forge::raster::Image;
 use w5k_forge::{Built, Forge, StatsFile};
 
 fn usage() -> ! {
-    eprintln!("usage:\n  w5k render <content-dir> --out <dir> [--only id,id,...]\n  w5k check <content-dir>");
+    eprintln!("usage:\n  w5k render <content-dir> --out <dir> [--only id,id,...]\n  w5k check <content-dir>\n  w5k family <content-dir> --out <dir>");
     std::process::exit(2)
 }
 
@@ -52,6 +55,7 @@ fn main() {
     let ok = match cmd.as_str() {
         "render" => render(&forge, a.out.as_deref().unwrap_or_else(|| usage()), a.only.as_deref()),
         "check" => check(&forge),
+        "family" => family_cmd::run(&forge, a.out.as_deref().unwrap_or_else(|| usage())),
         _ => usage(),
     };
     if !ok {

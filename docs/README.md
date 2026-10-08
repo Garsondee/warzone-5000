@@ -1,7 +1,8 @@
 # Documentation Index
 
-Project: **warzone-5000**, an attempt to create a game in the style of Warzone 2100, with the unit-design and research systems made
-bigger, bolder and more impactful on gameplay (more component types such as engines, many more propulsion varieties, deeper unit building).
+Project: **warzone-5000**, a design-first async auto-battler that grew out of Warzone 2100's unit-design ideas. Players draft
+parametric components, tune their sliders, test designs against bots, then send them into hands-off battles against other
+players' armies. See the [vision](design/00-vision.md).
 
 ## Directory layout
 
@@ -9,9 +10,9 @@ bigger, bolder and more impactful on gameplay (more component types such as engi
 |---|---|
 | `docs/research/` | Findings about *existing* games, tech and theory. Facts about the outside world, with sources. |
 | `docs/research/warzone-2100/` | Research dossier on Warzone 2100 (the reference game): overview, history, mechanics, deep dives, data. |
-| `docs/design/` | *Our* game's design: mechanics, units, factions, UI. Decisions we own. (empty for now) |
-| `docs/planning/` | Roadmap, milestones, task breakdowns, tech-stack decisions. (empty for now) |
-| `docs/notes/` | Scratch notes, session logs, ideas not yet promoted to design. (empty for now) |
+| `docs/design/` | *Our* game's design: mechanics, units, factions, UI. Decisions we own. |
+| `docs/planning/` | Roadmap, milestones, task breakdowns, tech-stack decisions. |
+| `docs/notes/` | Theory notes for each milestone, scratch notes, ideas not yet promoted to design. |
 | `docs/assets/` | Figures and diagrams used by the docs (generated figures live here). |
 | `tools/` | Scripts that produce the tables and figures (see [tools/README.md](../tools/README.md)). |
 
@@ -22,6 +23,24 @@ can always tell "this is how the original works" from "this is our choice".
 ### Convention: GPL hygiene
 Warzone 2100's code and data are GPL-2.0-or-later. We **study** them (read-only checkout kept *outside* this repository) but do not copy
 code or assets. Tables in `docs/research/warzone-2100/data/` are derived reference notes; do not paste them into our own game data.
+
+## Our game: design and planning
+| Document | Contents |
+|---|---|
+| [00 Vision](design/00-vision.md) | what the game must be: pillars and cut list |
+| [01 Technical architecture](design/01-technical-architecture.md) | Godot presentation over a deterministic Rust core |
+| [02 Determinism rules](design/02-determinism-rules.md) | fixed point, seeded randomness, ordered iteration |
+| [03 Part Forge](design/03-part-forge.md) | authoring parts, how mass and armour are measured, vehicles, tools |
+| [04 Parametric components](design/04-parametric-components.md) | slider families, the coupling solver, gun physics |
+| [05 Game loop](design/05-game-loop.md) | draft, design, deploy, battle, shop; Lanchester and terramechanics |
+| [Roadmap](planning/roadmap.md) | milestones and status |
+| [Decision log](planning/decisions.md) | D1 to D6 |
+| [Development environment](planning/dev-environment.md) | Rust, Godot, Blender, cloud sessions |
+| [Theory note: Part Forge](notes/m1-part-forge-theory.md) | half-spaces, sloped armour, sampling, composition, power balance, hover, scaling |
+
+Renders: [overview](assets/forge/overview-m1.png), [medium tank](assets/forge/tank_medium.png),
+[spider walker](assets/forge/walker_spider.png), [scout drone](assets/forge/drone_scout.png), [6x6 APC](assets/forge/apc_6x6.png),
+[turret sweep](assets/forge/turret_gun_sweep.png), [slider coupling](assets/forge/turret_gun_coupling.png).
 
 ## Warzone 2100 research dossier
 

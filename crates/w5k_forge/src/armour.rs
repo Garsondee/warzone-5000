@@ -79,8 +79,10 @@ struct Target {
 }
 
 pub fn armour_table(pieces: &[Piece], lib: &MaterialLibrary) -> ArmourTable {
+    // Pieces made of non-protective materials (guns, engines, electronics) are transparent here.
     let targets: Vec<Target> = pieces
         .iter()
+        .filter(|p| lib.materials.get(&p.mat).map(|m| m.armour).unwrap_or(true))
         .map(|p| {
             let (lo, hi) = p.poly.aabb();
             let centre = (lo + hi) * 0.5;
@@ -226,10 +228,13 @@ fn cast_ray(targets: &[Target], o: V3, d: V3) -> Ray {
     if solids.is_empty() && walls.is_empty() {
         return Ray::Miss;
     }
-    // The first vital point is where an interior starts, or where a solid ends inside an interior.
+    // The first vital point is where an interior starts, or where a solid ends inside an interior. Each candidate is
+    // classified a hair past the boundary, so pieces that merely touch (a plate laid against an inner wall) are
+    // judged the same way whichever way rounding falls.
+    const EPS: f64 = 1e-6;
     let mut cands: Vec<f64> = ints.iter().map(|i| i.a).chain(solids.iter().map(|s| s.b)).collect();
     cands.sort_by(f64::total_cmp);
-    let vital = cands.into_iter().find(|&c| covers(&ints, c).is_some() && covers(&solids, c).is_none());
+    let vital = cands.into_iter().find(|&c| covers(&ints, c + EPS).is_some() && covers(&solids, c + EPS).is_none());
     let Some(vital) = vital else { return Ray::External };
     // Steel-equivalent thickness before `vital`; where pieces overlap, the hardest material counts.
     let mut cuts: Vec<f64> = solids.iter().chain(&walls).flat_map(|s| [s.a, s.b]).filter(|&x| x < vital).chain([vital]).collect();

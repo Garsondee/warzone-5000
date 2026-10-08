@@ -1,53 +1,71 @@
 # Vision
 
-*Source: the project owner's brief, 2026-10-07. This page states what the game must be; how it is built is in
+*Source: the project owner's brief (2026-10-07), revised the same day toward a design-first async auto-battler. This
+page states what the game must be; the loop is detailed in [05-game-loop.md](05-game-loop.md), parametric components in
+[04-parametric-components.md](04-parametric-components.md), and how it is built in
 [01-technical-architecture.md](01-technical-architecture.md).*
 
 ## One sentence
-An RTS where **building your units is as important as moving them**, set in a world where height, sight and physics
-decide battles, with a tech tree too vast and too random to master the same way twice.
+A game about **exploring the possibility space of unit design**: draft components, tune them with sliders until they
+find a balance point, test them against bots, then send your best creations into hands-off battles against other
+players' armies.
 
 ## Pillars
 
-### 1. Design is half the game
-- Players design every vehicle from components: hulls, engines, locomotion, weapons, sensors, utility systems.
-- Design choices have physical consequences: mass, centre of mass, armour thickness and slope, power, internal volume,
-  silhouette and height. Stats are *derived from the geometry*, not typed into a table.
-- No option is simply "the next one up": components are sidegrades with real trade-offs (lesson from the
-  [Warzone 2100 research](../research/warzone-2100/expansion-analysis.md)).
+### 1. Design is the game
+- Units are assembled from **parametric components**: hulls, turrets, weapons, engines, locomotion, sensors. Each has
+  its own sliders (calibre, armour, barrel length, loader, size...).
+- Sliders change the **geometry**, and stats are *measured from the geometry*: armouring a turret makes it squatter
+  and more sloped, and its armour rating rises because the plates really are thicker and steeper.
+- Sliders are **coupled**. Some share a budget (move one and the unlocked others give way), some directly oppose
+  each other, and some are free choices of taste. A huge calibre with no armour and a half-hour reload is a legal
+  design; it just loses. Players find the balance point themselves.
+- Parametric components keep the number of tech items small while making the space of possible units enormous.
 
-### 2. A vast, partly random tech tree you must adapt to
-- Each match offers a different, seeded subset of a very large technology library.
-- Labs present a few options at a time; players adapt to what they are offered.
-- **Optional objectives** on the map (ruins, wrecks, relay stations, salvaging enemy titans) let players **steer** research
-  toward a chosen direction.
-- Most technologies unlock *capabilities* (new component families, materials, locomotion modes, scale limits), not
-  percentage upgrades.
+### 2. Test, then trust your creation
+- While designing, a **live mini-arena** shows a single copy of the unit. Drop enemies in at any time and the AI fights
+  it out, so a design can be evaluated continuously.
+- Battles are **auto-battles**: neither side gives direct commands. Players may choose routes; units attack-move on
+  their own. Behaviour itself can be parametric (preferred range, aggression, evasion pattern).
 
-### 3. Every scale
-- From small drones to lumbering walking super-titans and flying battleships, on the same battlefield.
-- Scale has physics: mass grows with the cube of size while strength grows with the square, so giants need better materials.
+### 3. A few titans or a swarm
+- Every design costs **command points** (CP) based on what it can do. A roster's budget buys N copies: 40 drones,
+  or one titan, are both valid.
+- What keeps titans honest is **physics**, not rules:
+  - big things bog down in soft ground;
+  - their big silhouettes are easy to hit;
+  - they are slow to repair;
+  - and slow units are always where the shell lands, while small fast ones never are.
+- Giant guns need giant hulls, many turrets, or **rail**: a railway carriage can carry what no tracks can.
 
-### 4. Every way of moving
-- Wheels, half-tracks, tracks, hover, anti-gravity and other science-fiction drives, legs (including very long spider legs),
-  air and water.
-- Walkers use procedural, inverse-kinematic legs that really plant their feet.
-- **Physical consequences:** a rope wrapped around a walker's legs brings it crashing down.
+### 4. A draft-and-shop run
+- A run starts with drafts: four cards for a hull, four for a turret, four for an engine, four for a weapon. One of each
+  critical component is always guaranteed, so a working unit can always be built.
+- After each battle, gold buys technology and **licences** (roster slots) in a shop; then back to the design bench.
+- The tech tree is a smaller set of *interesting* choices (new families, materials, mechanisms); the sliders provide
+  the depth.
 
-### 5. Height and sight
-- Accurate line of sight over terrain: higher sensors see further.
-- Allies share what they see, so spotters let long-range weapons fire at the limit of their range.
-- Being tall is a double-edged sword: a titan sees far and is seen from far.
+### 5. Every scale, every way of moving
+- From small drones to walking super-titans, flying battleships and railway guns, on the same battlefield.
+- Wheels, half-tracks, tracks, rail, hover, anti-gravity, rotors, and legs (including very long spider legs that plant
+  their feet with inverse kinematics).
+- Physical consequences: a rope wrapped around a walker's legs brings it crashing down.
 
-### 6. Entirely procedural, beautiful look
-- Vertex-coloured polygons with a rich, deliberate art direction.
-- Every model and texture is generated by code from data; no hand-made art assets.
+### 6. Height and sight
+- Accurate line of sight over terrain: higher sensors see further; allies share what they see, so spotters let long-range
+  weapons fire at the limit of their range. A titan sees far and is seen from far.
 
-### 7. Multiplayer at the core
-- Online multiplayer from day one, via deterministic lockstep (see [02-determinism-rules.md](02-determinism-rules.md)).
+### 7. Entirely procedural, beautiful look
+- Vertex-coloured, chamfered polygons with a rich, deliberate art direction; every model is generated by code from data.
+
+### 8. Fair, replayable, asynchronous multiplayer
+- Opponents are snapshots of other players' armies at a similar stage of their run.
+- Battles are deterministic, so a replay is just its inputs, and a server can verify results
+  ([02-determinism-rules.md](02-determinism-rules.md)).
 
 ## Out of scope for version 1 (explicit cut list)
+- Live real-time PvP with direct control (the async model replaces it; it could return later on the same deterministic sim).
 - Caves, tunnels and overhangs (terrain is a heightfield).
-- Player-made *parts* (players assemble vehicles from a part library first; a part editor comes later on the same format).
+- Free-form player part modelling (players tune parametric components; a block editor may come later).
 - Per-voxel destruction (parts detach as whole components).
-- Mods and a scripting API for third parties (the data formats are designed to allow it later).
+- Mods and a third-party scripting API (formats are designed to allow it later).

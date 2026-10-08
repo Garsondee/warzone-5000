@@ -2,6 +2,8 @@
 //
 // density:  kg per cubic metre (real-world values).
 // hardness: protection per metre of thickness relative to rolled homogeneous armour steel (RHA = 1.0).
+// armour:   false for materials that do not protect what is behind them (guns, engines, electronics):
+//           a shot that hits them damages them instead. Defaults to true.
 //           A 50 mm plate of a material with hardness 0.5 protects like 25 mm of steel.
 //           Mass efficiency (protection per kg) is hardness / (density / 7850).
 (
@@ -14,8 +16,9 @@
         "composite":   (density: 1800, hardness: 0.3),   // airframes and drone bodies
         "rubber":      (density: 1100, hardness: 0.02),  // tyres, track pads
         "glass":       (density: 2500, hardness: 0.15),  // optics and canopies
-        "machinery":   (density: 1600, hardness: 0.2),   // engines, gearboxes: average density of a filled engine bay
-        "electronics": (density: 1500, hardness: 0.05),  // sensor heads, radar dishes
+        "machinery":   (density: 1600, hardness: 0.2, armour: false),  // engines, gearboxes: a filled engine bay
+        "electronics": (density: 1500, hardness: 0.05, armour: false), // sensor heads, radar dishes
+        "gun_steel":   (density: 7850, hardness: 1.0, armour: false),  // barrels and breeches: hits damage the gun
         // Homogenised materials: a volume that stands for a mix of parts and air, so chunky shapes weigh what
         // the real thing would.
         "running_gear": (density: 900, hardness: 0.12),  // track pods: links, wheels, suspension and air

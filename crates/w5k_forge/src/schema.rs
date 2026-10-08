@@ -363,6 +363,10 @@ pub struct Material {
     /// Protection per metre relative to rolled homogeneous steel (1.0).
     #[serde(default)]
     pub hardness: f64,
+    /// Whether this material protects what is behind it. Guns, engines and electronics do not: a shot that
+    /// hits them damages them instead (`false` makes them transparent to the armour tables).
+    #[serde(default = "tru")]
+    pub armour: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
