@@ -7,8 +7,11 @@
 # A PR whose title starts with `CCR:` (contract change request) may additionally touch [ccr].paths and make mechanical
 # migration edits anywhere; ARCH reviews those line by line.
 #
+# [protected] paths are the rules a pull request is judged by (CI, settings, this file, CLAUDE.md, the swarm rules). No lane branch may
+# change them, not even a `CCR:` pull request; only the heads in [unrestricted] can.
+#
 # Heads that are not lane branches: only the entries in [unrestricted].heads may change anything; every other head fails the guard.
-# Editing this file is ARCH-only (it is in [lanes.arch].paths).
+# Editing this file is ARCH-only (it is in [lanes.arch].paths and in [protected]).
 
 [unrestricted]
 heads = ["claude/sharp-babbage-d702f7", "integration", "arch/*"]
@@ -25,6 +28,12 @@ paths = [
 
 [ccr]
 paths = ["crates/w5k_contract/**", "docs/architecture/CONTRACTS.md"]
+
+[protected]
+paths = [
+  ".github/**", ".claude/**", "tools/ci/**", "docs/swarm/ownership.toml", "clippy.toml", "rustfmt.toml", "CLAUDE.md", "Cargo.toml",
+  "docs/swarm/RULES.md", "docs/swarm/MERGE-GATE.md", "docs/swarm/GUARDRAILS.md",
+]
 
 [lanes.arch]
 paths = [
