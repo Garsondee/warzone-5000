@@ -1,7 +1,7 @@
 //! `w5k trial`: put designs on a course, one at a time, and write everything a viewer needs.
 //!
 //! ```text
-//! w5k trial <content> --out DIR [--course content/courses/hill_valley.ron] [--only a,b] [--limit 180] [--mode sim|parade]
+//! w5k trial <content> --out DIR [--course content/courses/hill_valley.ron] [--terrain content/terrain.ron] [--only a,b] [--limit 180] [--mode sim|parade]
 //! ```
 //!
 //! `sim` (the default) runs the physics of `w5k_sim::mover` on a spec baked from each design (`w5k_forge::mover`); `parade`
@@ -20,7 +20,7 @@ use w5k_forge::preview::palette_colours;
 use w5k_forge::raster::Rgb;
 use w5k_forge::Forge;
 use w5k_sim::trial::{parade, run as simulate, ParadeSpec};
-use w5k_sim::{Course, CourseDef, MoverSpec, Outcome, Run, HZ};
+use w5k_sim::{Course, CourseDef, MoverSpec, Outcome, Run, TerrainDef, HZ};
 
 use crate::plot::{Axis, Plot};
 use crate::trial_plots::{results_png, traces_png, Lane};
@@ -55,9 +55,12 @@ struct Entry {
     mesh: w5k_forge::export::ExportMesh,
     spec: MoverSpec,
     run: Run,
+    /// Seconds the same vehicle takes on the same course with every surface rigid (to show what the soil cost it); `None` when it
+    /// does not finish even then.
+    dry_s: Option<f64>,
 }
 
-fn entry(forge: &Forge, course: &Course, id: &str, mode: &str) -> Result<Entry, String> {
+fn entry(forge: &Forge, course: &Course, dry_course: &Course, id: &str, mode: &str) -> Result<Entry, String> {
     let design = forge.designs.get(id).ok_or_else(|| format!("no design '{id}'"))?;
     let (built, asm, sheet) = forge.build_design(design);
     let spec = forge.mover_spec(id, &asm, &sheet);
@@ -70,6 +73,7 @@ fn entry(forge: &Forge, course: &Course, id: &str, mode: &str) -> Result<Entry, 
         }
         other => return Err(format!("unknown mode '{other}' (sim or parade)")),
     };
+    let dry_s = if mode == "sim" && course.has_soft_ground() { simulate(dry_course, &spec).outcome.time_s() } else { None };
     Ok(Entry {
         id: id.to_string(),
         name: design.name.clone(),
@@ -85,6 +89,7 @@ fn entry(forge: &Forge, course: &Course, id: &str, mode: &str) -> Result<Entry, 
         mesh: export_mesh(&built.mesh),
         spec,
         run,
+        dry_s,
     })
 }
 
@@ -161,7 +166,7 @@ fn course_png(course: &Course, path: &Path) {
     }
 }
 
-pub fn run(forge: &Forge, course_path: &Path, only: Option<&[String]>, limit_s: Option<f64>, mode: &str, out: &Path) -> bool {
+pub fn run(forge: &Forge, course_path: &Path, terrain_path: &Path, only: Option<&[String]>, limit_s: Option<f64>, mode: &str, out: &Path) -> bool {
     let t0 = Instant::now();
     let text = match std::fs::read_to_string(course_path) {
         Ok(t) => t,
@@ -180,13 +185,22 @@ pub fn run(forge: &Forge, course_path: &Path, only: Option<&[String]>, limit_s: 
     if let Some(l) = limit_s {
         def.time_limit_s = l;
     }
-    let course = match Course::bake(&def) {
+    let terrain: TerrainDef = match std::fs::read_to_string(terrain_path).map_err(|e| e.to_string()).and_then(|t| ron::from_str(&t).map_err(|e| e.to_string())) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("error: {}: {e}", terrain_path.display());
+            return false;
+        }
+    };
+    let course = match Course::bake_with(&def, &terrain) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("error: course: {e}");
             return false;
         }
     };
+    // The same course with every surface rigid, for the reference run.
+    let dry_course = Course::bake(&def).expect("a course that bakes with a terrain table bakes without one");
     if std::fs::create_dir_all(out).is_err() {
         eprintln!("error: cannot create {}", out.display());
         return false;
@@ -198,12 +212,12 @@ pub fn run(forge: &Forge, course_path: &Path, only: Option<&[String]>, limit_s: 
     std::thread::scope(|sc| {
         let handles: Vec<_> = (0..threads)
             .map(|t| {
-                let (ids, course) = (&ids, &course);
+                let (ids, course, dry_course) = (&ids, &course, &dry_course);
                 sc.spawn(move || {
                     let mut mine = Vec::new();
                     let mut i = t;
                     while i < ids.len() {
-                        mine.push((i, entry(forge, course, &ids[i], mode)));
+                        mine.push((i, entry(forge, course, dry_course, &ids[i], mode)));
                         i += threads;
                     }
                     mine
@@ -246,7 +260,7 @@ pub fn run(forge: &Forge, course_path: &Path, only: Option<&[String]>, limit_s: 
             "id": e.id, "name": e.name, "class": e.class, "movement": e.movement,
             "mass_kg": e.mass_kg, "power_kw": e.power_kw, "top_kmh": e.top_kmh, "ground_kpa": e.ground_kpa,
             "width_m": e.size[0], "height_m": e.size[1], "length_m": e.size[2], "problems": e.problems,
-            "spec": e.spec,
+            "spec": e.spec, "dry_s": e.dry_s,
             "palette": e.palette.iter().map(|c| json!([c[0], c[1], c[2]])).collect::<Vec<_>>(),
             "mesh": {
                 "lo": e.mesh.lo, "hi": e.mesh.hi, "ground_y": e.mesh.ground_y,
@@ -304,7 +318,7 @@ pub fn run(forge: &Forge, course_path: &Path, only: Option<&[String]>, limit_s: 
     }
     let _ = std::fs::write(out.join("results.md"), md);
     course_png(&course, &out.join("course.png"));
-    let lanes: Vec<Lane> = order.iter().map(|e| Lane { name: &e.name, class: &e.class, run: &e.run }).collect();
+    let lanes: Vec<Lane> = order.iter().map(|e| Lane { name: &e.name, class: &e.class, run: &e.run, dry_s: e.dry_s }).collect();
     traces_png(&lanes, &course, &out.join("traces.png"));
     results_png(&lanes, &course, &out.join("results.png"));
     println!("wrote course.png, traces.png and results.png in {}", out.display());

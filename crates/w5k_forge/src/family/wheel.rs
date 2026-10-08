@@ -128,6 +128,7 @@ impl Family for Wheel {
                 load_kg: v["pressure_kpa"] * 1000.0 * contact / G,
                 contact_m2: contact,
                 contact_len_m: patch,
+                contact_w_m: w,
                 rolling: Some(((0.010 + 0.015 / d.sqrt()) * (300.0 / v["pressure_kpa"]).powf(0.25)).max(0.008)),
                 traction: Some(0.5 + 0.3 * tread),
                 max_kmh: Some((160.0 - 18.0 * d).clamp(35.0, 140.0)),

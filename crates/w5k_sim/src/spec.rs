@@ -26,6 +26,11 @@ impl GearClass {
         matches!(self, GearClass::AntiGrav | GearClass::Rotor)
     }
 
+    /// Stands on the ground and pushes against it: the soil decides how far it sinks and how much it can push with.
+    pub fn grounded(self) -> bool {
+        matches!(self, GearClass::Tracks | GearClass::Wheels | GearClass::Legs)
+    }
+
     pub fn name(self) -> &'static str {
         match self {
             GearClass::Tracks => "tracks",
@@ -78,7 +83,55 @@ pub struct MoverSpec {
     /// force = power / speed, which would be infinite at a standstill.
     #[serde(default = "default_launch")]
     pub launch_floor: f64,
+    /// How many separate contact units the running gear has (two tracks, six wheels, eight feet); zero for gear that does not
+    /// touch the ground.
+    #[serde(default)]
+    pub contact_units: u32,
+    /// Width of one contact unit (m): its smaller dimension, which sets how stiff the soil is under it.
+    #[serde(default)]
+    pub contact_width_m: f64,
+    /// Length of one contact unit along the direction of travel (m): how far it shears the soil.
+    #[serde(default)]
+    pub contact_len_m: f64,
+    /// Total ground contact area (m^2): the weight over it is the ground pressure.
+    #[serde(default)]
+    pub contact_area_m2: f64,
+    /// Legs: distance travelled between two steps of one foot (m).
+    #[serde(default)]
+    pub stride_m: f64,
+    /// Hull belly above the ground (m); zero when unknown (no hull dragging).
+    #[serde(default)]
+    pub clearance_m: f64,
     /// Why this vehicle cannot run the course at all, if it cannot.
     #[serde(default)]
     pub dns: Option<String>,
+}
+
+impl Default for MoverSpec {
+    /// A 1 t tracked vehicle with nothing else set: a starting point for tests and tools (`..Default::default()`).
+    fn default() -> Self {
+        MoverSpec {
+            id: String::new(),
+            class: GearClass::Tracks,
+            mass_t: 1.0,
+            drive_kw: 0.0,
+            rated_ms: 0.0,
+            c_roll: 0.0,
+            c_internal: 0.0,
+            grip_mu: 0.0,
+            thrust_w: 0.0,
+            skirt_drag: false,
+            cd_a_m2: 0.0,
+            span_m: 1.0,
+            altitude_m: 0.0,
+            launch_floor: default_launch(),
+            contact_units: 0,
+            contact_width_m: 0.0,
+            contact_len_m: 0.0,
+            contact_area_m2: 0.0,
+            stride_m: 0.0,
+            clearance_m: 0.0,
+            dns: None,
+        }
+    }
 }

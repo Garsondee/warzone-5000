@@ -12,6 +12,8 @@
 use serde::{Deserialize, Serialize};
 use w5k_math::{Fx, StateHasher};
 
+use crate::soil::{Soil, SurfaceDef, TerrainDef};
+
 /// Table spacing: 0.5 m, exactly representable in Q32.32.
 const DS: Fx = Fx::from_raw(1 << 31);
 /// A quarter, for the trapezoid rule over one table cell (half a cell width, halved again for the mean of two slopes).
@@ -22,7 +24,7 @@ pub struct SegmentDef {
     pub length_m: f64,
     /// Rise over run: +0.06 climbs 6 m in 100 m.
     pub grade: f64,
-    /// Surface name; the terrain table (soils) gives it a meaning.
+    /// Surface name; the terrain table (`content/terrain.ron`) gives it a meaning.
     pub surface: String,
 }
 
@@ -81,6 +83,8 @@ pub struct Course {
     finish: Fx,
     checkpoints: Vec<Fx>,
     time_limit_ticks: u32,
+    /// The soil of each surface (by surface id); `None` where the ground is rigid.
+    soils: Vec<Option<Soil>>,
 }
 
 fn intern(names: &mut Vec<String>, name: &str) -> Result<u8, String> {
@@ -117,9 +121,19 @@ fn slope_at(pieces: &[Piece], blend: Fx, s: Fx) -> Fx {
 }
 
 impl Course {
-    /// Bake a course definition into fixed-point tables. This is the one place floats enter the simulation: each is
-    /// converted exactly once (`Fx::from_f64` is IEEE arithmetic, so the result is the same everywhere).
+    /// Bake a course definition into fixed-point tables, with every surface rigid (no soil). This is the one place floats enter
+    /// the simulation, with [`Course::bake_with`]: each is converted exactly once (`Fx::from_f64` is IEEE arithmetic, so the
+    /// result is the same everywhere).
     pub fn bake(def: &CourseDef) -> Result<Course, String> {
+        Course::bake_inner(def, None)
+    }
+
+    /// Bake a course whose surfaces mean what the terrain table says. Every surface the course uses must be in the table.
+    pub fn bake_with(def: &CourseDef, terrain: &TerrainDef) -> Result<Course, String> {
+        Course::bake_inner(def, Some(terrain))
+    }
+
+    fn bake_inner(def: &CourseDef, terrain: Option<&TerrainDef>) -> Result<Course, String> {
         if def.segments.is_empty() {
             return Err("a course needs at least one segment".into());
         }
@@ -181,7 +195,30 @@ impl Course {
             checkpoints = vec![Fx::ZERO, finish];
         }
         let time_limit_ticks = Fx::from_f64(def.time_limit_s).mul_int(crate::replay::HZ as i64).floor_int().max(1) as u32;
-        Ok(Course { name: def.name.clone(), surface_names, pieces, s_min, height, slope, surf, finish, checkpoints, time_limit_ticks })
+        let mut soils = Vec::with_capacity(surface_names.len());
+        for name in &surface_names {
+            soils.push(match terrain {
+                None => None,
+                Some(t) => match t.surfaces.get(name) {
+                    None => return Err(format!("surface '{name}' is not in the terrain table")),
+                    Some(SurfaceDef::Rigid) => None,
+                    Some(SurfaceDef::Soft { kc, kphi, cohesion, friction_deg, shear_k }) => {
+                        Some(Soil::from_def(*kc, *kphi, *cohesion, *friction_deg, *shear_k).map_err(|e| format!("surface '{name}': {e}"))?)
+                    }
+                },
+            });
+        }
+        Ok(Course { name: def.name.clone(), surface_names, pieces, s_min, height, slope, surf, finish, checkpoints, time_limit_ticks, soils })
+    }
+
+    /// The soft surfaces of this course and their soils.
+    pub fn soft_surfaces(&self) -> impl Iterator<Item = (u8, &Soil)> {
+        self.soils.iter().enumerate().filter_map(|(i, s)| s.as_ref().map(|s| (i as u8, s)))
+    }
+
+    /// Whether any part of the course is soft ground.
+    pub fn has_soft_ground(&self) -> bool {
+        self.soils.iter().any(|s| s.is_some())
     }
 
     /// Table index and fraction for a distance (clamped to the table).
@@ -293,6 +330,9 @@ impl Course {
         for (&y, &sid) in self.height.iter().zip(&self.surf) {
             h.write_fx(y);
             h.write_u8(sid);
+        }
+        for soil in self.soils.iter().flatten() {
+            soil.hash_into(&mut h);
         }
         h.finish()
     }

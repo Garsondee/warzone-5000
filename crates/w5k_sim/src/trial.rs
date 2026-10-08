@@ -9,7 +9,7 @@ use w5k_math::{Fx, StateHasher};
 use crate::course::Course;
 use crate::mover::{Mover, MoverState, Step, STUCK_SPEED};
 use crate::replay::{limit, run_state, Cause, Frame, Outcome, Run, HZ};
-use crate::spec::MoverSpec;
+use crate::spec::{GearClass, MoverSpec};
 
 /// One tick in seconds as Q32.32 (2^32 / 20 = 214748364.8, rounded). The tick *count* is the clock; this only scales
 /// the integration, so the rounding never accumulates into the reported times.
@@ -43,10 +43,10 @@ fn pct(force: Fx, weight: Fx) -> i32 {
     }
 }
 
-/// Encode a vehicle's state as a replay frame.
-#[allow(clippy::too_many_arguments)]
-pub fn frame(course: &Course, s: Fx, v: Fx, span: Fx, sink: Fx, slip: Fx, run: u8, lim: u8, forces: &Step) -> Frame {
+/// Encode a vehicle's state as a replay frame (its sinkage and slip come from the forces of the last step).
+pub fn frame(course: &Course, s: Fx, v: Fx, span: Fx, run: u8, lim: u8, forces: &Step) -> Frame {
     let (y, pitch) = pose(course, s, span);
+    let (sink, slip) = (forces.sink, forces.slip);
     let w = forces.weight;
     Frame {
         s_mm: to_i32(s.mul_int(1000)),
@@ -59,7 +59,7 @@ pub fn frame(course: &Course, s: Fx, v: Fx, span: Fx, sink: Fx, slip: Fx, run: u
         thrust_pct: pct(forces.thrust, w).clamp(0, 255) as u8,
         grip_pct: pct(forces.cap, w).clamp(0, 255) as u8,
         grade_pct: pct(forces.grade, w).clamp(-128, 127) as i8,
-        resist_pct: pct(forces.roll + forces.drag + forces.soil, w).clamp(0, 255) as u8,
+        resist_pct: pct(forces.roll + forces.drag + forces.soil(), w).clamp(0, 255) as u8,
     }
 }
 
@@ -110,7 +110,7 @@ pub fn parade(course: &Course, id: &str, spec: &ParadeSpec) -> Run {
             None if v >= rated => (run_state::RUNNING, limit::RATING),
             None => (run_state::RUNNING, limit::NONE),
         };
-        frames.push(frame(course, s, v, span, Fx::ZERO, Fx::ZERO, run, lim, &no_forces));
+        frames.push(frame(course, s, v, span, run, lim, &no_forces));
         hasher.write_fx(s);
         hasher.write_fx(v);
         hasher.write_u32(tick);
@@ -154,22 +154,53 @@ pub fn parade(course: &Course, id: &str, spec: &ParadeSpec) -> Run {
     Run { id: id.to_string(), outcome, frames, checkpoint_hashes: checks, final_hash: hasher.finish() }
 }
 
-/// Why a vehicle that is not moving cannot go on, in numbers.
-fn stuck_detail(last: &Step) -> String {
+/// Why a vehicle that is not moving cannot go on: the cause and the numbers. In soft ground it is *bogged* (the soil took more than
+/// the vehicle could push); anywhere else it *stalled* (not enough engine or grip for the slope).
+fn stuck_detail(last: &Step, class: GearClass) -> (Cause, String) {
     let kn = |x: Fx| x.to_f64();
-    let resist = last.grade + last.roll + last.drag + last.soil;
-    let who = if last.limit == limit::GRIP { "the ground (or the thrust limit)" } else { "the engine" };
-    format!(
-        "{} could not push harder: {:.0} kN of thrust against {:.0} kN of resistance (slope {:.0}, rolling {:.0}, air {:.0}, soil {:.0}) on a {:.1}% grade; the most the gear can push with here is {:.0} kN",
-        who,
-        kn(last.thrust),
-        kn(resist),
-        kn(last.grade),
-        kn(last.roll),
-        kn(last.drag),
-        kn(last.soil),
-        last.slope.to_f64() * 100.0,
-        kn(last.cap)
+    let resist = last.grade + last.roll + last.drag + last.soil();
+    if last.soft >= Fx::from_ratio(1, 5) {
+        let gear = match class {
+            GearClass::Legs => "feet",
+            GearClass::Wheels => "tyres",
+            _ => "tracks",
+        };
+        // Which side of the contest was short: the ground (it gave all it could) or the engine (the ground had more to give).
+        let ground_limited = last.thrust >= last.cap * Fx::from_ratio(95, 100);
+        let advice = if ground_limited {
+            "all the soil would give: a longer or wider footprint would push harder and sink less".to_string()
+        } else {
+            format!("while the soil would have given {:.0} kN: it needs more engine power", kn(last.cap))
+        };
+        return (
+            Cause::Bogged,
+            format!(
+                "sunk {:.2} m into soft ground and stopped: the soil and the slope resisted with {:.0} kN (compaction {:.0}, hull dragging {:.0}, slope {:.0}, rolling {:.0}, air {:.0}) but the {gear} could push with only {:.0} kN, {advice}",
+                kn(last.sink),
+                kn(resist),
+                kn(last.compaction),
+                kn(last.hull),
+                kn(last.grade),
+                kn(last.roll),
+                kn(last.drag),
+                kn(last.thrust),
+            ),
+        );
+    }
+    let who = if last.limit == limit::GRIP || last.limit == limit::THRUST { "the ground (or the thrust limit)" } else { "the engine" };
+    (
+        Cause::Stalled,
+        format!(
+            "{} could not push harder: {:.0} kN of thrust against {:.0} kN of resistance (slope {:.0}, rolling {:.0}, air {:.0}) on a {:.1}% grade; the most the gear can push with here is {:.0} kN",
+            who,
+            kn(last.thrust),
+            kn(resist),
+            kn(last.grade),
+            kn(last.roll),
+            kn(last.drag),
+            last.slope.to_f64() * 100.0,
+            kn(last.cap)
+        ),
     )
 }
 
@@ -181,6 +212,9 @@ fn stuck_detail(last: &Step) -> String {
 pub fn run(course: &Course, spec: &MoverSpec) -> Run {
     if let Some(why) = &spec.dns {
         return Run::did_not_start(&spec.id, why);
+    }
+    if spec.class.grounded() && spec.contact_area_m2 <= 0.0 && course.has_soft_ground() {
+        return Run::did_not_start(&spec.id, "no ground-contact data: the running gear does not say how big its footprint is, so the soil cannot be modelled");
     }
     let mover = match Mover::new(spec) {
         Ok(m) => m,
@@ -208,7 +242,7 @@ pub fn run(course: &Course, spec: &MoverSpec) -> Run {
             Some(_) => (run_state::FINISHED, limit::NONE),
             None => (run_state::RUNNING, last.limit),
         };
-        frames.push(frame(course, st.s, st.v, span, Fx::ZERO, Fx::ZERO, run, lim, &last));
+        frames.push(frame(course, st.s, st.v, span, run, lim, &last));
         hasher.write_fx(st.s);
         hasher.write_fx(st.v);
         hasher.write_u32(tick);
@@ -232,7 +266,7 @@ pub fn run(course: &Course, spec: &MoverSpec) -> Run {
             if st.v < STUCK_SPEED && last.accel <= Fx::ZERO {
                 stuck += 1;
                 if stuck >= STUCK_TICKS {
-                    dnf = Some((Cause::Stalled, stuck_detail(&last)));
+                    dnf = Some(stuck_detail(&last, spec.class));
                 }
             } else {
                 stuck = 0;

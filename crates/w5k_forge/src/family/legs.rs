@@ -238,6 +238,7 @@ impl Family for Legs {
                 load_kg: rated_load_kg(v, lib),
                 contact_m2: contact,
                 contact_len_m: 2.0 * foot,
+                contact_w_m: 2.0 * foot,
                 rolling: Some(COST_OF_TRANSPORT),
                 traction: Some(0.8),
                 max_kmh: Some((3.6 * (FROUDE_MAX * G * g.stance).sqrt()).min(60.0)),

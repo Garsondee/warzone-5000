@@ -147,6 +147,8 @@ impl Family for Track {
                 locomotion: Some(Locomotion::Tracks),
                 load_kg: contact * RATED_PRESSURE / 9.81,
                 contact_m2: contact,
+                contact_len_m: 0.8 * lt,
+                contact_w_m: w,
                 rolling: Some(0.06),
                 traction: Some(0.9),
                 max_kmh: Some(70.0),

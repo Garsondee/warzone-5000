@@ -28,5 +28,6 @@
     sockets: [
         (name: "mount", kind: Mount, size: Large, at: (0, 0, 0), normal: (-1, 0, 0), forward: (0, 1, 0)),
     ],
-    function: (locomotion: Legs, load_kg: 6000, rolling: 0.12, draw_kw: 10, max_kmh: 35),
+    // Footprint: a 0.4 m round pad, of which half the feet are down at once (so half its area counts).
+    function: (locomotion: Legs, load_kg: 6000, rolling: 0.12, draw_kw: 10, max_kmh: 35, contact_m2: 0.063, contact_w_m: 0.4, contact_len_m: 0.4),
 )

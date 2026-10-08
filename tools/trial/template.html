@@ -562,10 +562,18 @@ function shareText(r) {
   parts.sort(function (a, b) { return b[0] - a[0]; });
   return parts.length ? 'Held back by ' + parts.map(function (p) { return p[1]; }).join(', ') + ' of the run.' : '';
 }
+function maxSink(r) { var m = 0; for (var i = 0; i < r.n; i++) m = Math.max(m, r.sink[i]); return m; }
 function finishedWhy(v, r, o) {
-  var fin = C.checkpoints[C.checkpoints.length - 1], ideal = v.top_kmh > 0 ? fin / (v.top_kmh / 3.6) : 0, cost = o.time_s - ideal;
-  var base = ideal > 0 ? 'A lap at the sheet speed of ' + Math.round(v.top_kmh) + ' km/h would take ' + ideal.toFixed(1) + ' s; the launch, the hill and the ground ' + (cost >= 0 ? 'cost it ' + cost.toFixed(1) + ' s.' : 'gained it ' + (-cost).toFixed(1) + ' s (the descent).') : '';
-  return base + ' ' + shareText(r);
+  var fin = C.checkpoints[C.checkpoints.length - 1], ideal = v.top_kmh > 0 ? fin / (v.top_kmh / 3.6) : 0, txt = '';
+  if (v.dry_s != null) {
+    var soil = o.time_s - v.dry_s;
+    txt = 'On concrete it would take ' + v.dry_s.toFixed(1) + ' s' + (soil > 0.05 ? ', so the soft earth cost it ' + soil.toFixed(1) + ' s' : ': the soft earth cost it nothing') + '.';
+  } else if (ideal > 0) {
+    var cost = o.time_s - ideal;
+    txt = 'A lap at the sheet speed of ' + Math.round(v.top_kmh) + ' km/h would take ' + ideal.toFixed(1) + ' s; the launch and the hill ' + (cost >= 0 ? 'cost it ' + cost.toFixed(1) + ' s.' : 'gained it ' + (-cost).toFixed(1) + ' s (the descent).');
+  }
+  var sink = maxSink(r); if (sink > 0.02) txt += ' It sank up to ' + (sink * 100).toFixed(0) + ' cm.';
+  return txt + ' ' + shareText(r);
 }
 function refreshPanels() {
   var v = cur.veh, r = cur.run; if (!v) return;
@@ -578,7 +586,7 @@ function refreshPanels() {
   var o = r.outcome, w = el.why;
   w.style.display = 'block'; w.className = 'why ' + (o.kind === 'finished' ? 'ok' : 'bad');
   if (o.kind === 'finished') w.innerHTML = '<b>Finished in ' + o.time_s.toFixed(1) + ' s.</b> ' + finishedWhy(v, r, o);
-  else if (o.kind === 'dnf') w.innerHTML = '<b>Did not finish: ' + causeText(o) + ' at ' + o.s_m.toFixed(0) + ' m.</b> ' + (o.detail || '');
+  else if (o.kind === 'dnf') w.innerHTML = '<b>Did not finish: ' + causeText(o) + ' at ' + o.s_m.toFixed(0) + ' m.</b> ' + (o.detail || '') + (v.dry_s != null ? ' On concrete it would have finished in ' + v.dry_s.toFixed(1) + ' s.' : '');
   else w.innerHTML = '<b>Did not start.</b> ' + o.cause;
 }
 var teleTick = 0;

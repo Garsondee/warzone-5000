@@ -32,6 +32,8 @@ pub const ROTOR_THRUST_W: f64 = 0.3;
 const DEFAULT_GRIP: f64 = 0.8;
 /// Drag coefficient of a vehicle's frontal area (the sheet's value: boxy).
 const CD: f64 = 0.9;
+/// A walker's stride (the distance between two steps of one foot) as a multiple of its stance.
+const STRIDE_PER_STANCE: f64 = 1.6;
 
 /// The kind of running gear that sets how the vehicle moves, if it has any. Anything that flies decides it; then floating, then
 /// whatever ground gear was met first (the order the sheet uses to pick its turning model).
@@ -82,24 +84,14 @@ fn support_span(class: GearClass, gear: &Gear, length_m: f64) -> f64 {
 
 /// Build a vehicle's mover spec from its sheet and its running gear (separate from `Forge::mover_spec` so that it can be tested
 /// without any content).
-pub fn mover_from(id: &str, sheet: &VehicleSheet, gear: &Gear) -> MoverSpec {
+pub fn mover_from(id: &str, sheet: &VehicleSheet, gear: &Gear, clearance_m: f64) -> MoverSpec {
     let class = gear_class(gear);
     let mut spec = MoverSpec {
         id: id.to_string(),
         class: class.unwrap_or(GearClass::Tracks),
         mass_t: sheet.mass_kg / 1000.0,
-        drive_kw: 0.0,
-        rated_ms: 0.0,
-        c_roll: 0.0,
-        c_internal: 0.0,
-        grip_mu: 0.0,
-        thrust_w: 0.0,
-        skirt_drag: false,
         cd_a_m2: CD * sheet.frontal_m2,
-        span_m: 1.0,
-        altitude_m: 0.0,
-        launch_floor: 0.2,
-        dns: None,
+        ..MoverSpec::default()
     };
     let Some(class) = class else {
         spec.dns = Some("no running gear".into());
@@ -131,6 +123,9 @@ pub fn mover_from(id: &str, sheet: &VehicleSheet, gear: &Gear) -> MoverSpec {
             // The "rolling" figure of legs is their cost of transport: power per weight per speed, spent in the gait.
             spec.c_internal = rolling;
             spec.grip_mu = traction.unwrap_or(DEFAULT_GRIP);
+            // Each foot is pressed in once per stride; a stride is about 1.6 times the stance (the hip's height above the foot: a
+            // part that does not state it is measured from the geometry, as the hull's clearance).
+            spec.stride_m = STRIDE_PER_STANCE * gear.stance.max(clearance_m).max(0.5);
         }
         GearClass::Cushion => {
             spec.c_roll = rolling;
@@ -147,7 +142,35 @@ pub fn mover_from(id: &str, sheet: &VehicleSheet, gear: &Gear) -> MoverSpec {
         }
         GearClass::Rail => {}
     }
+    if class.grounded() {
+        if let Some((units, width, length, area)) = gear.footprint() {
+            spec.contact_units = units;
+            spec.contact_width_m = width;
+            spec.contact_len_m = length;
+            spec.contact_area_m2 = area;
+            spec.clearance_m = clearance_m;
+        }
+    }
     spec
+}
+
+/// Height of the hull's underside above the ground (m): the lowest point of the hull over the lowest point of the running
+/// gear. Zero when there is no hull or no gear to measure against.
+pub fn hull_clearance(forge: &Forge, asm: &Assembly) -> f64 {
+    let (mut gear_lo, mut hull_lo) = (f64::MAX, f64::MAX);
+    for p in &asm.pieces {
+        let lo = p.poly.aabb().0.y;
+        if forge.parts[&asm.parts[p.part as usize].0].def.function.locomotion.is_some() {
+            gear_lo = gear_lo.min(lo);
+        } else if p.part == 0 {
+            hull_lo = hull_lo.min(lo);
+        }
+    }
+    if gear_lo < f64::MAX && hull_lo < f64::MAX {
+        (hull_lo - gear_lo).max(0.0)
+    } else {
+        0.0
+    }
 }
 
 impl Forge {
@@ -157,6 +180,6 @@ impl Forge {
         for (part, x) in &asm.parts {
             gear.add(&self.parts[part].def.function, x);
         }
-        mover_from(id, sheet, &gear)
+        mover_from(id, sheet, &gear, hull_clearance(self, asm))
     }
 }

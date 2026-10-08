@@ -10,6 +10,7 @@ mod explore_cmd;
 mod family_cmd;
 mod host_sweep;
 mod plot;
+mod soil_cmd;
 mod space_cmd;
 mod trial_cmd;
 mod trial_plots;
@@ -24,7 +25,7 @@ use w5k_forge::raster::Image;
 use w5k_forge::{Built, Forge, StatsFile};
 
 fn usage() -> ! {
-    eprintln!("usage:\n  w5k render <content-dir> --out <dir> [--only id,id,...]\n  w5k check <content-dir>\n  w5k family <content-dir> --out <dir>\n  w5k sweeps <content-dir> --out <dir> [--only family,family]\n  w5k view <content-dir> --design id --out file.png [--az 40 --el 20 --focus x,y,z --radius r --size WxH]\n  w5k lineup <content-dir> --out <dir> [--only design,design,...]\n  w5k trial <content-dir> --out <dir> [--course file.ron --only id,id --limit seconds --mode sim|parade]");
+    eprintln!("usage:\n  w5k render <content-dir> --out <dir> [--only id,id,...]\n  w5k check <content-dir>\n  w5k family <content-dir> --out <dir>\n  w5k sweeps <content-dir> --out <dir> [--only family,family]\n  w5k view <content-dir> --design id --out file.png [--az 40 --el 20 --focus x,y,z --radius r --size WxH]\n  w5k lineup <content-dir> --out <dir> [--only design,design,...]\n  w5k trial <content-dir> --out <dir> [--course file.ron --terrain file.ron --only id,id --limit seconds --mode sim|parade]\n  w5k soil <content-dir> --design id --out <dir> [--course file.ron --terrain file.ron]");
     std::process::exit(2)
 }
 
@@ -125,7 +126,14 @@ fn main() {
         "trial" => {
             let course = a.opts.get("course").map(PathBuf::from).unwrap_or_else(|| a.content.join("courses/hill_valley.ron"));
             let mode = a.opts.get("mode").map(|m| m.as_str()).unwrap_or("sim");
-            trial_cmd::run(&forge, &course, a.only.as_deref(), a.opts.get("limit").and_then(|v| v.parse().ok()), mode, a.out.as_deref().unwrap_or_else(|| usage()))
+            let terrain = a.opts.get("terrain").map(PathBuf::from).unwrap_or_else(|| a.content.join("terrain.ron"));
+            trial_cmd::run(&forge, &course, &terrain, a.only.as_deref(), a.opts.get("limit").and_then(|v| v.parse().ok()), mode, a.out.as_deref().unwrap_or_else(|| usage()))
+        }
+        "soil" => {
+            let course = a.opts.get("course").map(PathBuf::from).unwrap_or_else(|| a.content.join("courses/hill_valley.ron"));
+            let terrain = a.opts.get("terrain").map(PathBuf::from).unwrap_or_else(|| a.content.join("terrain.ron"));
+            let design = a.opts.get("design").map(|d| d.as_str()).unwrap_or("lancer_mk1");
+            soil_cmd::run_ladders(&forge, &a.content, design, &course, &terrain, a.out.as_deref().unwrap_or_else(|| usage()))
         }
         "lineup" => lineup(&forge, a.out.as_deref().unwrap_or_else(|| usage()), a.only.as_deref(), a.palette.as_deref()),
         "factions" => factions(&forge, a.out.as_deref().unwrap_or_else(|| usage()), a.only.as_deref()),

@@ -33,7 +33,7 @@ fn base() -> MoverSpec {
         span_m: 4.0,
         altitude_m: 0.0,
         launch_floor: 0.2,
-        dns: None,
+        ..Default::default()
     }
 }
 

@@ -15,10 +15,12 @@
 pub mod course;
 pub mod mover;
 pub mod replay;
+pub mod soil;
 pub mod spec;
 pub mod trial;
 
 pub use course::{Course, CourseDef, SegmentDef};
 pub use mover::{Mover, MoverState};
 pub use replay::{Cause, Frame, Outcome, Run, HZ};
+pub use soil::{Footprint, Soil, SurfaceDef, TerrainDef};
 pub use spec::{GearClass, MoverSpec};

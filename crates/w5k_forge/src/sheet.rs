@@ -72,6 +72,8 @@ pub struct Gear {
     pub altitude_m: f64,
     /// Longest contact patch of an air cushion (m).
     pub cushion_len: f64,
+    /// The ground contact of each track, wheel or foot: (area m^2, width m, length m; zero when the part does not say).
+    pub contacts: Vec<(f64, f64, f64)>,
 }
 
 impl Default for Gear {
@@ -90,6 +92,7 @@ impl Default for Gear {
             stance: 0.0,
             altitude_m: 0.0,
             cushion_len: 0.0,
+            contacts: Vec::new(),
         }
     }
 }
@@ -114,6 +117,9 @@ impl Gear {
             self.traction.push(t);
         }
         self.efficiency.push(assemble::drive_efficiency(l));
+        if matches!(l, Locomotion::Tracks | Locomotion::HalfTracks | Locomotion::Wheels | Locomotion::Legs) && f.contact_m2 > 0.0 {
+            self.contacts.push((f.contact_m2, f.contact_w_m, f.contact_len_m));
+        }
         self.limit_kmh = self.limit_kmh.min(f.max_kmh.unwrap_or(f64::INFINITY));
         self.rail |= f.rail_bound || l == Locomotion::Rail;
         if f.step_m > 0.0 {
@@ -139,6 +145,32 @@ impl Gear {
     /// Mean of a list, zero when empty.
     pub fn mean(v: &[f64]) -> f64 {
         mean(v)
+    }
+
+    /// The footprint of the running gear that stands on the ground: (units, width, length, total area), or `None` when the gear
+    /// does not say how big it is. Width and length are the means over the units that state them; where a part states only its
+    /// area, the footprint is taken as square.
+    pub fn footprint(&self) -> Option<(u32, f64, f64, f64)> {
+        if self.contacts.is_empty() {
+            return None;
+        }
+        let area: f64 = self.contacts.iter().map(|c| c.0).sum();
+        let each = area / self.contacts.len() as f64;
+        let pick = |get: fn(&(f64, f64, f64)) -> f64| {
+            let v: Vec<f64> = self.contacts.iter().map(get).filter(|x| *x > 0.0).collect();
+            if v.is_empty() {
+                None
+            } else {
+                Some(mean(&v))
+            }
+        };
+        let (w, l) = match (pick(|c| c.1), pick(|c| c.2)) {
+            (Some(w), Some(l)) => (w, l),
+            (Some(w), None) => (w, each / w),
+            (None, Some(l)) => (each / l, l),
+            (None, None) => (each.sqrt(), each.sqrt()),
+        };
+        Some((self.contacts.len() as u32, w, l, area))
     }
 }
 

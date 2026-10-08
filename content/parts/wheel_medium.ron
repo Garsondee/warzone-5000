@@ -24,5 +24,6 @@
     sockets: [
         (name: "mount", kind: Mount, size: Medium, at: (-0.4, 0, 0), normal: (-1, 0, 0)),
     ],
-    function: (locomotion: Wheels, load_kg: 3500, rolling: 0.03, traction: 0.6, max_kmh: 105),
+    // Footprint: a 0.38 m wide tyre with a patch 0.35 of its 1.1 m diameter long.
+    function: (locomotion: Wheels, load_kg: 3500, rolling: 0.03, traction: 0.6, max_kmh: 105, contact_m2: 0.146, contact_w_m: 0.38, contact_len_m: 0.385),
 )

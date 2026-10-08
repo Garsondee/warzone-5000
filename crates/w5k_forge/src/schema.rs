@@ -365,9 +365,14 @@ pub struct Function {
     /// Turret ring diameter (m); checked against the hull socket's `ctx.ring_max`.
     #[serde(default)]
     pub ring_m: f64,
-    /// Length of the contact patch along the direction of travel (m), for turning and wheelbase estimates.
+    /// Length of the contact patch along the direction of travel (m): for turning and wheelbase estimates, and how far the
+    /// running gear shears soft ground.
     #[serde(default)]
     pub contact_len_m: f64,
+    /// Width of the contact patch (m): the smaller dimension of the footprint, which sets how stiff soft ground is under it
+    /// (narrow footprints sink less for the same pressure).
+    #[serde(default)]
+    pub contact_w_m: f64,
     /// Weapon summary.
     #[serde(default)]
     pub weapon: Option<WeaponFn>,

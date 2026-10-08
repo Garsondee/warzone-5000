@@ -1,0 +1,22 @@
+// What the surfaces of a course mean to a vehicle driving on them (see crates/w5k_sim/src/soil.rs).
+//
+// Rigid ground does not give: running gear grips with its own coefficient. Soft ground sinks under a footprint (Bekker's law,
+// p = (kc / b + kphi) z, with b the footprint's width) and gives only the thrust its shear strength allows (Mohr-Coulomb,
+// H = A c + N tan(phi)).
+//
+// These numbers are tuned for a course that is *fun*, not measured: real soil tables are far too stiff or far too soft to
+// put the army's designs on either side of the same bog. The intent, for the tracked hulls of the army: a vehicle pressing about
+// 20 kPa sinks a few centimetres and does not slow; about 50 kPa sinks 15-20 cm and loses a tenth of its speed; and around
+// 100 kPa on a narrow footprint sinks past its ground clearance and bogs.
+(
+    surfaces: {
+        "concrete": Rigid,
+        "soft_earth": Soft(
+            kc: 60.0,          // kPa: cohesive modulus of sinkage
+            kphi: 170.0,       // kPa / m: frictional modulus of sinkage
+            cohesion: 4.0,     // kPa
+            friction_deg: 22.0,
+            shear_k: 0.02,     // m: how far the soil must be sheared to give its full strength
+        ),
+    },
+)

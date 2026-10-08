@@ -15,12 +15,16 @@ pub struct Lane<'a> {
     /// The kind of running gear ("tracks", "legs"...): the colour of its line.
     pub class: &'a str,
     pub run: &'a Run,
+    /// Seconds on the same course with every surface rigid, when known: the bar is split into that and what the soil cost.
+    pub dry_s: Option<f64>,
 }
 
 const TEXT: Rgb = [0.8, 0.82, 0.86];
 const DIM: Rgb = [0.5, 0.52, 0.58];
 const GRID: Rgb = [0.03, 0.033, 0.045];
 const BAD: Rgb = [0.95, 0.2, 0.3];
+/// The colour of what the soft ground cost.
+const EARTH: Rgb = [0.55, 0.33, 0.14];
 
 /// The colour of a kind of running gear (the same as the viewer's).
 pub fn class_colour(class: &str) -> Rgb {
@@ -144,13 +148,19 @@ pub fn results_png(lanes: &[Lane], course: &Course, path: &Path) {
     };
     order.sort_by(|a, b| key(a).cmp(&key(b)).then_with(|| a.name.cmp(b.name)));
     let limit_s = course.time_limit_ticks() as f64 / HZ as f64;
-    let slowest = order.iter().filter_map(|l| l.run.outcome.time_s()).fold(10.0f64, f64::max);
+    let slowest = order.iter().filter_map(|l| l.run.outcome.time_s()).fold(10.0f64, f64::max).max(order.iter().filter_map(|l| l.dry_s).fold(0.0, f64::max));
     let xmax = ((slowest * 1.1) / 20.0).ceil().max(2.0) * 20.0;
     let (row, left, right) = (28i64, 270i64, 60i64);
     let (w, h) = (1500usize, (130 + row * order.len() as i64 + 40) as usize);
     let mut img = Image::new(w, h, BG);
     img.text(24, 18, 2, &format!("{}: time to complete the course", course.name), [0.9, 0.91, 0.94]);
-    img.text(24, 44, 1, &format!("Seconds from the standing start to the finish line, fastest first. The clock stops at {limit_s:.0} s."), DIM);
+    let split = lanes.iter().any(|l| l.dry_s.is_some());
+    let sub = if split {
+        format!("Seconds from a standing start to the finish line, fastest first. Each bar: the time on concrete, then what the soft earth added (brown). Clock stops at {limit_s:.0} s.")
+    } else {
+        format!("Seconds from the standing start to the finish line, fastest first. The clock stops at {limit_s:.0} s.")
+    };
+    img.text(24, 44, 1, &sub, DIM);
     let (x0, bw) = (left, w as i64 - left - right);
     let top = 84i64;
     let xs = |t: f64| x0 as f64 + t / xmax * bw as f64;
@@ -171,11 +181,25 @@ pub fn results_png(lanes: &[Lane], course: &Course, path: &Path) {
         match &l.run.outcome {
             Outcome::Finished { ticks, .. } => {
                 let t = *ticks as f64 / HZ as f64;
-                img.fill_rect(x0, y + 3, (xs(t) - x0 as f64) as i64, row - 8, c, 0.9);
-                img.text(xs(t) as i64 + 8, y + 7, 1, &format!("{t:.1} s"), TEXT);
+                match l.dry_s {
+                    // What it would take on concrete, then what the soft earth added.
+                    Some(dry) if dry < t - 0.05 => {
+                        img.fill_rect(x0, y + 3, (xs(dry) - x0 as f64) as i64, row - 8, c, 0.9);
+                        img.fill_rect(xs(dry) as i64, y + 3, (xs(t) - xs(dry)) as i64, row - 8, EARTH, 0.95);
+                        img.text(xs(t) as i64 + 8, y + 7, 1, &format!("{t:.1} s   (+{:.1} s of soft earth)", t - dry), TEXT);
+                    }
+                    _ => {
+                        img.fill_rect(x0, y + 3, (xs(t) - x0 as f64) as i64, row - 8, c, 0.9);
+                        img.text(xs(t) as i64 + 8, y + 7, 1, &format!("{t:.1} s"), TEXT);
+                    }
+                }
             }
             Outcome::Dnf { cause, s_mm, ticks, .. } => {
                 let t = *ticks as f64 / HZ as f64;
+                if let Some(dry) = l.dry_s {
+                    // The ghost of the dry run: how quickly it would have finished.
+                    img.fill_rect(x0, y + 3, (xs(dry) - x0 as f64) as i64, row - 8, c, 0.12);
+                }
                 img.fill_rect(x0, y + 3, (xs(t.min(xmax)) - x0 as f64) as i64, row - 8, c, 0.3);
                 img.fill_rect(xs(t.min(xmax)) as i64 - 3, y + 1, 6, row - 4, BAD, 1.0);
                 img.text(xs(t.min(xmax)) as i64 + 12, y + 7, 1, &format!("DID NOT FINISH: {cause:?} at {:.0} m, after {t:.0} s", *s_mm as f64 / 1000.0), BAD);

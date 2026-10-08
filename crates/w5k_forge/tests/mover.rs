@@ -100,3 +100,83 @@ fn more_engine_never_slows_a_real_design_down() {
     let times: Vec<u32> = [0.5, 1.0, 2.0].iter().map(|k| ticks(base.drive_kw * k)).collect();
     assert!(times.windows(2).all(|w| w[0] >= w[1]), "{times:?} ({} ticks per second)", HZ);
 }
+
+fn content() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../content")
+}
+
+fn hill_valley(with_soil: bool) -> Course {
+    let def: CourseDef = ron::from_str(&std::fs::read_to_string(content().join("courses/hill_valley.ron")).unwrap()).unwrap();
+    if with_soil {
+        let terrain: w5k_sim::TerrainDef = ron::from_str(&std::fs::read_to_string(content().join("terrain.ron")).unwrap()).unwrap();
+        Course::bake_with(&def, &terrain).expect("the course and the terrain table agree")
+    } else {
+        Course::bake(&def).unwrap()
+    }
+}
+
+#[test]
+fn every_ground_design_has_a_real_footprint() {
+    let forge = forge();
+    for (id, design) in &forge.designs {
+        let (asm, sheet) = forge.quick_design(design);
+        let spec = forge.mover_spec(id, &asm, &sheet);
+        if spec.dns.is_some() || !spec.class.grounded() {
+            assert_eq!(spec.contact_area_m2, 0.0, "{id}: gear that is not on the ground has no footprint");
+            continue;
+        }
+        assert!(spec.contact_units >= 2, "{id}: {} contact units", spec.contact_units);
+        assert!(spec.contact_width_m > 0.05 && spec.contact_len_m > 0.05, "{id}: {} x {} m", spec.contact_width_m, spec.contact_len_m);
+        // The footprint adds up: units x width x length is the contact area the sheet divides the weight by.
+        let each = spec.contact_area_m2 / spec.contact_units as f64;
+        assert!((each / (spec.contact_width_m * spec.contact_len_m)).clamp(0.3, 1.5) == each / (spec.contact_width_m * spec.contact_len_m), "{id}: {each} m2 against {} x {}", spec.contact_width_m, spec.contact_len_m);
+        let kpa = sheet.mass_kg * 9.81 / spec.contact_area_m2 / 1000.0;
+        assert!((kpa - sheet.ground_pressure_kpa).abs() < 1e-6 * kpa.max(1.0), "{id}: {kpa} against the sheet's {}", sheet.ground_pressure_kpa);
+        assert!(spec.clearance_m > 0.1 && spec.clearance_m < 10.0, "{id}: hull clearance {} m", spec.clearance_m);
+        if spec.class == GearClass::Legs {
+            assert!(spec.stride_m > 1.0, "{id}: legs have a stride");
+        }
+    }
+}
+
+#[test]
+fn soft_earth_sorts_the_army() {
+    let forge = forge();
+    let (dry, wet) = (hill_valley(false), hill_valley(true));
+    let mut bogged = Vec::new();
+    for (id, design) in &forge.designs {
+        let (asm, sheet) = forge.quick_design(design);
+        let spec = forge.mover_spec(id, &asm, &sheet);
+        if spec.dns.is_some() {
+            continue;
+        }
+        let (a, b) = (run(&dry, &spec), run(&wet, &spec));
+        match spec.class {
+            // What does not touch the ground does not care about it: the very same run, bit for bit.
+            GearClass::Cushion | GearClass::AntiGrav | GearClass::Rotor => assert_eq!(a.final_hash, b.final_hash, "{id} ({})", spec.class.name()),
+            _ => {
+                if let Outcome::Dnf { cause, detail, .. } = &b.outcome {
+                    // Too slow for the clock (a giant walker the quick path weighs a little heavy) is a fair end; stalling is not.
+                    assert!(matches!(cause, Cause::Bogged | Cause::TimedOut), "{id}: {cause:?}: {detail}");
+                    if *cause == Cause::Bogged {
+                        assert!(detail.contains("soft ground"), "{id}: {detail}");
+                        bogged.push(id.clone());
+                    }
+                }
+                // The soil never makes a vehicle faster.
+                if let (Some(t0), Some(t1)) = (a.outcome.time_s(), b.outcome.time_s()) {
+                    assert!(t1 >= t0 - 0.05, "{id}: {t1} s on soft earth against {t0} s on concrete");
+                }
+            }
+        }
+    }
+    // The course is worth running: it stops some designs and not all of them.
+    assert!(!bogged.is_empty() && bogged.len() <= 6, "bogged: {bogged:?}");
+    // The owner's own examples: a narrow-tyred scout (110 kPa on 0.15 m tyres) bogs; a light tank (20 kPa) does not notice.
+    assert!(bogged.iter().any(|b| b == "wheel_scout"), "the narrow-tyred scout bogs: {bogged:?}");
+    let scout = forge.designs.get("lancer_scout").expect("lancer_scout");
+    let (asm, sheet) = forge.quick_design(scout);
+    let spec = forge.mover_spec("lancer_scout", &asm, &sheet);
+    let (t0, t1) = (run(&dry, &spec).outcome.time_s().unwrap(), run(&wet, &spec).outcome.time_s().unwrap());
+    assert!(t1 < 1.05 * t0, "the light scout does not slow down in the valley: {t0} s then {t1} s");
+}
