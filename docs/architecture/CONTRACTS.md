@@ -7,7 +7,7 @@ and CCRs) hardens it into v0.2; it freezes at M1 (first light).
 ## Changing a contract (CCR)
 A contract change request is a PR titled `CCR: <what>` that touches `crates/w5k_contract/**` and this file (and, if it breaks users, makes the mechanical
 migration edits in the lanes that use it; ARCH reviews every line). Additive, optional fields are a minor bump; anything that breaks a user is a major bump with a
-migration of the goldens. ARCH tags the commit `contract-vX.Y`. **Lanes pin the tag they build against and upgrade deliberately.** Until M1 the contract is a
+migration of the goldens. ARCH names the commit `contract-vX.Y` under *Contract pin* in `docs/swarm/STATE.md` (the git proxy refuses to push tags, so the commit id is the pin). **Lanes pin the version they build against and upgrade deliberately.** Until M1 the contract is a
 draft: file a CCR early rather than work around a gap.
 
 ## The contracts

@@ -7,7 +7,7 @@ When you have succeeded, a vehicle with nobody at the controls drives the rough 
 `crates/w5k_ai/**` (tunable numbers as RON `Param`s in `crates/w5k_ai/params/`: `ownership.toml` gives you no `content/ai`, so file a request), `crates/w5k_tools/src/cmd/ai.rs`; always `docs/swarm/status/ai.md`, `docs/swarm/requests/ai-*.md`, `docs/theory/ai.md`, `docs/lanes/ai/**`, `spikes/ai/**`.
 
 ## You read, never edit
-`crates/w5k_contract` (pin the tag): `Command`, `GearRequest`, `CapabilityTable` (`braking_distance_m`, `rig_hash`), `WorldQuery`, `MaterialTable`, `PropRef`, `VehicleFrame`, `ContactFrame`, `Event`, `PhysRig` (your own vehicle only); `w5k_math` (`Pcg32::derive`, `StateHasher`); `docs/architecture/*`; COMBAT's design note (the `RangeTable`). Sources named here are pointers from memory: open them before citing; mark `UNVERIFIED` what you could not.
+`crates/w5k_contract` (pin the commit named under *Contract pin* in `docs/swarm/STATE.md`): `Command`, `GearRequest`, `CapabilityTable` (`braking_distance_m`, `rig_hash`), `WorldQuery`, `MaterialTable`, `PropRef`, `VehicleFrame`, `ContactFrame`, `Event`, `PhysRig` (your own vehicle only); `w5k_math` (`Pcg32::derive`, `StateHasher`); `docs/architecture/*`; COMBAT's design note (the `RangeTable`). Sources named here are pointers from memory: open them before citing; mark `UNVERIFIED` what you could not.
 
 ## Stand-ins you start on
 - `RigidBoxVehicle` (the proxy) accelerates, brakes, steers and rides terrain, but has no slip, soil or slope response, props, rollover or real stuck: it tests the driver loop, not grip, bogging or tipping. Say so in every finding.
