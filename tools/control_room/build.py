@@ -5,6 +5,7 @@ Usage: python3 -I tools/control_room/build.py OUT.html
 ARCH edits data.json at each check-in (lane states, strip, log, pictures), rebuilds, and republishes the page as an Artifact.
 Decision-card answers do not live here: they live in the artifact's database, which the page writes and ARCH reads.
 """
+import base64
 import json
 import re
 import sys
@@ -53,6 +54,11 @@ def main():
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "out" / "control-room.html"
     data = json.loads((ROOT / "docs/swarm/control-room/data.json").read_text(encoding="utf-8"))
     data["cards"] = parse_cards((ROOT / "docs/decisions/QUEUE.md").read_text(encoding="utf-8"))
+    for pic in data.get("pictures", []):  # the page must be self-contained: inline each picture as a data URI
+        if "file" in pic and "src" not in pic:
+            raw = (ROOT / pic["file"]).read_bytes()
+            kind = "png" if pic["file"].endswith(".png") else "jpeg"
+            pic["src"] = f"data:image/{kind};base64," + base64.b64encode(raw).decode("ascii")
     if not data.get("updated"):
         data["updated"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     template = (ROOT / "tools/control_room/template.html").read_text(encoding="utf-8")
