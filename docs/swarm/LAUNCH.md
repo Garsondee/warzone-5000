@@ -3,7 +3,7 @@
 Only ARCH starts lane sessions. Everything a lane needs is in the repo, so the launch prompt is short and always the same shape.
 
 ## Before the first launch
-- `integration` exists on the remote and CI is green on it; the contract 0.1.1 batch (`docs/architecture/CONTRACT-0.1.1-PLAN.md`) is applied and `contract-v0.1` is tagged; the lane brief for the lane is committed on `integration`.
+- `integration` exists on the remote and CI is green on it; the contract 0.1.1 batch (`docs/architecture/CONTRACT-0.1.1-PLAN.md`) is applied and pinned (`contract-v0.1` = commit `f8f5e5d` on `integration`, no remote tag); the lane brief for the lane is committed on `integration`.
 - The rehearsal has round-tripped (clone, branch, commit, push, PR, lane guard, merge).
 - The owner has answered or accepted the defaults of the open cards, and C-008 (hold for the usage window?) is settled.
 
