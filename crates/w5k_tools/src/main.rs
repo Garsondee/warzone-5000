@@ -6,8 +6,11 @@
 //! w5k family <content-dir> --out <dir>                     sweep and slider-coupling sheets for parametric families
 //! ```
 
+mod explore_cmd;
 mod family_cmd;
 mod host_sweep;
+mod plot;
+mod space_cmd;
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -79,6 +82,44 @@ fn main() {
             true
         }
         "view" => view(&forge, &a),
+        "rates" => {
+            explore_cmd::rates(&forge.lib, a.num("seed", 1.0) as u64, a.num("count", 12.0) as usize);
+            true
+        }
+        "space" => {
+            space_cmd::run(&forge.lib, a.out.as_deref().unwrap_or_else(|| usage()), a.num("seed", 1.0) as u64, a.num("count", 2000.0) as usize, a.opts.contains_key("csv-only"));
+            true
+        }
+        "atlas" => {
+            explore_cmd::atlas(&forge.lib, a.out.as_deref().unwrap_or_else(|| usage()), a.num("seed", 1.0) as u64);
+            true
+        }
+        "ladder" => {
+            let hull = a.opts.get("hull").map(|h| if h.starts_with("hull_") { h.clone() } else { format!("hull_{h}") }).unwrap_or_else(|| "hull_strider".into());
+            let gear = a.opts.get("gear").cloned().unwrap_or_else(|| "legs".into());
+            let weapon = a.opts.get("weapon").map(|w| if w.starts_with("turret_") { w.clone() } else { format!("turret_{w}") }).unwrap_or_else(|| "turret_gun".into());
+            explore_cmd::ladder(&forge.lib, a.out.as_deref().unwrap_or_else(|| usage()), a.num("seed", 1.0) as u64, &hull, &gear, a.num("steps", 6.0) as usize, &weapon);
+            true
+        }
+        "fit" => {
+            let spec = a.opts.get("spec").map(PathBuf::from).unwrap_or_else(|| usage());
+            explore_cmd::fit_file(&forge.lib, &spec, a.out.as_deref().unwrap_or_else(|| usage()))
+        }
+        "why" => {
+            explore_cmd::why(&forge.lib, a.num("seed", 1.0) as u64, a.num("count", 12.0) as usize, &explore_cmd_spec(&a));
+            true
+        }
+        "roll" => {
+            let spec = explore_cmd_spec(&a);
+            explore_cmd::roll(&forge.lib, a.out.as_deref().unwrap_or_else(|| usage()), a.num("seed", 1.0) as u64, a.num("count", 24.0) as usize, a.num("cols", 6.0) as usize, &spec);
+            true
+        }
+        "gallery" => {
+            let ids: Vec<String> = a.only.clone().unwrap_or_else(|| forge.designs.keys().cloned().collect());
+            let title = a.opts.get("title").cloned().unwrap_or_else(|| "Designs".into());
+            explore_cmd::gallery(&forge, &ids, a.out.as_deref().unwrap_or_else(|| usage()), a.num("cols", 4.0) as usize, a.num("size", 360.0) as usize, &title);
+            true
+        }
         "lineup" => lineup(&forge, a.out.as_deref().unwrap_or_else(|| usage()), a.only.as_deref(), a.palette.as_deref()),
         "factions" => factions(&forge, a.out.as_deref().unwrap_or_else(|| usage()), a.only.as_deref()),
         _ => usage(),
@@ -90,6 +131,17 @@ fn main() {
 
 /// One large view of a design: `w5k view <content> --design id --out file.png [--az 40 --el 20 --focus x,y,z
 /// --radius r --size 1100x800 --palette name]`.
+fn explore_cmd_spec(a: &Args) -> w5k_forge::explore::Spec {
+    w5k_forge::explore::Spec {
+        hull: a.opts.get("hull").map(|h| if h.starts_with("hull_") { h.clone() } else { format!("hull_{h}") }),
+        gear: a.opts.get("gear").cloned(),
+        weapon: a.opts.get("weapon").map(|w| if w.starts_with("turret_") { w.clone() } else { format!("turret_{w}") }),
+        size: a.opts.get("size").and_then(|x| x.parse().ok()),
+        palette: a.opts.get("palette").cloned(),
+        turrets: a.opts.get("turrets").and_then(|x| x.parse().ok()),
+    }
+}
+
 fn view(forge: &Forge, a: &Args) -> bool {
     let Some(id) = a.opts.get("design") else { usage() };
     let Some(d) = forge.designs.get(id) else {
@@ -109,6 +161,11 @@ fn view(forge: &Forge, a: &Args) -> bool {
     if let Some(r) = a.opts.get("radius").and_then(|r| r.parse::<f64>().ok()) {
         fr.radius = r;
         fr.grid = preview::nice_step(r / 2.0);
+    }
+    let zoom = a.num("zoom", 1.0);
+    if zoom != 1.0 {
+        fr.radius *= zoom;
+        fr.grid = preview::nice_step(fr.radius / 2.0);
     }
     let (w, h) = a
         .opts

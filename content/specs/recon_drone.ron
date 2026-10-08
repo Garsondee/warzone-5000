@@ -1,0 +1,13 @@
+#![enable(implicit_some)]
+// The battery's eyes: a 5 m arrowhead flier lifted by one big rotor and hovering 28 m up, carrying a radar mast. Height buys
+// horizon (the sight is the horizon from its eye), and the radar buys range. Cheap, fast and fragile.
+(
+    id: "recon_drone", name: "Recon Drone", hull: "hull_skiff",
+    hull_params: { "length_m": 5.0, "width_m": 1.8, "height_m": 0.7, "front_mm": 8, "side_mm": 5, "sweep": 0.9, "cabin": 0.2 },
+    palette: "verdant",
+    attach: [
+        (socket: "hub", family: "rotor", params: { "radius_m": 3.0, "blades": 4, "altitude_m": 28.0 }),
+        (socket: "engine", family: "engine", params: { "power_kw": 300, "tech": 1 }),
+        (socket: "mast_1", family: "sensor", params: { "height_m": 0.6, "aperture_m": 0.7, "radar": 0.9 }),
+    ],
+)

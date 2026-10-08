@@ -45,8 +45,12 @@ Part fields:
 attachable part has a socket named `mount`. Attaching aligns the child's mount normal against the parent socket's normal
 and the forwards together. `mirror` reflects the child left and right first; `spin` rotates it about the socket normal.
 
-**Function** fields: `power_kw`, `draw_kw`, `load_kg`, `locomotion`, `rolling` (C_rr), `traction`, `max_kmh`,
-`rotor_radius_m` and `sensor_m`.
+**Function** fields (all optional): power (`power_kw`, `draw_kw`); running gear (`locomotion`, `load_kg` rated load,
+`rolling` C_rr, `traction`, `max_kmh`, `contact_m2`, `contact_len_m`, `step_m`, `ride_height_m` which raises the hull,
+`rail_bound`); lift (`rotor_radius_m`, `cushion_area_m2` / `cushion_perimeter_m` / `cushion_gap_m`, `grav_kw_per_t`);
+fit checks (`ring_m` for turrets, `mast_m` for mast-mounted parts); and the weapon, sensor and repair summaries
+(`weapon`: kind, energy, rate, penetration, range, recoil, burst power, guided, salvo; `sensor`: kind, range, height;
+`repair_kg_s`, `repair_reach_m`).
 
 **Materials** (`content/materials.ron`) have three properties:
 - `density`;
@@ -85,14 +89,19 @@ exactly the sum of its parts. The vehicle's own grid gives bounds, free internal
 hull's space) and AO.
 
 The vehicle sheet reports:
-- totals (power, draw, load);
-- frontal area;
-- hover power for rotorcraft (actuator-disc theory);
-- top speed, from the power balance P = C_rr m g v + 1/2 rho C_d A v^3 after drive efficiency, capped by the running
-  gear's `max_kmh`, and which of the two set it;
-- problems: no locomotion, no engine, overloaded, power deficit, cannot hover, bad sockets.
+- totals (power, draw, load), frontal, side and top area, and the median steel-equivalent armour from four directions;
+- **lift power** for rotors (actuator-disc theory), air cushions (leakage flow) and anti-gravity (kW per tonne), and the
+  ground pressure where something touches the ground;
+- top speed, from the power balance P = C_rr m g v + 1/2 rho C_d A v^3 after drive efficiency and after the lift has
+  taken its share, capped by the running gear's `max_kmh`, and which of the two set it; turn rate by kind of gear;
+- weapons (firepower, alpha strike, best penetration, longest range, recoil), sight (the horizon from the highest
+  sensor, limited by its range) and repair capacity;
+- problems: no locomotion, no engine, overloaded, power deficit, cannot hover/float/rise, engine too big for its bay,
+  turret ring or mast head too big for its mount, bad sockets.
 
 ## Outputs and tools
+Mixing and sampling tools are listed in [07 Possibility space](07-possibility-space.md): `sweeps`, `view`, `gallery`, `roll`,
+`atlas`, `ladder`, `space`, `fit`.
 - `w5k render content --out DIR [--only ids]` writes, per part and vehicle:
   - a contact sheet: 8 views, stats and two armour polar plots;
   - a `.glb`: `COLOR_0` with baked edge wear and AO, the raw `_W5K` attributes, and socket nodes;

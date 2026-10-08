@@ -18,7 +18,7 @@ pub const WORLD_RADIUS_M: f64 = 250_000.0;
 /// Height of the standard target (m).
 pub const TARGET_H: f64 = 3.0;
 /// Range of the plain optics every vehicle has (m).
-pub const BASE_SIGHT_M: f64 = 2500.0;
+pub const BASE_SIGHT_M: f64 = 4000.0;
 
 /// Distance to the horizon for an observer `eye_height_m` above the ground, to a standard 3 m target.
 pub fn horizon_m(eye_height_m: f64) -> f64 {

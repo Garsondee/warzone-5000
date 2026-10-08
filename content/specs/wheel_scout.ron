@@ -1,0 +1,13 @@
+#![enable(implicit_some)]
+// A fast six-wheeled scout: a thin wedge with a light gun and a tall optical mast. It sees far and runs from everything.
+(
+    id: "wheel_scout", name: "Wheel Scout", hull: "hull_lancer",
+    hull_params: { "length_m": 5.0, "width_m": 2.0, "height_m": 0.8, "front_mm": 12, "side_mm": 8, "glacis": 0.6, "nose": 0.7, "stations": 3 },
+    palette: "verdant",
+    attach: [
+        (socket: "station_*", family: "wheel", params: { "tread": 0.8 }),
+        (socket: "engine", family: "engine", params: { "power_kw": 300, "tech": 1 }),
+        (socket: "turret", family: "turret_gun", params: { "calibre_mm": 30, "barrel_cal": 40, "armour_mm": 10, "slope": 0.4, "loader": 1, "ammo": 100 }),
+        (socket: "mast_1", family: "sensor", params: { "height_m": 3.0, "aperture_m": 0.3, "radar": 0.1 }),
+    ],
+)

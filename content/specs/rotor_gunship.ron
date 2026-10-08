@@ -1,0 +1,13 @@
+#![enable(implicit_some)]
+// A light wedge hull slung under a big rotor: fast, and its missile rack reaches over ridges the tracks cannot cross.
+(
+    id: "rotor_gunship", name: "Rotor Gunship", hull: "hull_lancer",
+    hull_params: { "length_m": 7.0, "width_m": 2.4, "height_m": 1.0, "front_mm": 15, "side_mm": 8, "glacis": 0.7, "nose": 0.8, "stations": 2 },
+    palette: "crimson",
+    attach: [
+        (socket: "hub", family: "rotor", params: { "radius_m": 6.0, "blades": 5 }),
+        (socket: "engine", family: "engine", params: { "power_kw": 1500, "tech": 1 }),
+        (socket: "turret", family: "turret_missile", params: { "tube_mm": 110, "tubes": 8, "armour_mm": 5, "seeker": 0.9, "warhead": 0.3, "elevation": 20 }),
+        (socket: "mast_1", family: "sensor", params: { "height_m": 0.5, "aperture_m": 0.25, "radar": 0.1 }),
+    ],
+)

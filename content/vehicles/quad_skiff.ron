@@ -1,0 +1,54 @@
+#![enable(implicit_some)]
+// Fitted by `w5k fit` from quad_skiff.ron: running gear and engine sized to the vehicle.
+(
+    id: "quad_skiff",
+    name: "Quad Skiff",
+    hull: "hull_skiff",
+    hull_params: {
+        "cabin": 0.3,
+        "front_mm": 6.0,
+        "height_m": 0.9,
+        "length_m": 10.0,
+        "side_mm": 5.0,
+        "stations": 2.0,
+        "sweep": 0.8,
+        "width_m": 3.4,
+    },
+    palette: Some("vanguard"),
+    attach: [(
+        socket: "station_*",
+        family: Some("rotor"),
+        params: {
+            "altitude_m": 6.0,
+            "blades": 6.0,
+            "radius_m": 1.609,
+            "tip_ms": 260.0,
+        },
+    ), (
+        socket: "engine",
+        family: Some("engine"),
+        params: {
+            "power_kw": 1401.0,
+            "tech": 2.0,
+        },
+    ), (
+        socket: "turret",
+        family: Some("turret_gun"),
+        params: {
+            "ammo": 80.0,
+            "armour_mm": 6.0,
+            "barrel_cal": 40.0,
+            "calibre_mm": 30.0,
+            "loader": 1.0,
+            "slope": 0.4,
+        },
+    ), (
+        socket: "mast_1",
+        family: Some("sensor"),
+        params: {
+            "aperture_m": 0.3,
+            "height_m": 0.8,
+            "radar": 0.2,
+        },
+    )],
+)

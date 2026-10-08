@@ -2,6 +2,51 @@
 
 Short records of decisions that are expensive to reverse. Newest first. Each entry: what, why, alternatives, consequences.
 
+## D10 (2026-10-08, proposed): Trade-offs come from price and physics gates, not from mass alone
+- **What:** the sampled possibility space ([../design/07-possibility-space.md](../design/07-possibility-space.md)) shows that at
+  equal mass firepower, armour and speed are nearly independent (rank correlations -0.17, +0.01, +0.05); speed is almost free
+  (the engine is roughly 2-15 % of the vehicle and each kind of running gear tops out at its rating); anti-gravity dominates
+  (98 % valid, fast at every size, no ground pressure, power linear in the weight); sight is flat (median 3.0 km, 7 % above 4 km).
+  The proposal is that every part carries a price in command points that is **not** just its mass: speed and lift are priced by
+  power, anti-gravity is a late-tier gate with an upkeep or a core that does not scale down, and sensors differentiate sight.
+- **Why:** a constraint only shapes decisions where it binds, and mass binds weakly. "Physics keeps titans honest" already works
+  (walkers crawl, rotors stop near 100 t); "balance is found by the player" needs a second scarce resource to find it with.
+- **Alternatives:** tighten the mass budget (does not touch speed, which is cheap in mass); hard caps by rule (throws away the
+  physics story); do nothing and let the meta find it (the dominant choice then wins every match).
+- **Consequences:** lands in M6 (command-point pricing). Until then the sample is the regression test: the correlations and the
+  corners of the space should move when a price or a gate is added. Awaiting the owner's decision.
+
+## D9 (2026-10-08): The possibility space is sampled, not argued
+- **What:** `w5k space` rolls thousands of auto-fitted designs (every hull with every gear, many sizes) with the quick
+  evaluation path and charts them: speed against mass, armour against firepower per tonne, sight against range, ground pressure,
+  which mixes survive, the trade triangle, the corners, and what one budget buys
+  ([../design/07-possibility-space.md](../design/07-possibility-space.md)).
+- **Why:** with eighteen families and continuous sliders nobody can reason about the whole space; sampling shows where it is
+  empty, where it is crowded and which constants are wrong. It is also the first balance instrument.
+- **Alternatives:** hand-picked archetypes only (miss the edges); full voxel builds for every sample (a hundred times slower).
+- **Consequences:** results depend on the fitter's assumptions (the sample is stratified over hull x gear, power per tonne is drawn
+  from a range, armour is sampled thin) and on constants that are hypotheses; the quick path is within about 10-20 % of the full
+  build. The charts are for finding problems, not for pricing.
+
+## D8 (2026-10-08): Auto-fit sizes designs; a diet fixes what gear cannot carry
+- **What:** `Explorer::fit` sizes running gear to its share of the weight and the engine to the vehicle, iterating to a fixed point;
+  when the gear cannot carry the vehicle it thins the armour in steps (a "diet") before giving up. Fitter hints that are not
+  sliders (`margin`, `kw_per_t`) live in the attachment parameters.
+- **Why:** designs must be coherent to be compared; the same function is the AI designer's repair step and the player's "fit this
+  gear to my vehicle" button.
+- **Alternatives:** leave every design to hand sizing (rejects most random mixes); size by lookup tables (loses the physics).
+- **Consequences:** the fitter can only fix what the sliders can reach; a design that still fails reports the reason (overloaded,
+  cannot hover, engine does not fit). Viability charts therefore show both "valid" and "how much armour it had to give up".
+
+## D7 (2026-10-08): One mounting vocabulary; physics gates combinations
+- **What:** hulls publish standard sockets (`gear`, `station`, `keel`, `belly`, `turret`, `mast`, `hub`, `engine`) with sizing
+  hints; families declare the socket kinds they fit. Running gear that lifts the hull (`ride_height_m`) raises it (`lift_m`).
+- **Why:** the owner wants to mix and match components in fun ways; rules about which combinations are "allowed" would cut the
+  possibility space and need constant upkeep. Physics (load rating, lift power, engine bay, ring size) already says which ones work.
+- **Alternatives:** a compatibility matrix (brittle); per-hull bespoke gear (no mixing).
+- **Consequences:** every new family must publish a `host()` for sweeps and the sheet must check what it adds; odd mixes (a
+  walker on rails' keel, anti-gravity on a tank) are legal and are shown, with their problems, rather than hidden.
+
 ## D6 (2026-10-08): Components are parametric families, written as generators
 - **What:** each component (turret, hull, engine, locomotion, sensor) is a *family* with sliders. A family is Rust code that
   turns slider values into an ordinary part tree; the forge then measures the real geometry. Sliders are free, budgeted

@@ -492,14 +492,22 @@ pub struct DesignDef {
     /// Slider values when `hull` names a family.
     #[serde(default)]
     pub hull_params: BTreeMap<String, f64>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub palette: Option<String>,
     #[serde(default)]
     pub attach: Vec<Attach>,
     /// How far the hull is raised so the running gear reaches the ground (m). Computed when a design is
     /// instantiated from its running gear's `ride_height_m`; leave at 0 in content files.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub lift_m: f64,
+}
+
+fn is_zero(x: &f64) -> bool {
+    *x == 0.0
+}
+
+fn is_false(x: &bool) -> bool {
+    !*x
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -508,19 +516,19 @@ pub struct Attach {
     /// sockets on the left side (negative x normal) are mirrored automatically.
     pub socket: String,
     /// A fixed part id (leave empty when `family` is given).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub part: String,
     /// A parametric family id, generated with `params` plus the parent socket's hints.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub family: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub params: BTreeMap<String, f64>,
     /// Mirror the child left-right before attaching (for symmetric pairs such as left/right tracks).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_false")]
     pub mirror: bool,
     /// Extra rotation (degrees) about the socket normal, for poses such as turret yaw or leg splay.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub spin: f64,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<Attach>,
 }

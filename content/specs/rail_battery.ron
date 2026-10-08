@@ -1,0 +1,17 @@
+#![enable(implicit_some)]
+// A railway gun: a 30 m armoured deck riding on rail bogies, two long 280 mm guns, a radar mast and a repair crane.
+// Steel wheels on steel rails roll with almost no resistance and carry enormous loads, but the vehicle can only go where
+// the track goes.
+(
+    id: "rail_battery", name: "Rail Battery", hull: "hull_dreadnought",
+    hull_params: { "length_m": 30.0, "width_m": 4.6, "height_m": 2.3, "front_mm": 120, "side_mm": 60, "turrets": 2, "stations": 5, "prow": 0.25 },
+    palette: "crimson",
+    attach: [
+        (socket: "keel_*", family: "rail", params: { "axles": 3, "gauge_m": 2.4 }),
+        (socket: "engine", family: "engine", params: { "power_kw": 3000, "tech": 1 }),
+        (socket: "turret_1", family: "turret_gun", params: { "calibre_mm": 250, "barrel_cal": 55, "armour_mm": 100, "slope": 0.6, "loader": 1, "ammo": 30 }),
+        (socket: "turret_2", family: "turret_gun", params: { "calibre_mm": 250, "barrel_cal": 55, "armour_mm": 100, "slope": 0.6, "loader": 1, "ammo": 30 }, spin: 180),
+        (socket: "mast_1", family: "sensor", params: { "height_m": 5.0, "aperture_m": 0.8, "radar": 0.7 }),
+        (socket: "mast_2", family: "repair", params: { "reach_m": 8.0, "rate": 3.0 }),
+    ],
+)

@@ -1,0 +1,12 @@
+#![enable(implicit_some)]
+// A 3.5 m hover scooter with a rapid-fire cannon: nothing special alone, but cheap enough to field in dozens.
+(
+    id: "swarm_hover", name: "Swarm Hover", hull: "hull_skiff",
+    hull_params: { "length_m": 3.5, "width_m": 1.7, "height_m": 0.6, "front_mm": 8, "side_mm": 5, "sweep": 0.6, "cabin": 0.1 },
+    palette: "verdant",
+    attach: [
+        (socket: "belly", family: "hover", params: { "skirt_m": 0.3, "fans": 1 }),
+        (socket: "engine", family: "engine", params: { "power_kw": 150, "tech": 1 }),
+        (socket: "turret", family: "turret_gun", params: { "calibre_mm": 20, "barrel_cal": 40, "armour_mm": 5, "slope": 0.4, "loader": 1, "ammo": 200 }),
+    ],
+)

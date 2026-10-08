@@ -1,0 +1,14 @@
+#![enable(implicit_some)]
+// A spider with a 24-tube missile battery on its back: it picks its way over broken ground and lobs a barrage from
+// behind cover. The warhead share is small, so the missiles fly far.
+(
+    id: "spider_artillery", name: "Spider Artillery", hull: "hull_strider",
+    hull_params: { "radius_m": 3.2, "height_m": 1.6, "front_mm": 40, "side_mm": 20, "stations": 4, "head": 0.4, "dome": 0.3 },
+    palette: "crimson",
+    attach: [
+        (socket: "station_*", family: "legs", params: { "stance_m": 3.5, "bend": 0.6, "splay": 1.0 }),
+        (socket: "engine", family: "engine", params: { "power_kw": 600, "tech": 1 }),
+        (socket: "turret_1", family: "turret_missile", params: { "tube_mm": 160, "tubes": 16, "armour_mm": 8, "seeker": 0.8, "warhead": 0.22, "elevation": 40 }),
+        (socket: "mast_1", family: "sensor", params: { "height_m": 1.5, "aperture_m": 0.4, "radar": 0.2 }),
+    ],
+)

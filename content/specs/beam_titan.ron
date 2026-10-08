@@ -1,0 +1,15 @@
+#![enable(implicit_some)]
+// A 14 m walker whose single weapon is a beam turret: a vast capacitor bank on its back, a long mirror at the front
+// and a repair crane to mend what the answering fire breaks.
+(
+    id: "beam_titan", name: "Beam Titan", hull: "hull_strider",
+    hull_params: { "radius_m": 7.0, "height_m": 3.4, "front_mm": 110, "side_mm": 50, "stations": 4, "head": 0.6, "dome": 0.6 },
+    palette: "ultraviolet",
+    attach: [
+        (socket: "station_*", family: "legs", params: { "stance_m": 8.0, "bend": 0.45 }),
+        (socket: "engine", family: "engine", params: { "power_kw": 6000, "tech": 2 }),
+        (socket: "turret_1", family: "turret_beam", params: { "power_mw": 60.0, "aperture_m": 1.1, "armour_mm": 60, "dwell_s": 0.8 }),
+        (socket: "mast_1", family: "sensor", params: { "height_m": 4.0, "aperture_m": 0.9, "radar": 0.5 }),
+        (socket: "mast_2", family: "repair", params: { "reach_m": 9.0, "rate": 6.0 }),
+    ],
+)

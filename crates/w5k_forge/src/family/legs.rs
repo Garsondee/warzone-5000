@@ -36,6 +36,7 @@ const FROUDE_MAX: f64 = 1.0;
 pub const COST_OF_TRANSPORT: f64 = 0.6;
 const G: f64 = 9.81;
 
+#[allow(clippy::too_many_arguments)]
 fn param(id: &'static str, name: &'static str, unit: &'static str, min: f64, max: f64, default: f64, scale: Scale, role: Role, help: &'static str) -> Param {
     Param { id, name, unit, min, max, default, scale, role, help }
 }
@@ -174,9 +175,9 @@ impl Family for Legs {
             Node::Beam { from: from.arr(), to: to.arr(), size: [1.15 * fb, fb], end: Some([0.78 * 1.15 * fb, 0.78 * fb]), up: z.arr(), mat: "composite".into(), slot, shell: Some(0.008), chamfer: 0.01 + 0.04 * fb }
         };
         shapes.push(Node::Beam { from: hip.arr(), to: knee.arr(), size: [h1, b1], end: Some([0.8 * h1, 0.8 * b1]), up: z.arr(), mat: mat.into(), slot: Slot::Dark, shell: Some(t1), chamfer: 0.3 * t1 });
-        shapes.push(fair(hip, knee, g.s1, g.l1, 0.085, Slot::Primary));
+        shapes.push(fair(hip, knee, g.s1, g.l1, 0.11, Slot::Primary));
         // Knee: a smaller drum with glowing caps on both faces.
-        let fb1 = (1.25 * b1).max(0.085 * g.l1);
+        let fb1 = (1.25 * b1).max(0.11 * g.l1);
         let r_k = (0.1 * act / rho / (std::f64::consts::PI * 1.3 * fb1)).sqrt().max(0.6 * fb1);
         shapes.push(style::cyl(r_k, 1.25 * fb1, Axis::Z, 12, 1.0, knee, "gun_steel", Slot::Dark, None, 0.1 * r_k));
         for s in [-1.0, 1.0] {
@@ -192,13 +193,13 @@ impl Family for Legs {
         let off = n1 * (0.1 * fb1);
         shapes.push(style::beam(hip + d1 * (0.12 * g.l1) + off, hip + d1 * (0.12 * g.l1 + len_r) + off, [side, side], z, "gun_steel", Slot::Dark, 0.0));
         shapes.push(Node::Beam { from: knee.arr(), to: ankle.arr(), size: [h2, b2], end: Some([0.7 * h2, 0.7 * b2]), up: z.arr(), mat: mat.into(), slot: Slot::Dark, shell: Some(t2), chamfer: 0.3 * t2 });
-        shapes.push(fair(knee, ankle, g.s2, g.l2, 0.07, Slot::Secondary));
+        shapes.push(fair(knee, ankle, g.s2, g.l2, 0.09, Slot::Secondary));
         // Warning band near the knee: a thin shell, so it merges with the hollow shin.
         let d2 = p(ankle.x - knee.x, ankle.y - knee.y, 0.0).norm();
         shapes.push(Node::Beam {
             from: (knee + d2 * (0.16 * g.l2)).arr(),
             to: (knee + d2 * (0.24 * g.l2)).arr(),
-            size: [1.04 * 1.15 * ((1.25 * b2).max(0.07 * g.l2)) * 0.97, 1.04 * ((1.25 * b2).max(0.07 * g.l2)) * 0.97],
+            size: [1.04 * 1.15 * ((1.25 * b2).max(0.09 * g.l2)) * 0.97, 1.04 * ((1.25 * b2).max(0.09 * g.l2)) * 0.97],
             end: None,
             up: z.arr(),
             mat: "fittings".into(),

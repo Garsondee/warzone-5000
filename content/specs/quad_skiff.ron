@@ -1,0 +1,15 @@
+#![enable(implicit_some)]
+// A quadcopter: a 10 m arrowhead skiff carried by four rotor arms (two per side), with a light gun on the foredeck. The
+// arm rotors must not overlap, so their size is capped by the room between stations: lift comes from many small
+// discs, which costs far more power than one big one.
+(
+    id: "quad_skiff", name: "Quad Skiff", hull: "hull_skiff",
+    hull_params: { "length_m": 10.0, "width_m": 3.4, "height_m": 0.9, "front_mm": 6, "side_mm": 5, "sweep": 0.8, "cabin": 0.3, "stations": 2 },
+    palette: "vanguard",
+    attach: [
+        (socket: "station_*", family: "rotor", params: { "blades": 6 }),
+        (socket: "engine", family: "engine", params: { "power_kw": 2500, "tech": 2 }),
+        (socket: "turret", family: "turret_gun", params: { "calibre_mm": 30, "barrel_cal": 40, "armour_mm": 6, "slope": 0.4, "loader": 1, "ammo": 80 }),
+        (socket: "mast_1", family: "sensor", params: { "height_m": 0.8, "aperture_m": 0.3, "radar": 0.2 }),
+    ],
+)

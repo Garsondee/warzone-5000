@@ -19,6 +19,7 @@ use crate::Built;
 
 pub struct AntiGrav;
 
+#[allow(clippy::too_many_arguments)]
 fn param(id: &'static str, name: &'static str, unit: &'static str, min: f64, max: f64, default: f64, scale: Scale, role: Role, help: &'static str) -> Param {
     Param { id, name, unit, min, max, default, scale, role, help }
 }

@@ -1,0 +1,18 @@
+#![enable(implicit_some)]
+// A flying battleship: a 40 m dreadnought deck held up by a row of anti-gravity pods, 14 m above the ground. Two guns,
+// a missile battery and a beam turret ride the deck. Anti-gravity has no W^1.5 penalty, so a titan can float, at a
+// flat price in kilowatts per tonne.
+(
+    id: "sky_battery", name: "Sky Battery", hull: "hull_dreadnought",
+    hull_params: { "length_m": 40.0, "width_m": 8.0, "height_m": 2.6, "front_mm": 90, "side_mm": 40, "turrets": 4, "stations": 4, "prow": 1.0 },
+    palette: "ultraviolet",
+    attach: [
+        (socket: "station_*", family: "antigrav", params: { "ride_m": 14.0, "kw_per_t": 22.0 }),
+        (socket: "engine", family: "engine", params: { "power_kw": 30000, "tech": 2 }),
+        (socket: "turret_1", family: "turret_gun", params: { "calibre_mm": 203, "barrel_cal": 50, "armour_mm": 80, "slope": 0.5, "loader": 1, "ammo": 30 }),
+        (socket: "turret_2", family: "turret_beam", params: { "power_mw": 20.0, "aperture_m": 0.8, "armour_mm": 40 }),
+        (socket: "turret_3", family: "turret_missile", params: { "tube_mm": 220, "tubes": 12, "armour_mm": 25, "seeker": 0.9, "warhead": 0.3, "elevation": 30 }),
+        (socket: "turret_4", family: "turret_gun", params: { "calibre_mm": 203, "barrel_cal": 50, "armour_mm": 80, "slope": 0.5, "loader": 1, "ammo": 30 }, spin: 180),
+        (socket: "mast_1", family: "sensor", params: { "height_m": 8.0, "aperture_m": 1.5, "radar": 0.8 }),
+    ],
+)

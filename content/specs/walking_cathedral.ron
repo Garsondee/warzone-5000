@@ -1,0 +1,15 @@
+#![enable(implicit_some)]
+// A 22 m walker with ten legs, a tall dome, a single great gun, a radar spire and a repair crane. The square-cube law
+// shows in its legs: each carries a hundred tonnes on a fat tube and a broad foot.
+(
+    id: "walking_cathedral", name: "Walking Cathedral", hull: "hull_strider",
+    hull_params: { "radius_m": 11.0, "height_m": 5.5, "front_mm": 150, "side_mm": 70, "stations": 5, "head": 0.8, "dome": 0.9 },
+    palette: "ultraviolet",
+    attach: [
+        (socket: "station_*", family: "legs", params: { "stance_m": 12.0 }),
+        (socket: "engine", family: "engine", params: { "power_kw": 8000, "tech": 2 }),
+        (socket: "turret_1", family: "turret_gun", params: { "calibre_mm": 300, "barrel_cal": 50, "armour_mm": 150, "slope": 0.5, "loader": 1, "ammo": 40 }),
+        (socket: "mast_1", family: "sensor", params: { "height_m": 9.0, "aperture_m": 1.2, "radar": 0.6 }),
+        (socket: "mast_2", family: "repair", params: { "reach_m": 14.0, "rate": 10.0 }),
+    ],
+)

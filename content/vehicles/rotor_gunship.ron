@@ -1,0 +1,54 @@
+#![enable(implicit_some)]
+// Fitted by `w5k fit` from rotor_gunship.ron: running gear and engine sized to the vehicle.
+(
+    id: "rotor_gunship",
+    name: "Rotor Gunship",
+    hull: "hull_lancer",
+    hull_params: {
+        "front_mm": 10.5,
+        "glacis": 0.7,
+        "height_m": 1.0,
+        "length_m": 7.0,
+        "nose": 0.8,
+        "side_mm": 5.6,
+        "stations": 2.0,
+        "width_m": 2.4,
+    },
+    palette: Some("crimson"),
+    attach: [(
+        socket: "hub",
+        family: Some("rotor"),
+        params: {
+            "altitude_m": 6.0,
+            "blades": 4.0,
+            "radius_m": 7.025,
+            "tip_ms": 200.0,
+        },
+    ), (
+        socket: "engine",
+        family: Some("engine"),
+        params: {
+            "power_kw": 1690.0,
+            "tech": 2.0,
+        },
+    ), (
+        socket: "turret",
+        family: Some("turret_missile"),
+        params: {
+            "armour_mm": 3.5,
+            "elevation": 20.0,
+            "seeker": 0.9,
+            "tube_mm": 110.0,
+            "tubes": 8.0,
+            "warhead": 0.3,
+        },
+    ), (
+        socket: "mast_1",
+        family: Some("sensor"),
+        params: {
+            "aperture_m": 0.25,
+            "height_m": 0.5,
+            "radar": 0.1,
+        },
+    )],
+)

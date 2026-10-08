@@ -21,9 +21,7 @@ const BG: Rgb = [0.018, 0.019, 0.022];
 pub const TILE: usize = 300;
 
 fn fmt(x: f64) -> String {
-    if x >= 1000.0 {
-        format!("{x:.0}")
-    } else if x >= 100.0 {
+    if x >= 100.0 {
         format!("{x:.0}")
     } else if x >= 10.0 {
         format!("{x:.1}")
@@ -189,8 +187,18 @@ fn sweep(lib: &MaterialLibrary, fam: &dyn Family, host: &Host, out: &Path) {
         }
     });
     let cells: Vec<Cell> = cells.into_iter().map(|c| c.unwrap()).collect();
-    let frames: Vec<Frame> = (0..rows.len()).map(|r| bounds(&cells[r * cols.len()..(r + 1) * cols.len()])).collect();
+    let mut frames: Vec<Frame> = (0..rows.len()).map(|r| bounds(&cells[r * cols.len()..(r + 1) * cols.len()])).collect();
+    if fam.id() == "rail" {
+        // Bogies are a thin strip under a long hull: look at the nose end, low down and close in.
+        for fr in frames.iter_mut() {
+            fr.centre.y = fr.ground + 0.2 * fr.radius;
+            fr.centre.z -= 0.64 * fr.radius;
+            fr.radius *= 0.45;
+        }
+    }
     let colours = preview::palette_colours(lib, Some("vanguard"));
+    // Running gear under a hull (rail bogies) is best seen from low and to the side.
+    let (az, el) = if fam.id() == "rail" { (62.0, 7.0) } else { (35.0, 24.0) };
     let (hdr, lbl) = (36usize, 44usize);
     let mut img = Image::new(TILE * cols.len(), hdr + (TILE + lbl) * rows.len(), BG);
     img.text(10, 10, 2, &format!("{}: {} (down) x {} (across), on {}", fam.name(), pa.name, pb.name, host.hull), [0.85, 0.86, 0.88]);
@@ -198,7 +206,7 @@ fn sweep(lib: &MaterialLibrary, fam: &dyn Family, host: &Host, out: &Path) {
         let (r, c) = (i / cols.len(), i % cols.len());
         let (x, y) = (c * TILE, hdr + r * (TILE + lbl));
         if !cell.mesh.positions.is_empty() {
-            img.blit(&preview::render_view(&cell.mesh, &colours, &frames[r], 35.0, 24.0, TILE), x, y);
+            img.blit(&preview::render_view(&cell.mesh, &colours, &frames[r], az, el, TILE), x, y);
         }
         img.text(x as i64 + 5, (y + TILE + 6) as i64, 1, &cell.label, TEXT);
         img.text(x as i64 + 5, (y + TILE + 19) as i64, 1, &cell.stats, DIM);

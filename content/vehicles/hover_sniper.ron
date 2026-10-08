@@ -1,0 +1,52 @@
+#![enable(implicit_some)]
+// Fitted by `w5k fit` from hover_sniper.ron: running gear and engine sized to the vehicle.
+(
+    id: "hover_sniper",
+    name: "Hover Sniper",
+    hull: "hull_skiff",
+    hull_params: {
+        "cabin": 0.5,
+        "front_mm": 30.0,
+        "height_m": 1.1,
+        "length_m": 12.0,
+        "side_mm": 15.0,
+        "sweep": 0.7,
+        "width_m": 5.0,
+    },
+    palette: Some("vanguard"),
+    attach: [(
+        socket: "belly",
+        family: Some("hover"),
+        params: {
+            "cushion_kpa": 5.055,
+            "fans": 3.0,
+            "skirt_m": 0.8,
+        },
+    ), (
+        socket: "engine",
+        family: Some("engine"),
+        params: {
+            "power_kw": 843.2,
+            "tech": 2.0,
+        },
+    ), (
+        socket: "turret",
+        family: Some("turret_gun"),
+        params: {
+            "ammo": 30.0,
+            "armour_mm": 20.0,
+            "barrel_cal": 70.0,
+            "calibre_mm": 90.0,
+            "loader": 0.0,
+            "slope": 0.5,
+        },
+    ), (
+        socket: "mast_1",
+        family: Some("sensor"),
+        params: {
+            "aperture_m": 0.6,
+            "height_m": 4.0,
+            "radar": 0.3,
+        },
+    )],
+)

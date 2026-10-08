@@ -457,6 +457,7 @@ pub fn lineup(units: &[(&Mesh, &str)], colours: &[Rgb; 8], w: usize, h: usize) -
     let mut labels = Vec::new();
     let mut x = 0.0f64;
     let mut height = 0.0f64;
+    let mut heights: Vec<f64> = Vec::new();
     let gap = 1.5;
     // The camera looks along +Z, so its right is -X: place units at decreasing x to read left to right.
     for (m, name) in units {
@@ -466,6 +467,7 @@ pub fn lineup(units: &[(&Mesh, &str)], colours: &[Rgb; 8], w: usize, h: usize) -
         let width = hi.x - lo.x;
         let (dx, dz) = (-x - hi.x, -(lo.z + hi.z) / 2.0);
         height = height.max(hi.y - lo.y);
+        heights.push(hi.y - lo.y);
         let base = all.positions.len() as u32;
         for q in &turned {
             all.positions.push([(q.x + dx) as f32, (q.y - lo.y) as f32, (q.z + dz) as f32]);
@@ -483,6 +485,11 @@ pub fn lineup(units: &[(&Mesh, &str)], colours: &[Rgb; 8], w: usize, h: usize) -
         x += width + gap;
     }
     let row = x - gap;
+    // One very tall unit (a flier on a long plumb line) must not shrink the rest: frame on a few times the median.
+    heights.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    if let Some(median) = heights.get(heights.len() / 2) {
+        height = height.min(2.5 * median);
+    }
     let (az, el) = (0.0, 16.0);
     // Fit the row's width into the picture: the camera distance that shows half the row within the horizontal
     // half-angle of view, expressed as the radius `Camera::orbit` expects.
@@ -492,10 +499,11 @@ pub fn lineup(units: &[(&Mesh, &str)], colours: &[Rgb; 8], w: usize, h: usize) -
     let fr = Frame { centre: v3(-row / 2.0, 0.35 * height, 0.0), radius, ground: 0.0, grid: nice_step(row / 12.0) };
     let mut img = render_view_wh(&all, colours, &fr, az, el, w, h);
     let cam = Camera::orbit(fr.centre, fr.radius, az, el, FOV_DEG, w, h);
-    for (p, name) in labels {
+    for (i, (p, name)) in labels.into_iter().enumerate() {
         if let Some(s) = cam.project(p) {
             let tw = 8 * name.len() as i64;
-            img.text(s[0] as i64 - tw / 2, s[1] as i64 + 6, 1, &name, [0.82, 0.84, 0.88]);
+            // Alternate rows so the names of neighbouring units do not run into each other.
+            img.text(s[0] as i64 - tw / 2, s[1] as i64 + 6 + 14 * (i % 2) as i64, 1, &name, [0.82, 0.84, 0.88]);
         }
     }
     img

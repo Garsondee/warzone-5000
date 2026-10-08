@@ -155,6 +155,13 @@ impl Family for Track {
         }
     }
 
+    fn fit_to_load(&self, v: &mut Values, load_kg: f64, _lib: &MaterialLibrary) {
+        // The narrowest track that carries the load at the rated ground pressure, with a margin.
+        let lt = ctx(v, "ctx.length", 6.0);
+        let w = load_kg * 1.15 * 9.81 / (RATED_PRESSURE * 0.8 * lt);
+        v.insert("width_m".into(), w.clamp(0.25, 2.5));
+    }
+
     fn performance(&self, v: &Values, built: &Built) -> Vec<Stat> {
         let lt = ctx(v, "ctx.length", 6.0);
         vec![

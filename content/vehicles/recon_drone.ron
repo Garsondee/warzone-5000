@@ -1,0 +1,42 @@
+#![enable(implicit_some)]
+// Fitted by `w5k fit` from recon_drone.ron: running gear and engine sized to the vehicle.
+(
+    id: "recon_drone",
+    name: "Recon Drone",
+    hull: "hull_skiff",
+    hull_params: {
+        "cabin": 0.2,
+        "front_mm": 8.0,
+        "height_m": 0.7,
+        "length_m": 5.0,
+        "side_mm": 5.0,
+        "sweep": 0.9,
+        "width_m": 1.8,
+    },
+    palette: Some("verdant"),
+    attach: [(
+        socket: "hub",
+        family: Some("rotor"),
+        params: {
+            "altitude_m": 28.0,
+            "blades": 4.0,
+            "radius_m": 2.537,
+            "tip_ms": 200.0,
+        },
+    ), (
+        socket: "engine",
+        family: Some("engine"),
+        params: {
+            "power_kw": 247.0,
+            "tech": 2.0,
+        },
+    ), (
+        socket: "mast_1",
+        family: Some("sensor"),
+        params: {
+            "aperture_m": 0.7,
+            "height_m": 0.6,
+            "radar": 0.9,
+        },
+    )],
+)

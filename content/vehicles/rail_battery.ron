@@ -1,0 +1,73 @@
+#![enable(implicit_some)]
+// Fitted by `w5k fit` from rail_battery.ron: running gear and engine sized to the vehicle.
+(
+    id: "rail_battery",
+    name: "Rail Battery",
+    hull: "hull_dreadnought",
+    hull_params: {
+        "front_mm": 120.0,
+        "height_m": 2.3,
+        "length_m": 30.0,
+        "prow": 0.25,
+        "side_mm": 60.0,
+        "stations": 5.0,
+        "turrets": 2.0,
+        "width_m": 4.6,
+    },
+    palette: Some("crimson"),
+    attach: [(
+        socket: "keel_*",
+        family: Some("rail"),
+        params: {
+            "axle_load_t": 29.58,
+            "axles": 3.0,
+            "gauge_m": 2.4,
+            "wheel_d_m": 0.9,
+        },
+    ), (
+        socket: "engine",
+        family: Some("engine"),
+        params: {
+            "power_kw": 4791.0,
+            "tech": 1.0,
+        },
+    ), (
+        socket: "turret_1",
+        family: Some("turret_gun"),
+        params: {
+            "ammo": 30.0,
+            "armour_mm": 100.0,
+            "barrel_cal": 55.0,
+            "calibre_mm": 250.0,
+            "loader": 1.0,
+            "slope": 0.6,
+        },
+    ), (
+        socket: "turret_2",
+        family: Some("turret_gun"),
+        params: {
+            "ammo": 30.0,
+            "armour_mm": 100.0,
+            "barrel_cal": 55.0,
+            "calibre_mm": 250.0,
+            "loader": 1.0,
+            "slope": 0.6,
+        },
+        spin: 180.0,
+    ), (
+        socket: "mast_1",
+        family: Some("sensor"),
+        params: {
+            "aperture_m": 0.8,
+            "height_m": 5.0,
+            "radar": 0.7,
+        },
+    ), (
+        socket: "mast_2",
+        family: Some("repair"),
+        params: {
+            "rate": 3.0,
+            "reach_m": 8.0,
+        },
+    )],
+)

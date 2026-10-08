@@ -8,6 +8,7 @@ pub mod armour;
 pub mod assemble;
 pub mod build;
 pub mod convex;
+pub mod explore;
 pub mod family;
 pub mod geom;
 pub mod gltf;

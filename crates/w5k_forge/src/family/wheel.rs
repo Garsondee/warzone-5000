@@ -23,6 +23,7 @@ const G: f64 = 9.81;
 /// Length of the contact patch as a fraction of the diameter at rated load.
 const PATCH: f64 = 0.35;
 
+#[allow(clippy::too_many_arguments)]
 fn param(id: &'static str, name: &'static str, unit: &'static str, min: f64, max: f64, default: f64, scale: Scale, role: Role, help: &'static str) -> Param {
     Param { id, name, unit, min, max, default, scale, role, help }
 }

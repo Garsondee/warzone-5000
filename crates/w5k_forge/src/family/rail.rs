@@ -20,6 +20,7 @@ pub struct Rail;
 /// Height of the rail head above the ground (sleeper plus rail).
 const RAIL_H: f64 = 0.18;
 
+#[allow(clippy::too_many_arguments)]
 fn param(id: &'static str, name: &'static str, unit: &'static str, min: f64, max: f64, default: f64, scale: Scale, role: Role, help: &'static str) -> Param {
     Param { id, name, unit, min, max, default, scale, role, help }
 }
@@ -108,7 +109,7 @@ impl Family for Rail {
         // past the ends of the vehicle (the first and last bogie extend the track).
         let idx = ctx(v, "ctx.index", -1.0);
         let total = ctx(v, "ctx.stations", 0.0);
-        let ext_f = if idx >= -0.5 && idx < 0.5 { 4.0 } else { 0.0 };
+        let ext_f = if (-0.5..0.5).contains(&idx) { 4.0 } else { 0.0 };
         let ext_r = if total > 0.0 && (idx - (total - 1.0)).abs() < 0.5 { 4.0 } else { 0.0 };
         let rail_len = slot * 1.02 + ext_f + ext_r;
         let rail_z = 0.5 * (ext_r - ext_f);

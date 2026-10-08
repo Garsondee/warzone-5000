@@ -16,6 +16,11 @@ research documents. They only *parse JSON*; they never execute anything from the
 | `generate_tables.py` | Runs the above and writes every table into `docs/research/warzone-2100/data/` with a provenance header |
 | `make_figures.py` | Draws the three SVG figures in `docs/assets/` from the data (validated palette, light surface) |
 
+## `tools/explorer/`: possibility-space explorer
+
+Builds the interactive explorer page and prints the summary statistics from a sampled `space_sample.csv`
+(see [tools/explorer/README.md](explorer/README.md)). Python standard library for the build; Node and Playwright for the optional helpers.
+
 ### Getting the Warzone 2100 data (read-only, outside this repo)
 
 ```bash

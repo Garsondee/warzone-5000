@@ -68,6 +68,16 @@ Every family decorates its surfaces through `family/style.rs`, so components fro
 - **Human-scale fittings** (hatches, cupolas) stay the same size on every unit, so a titan's tiny hatches tell you how
   big it is.
 
+## Scenery: making physics visible
+Some quantities have no solid shape, so families draw them as **scenery** (the `scenery` material has no mass, no
+armour and no bounds) in the faction's Glow colour:
+- rails, ballast and sleepers under a rail bogie, running on past the ends of the vehicle (the vehicle can only go there);
+- the field of an anti-gravity pod: a thin beam to the ground and two rings where it lands (the ride height at a glance);
+- a rotor's tip-path ring (the disc it sweeps) and, for fliers, a plumb line and downwash ring down to the ground (altitude);
+- the glowing seam at the bottom of an air-cushion skirt.
+Scenery is capped at one hue (Glow) and kept thin, so the army still reads by its Primary and Trim, and a flier's
+altitude or a field's reach is visible without a label.
+
 ## Checklist for a new family
 1. Body in Primary, lower or supporting surfaces in Secondary; check the top view first.
 2. One Trim accent, placed where it marks the front or a focal point.

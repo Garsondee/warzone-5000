@@ -21,6 +21,7 @@ pub struct Missile;
 const G: f64 = 9.81;
 const ISP: f64 = 230.0;
 
+#[allow(clippy::too_many_arguments)]
 fn param(id: &'static str, name: &'static str, unit: &'static str, min: f64, max: f64, default: f64, scale: Scale, role: Role, help: &'static str) -> Param {
     Param { id, name, unit, min, max, default, scale, role, help }
 }

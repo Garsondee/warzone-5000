@@ -1,7 +1,9 @@
 # Parametric Components
 
-*Status: families for the gun turret, three hull shapes (Lancer, Bastion, Dreadnought), tracks and engines in
-`crates/w5k_forge/src/family/`; designs can be built entirely from families. Renders:
+*Status: **complete catalogue** in `crates/w5k_forge/src/family/`: five hulls, seven kinds of running gear, three
+weapons, a sensor, a repair rig and an engine, all mounting on one standard socket vocabulary, with an auto-fitter and
+a design roller that mix them (see [07 Possibility space](07-possibility-space.md)). Renders:
+[atlas of every hull with every gear](../assets/forge/atlas.png), [fun mixes](../assets/forge/showcase.png),
 [sweep](../assets/forge/turret_gun_sweep.png), [coupling](../assets/forge/turret_gun_coupling.png),
 [army lineup](../assets/forge/lineup_vanguard.png).*
 
@@ -107,28 +109,63 @@ In the turret family, **profile** is implemented: low turrets measure a smaller 
 (not with an autoloader) and depress the gun less (about 8 degrees at the lowest against 20 at the tallest).
 
 ## Families so far
-| Family | Sliders | Shape character |
-|---|---|---|
-| `turret_gun` | calibre, barrel length, front armour, slope, profile, loader, ammunition | sized to fit crew, breech, ammunition and loader |
-| `hull_lancer` | length, width, height, front and side armour, glacis, nose | low sharp wedge, one turret |
-| `hull_bastion` | the same plus turrets (1-2), sponsons | tall box, dark lower hull, bright overhanging sponsons |
-| `hull_dreadnought` | the same plus turrets (1-6), track sets (2-6) | long deck with a prow, command tower and a row of turrets |
-| `track` | width, skirt armour, road wheels | sized by the hull's socket; wider spreads weight |
-| `engine` | power, technology (diesel 0.22, turbine 0.75, fusion 2.5 kW/kg) | hidden in the hull, but its mass is real |
+| Family | Main sliders | What the physics says | Sweep |
+|---|---|---|---|
+| `turret_gun` | calibre, barrel length, front armour, slope, profile, loader, ammunition | de Marre penetration, shell mass with the cube of the calibre, sized to fit crew, breech, ammunition and loader | [sweep](../assets/forge/turret_gun_sweep.png) |
+| `turret_missile` | missile calibre, tubes, housing armour, seeker, warhead share, elevation | mass with d^3; rocket equation trades warhead for range; shaped charge about 6 calibres | [sweep](../assets/forge/turret_missile_sweep.png) |
+| `turret_beam` | beam power, aperture, housing armour, dwell | capacitors set the mass; the aperture sets the spot, so range and burn-through | [sweep](../assets/forge/turret_beam_sweep.png) |
+| `sensor` | mast height, aperture, radar share | the horizon grows with sqrt(height); the radar equation; a tall mast is heavy | [sweep](../assets/forge/sensor_sweep.png) |
+| `repair` | reach, repair rate | a cantilever arm (heavy with reach); 25 kW per kg/s | [sweep](../assets/forge/repair_sweep.png) |
+| `engine` | power, technology (diesel 0.22, turbine 0.75, fusion 2.5 kW/kg) | hidden in the hull, but its mass and bay are real | |
+| `track` | width, skirt armour, road wheels | wider spreads the weight (ground pressure) | [sweep](../assets/forge/track_sweep.png) |
+| `wheel` | diameter, width, tyre pressure, tread | load = pressure x contact patch; big wheels roll over obstacles | [sweep](../assets/forge/wheel_sweep.png) |
+| `legs` | stance, leg strength, foot radius, splay, knee bend, material | Euler buckling against crushing, hip torque, Froude gait; square-cube law | [sweep](../assets/forge/legs_sweep.png) |
+| `rail` | wheel diameter, axle load, axles, gauge | tiny rolling resistance, low adhesion; only goes where the rails go | [sweep](../assets/forge/rail_sweep.png) |
+| `hover` | skirt height, thrust fans, cushion pressure | lift power grows as W^1.5 at a fixed footprint | [sweep](../assets/forge/hover_sweep.png) |
+| `antigrav` | rated lift, field cost (kW/t), ride height | power linear in the weight; a cheaper field needs heavier coils | [sweep](../assets/forge/antigrav_sweep.png) |
+| `rotor` | radius, blades, tip speed, altitude | actuator-disc hover power, blade-stall thrust limit | [sweep](../assets/forge/rotor_sweep.png) |
+| `hull_lancer` | length, width, height, front and side armour, glacis, nose, stations | low sharp wedge, one turret | |
+| `hull_bastion` | the same plus turrets (1-2), sponsons | tall box, room inside, two turrets | |
+| `hull_dreadnought` | the same plus turrets (1-6), stations (2-10) | long deck, row of turrets, a keel for rails | |
+| `hull_strider` | radius, height, armour, leg pairs, sensor head, dome | round carapace on a ring of hips | |
+| `hull_skiff` | length, width, height, armour, sweep, cabin, stations | flat arrowhead of composite: the body of cushions, rotors and anti-gravity | |
 
-## How families fit together
-- A hull's sockets carry **hints** (`ctx.length`, `ctx.top`, `ctx.bottom` for tracks; `ctx.ring_max` for turrets;
-  `ctx.bay_*` for engines). An attached family reads them alongside its sliders, so a track sizes itself to its hull.
-- A **design** names families with slider values instead of fixed parts:
-  ```ron
-  (socket: "track_r", family: "track", params: { "width_m": 0.62 }),
-  ```
-  Loading a design generates the parts (identical requests share one part) and assembles them as usual. Vehicle mass
-  is still the exact sum of the parts.
-- The vehicle sheet now reports **ground pressure** (weight over track contact area): the Lancer Mk1 presses 46 kPa,
-  the 400 t Dreadnought 88 kPa thanks to 1.4 m tracks.
+Sweeps are `w5k sweeps`: each family on its host hull, the engine sized to the whole vehicle, red text where the
+physics objects.
+
+## Mounts: why any gear fits any hull
+Hulls publish a **standard vocabulary of sockets**, and families declare which kinds they fit:
+
+| Socket | Where | Used by |
+|---|---|---|
+| `gear_r/l` | one long mount on each side | tracks |
+| `station_r1..n / station_l1..n` | evenly spaced along each side (kind Station, or Hip on a round body) | wheels, legs, anti-gravity pods, rotor arms, tracks (not on hips) |
+| `keel_1..n` | centre line under the hull | rail bogies |
+| `belly` | the whole underside | air cushions, anti-gravity plates |
+| `turret`, `turret_k` | rings on the roof | gun, missile and beam turrets |
+| `mast_1/2`, `hub` | the roof | sensors, repair rigs; the `hub` also takes a rotor |
+| `engine` | inside | engines (bay size checked) |
+
+Every socket carries **hints** (`ctx.*`): the room along the hull, the height above the ground, the largest turret ring,
+the mast width, the engine bay. A family reads them next to its sliders, so a wheel sizes itself to the room between
+stations and a tyre touches the ground whatever the hull. `Forge::instantiate` generates the parts, refuses a family on a
+socket kind it does not fit, mirrors the left side, and **raises the hull** so legs, cushions, pods and rotors reach the
+ground (or their altitude): the design's `lift_m`. Fit problems (turret ring too wide, engine too big for its bay,
+sensor head wider than its mast) appear on the vehicle sheet. Nothing is a rule; a combination simply fails when the
+numbers say so.
+
+## Mixing and auto-fit
+Because mounts are standard, the explorer (`w5k_forge::explore`) can combine anything. It rolls a design from a seed
+(`Pcg32::derive`, so the same seed gives the same design), then **auto-fit** sizes the parts: each running gear gets its
+share of the weight (`Family::fit_to_load`), the engine gets what the vehicle draws, lifts and wants for speed, and the loop
+repeats because every change moves the mass. If the gear cannot carry the vehicle even at its limits, the fitter puts the
+vehicle on a **diet** (thinner armour, step by step), because mass is what every kind of lift is short of. What is left
+over is either valid or reports why not. This is the seed of an AI designer: a search proposes a skeleton; the fitter
+makes it physically coherent. Used from the command line: `w5k fit --spec content/specs/x.ron --out content/vehicles/x.ron`.
 
 ## Decisions taken
+- Every piece of running gear and equipment mounts on the standard sockets; physics, not rules, gates combinations
+  ([D7](../planning/decisions.md)).
 - *Hold mass* is on by default (owner, 2026-10-08).
 - Slope stays a free slider, with profile as a separate shape slider; heavy armour also pulls the turret a little
   lower and its chamfers heavier, so armour reads visually.

@@ -1,0 +1,821 @@
+<title>Possibility Space</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: an instrument panel. Filters on the left, the plot in the middle, the selected design on the right;
+   below 1100px the inspector drops under the plot, below 760px everything stacks.
+   Deliberately dark: it shares the stage the vehicle renders are lit on. */
+:root {
+  color-scheme: dark;
+  --bg: #090b12;
+  --surface: #0e121b;
+  --surface-2: #131928;
+  --line: #1f2738;
+  --line-2: #2c3852;
+  --fg: #e8ecf6;
+  --fg-2: #a4adc4;
+  --fg-3: #7c87a2;
+  --accent: #45efff;
+  --accent-ink: #03161a;
+  --warn: #ff7a7a;
+  --ok: #5ee6a0;
+
+  --c-track: #ffb454;
+  --c-wheel: #a3e635;
+  --c-legs: #ff5c8a;
+  --c-rail: #cbd5e1;
+  --c-hover: #38bdf8;
+  --c-antigrav: #c084fc;
+  --c-rotor: #34d399;
+
+  --c-lancer: #38bdf8;
+  --c-bastion: #fb923c;
+  --c-dreadnought: #f43f5e;
+  --c-strider: #a3e635;
+  --c-skiff: #c084fc;
+
+  --c-gun: #ffb454;
+  --c-missile: #38bdf8;
+  --c-beam: #f472b6;
+  --c-none: #94a3b8;
+
+  --font-display: "Chakra Petch", "Bahnschrift", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  padding-inline: 16px;
+  padding-block: 18px 28px;
+}
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 24px; max-width: 1560px; margin: 0 auto 14px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 26px; letter-spacing: 0.02em; margin: 0; text-wrap: balance; }
+.sub { margin: 0; color: var(--fg-2); max-width: 70ch; }
+.facts { display: flex; flex-wrap: wrap; gap: 4px 18px; font-family: var(--font-mono); font-size: 12px; color: var(--fg-2); }
+.facts b { color: var(--fg); font-weight: 500; }
+
+.app {
+  display: grid;
+  grid-template-columns: minmax(230px, 270px) minmax(0, 1fr) minmax(270px, 330px);
+  gap: 14px;
+  max-width: 1560px;
+  margin: 0 auto;
+  align-items: start;
+}
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.rail, .inspector { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+.rail, .inspector { padding: 14px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.stage { padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+.label { font-family: var(--font-display); font-weight: 600; font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); margin: 0 0 6px; }
+.group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 4px 9px 4px 8px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--line-2);
+  color: var(--fg-2); cursor: pointer; font-size: 12.5px; line-height: 1.3;
+}
+.chip i { width: 9px; height: 9px; border-radius: 50%; background: var(--dot, var(--fg-3)); flex: none; }
+.chip small { font-family: var(--font-mono); font-size: 11px; color: var(--fg-3); }
+.chip[aria-pressed="true"] { color: var(--fg); border-color: var(--dot, var(--accent)); background: color-mix(in srgb, var(--dot, var(--accent)) 14%, var(--surface-2)); }
+.chip[aria-pressed="false"] i { opacity: 0.35; }
+.chips[data-keyed="false"] .chip i { background: var(--fg-3); }
+.chips[data-keyed="false"] .chip[aria-pressed="true"] { border-color: var(--accent); background: var(--surface-2); }
+.chip[aria-pressed="false"] { opacity: 0.7; }
+
+.seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 6px; overflow: hidden; flex-wrap: wrap; }
+.seg button { background: var(--surface-2); border: 0; padding: 5px 10px; color: var(--fg-2); cursor: pointer; font-size: 12.5px; }
+.seg button + button { border-left: 1px solid var(--line-2); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.check { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; color: var(--fg-2); font-size: 13px; }
+.check input { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
+
+select {
+  background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 6px;
+  padding: 5px 8px; min-width: 0; max-width: 100%;
+}
+
+.range { display: grid; gap: 4px; }
+.range output { font-family: var(--font-mono); font-size: 12px; color: var(--fg-2); }
+.range input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
+
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.preset {
+  background: transparent; border: 1px solid var(--line-2); border-radius: 6px; padding: 5px 10px;
+  color: var(--fg-2); cursor: pointer; font-size: 12.5px;
+}
+.preset:hover { border-color: var(--fg-3); color: var(--fg); }
+.preset[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+
+.axes { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px 14px; }
+.axis { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.axis > span { font-family: var(--font-display); font-weight: 600; font-size: 12px; letter-spacing: 0.1em; color: var(--fg-3); text-transform: uppercase; width: 16px; }
+.axis select { flex: 1 1 140px; }
+
+.plot { position: relative; width: 100%; height: clamp(340px, 52vw, 640px); border: 1px solid var(--line); border-radius: 4px; background: var(--surface); overflow: hidden; }
+.plot canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; cursor: crosshair; }
+.tip {
+  position: absolute; pointer-events: none; z-index: 2; padding: 6px 9px; border-radius: 5px;
+  background: var(--bg); border: 1px solid var(--line-2); font-size: 12px; line-height: 1.35; white-space: nowrap; box-shadow: 0 4px 14px rgb(0 0 0 / 0.45);
+}
+.tip b { font-weight: 600; }
+.tip span { font-family: var(--font-mono); color: var(--fg-2); }
+.status { font-family: var(--font-mono); font-size: 12px; color: var(--fg-3); display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.pinbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 7px 10px; border: 1px solid var(--accent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 8%, var(--surface)); font-size: 13px; }
+.pinbar b { font-weight: 600; }
+.pinbar span { font-family: var(--font-mono); font-size: 12px; color: var(--fg-2); }
+.pinbar .btn { margin-left: auto; padding: 3px 9px; }
+
+.extremes { display: flex; flex-direction: column; gap: 2px; }
+.extremes .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+.xrow {
+  display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 10px; align-items: center;
+  background: transparent; border: 0; border-radius: 4px; padding: 5px 6px; text-align: left; cursor: pointer; width: 100%;
+}
+.xrow:hover { background: var(--surface-2); }
+.xrow i { width: 10px; height: 10px; border-radius: 50%; background: var(--dot); }
+.xrow .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xrow .vals { font-family: var(--font-mono); font-size: 12px; color: var(--fg-2); }
+
+.inspector h2 { font-family: var(--font-display); font-weight: 700; font-size: 19px; line-height: 1.2; margin: 0; text-wrap: balance; }
+.badge { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 2px 7px; border-radius: 999px; border: 1px solid currentColor; }
+.badge.ok { color: var(--ok); }
+.badge.bad { color: var(--warn); }
+.problem { color: var(--warn); font-size: 12.5px; margin: 0; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin: 0; }
+.stats div { min-width: 0; }
+.stats dt { font-size: 11.5px; color: var(--fg-3); }
+.stats dd { margin: 0; font-family: var(--font-mono); font-size: 14px; color: var(--fg); font-variant-numeric: tabular-nums; }
+.stats dd small { color: var(--fg-3); font-size: 11.5px; }
+.cmd { display: flex; gap: 8px; align-items: stretch; }
+.cmd code { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 11.5px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 7px 8px; color: var(--fg-2); overflow-x: auto; white-space: nowrap; }
+.btn { background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 4px; padding: 5px 10px; cursor: pointer; color: var(--fg); }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.hint { color: var(--fg-3); font-size: 12.5px; margin: 0; }
+.empty { color: var(--fg-2); }
+
+.gallery { max-width: 1560px; margin: 26px auto 0; display: grid; gap: 22px; }
+.gallery h2 { font-family: var(--font-display); font-weight: 700; font-size: 19px; margin: 0; letter-spacing: 0.02em; }
+.gallery .lede { margin: 4px 0 0; color: var(--fg-2); max-width: 78ch; }
+.gallery figure { margin: 0; display: grid; gap: 8px; }
+.gallery img { display: block; width: 100%; max-width: 1100px; height: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.gallery figcaption { color: var(--fg-2); max-width: 90ch; }
+.gallery figcaption b { color: var(--fg); font-weight: 600; }
+.foot { max-width: 1560px; margin: 16px auto 0; color: var(--fg-3); font-size: 12.5px; display: grid; gap: 4px; }
+.foot p { margin: 0; max-width: 100ch; }
+
+@media (max-width: 1100px) {
+  .app { grid-template-columns: minmax(220px, 260px) minmax(0, 1fr); }
+  .inspector { grid-column: 1 / -1; position: static; max-height: none; overflow: visible; }
+  .inspector .stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+}
+@media (max-width: 760px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .stage { order: 1; }
+  .inspector { order: 2; }
+  .rail { order: 3; position: static; max-height: none; overflow: visible; }
+  .plot { height: clamp(300px, 92vw, 460px); }
+  h1 { font-size: 22px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<header class="top">
+  <div>
+    <h1>Possibility Space</h1>
+    <p class="sub">Every hull mixed with every kind of running gear, auto-fitted by the physics and sampled thousands of times. Each dot is a whole vehicle.</p>
+  </div>
+  <div class="facts" id="facts" aria-live="polite"></div>
+</header>
+
+<main class="app">
+  <aside class="rail panel" aria-label="Filters">
+    <div class="group">
+      <p class="label">Colour by</p>
+      <div class="seg" id="colorBy" role="group" aria-label="Colour by">
+        <button type="button" data-k="gear" aria-pressed="true">Gear</button>
+        <button type="button" data-k="hull" aria-pressed="false">Hull</button>
+        <button type="button" data-k="weapon" aria-pressed="false">Weapon</button>
+        <button type="button" data-k="valid" aria-pressed="false">Valid</button>
+      </div>
+    </div>
+    <p class="hint">Percentages: how many sampled designs of that kind the physics accepted.</p>
+    <div class="group">
+      <p class="label">Running gear</p>
+      <div class="chips" id="gearChips"></div>
+    </div>
+    <div class="group">
+      <p class="label">Hull</p>
+      <div class="chips" id="hullChips"></div>
+    </div>
+    <div class="group">
+      <p class="label">Weapon</p>
+      <div class="chips" id="weaponChips"></div>
+    </div>
+    <div class="group">
+      <p class="label">Vehicle mass</p>
+      <div class="range">
+        <output id="massOut"></output>
+        <input type="range" id="massLo" min="0" max="100" value="0" aria-label="Lightest vehicle shown">
+        <input type="range" id="massHi" min="0" max="100" value="100" aria-label="Heaviest vehicle shown">
+      </div>
+    </div>
+    <div class="group">
+      <p class="label">Show</p>
+      <label class="check"><input type="checkbox" id="showInvalid"> Designs the physics rejected</label>
+      <label class="check"><input type="checkbox" id="sizeByMass"> Dot size follows mass</label>
+    </div>
+  </aside>
+
+  <section class="stage panel" aria-label="Plot">
+    <div class="presets" id="presets" role="group" aria-label="Views"></div>
+    <div class="axes">
+      <div class="axis"><span>X</span><select id="xSel" aria-label="X axis"></select><label class="check"><input type="checkbox" id="xLog"> log</label></div>
+      <div class="axis"><span>Y</span><select id="ySel" aria-label="Y axis"></select><label class="check"><input type="checkbox" id="yLog"> log</label></div>
+    </div>
+    <div class="row">
+      <label class="check" for="frontier">Frontier</label>
+      <select id="frontier" aria-label="Frontier overlay">
+        <option value="off">off</option>
+        <option value="++">more x, more y</option>
+        <option value="+-">more x, less y</option>
+        <option value="-+">less x, more y</option>
+        <option value="--">less x, less y</option>
+      </select>
+    </div>
+    <div class="plot" id="plotBox">
+      <canvas id="cv" role="img" aria-label="Scatter plot of sampled vehicle designs"></canvas>
+      <div class="tip" id="tip" hidden></div>
+    </div>
+    <div class="status" id="status" aria-live="polite"></div>
+    <div class="pinbar" id="pinbar" hidden></div>
+    <div class="extremes" id="extremes"></div>
+  </section>
+
+  <aside class="inspector panel" id="inspector" aria-label="Selected design" aria-live="polite"></aside>
+</main>
+
+<section class="gallery" aria-label="Renders">
+  <div>
+    <h2>What the sample is made of</h2>
+    <p class="lede">Every dot above is a vehicle like these: the same catalogue of parts, mixed by the same physics.</p>
+  </div>
+  <figure>
+    <img alt="A grid of auto-fitted vehicles: five hulls across seven kinds of running gear" src="__IMG_ATLAS__">
+    <figcaption><b>The atlas.</b> Every hull with every kind of running gear, each sized by the auto-fitter. A Strider has no mount for tracks, wheels or rail, so those cells stay empty.</figcaption>
+  </figure>
+  <figure>
+    <img alt="Thirteen hand-built mixed vehicles: a railway gun, a walking cathedral, a flying battleship and more" src="__IMG_SHOWCASE__">
+    <figcaption><b>Fun mixes.</b> Thirteen deliberate combinations: a rail battery with its recon drone, a ten-legged cathedral, a battleship held up by anti-gravity pods, a quadcopter, a tank on stilts.</figcaption>
+  </figure>
+  <figure>
+    <img alt="Twelve extreme vehicles from the sample: the fastest, the most armoured, the heaviest and others" src="__IMG_CORNERS__">
+    <figcaption><b>The corners.</b> The extremes of this sample: fastest, most armoured, most firepower, longest range, sees farthest, heaviest, lightest, gentlest on the ground.</figcaption>
+  </figure>
+</section>
+
+<footer class="foot">
+  <p>Evaluation is the quick path (exact-volume mass, four-direction armour): within roughly 10 to 20 percent of the full build. The sample is stratified, so every hull-and-gear mix gets the same number of attempts at random sizes, weapons and masts; it shows the shape of the space, not the odds of a random roll.</p>
+  <p>Every constant behind the numbers (tyre pressure limit, melt energy, rotor stall, anti-gravity cost, leg safety factors) is a hypothesis chosen to give a believable shape. Reproduce a design with the command in the inspector; regenerate the sample with <code>w5k space content --out out</code>.</p>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+  var DATA = __DATA__;
+
+  // ---------- data ----------
+  var HULL_LABEL = { lancer: 'Lancer', bastion: 'Bastion', dreadnought: 'Dreadnought', strider: 'Strider', skiff: 'Skiff' };
+  var GEAR_LABEL = { track: 'tracks', wheel: 'wheels', legs: 'legs', rail: 'rail', hover: 'air cushion', antigrav: 'anti-grav', rotor: 'rotors' };
+  var WEAPON_LABEL = { gun: 'gun', missile: 'missile', beam: 'beam', none: 'unarmed' };
+  var cols = DATA.cols;
+  var P = DATA.rows.map(function (r, idx) {
+    var o = { id: idx };
+    for (var i = 0; i < cols.length; i++) o[cols[i]] = r[i];
+    o.hullN = DATA.hulls[o.hull];
+    o.gearN = DATA.gears[o.gear];
+    o.weaponN = DATA.weapons[o.weapon];
+    o.validB = o.valid === 1;
+    o.why = DATA.why[o.whyi] || '';
+    o.tonnes = o.mass / 1000;
+    o.pw = o.tonnes > 0 ? o.power / o.tonnes : 0;
+    o.firet = o.tonnes > 0 ? o.fire / o.tonnes : 0;
+    o.name = HULL_LABEL[o.hullN] + ' / ' + GEAR_LABEL[o.gearN] + ' / ' + WEAPON_LABEL[o.weaponN];
+    return o;
+  });
+
+  // ---------- metrics ----------
+  function fmt(v, digits) {
+    if (v === undefined || v === null || isNaN(v)) return '-';
+    var a = Math.abs(v);
+    if (digits !== undefined) return v.toFixed(digits);
+    if (a >= 1000) return Math.round(v).toLocaleString('en-US');
+    if (a >= 100) return v.toFixed(0);
+    if (a >= 10) return v.toFixed(1);
+    if (a >= 1) return v.toFixed(2);
+    if (a === 0) return '0';
+    return v.toPrecision(2);
+  }
+  function fmtMass(kg) {
+    if (kg >= 10000) return fmt(kg / 1000) + ' t';
+    if (kg >= 1000) return (kg / 1000).toFixed(2) + ' t';
+    return Math.round(kg) + ' kg';
+  }
+  function tickFmt(v) {
+    if (v >= 1000) return Math.round(v).toLocaleString('en-US');
+    if (Number.isInteger(v)) return String(v);
+    return String(+v.toPrecision(3));
+  }
+  var METRICS = {
+    mass:  { label: 'Mass', unit: '', get: function (p) { return p.mass; }, log: true, show: fmtMass, tick: function (v) { return v >= 1000 ? (v / 1000) + ' t' : v + ' kg'; } },
+    speed: { label: 'Top speed', unit: 'km/h', get: function (p) { return p.speed; }, log: false },
+    power: { label: 'Engine power', unit: 'kW', get: function (p) { return p.power; }, log: true },
+    pw:    { label: 'Power per tonne', unit: 'kW/t', get: function (p) { return p.pw; }, log: true },
+    armF:  { label: 'Front armour (steel-equivalent)', unit: 'mm', get: function (p) { return p.armF; }, log: true },
+    armS:  { label: 'Side armour (steel-equivalent)', unit: 'mm', get: function (p) { return p.armS; }, log: true },
+    area:  { label: 'Frontal area', unit: 'm\u00b2', get: function (p) { return p.area; }, log: true },
+    fire:  { label: 'Firepower', unit: 'kW', get: function (p) { return p.fire; }, log: true },
+    firet: { label: 'Firepower per tonne', unit: 'kW/t', get: function (p) { return p.firet; }, log: true },
+    alpha: { label: 'Alpha strike', unit: 'MJ', get: function (p) { return p.alpha; }, log: true },
+    pen:   { label: 'Best penetration', unit: 'mm', get: function (p) { return p.pen; }, log: true },
+    range: { label: 'Weapon range', unit: 'km', get: function (p) { return p.range; }, log: true },
+    sight: { label: 'Sight range', unit: 'km', get: function (p) { return p.sight; }, log: true },
+    press: { label: 'Ground pressure', unit: 'kPa', get: function (p) { return p.press; }, log: true },
+    len:   { label: 'Length', unit: 'm', get: function (p) { return p.len; }, log: true },
+    hei:   { label: 'Height', unit: 'm', get: function (p) { return p.hei; }, log: true },
+    lift:  { label: 'Lift power', unit: 'kW', get: function (p) { return p.lift; }, log: true },
+    kept:  { label: 'Armour kept by the fitter', unit: '%', get: function (p) { return p.kept * 100; }, log: false }
+  };
+  var ORDER = ['mass', 'speed', 'power', 'pw', 'armF', 'armS', 'area', 'fire', 'firet', 'alpha', 'pen', 'range', 'sight', 'press', 'len', 'hei', 'lift', 'kept'];
+
+  var PRESETS = [
+    { id: 'speed', name: 'Speed against mass', x: 'mass', y: 'speed', lx: true, ly: false, color: 'gear' },
+    { id: 'fire', name: 'Armour against firepower', x: 'armF', y: 'firet', lx: true, ly: true, color: 'hull', frontier: '++' },
+    { id: 'sight', name: 'Sight against weapon range', x: 'sight', y: 'range', lx: true, ly: true, color: 'weapon' },
+    { id: 'press', name: 'Ground pressure', x: 'mass', y: 'press', lx: true, ly: true, color: 'gear' },
+    { id: 'power', name: 'Power per tonne', x: 'pw', y: 'speed', lx: true, ly: false, color: 'gear' },
+    { id: 'kept', name: 'Armour kept', x: 'mass', y: 'kept', lx: true, ly: false, color: 'gear' }
+  ];
+
+  // ---------- state ----------
+  var S = {
+    x: 'mass', y: 'speed', lx: true, ly: false, color: 'gear', frontier: 'off',
+    gears: {}, hulls: {}, weapons: {}, showInvalid: false, sizeByMass: false,
+    massLo: 0, massHi: 100, pinned: null, hover: null, extremesDesc: true, preset: 'speed'
+  };
+  DATA.gears.forEach(function (g) { S.gears[g] = true; });
+  DATA.hulls.forEach(function (h) { S.hulls[h] = true; });
+  DATA.weapons.forEach(function (w) { S.weapons[w] = true; });
+
+  var minMass = Infinity, maxMass = 0;
+  P.forEach(function (p) { if (p.mass > 0) { minMass = Math.min(minMass, p.mass); maxMass = Math.max(maxMass, p.mass); } });
+  var lmin = Math.log10(minMass), lmax = Math.log10(maxMass);
+  function massAt(t) { return Math.pow(10, lmin + (lmax - lmin) * t / 100); }
+
+  // ---------- dom ----------
+  var $ = function (id) { return document.getElementById(id); };
+  var cv = $('cv'), ctx = cv.getContext('2d'), tip = $('tip'), plotBox = $('plotBox');
+  var css = getComputedStyle(document.documentElement);
+  function token(name) { return css.getPropertyValue(name).trim(); }
+  var T = {
+    surface: token('--surface'), line: token('--line'), line2: token('--line-2'), fg: token('--fg'), fg2: token('--fg-2'), fg3: token('--fg-3'),
+    accent: token('--accent'), warn: token('--warn'), bg: token('--bg'),
+    mono: token('--font-mono'), body: token('--font-body')
+  };
+  function colorOf(p) {
+    if (S.color === 'valid') return p.validB ? token('--ok') : token('--warn');
+    var key = S.color === 'gear' ? p.gearN : S.color === 'hull' ? p.hullN : p.weaponN;
+    return token('--c-' + key);
+  }
+  var colorCache = {};
+  function cached(p) {
+    var k = S.color + ':' + (S.color === 'gear' ? p.gearN : S.color === 'hull' ? p.hullN : S.color === 'weapon' ? p.weaponN : p.validB);
+    return colorCache[k] || (colorCache[k] = colorOf(p));
+  }
+
+  // ---------- controls ----------
+  function chipGroup(host, keys, labels, state, colorKey, countOf) {
+    var el = $(host);
+    el.innerHTML = '';
+    keys.forEach(function (k) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      b.style.setProperty('--dot', 'var(--c-' + k + ')');
+      b.setAttribute('aria-pressed', state[k] ? 'true' : 'false');
+      b.innerHTML = '<i></i>' + labels[k] + ' <small>' + countOf(k) + '</small>';
+      b.addEventListener('click', function () {
+        state[k] = !state[k];
+        b.setAttribute('aria-pressed', state[k] ? 'true' : 'false');
+        update();
+      });
+      el.appendChild(b);
+    });
+  }
+  function validShare(field, key) {
+    var n = 0, v = 0;
+    P.forEach(function (p) { if (p[field] === key) { n++; if (p.validB) v++; } });
+    return n ? Math.round(100 * v / n) + '%' : '-';
+  }
+  chipGroup('gearChips', DATA.gears, GEAR_LABEL, S.gears, 'gear', function (k) { return validShare('gearN', k); });
+  chipGroup('hullChips', DATA.hulls, HULL_LABEL, S.hulls, 'hull', function (k) { return validShare('hullN', k); });
+  chipGroup('weaponChips', DATA.weapons, WEAPON_LABEL, S.weapons, 'weapon', function (k) { return validShare('weaponN', k); });
+
+  ORDER.forEach(function (k) {
+    ['xSel', 'ySel'].forEach(function (id) {
+      var o = document.createElement('option');
+      o.value = k;
+      o.textContent = METRICS[k].label + (METRICS[k].unit ? ' (' + METRICS[k].unit + ')' : '');
+      $(id).appendChild(o);
+    });
+  });
+  PRESETS.forEach(function (pr) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'preset';
+    b.textContent = pr.name;
+    b.dataset.id = pr.id;
+    b.addEventListener('click', function () { applyPreset(pr); });
+    $('presets').appendChild(b);
+  });
+  function applyPreset(pr) {
+    S.x = pr.x; S.y = pr.y; S.lx = pr.lx; S.ly = pr.ly; S.color = pr.color; S.frontier = pr.frontier || 'off'; S.preset = pr.id;
+    syncControls();
+    update();
+  }
+  function syncControls() {
+    $('xSel').value = S.x; $('ySel').value = S.y;
+    $('xLog').checked = S.lx; $('yLog').checked = S.ly;
+    $('frontier').value = S.frontier;
+    Array.prototype.forEach.call($('colorBy').children, function (b) { b.setAttribute('aria-pressed', b.dataset.k === S.color ? 'true' : 'false'); });
+    Array.prototype.forEach.call($('presets').children, function (b) { b.setAttribute('aria-pressed', b.dataset.id === S.preset ? 'true' : 'false'); });
+    $('gearChips').dataset.keyed = String(S.color === 'gear');
+    $('hullChips').dataset.keyed = String(S.color === 'hull');
+    $('weaponChips').dataset.keyed = String(S.color === 'weapon');
+    colorCache = {};
+  }
+  $('xSel').addEventListener('change', function () { S.x = this.value; S.lx = METRICS[S.x].log; S.preset = ''; syncControls(); update(); });
+  $('ySel').addEventListener('change', function () { S.y = this.value; S.ly = METRICS[S.y].log; S.preset = ''; syncControls(); update(); });
+  $('xLog').addEventListener('change', function () { S.lx = this.checked; S.preset = ''; syncControls(); update(); });
+  $('yLog').addEventListener('change', function () { S.ly = this.checked; S.preset = ''; syncControls(); update(); });
+  $('frontier').addEventListener('change', function () { S.frontier = this.value; update(); });
+  Array.prototype.forEach.call($('colorBy').children, function (b) {
+    b.addEventListener('click', function () { S.color = b.dataset.k; S.preset = ''; syncControls(); update(); });
+  });
+  $('showInvalid').addEventListener('change', function () { S.showInvalid = this.checked; update(); });
+  $('sizeByMass').addEventListener('change', function () { S.sizeByMass = this.checked; update(); });
+  function massInputs() {
+    var lo = +$('massLo').value, hi = +$('massHi').value;
+    if (lo > hi) { if (this === $('massLo')) { hi = lo; $('massHi').value = hi; } else { lo = hi; $('massLo').value = lo; } }
+    S.massLo = lo; S.massHi = hi;
+    update();
+  }
+  $('massLo').addEventListener('input', massInputs);
+  $('massHi').addEventListener('input', massInputs);
+
+  // ---------- selection ----------
+  function visiblePoints() {
+    var lo = massAt(S.massLo) * 0.9999, hi = massAt(S.massHi) * 1.0001;
+    var mx = METRICS[S.x], my = METRICS[S.y];
+    var out = [], hidden = 0;
+    P.forEach(function (p) {
+      if (!S.gears[p.gearN] || !S.hulls[p.hullN] || !S.weapons[p.weaponN]) return;
+      if (!p.validB && !S.showInvalid) return;
+      if (p.mass < lo || p.mass > hi) return;
+      var vx = mx.get(p), vy = my.get(p);
+      if ((S.lx && !(vx > 0)) || (S.ly && !(vy > 0)) || isNaN(vx) || isNaN(vy)) { hidden++; return; }
+      out.push(p);
+    });
+    out.hidden = hidden;
+    return out;
+  }
+
+  // ---------- drawing ----------
+  var view = null;
+  function niceStep(span) {
+    var raw = span / 6, pow = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / pow;
+    return (m < 1.5 ? 1 : m < 3 ? 2 : m < 7 ? 5 : 10) * pow;
+  }
+  function makeScale(values, log, size, flip) {
+    var lo = Infinity, hi = -Infinity;
+    values.forEach(function (v) { if (v < lo) lo = v; if (v > hi) hi = v; });
+    if (!isFinite(lo)) { lo = 1; hi = 10; }
+    if (log) {
+      var a = Math.log10(lo), b = Math.log10(hi);
+      if (b - a < 0.3) { a -= 0.15; b += 0.15; }
+      a = Math.floor(a * 4 - 0.2) / 4; b = Math.ceil(b * 4 + 0.2) / 4;
+      return { log: true, a: a, b: b, to: function (v) { var t = (Math.log10(v) - a) / (b - a); return flip ? size - t * size : t * size; } };
+    }
+    if (lo > 0 && lo < 0.5 * hi) lo = 0;
+    var pad = (hi - lo) * 0.04 || 1;
+    var a2 = lo === 0 ? 0 : lo - pad, b2 = hi + pad;
+    return { log: false, a: a2, b: b2, to: function (v) { var t = (v - a2) / (b2 - a2); return flip ? size - t * size : t * size; } };
+  }
+  function ticksOf(sc, metricKey, isX) {
+    var out = [];
+    var m = METRICS[metricKey];
+    if (sc.log) {
+      for (var d = Math.ceil(sc.a); d <= Math.floor(sc.b); d++) {
+        var v = Math.pow(10, d);
+        out.push({ v: v, major: true, text: m.tick ? m.tick(v) : tickFmt(v) });
+        if (sc.b - sc.a <= 3.2) [2, 5].forEach(function (k) { if (Math.log10(v * k) <= sc.b) out.push({ v: v * k, major: false, text: '' }); });
+      }
+      if (sc.a < Math.ceil(sc.a)) [2, 5].forEach(function (k) {
+        var v = Math.pow(10, Math.floor(sc.a)) * k;
+        if (Math.log10(v) >= sc.a) out.push({ v: v, major: false, text: '' });
+      });
+    } else {
+      var step = niceStep(sc.b - sc.a);
+      for (var t = Math.ceil(sc.a / step) * step; t <= sc.b + 1e-9; t += step) out.push({ v: t, major: true, text: tickFmt(+t.toPrecision(6)) });
+    }
+    return out;
+  }
+
+  function draw() {
+    var rect = plotBox.getBoundingClientRect();
+    var w = Math.max(200, Math.floor(rect.width)), h = Math.max(200, Math.floor(rect.height));
+    var dpr = Math.min(window.devicePixelRatio || 1, 3);
+    if (cv.width !== w * dpr || cv.height !== h * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = T.surface; ctx.fillRect(0, 0, w, h);
+
+    var pts = visiblePoints();
+    var mx = METRICS[S.x], my = METRICS[S.y];
+    var narrow = w < 520;
+    var m = { l: narrow ? 46 : 62, r: 14, t: 14, b: narrow ? 40 : 46 };
+    var pw = w - m.l - m.r, ph = h - m.t - m.b;
+    var xs = makeScale(pts.map(mx.get), S.lx, pw, false);
+    var ys = makeScale(pts.map(my.get), S.ly, ph, true);
+    view = { m: m, xs: xs, ys: ys, pts: pts, w: w, h: h };
+
+    ctx.save();
+    ctx.translate(m.l, m.t);
+    ctx.font = '11px ' + T.mono;
+    ctx.textBaseline = 'middle';
+    // grid and tick labels
+    var xt = ticksOf(xs, S.x, true), yt = ticksOf(ys, S.y, false);
+    xt.forEach(function (t) {
+      var px = Math.round(xs.to(t.v)) + 0.5;
+      ctx.strokeStyle = t.major ? T.line2 : T.line; ctx.globalAlpha = t.major ? 0.55 : 0.5; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, ph); ctx.stroke();
+      if (t.major && t.text) { ctx.globalAlpha = 1; ctx.fillStyle = T.fg3; ctx.textAlign = 'center'; ctx.fillText(t.text, px, ph + 14); }
+    });
+    yt.forEach(function (t) {
+      var py = Math.round(ys.to(t.v)) + 0.5;
+      ctx.strokeStyle = t.major ? T.line2 : T.line; ctx.globalAlpha = t.major ? 0.55 : 0.5; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(pw, py); ctx.stroke();
+      if (t.major && t.text) { ctx.globalAlpha = 1; ctx.fillStyle = T.fg3; ctx.textAlign = 'right'; ctx.fillText(t.text, -8, py); }
+    });
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = T.line2;
+    ctx.beginPath(); ctx.moveTo(0.5, 0); ctx.lineTo(0.5, ph + 0.5); ctx.lineTo(pw, ph + 0.5); ctx.stroke();
+
+    // reference overlays
+    if (S.x === 'sight' && S.y === 'range' && xs.log && ys.log) {
+      var lo = Math.max(Math.pow(10, xs.a), Math.pow(10, ys.a)), hi = Math.min(Math.pow(10, xs.b), Math.pow(10, ys.b));
+      if (hi > lo) {
+        ctx.strokeStyle = T.fg2; ctx.globalAlpha = 0.8; ctx.setLineDash([6, 5]);
+        ctx.beginPath(); ctx.moveTo(xs.to(lo), ys.to(lo)); ctx.lineTo(xs.to(hi), ys.to(hi)); ctx.stroke(); ctx.setLineDash([]);
+        ctx.globalAlpha = 1; ctx.fillStyle = T.fg2; ctx.textAlign = 'left';
+        ctx.fillText('above: outranges its own eyes, needs a spotter', 8, 10);
+      }
+    }
+    if (S.y === 'press' && ys.log) {
+      var y1 = ys.to(100), y0 = ys.to(50);
+      ctx.fillStyle = '#ffb454'; ctx.globalAlpha = 0.1; ctx.fillRect(0, y1, pw, y0 - y1);
+      ctx.globalAlpha = 1; ctx.fillStyle = '#ffb454'; ctx.textAlign = 'left'; ctx.fillText('soft ground gives way (50-100 kPa)', 8, y1 - 8);
+    }
+
+    // points
+    var sel = S.pinned || S.hover;
+    var rBase = narrow ? 2.6 : 3.1;
+    function rOf(p) { return S.sizeByMass ? 1.6 + 4.4 * Math.max(0, Math.min(1, (Math.log10(p.mass) - lmin) / (lmax - lmin))) : rBase; }
+    var drawOrder = pts.slice().sort(function (a, b) { return (a.validB === b.validB) ? 0 : a.validB ? 1 : -1; });
+    drawOrder.forEach(function (p) {
+      if (p === sel) return;
+      var x = xs.to(mx.get(p)), y = ys.to(my.get(p));
+      if (!p.validB) {
+        ctx.globalAlpha = 0.8; ctx.strokeStyle = T.warn; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(x, y, rOf(p), 0, 6.2832); ctx.stroke();
+        return;
+      }
+      ctx.globalAlpha = 0.66; ctx.fillStyle = cached(p);
+      ctx.beginPath(); ctx.arc(x, y, rOf(p), 0, 6.2832); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    // frontier
+    if (S.frontier !== 'off' && pts.length > 2) {
+      var sx = S.frontier[0] === '+' ? 1 : -1, sy = S.frontier[1] === '+' ? 1 : -1;
+      var arr = pts.filter(function (p) { return p.validB; }).map(function (p) { return { x: mx.get(p), y: my.get(p) }; });
+      arr.sort(function (a, b) { return sx * (b.x - a.x); });
+      var best = -Infinity, line = [];
+      arr.forEach(function (q) { var v = sy * q.y; if (v > best) { best = v; line.push(q); } });
+      line.sort(function (a, b) { return a.x - b.x; });
+      ctx.strokeStyle = T.fg; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      line.forEach(function (q, i) { var x = xs.to(q.x), y = ys.to(q.y); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = T.fg; ctx.textAlign = 'right';
+      ctx.fillText('frontier: no sampled design beats these on both axes', pw - 8, ph - 10);
+    }
+
+    // selection ring
+    if (sel && pts.indexOf(sel) >= 0) {
+      var sx2 = xs.to(mx.get(sel)), sy2 = ys.to(my.get(sel));
+      ctx.lineWidth = 2; ctx.strokeStyle = T.accent;
+      ctx.beginPath(); ctx.arc(sx2, sy2, rOf(sel) + 5, 0, 6.2832); ctx.stroke();
+      ctx.fillStyle = sel.validB ? cached(sel) : T.warn;
+      ctx.beginPath(); ctx.arc(sx2, sy2, rOf(sel) + 1.5, 0, 6.2832); ctx.fill();
+    }
+    ctx.restore();
+
+    // axis titles
+    ctx.font = '600 12px ' + T.body;
+    ctx.fillStyle = T.fg2; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(mx.label + (mx.unit ? ' (' + mx.unit + ')' : '') + (S.lx ? ', log scale' : ''), m.l + pw / 2, h - 8);
+    ctx.save();
+    ctx.translate(13, m.t + ph / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText(my.label + (my.unit ? ' (' + my.unit + ')' : '') + (S.ly ? ', log scale' : ''), 0, 0);
+    ctx.restore();
+
+    var valid = pts.filter(function (p) { return p.validB; }).length;
+    $('status').innerHTML = '<span>' + valid.toLocaleString('en-US') + ' designs shown</span>' +
+      (S.showInvalid ? '<span>' + (pts.length - valid).toLocaleString('en-US') + ' rejected</span>' : '') +
+      (pts.hidden ? '<span>' + pts.hidden.toLocaleString('en-US') + ' hidden (value is zero on a log axis)</span>' : '');
+  }
+
+  // ---------- hit testing ----------
+  function nearest(px, py, maxDist) {
+    if (!view) return null;
+    var mx = METRICS[S.x], my = METRICS[S.y], best = null, bd = maxDist * maxDist;
+    view.pts.forEach(function (p) {
+      var x = view.m.l + view.xs.to(mx.get(p)), y = view.m.t + view.ys.to(my.get(p));
+      var d = (x - px) * (x - px) + (y - py) * (y - py);
+      if (d < bd) { bd = d; best = p; }
+    });
+    return best;
+  }
+  function localXY(ev) {
+    var r = cv.getBoundingClientRect();
+    return { x: ev.clientX - r.left, y: ev.clientY - r.top, w: r.width };
+  }
+  cv.addEventListener('pointermove', function (ev) {
+    if (ev.pointerType === 'touch') return;
+    var q = localXY(ev), p = nearest(q.x, q.y, 12);
+    if (p !== S.hover) { S.hover = p; draw(); renderInspector(); }
+    if (p) {
+      var mx = METRICS[S.x], my = METRICS[S.y];
+      tip.hidden = false;
+      tip.innerHTML = '<b>' + p.name + '</b><br><span>' + mx.label + ' ' + valText(S.x, p) + '<br>' + my.label + ' ' + valText(S.y, p) + '</span>';
+      var tw = tip.offsetWidth, th = tip.offsetHeight;
+      var left = q.x + 14, top = q.y - th - 10;
+      if (left + tw > q.w - 4) left = q.x - tw - 14;
+      if (top < 4) top = q.y + 16;
+      tip.style.left = Math.max(4, left) + 'px'; tip.style.top = top + 'px';
+    } else { tip.hidden = true; }
+  });
+  cv.addEventListener('pointerleave', function () { if (S.hover) { S.hover = null; draw(); renderInspector(); } tip.hidden = true; });
+  var lastPointer = 'mouse';
+  cv.addEventListener('pointerdown', function (ev) { lastPointer = ev.pointerType || 'mouse'; });
+  cv.addEventListener('click', function (ev) {
+    var q = localXY(ev), p = nearest(q.x, q.y, lastPointer === 'touch' ? 22 : 12);
+    S.pinned = (p && p !== S.pinned) ? p : null;
+    if (!p) S.hover = null;
+    draw(); renderInspector();
+  });
+  window.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && S.pinned) { S.pinned = null; draw(); renderInspector(); } });
+
+  function valText(key, p) {
+    var m = METRICS[key], v = m.get(p);
+    return (m.show ? m.show(v) : fmt(v)) + (m.unit && !m.show ? ' ' + m.unit : '');
+  }
+
+  // ---------- extremes ----------
+  function renderExtremes() {
+    var pts = (view ? view.pts : visiblePoints()).filter(function (p) { return p.validB; });
+    var my = METRICS[S.y], mx = METRICS[S.x];
+    var sorted = pts.slice().sort(function (a, b) { return S.extremesDesc ? my.get(b) - my.get(a) : my.get(a) - my.get(b); }).slice(0, 8);
+    var host = $('extremes');
+    host.innerHTML = '';
+    var head = document.createElement('div');
+    head.className = 'head';
+    head.innerHTML = '<p class="label" style="margin:0">' + (S.extremesDesc ? 'Highest' : 'Lowest') + ' ' + my.label.toLowerCase() + ' in view</p>';
+    var flip = document.createElement('button');
+    flip.type = 'button'; flip.className = 'btn'; flip.textContent = S.extremesDesc ? 'Show lowest' : 'Show highest';
+    flip.addEventListener('click', function () { S.extremesDesc = !S.extremesDesc; renderExtremes(); });
+    head.appendChild(flip);
+    host.appendChild(head);
+    if (!sorted.length) { var e = document.createElement('p'); e.className = 'hint'; e.textContent = 'No designs match the filters.'; host.appendChild(e); return; }
+    sorted.forEach(function (p) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'xrow';
+      b.style.setProperty('--dot', cached(p));
+      b.innerHTML = '<i></i><span class="nm"></span><span class="vals"></span>';
+      b.querySelector('.nm').textContent = p.name;
+      b.querySelector('.vals').textContent = valText(S.y, p) + '  \u00b7  ' + fmtMass(p.mass);
+      b.addEventListener('click', function () { S.pinned = p; draw(); renderInspector(); });
+      host.appendChild(b);
+    });
+  }
+
+  // ---------- inspector ----------
+  function stat(label, value, unit) {
+    return '<div><dt>' + label + '</dt><dd>' + value + (unit ? ' <small>' + unit + '</small>' : '') + '</dd></div>';
+  }
+  function renderPinbar() {
+    var bar = $('pinbar'), p = S.pinned;
+    if (!p) { bar.hidden = true; bar.innerHTML = ''; return; }
+    bar.hidden = false;
+    bar.innerHTML = '<b></b><span></span><button type="button" class="btn">Unpin</button>';
+    bar.querySelector('b').textContent = p.name;
+    bar.querySelector('span').textContent = fmtMass(p.mass) + '  \u00b7  ' + fmt(p.speed) + ' km/h  \u00b7  armour ' + fmt(p.armF) + ' mm  \u00b7  fire ' + fmt(p.fire) + ' kW';
+    bar.querySelector('button').addEventListener('click', function () { S.pinned = null; draw(); renderInspector(); });
+  }
+  function renderInspector() {
+    renderPinbar();
+    var host = $('inspector'), p = S.pinned || S.hover;
+    if (!p) {
+      host.innerHTML = '<p class="label">Selected design</p><p class="empty">Hover a dot to preview a design, click to pin it. Press Escape to unpin.</p>' +
+        '<p class="hint">Each dot is one vehicle: a hull, running gear sized to carry it, up to a few turrets, a mast or two and an engine sized to power it all.</p>';
+      return;
+    }
+    var cmd = 'w5k roll content --out out --seed ' + p.seed + ' --count 1 --hull ' + p.hullN + ' --gear ' + p.gearN;
+    host.innerHTML =
+      '<p class="label">' + (S.pinned ? 'Pinned design' : 'Preview') + '</p>' +
+      '<h2></h2>' +
+      '<div><span class="badge ' + (p.validB ? 'ok' : 'bad') + '">' + (p.validB ? 'valid' : 'rejected') + '</span></div>' +
+      (p.validB ? '' : '<p class="problem"></p>') +
+      '<dl class="stats">' +
+        stat('Mass', fmtMass(p.mass)) +
+        stat('Top speed', fmt(p.speed), 'km/h') +
+        stat('Engine', fmt(p.power), 'kW') +
+        stat('Power per tonne', fmt(p.pw), 'kW/t') +
+        stat('Front armour', fmt(p.armF), 'mm') +
+        stat('Side armour', fmt(p.armS), 'mm') +
+        stat('Firepower', fmt(p.fire), 'kW') +
+        stat('Alpha strike', fmt(p.alpha), 'MJ') +
+        stat('Penetration', fmt(p.pen), 'mm') +
+        stat('Weapon range', fmt(p.range), 'km') +
+        stat('Sight range', fmt(p.sight), 'km') +
+        stat('Ground pressure', p.press > 0 ? fmt(p.press) : 'none', p.press > 0 ? 'kPa' : '') +
+        stat('Size', p.len.toFixed(1) + ' \u00d7 ' + p.wid.toFixed(1) + ' \u00d7 ' + p.hei.toFixed(1), 'm') +
+        stat('Lift power', p.lift > 0 ? fmt(p.lift) : 'none', p.lift > 0 ? 'kW' : '') +
+        stat('Armour kept', Math.round(p.kept * 100), '%') +
+      '</dl>' +
+      (p.validB ?
+        '<div class="group"><p class="label">Reproduce</p><div class="cmd"><code></code><button type="button" class="btn" id="copyBtn">Copy</button></div>' +
+        '<p class="hint">Renders this exact design with the same code version. Add <code>--zoom</code> through <code>w5k view</code> for close-ups.</p></div>' : '');
+    host.querySelector('h2').textContent = p.name;
+    var pr = host.querySelector('.problem'); if (pr) pr.textContent = p.why || 'The auto-fitter could not make this design work.';
+    var code = host.querySelector('code'); if (code) code.textContent = cmd;
+    var cb = $('copyBtn');
+    if (cb) cb.addEventListener('click', function () {
+      function fallback() { var r = document.createRange(); r.selectNodeContents(code); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); cb.textContent = 'Selected'; }
+      try { navigator.clipboard.writeText(cmd).then(function () { cb.textContent = 'Copied'; }, fallback); } catch (e) { fallback(); }
+      setTimeout(function () { cb.textContent = 'Copy'; }, 1600);
+    });
+  }
+
+  // ---------- top-level update ----------
+  function updateMassOut() {
+    $('massOut').textContent = fmtMass(massAt(S.massLo)) + '  to  ' + fmtMass(massAt(S.massHi));
+  }
+  function update() {
+    updateMassOut();
+    if (S.pinned && !visiblePoints().includes(S.pinned)) S.pinned = null;
+    draw();
+    renderExtremes();
+    renderInspector();
+  }
+
+  // facts
+  (function () {
+    var total = P.length, ok = P.filter(function (p) { return p.validB; }).length;
+    $('facts').innerHTML = '<span><b>' + total.toLocaleString('en-US') + '</b> designs sampled</span><span><b>' + ok.toLocaleString('en-US') + '</b> valid (' + Math.round(100 * ok / total) + '%)</span><span><b>' + DATA.hulls.length + '</b> hulls \u00d7 <b>' + DATA.gears.length + '</b> gears</span>';
+  })();
+
+  syncControls();
+  update();
+  if (window.ResizeObserver) new ResizeObserver(function () { draw(); }).observe(plotBox);
+  else window.addEventListener('resize', draw);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { draw(); });
+})();
+</script>

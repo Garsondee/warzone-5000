@@ -2,7 +2,8 @@
 //!
 //! * **Hover power** is set by the disc. Momentum theory gives the ideal power to hold a weight W on a disc of
 //!   area A as P = W^1.5 / sqrt(2 rho A), divided by a figure of merit of about 0.7 for real blades. Doubling the
-//!   disc radius quarters the disc loading (W/A) and cuts hover power by a factor of 8 (the sheet sums the discs).
+//!   disc radius quadruples the area (the disc loading W/A falls to a quarter) and halves the hover power; the sheet
+//!   sums the discs of every rotor on the vehicle.
 //! * **Rated lift** is what the blades can bite: thrust T = C_T rho A V_tip^2 where the blades stall beyond
 //!   C_T = 0.12 sigma (sigma, the solidity, is the blade area over the disc area). More blades, bigger discs and
 //!   faster tips lift more.
@@ -23,6 +24,7 @@ const RHO: f64 = 1.225;
 /// Chord of a blade as a fraction of the rotor radius.
 const CHORD: f64 = 0.08;
 
+#[allow(clippy::too_many_arguments)]
 fn param(id: &'static str, name: &'static str, unit: &'static str, min: f64, max: f64, default: f64, scale: Scale, role: Role, help: &'static str) -> Param {
     Param { id, name, unit, min, max, default, scale, role, help }
 }
@@ -71,9 +73,10 @@ impl Family for Rotor {
     }
     fn params(&self) -> Vec<Param> {
         vec![
-            param("radius_m", "Rotor radius", "m", 0.25, 14.0, 1.4, Scale::Log, Role::Budgeted, "Bigger discs hover on far less power (W^1.5 over the disc), but weigh more and need room."),
+            param("radius_m", "Rotor radius", "m", 0.25, 14.0, 1.4, Scale::Log, Role::Budgeted, "Bigger discs hover on less power (it falls with the square root of the disc area), but weigh more and need room."),
             param("blades", "Blades", "", 2.0, 6.0, 3.0, Scale::Linear, Role::Budgeted, "More blades can bite more air (rated lift), and weigh more."),
             param("tip_ms", "Tip speed", "m/s", 120.0, 260.0, 200.0, Scale::Linear, Role::Free, "Faster tips lift more (thrust grows with the square), at the cost of noise."),
+            param("altitude_m", "Altitude", "m", 1.5, 60.0, 6.0, Scale::Log, Role::Free, "Cruise height above the ground: the horizon (what it can see, and be seen from) grows with its square root."),
         ]
     }
     fn fits(&self) -> &'static [SocketKind] {
@@ -112,6 +115,8 @@ impl Family for Rotor {
             shapes.push(style::cyl(hub_r, 0.12 * hub_r + 0.05, Axis::Y, 12, 1.0, at, "machinery", Slot::Dark, None, 0.0));
             shapes.push(style::cyl(0.45 * hub_r, 0.12 * hub_r + 0.08, Axis::Y, 8, 1.0, at + p(0.0, 0.02, 0.0), "fittings", Slot::Glow, None, 0.0));
         };
+        let alt = v["altitude_m"];
+        let (hub_x, hub_y);
         if is_free(v) {
             // A mast carrying one disc, or two counter-rotating discs on a turret ring (no tail rotor needed).
             let coax = ring;
@@ -126,6 +131,8 @@ impl Family for Rotor {
                 shapes.push(Node::Group { at: at.arr(), rot: [0.0; 3], scale: 1.0, children: vec![blades(if k == 0 { 0.0 } else { 180.0 / nb as f64 }, if k == 0 { Slot::Primary } else { Slot::Trim })] });
                 tip_ring(at, &mut shapes);
             }
+            hub_x = 0.0;
+            hub_y = mh - gap;
         } else {
             // A pylon out and up from the hull side, with the rotor above the deck.
             let hy = top + 0.3 + 0.05 * r;
@@ -137,6 +144,14 @@ impl Family for Rotor {
             hub_disc(at, &mut shapes);
             shapes.push(Node::Group { at: at.arr(), rot: [0.0; 3], scale: 1.0, children: vec![blades(0.0, Slot::Primary)] });
             tip_ring(at, &mut shapes);
+            hub_x = arm;
+            hub_y = hy - 0.1;
+        }
+        // Altitude made visible: a plumb line from the hub down to the ground and the ring of downwash where it lands.
+        if hub_y + alt > 1.0 {
+            let ground = -alt;
+            shapes.push(style::cyl(0.012 + 0.006 * r, hub_y - ground, Axis::Y, 6, 1.0, p(hub_x, ground + 0.5 * (hub_y - ground), 0.0), "scenery", Slot::Glow, None, 0.0));
+            shapes.push(style::flat_ring(0.8 * r + 0.2, 0.03 + 0.02 * r, 0.02, (20.0 + 6.0 * r).min(56.0) as u32, p(hub_x, ground + 0.012, 0.0), "scenery", Slot::Glow));
         }
         let lift = rated_lift_kg(v);
         PartDef {
@@ -164,6 +179,7 @@ impl Family for Rotor {
                 // A coaxial pair works one air column: the effective disc is a little smaller than a single disc.
                 rotor_radius_m: if ring { 0.86 * r } else { r },
                 max_kmh: Some(320.0),
+                ride_height_m: Some(alt),
                 ..Default::default()
             },
         }

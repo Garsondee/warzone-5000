@@ -1,0 +1,55 @@
+#![enable(implicit_some)]
+// Fitted by `w5k fit` from spider_artillery.ron: running gear and engine sized to the vehicle.
+(
+    id: "spider_artillery",
+    name: "Spider Artillery",
+    hull: "hull_strider",
+    hull_params: {
+        "dome": 0.3,
+        "front_mm": 40.0,
+        "head": 0.4,
+        "height_m": 1.6,
+        "radius_m": 3.2,
+        "side_mm": 20.0,
+        "stations": 4.0,
+    },
+    palette: Some("crimson"),
+    attach: [(
+        socket: "station_*",
+        family: Some("legs"),
+        params: {
+            "bend": 0.6,
+            "foot_m": 0.455,
+            "material": 0.0,
+            "splay": 1.0,
+            "stance_m": 3.5,
+            "thickness": 0.03,
+        },
+    ), (
+        socket: "engine",
+        family: Some("engine"),
+        params: {
+            "power_kw": 596.2,
+            "tech": 1.0,
+        },
+    ), (
+        socket: "turret_1",
+        family: Some("turret_missile"),
+        params: {
+            "armour_mm": 8.0,
+            "elevation": 40.0,
+            "seeker": 0.8,
+            "tube_mm": 160.0,
+            "tubes": 16.0,
+            "warhead": 0.22,
+        },
+    ), (
+        socket: "mast_1",
+        family: Some("sensor"),
+        params: {
+            "aperture_m": 0.4,
+            "height_m": 1.5,
+            "radar": 0.2,
+        },
+    )],
+)

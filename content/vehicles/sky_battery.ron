@@ -1,0 +1,84 @@
+#![enable(implicit_some)]
+// Fitted by `w5k fit` from sky_battery.ron: running gear and engine sized to the vehicle.
+(
+    id: "sky_battery",
+    name: "Sky Battery",
+    hull: "hull_dreadnought",
+    hull_params: {
+        "front_mm": 90.0,
+        "height_m": 2.6,
+        "length_m": 40.0,
+        "prow": 1.0,
+        "side_mm": 40.0,
+        "stations": 4.0,
+        "turrets": 4.0,
+        "width_m": 8.0,
+    },
+    palette: Some("ultraviolet"),
+    attach: [(
+        socket: "station_*",
+        family: Some("antigrav"),
+        params: {
+            "kw_per_t": 22.0,
+            "lift_t": 60.06,
+            "ride_m": 14.0,
+        },
+    ), (
+        socket: "engine",
+        family: Some("engine"),
+        params: {
+            "power_kw": 20760.0,
+            "tech": 2.0,
+        },
+    ), (
+        socket: "turret_1",
+        family: Some("turret_gun"),
+        params: {
+            "ammo": 30.0,
+            "armour_mm": 80.0,
+            "barrel_cal": 50.0,
+            "calibre_mm": 203.0,
+            "loader": 1.0,
+            "slope": 0.5,
+        },
+    ), (
+        socket: "turret_2",
+        family: Some("turret_beam"),
+        params: {
+            "aperture_m": 0.8,
+            "armour_mm": 40.0,
+            "power_mw": 20.0,
+        },
+    ), (
+        socket: "turret_3",
+        family: Some("turret_missile"),
+        params: {
+            "armour_mm": 25.0,
+            "elevation": 30.0,
+            "seeker": 0.9,
+            "tube_mm": 220.0,
+            "tubes": 12.0,
+            "warhead": 0.3,
+        },
+    ), (
+        socket: "turret_4",
+        family: Some("turret_gun"),
+        params: {
+            "ammo": 30.0,
+            "armour_mm": 80.0,
+            "barrel_cal": 50.0,
+            "calibre_mm": 203.0,
+            "loader": 1.0,
+            "slope": 0.5,
+        },
+        spin: 180.0,
+    ), (
+        socket: "mast_1",
+        family: Some("sensor"),
+        params: {
+            "aperture_m": 1.5,
+            "height_m": 8.0,
+            "radar": 0.8,
+        },
+    )],
+)

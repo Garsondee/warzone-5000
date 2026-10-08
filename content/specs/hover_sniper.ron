@@ -1,0 +1,14 @@
+#![enable(implicit_some)]
+// A 12 m air-cushion skiff with a very long 90 mm gun and a tall radar mast: it floats over swamp and water, sees far
+// and hits at range. Thin plating keeps it light enough to float.
+(
+    id: "hover_sniper", name: "Hover Sniper", hull: "hull_skiff",
+    hull_params: { "length_m": 12.0, "width_m": 5.0, "height_m": 1.1, "front_mm": 30, "side_mm": 15, "sweep": 0.7, "cabin": 0.5 },
+    palette: "vanguard",
+    attach: [
+        (socket: "belly", family: "hover", params: { "skirt_m": 0.8, "fans": 3 }),
+        (socket: "engine", family: "engine", params: { "power_kw": 1500, "tech": 1 }),
+        (socket: "turret", family: "turret_gun", params: { "calibre_mm": 90, "barrel_cal": 70, "armour_mm": 20, "slope": 0.5, "loader": 0.0, "ammo": 30 }),
+        (socket: "mast_1", family: "sensor", params: { "height_m": 4.0, "aperture_m": 0.6, "radar": 0.3 }),
+    ],
+)

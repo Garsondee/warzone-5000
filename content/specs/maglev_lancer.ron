@@ -1,0 +1,14 @@
+#![enable(implicit_some)]
+// A wedge tank on four anti-gravity pods: it skims two metres above the ground (trenches, rocks and mud pass under it)
+// and fires a beam from its turret.
+(
+    id: "maglev_lancer", name: "Maglev Lancer", hull: "hull_lancer",
+    hull_params: { "length_m": 8.0, "width_m": 2.8, "height_m": 1.1, "front_mm": 60, "side_mm": 25, "stations": 2 },
+    palette: "vanguard",
+    attach: [
+        (socket: "station_*", family: "antigrav", params: { "ride_m": 2.0, "kw_per_t": 25.0 }),
+        (socket: "engine", family: "engine", params: { "power_kw": 3000, "tech": 2 }),
+        (socket: "turret", family: "turret_beam", params: { "power_mw": 8.0, "aperture_m": 0.5, "armour_mm": 30 }),
+        (socket: "mast_1", family: "sensor", params: { "height_m": 1.0, "aperture_m": 0.4, "radar": 0.5 }),
+    ],
+)

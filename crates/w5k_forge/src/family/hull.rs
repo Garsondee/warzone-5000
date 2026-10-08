@@ -16,6 +16,7 @@ use crate::geom::V3;
 use crate::schema::{MaterialLibrary, Category, Function, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot};
 use crate::Built;
 
+#[allow(clippy::too_many_arguments)]
 fn param(id: &'static str, name: &'static str, unit: &'static str, min: f64, max: f64, default: f64, role: Role, help: &'static str) -> Param {
     Param { id, name, unit, min, max, default, scale: Scale::Linear, role, help }
 }
@@ -190,6 +191,7 @@ impl Family for Lancer {
             ),
             socket("mast_1", SocketKind::Mast, p(-0.32 * w, yt, l / 2.0 - 0.2 * l), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.5 * w)]),
             socket("mast_2", SocketKind::Mast, p(0.32 * w, yt, l / 2.0 - 0.2 * l), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.5 * w)]),
+            socket("hub", SocketKind::Mast, p(0.0, yt, -l / 2.0 + lg + 0.84 * (l - lg - 0.12 * h)), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.6 * w)]),
         ];
         sockets.extend(mounts::running_gear(&ch));
         hull_part(format!("hull_lancer_{l:.1}m"), format!("Lancer hull {l:.1} m"), size_class(l), shapes, sockets)
@@ -300,6 +302,7 @@ impl Family for Bastion {
         let mast_z = roof_z1 - 0.1 * l;
         sockets.push(socket("mast_1", SocketKind::Mast, p(-0.3 * (wu - 0.36 * h), yt, mast_z), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.5 * w)]));
         sockets.push(socket("mast_2", SocketKind::Mast, p(0.3 * (wu - 0.36 * h), yt, mast_z), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.5 * w)]));
+        sockets.push(socket("hub", SocketKind::Mast, p(0.0, yt, roof_z0 + 0.9 * (roof_z1 - roof_z0)), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.6 * w)]));
         let ch = Chassis { z0: -l / 2.0 + 0.1 * l, z1: l / 2.0 - 0.03 * l, y_under: yb, y_side: s_y, track_top, half_w: w / 2.0, width: w, stations, gear: Some((0.0, 0.92 * l)) };
         sockets.extend(mounts::running_gear(&ch));
         hull_part(format!("hull_bastion_{l:.1}m"), format!("Bastion hull {l:.1} m"), size_class(l), shapes, sockets)
@@ -419,6 +422,7 @@ impl Family for Dreadnought {
         sockets.push(socket("engine", SocketKind::Internal, p(0.0, yb + ts + 0.01, 0.3 * l), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.bay_length", 0.25 * l), ("ctx.bay_width", 0.8 * w), ("ctx.bay_height", 0.9 * h)]));
         sockets.push(socket("mast_1", SocketKind::Mast, mast_base, p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.4 * tw)]));
         sockets.push(socket("mast_2", SocketKind::Mast, p(0.0, yt, l / 2.0 - 0.1 * l), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.4 * w)]));
+        sockets.push(socket("hub", SocketKind::Mast, p(0.0, yt, l / 2.0 - 0.24 * l), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.5 * w)]));
         hull_part(format!("hull_dreadnought_{l:.0}m"), format!("Dreadnought hull {l:.0} m"), size_class(l), shapes, sockets)
     }
 
@@ -548,6 +552,7 @@ impl Family for Strider {
         sockets.push(socket("turret_1", SocketKind::TurretRing, p(0.0, y_top, 0.04 * r), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.ring_max", 1.8 * r_top)]));
         sockets.push(socket("mast_1", SocketKind::Mast, p(-0.3 * r, roof_y(0.5 * r), 0.42 * r), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.4 * r)]));
         sockets.push(socket("mast_2", SocketKind::Mast, p(0.3 * r, roof_y(0.5 * r), 0.42 * r), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.4 * r)]));
+        sockets.push(socket("hub", SocketKind::Mast, p(0.0, y_top, 0.45 * r_top + 0.1 * r), p(0.0, 1.0, 0.0), p(0.0, 0.0, -1.0), &[("ctx.mast_max", 0.8 * r)]));
         sockets.push(socket(
             "engine",
             SocketKind::Internal,

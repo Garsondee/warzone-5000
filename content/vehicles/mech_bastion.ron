@@ -1,0 +1,68 @@
+#![enable(implicit_some)]
+// Fitted by `w5k fit` from mech_bastion.ron: running gear and engine sized to the vehicle.
+(
+    id: "mech_bastion",
+    name: "Mech Bastion",
+    hull: "hull_bastion",
+    hull_params: {
+        "front_mm": 80.0,
+        "height_m": 2.0,
+        "length_m": 9.0,
+        "side_mm": 40.0,
+        "sponson": 0.6,
+        "stations": 3.0,
+        "turrets": 2.0,
+        "width_m": 3.4,
+    },
+    palette: Some("verdant"),
+    attach: [(
+        socket: "station_*",
+        family: Some("legs"),
+        params: {
+            "bend": 0.35,
+            "foot_m": 0.9146,
+            "material": 0.0,
+            "splay": 0.75,
+            "stance_m": 3.2,
+            "thickness": 0.07155,
+        },
+    ), (
+        socket: "engine",
+        family: Some("engine"),
+        params: {
+            "power_kw": 2839.0,
+            "tech": 1.0,
+        },
+    ), (
+        socket: "turret_1",
+        family: Some("turret_gun"),
+        params: {
+            "ammo": 36.0,
+            "armour_mm": 70.0,
+            "barrel_cal": 50.0,
+            "calibre_mm": 105.0,
+            "loader": 1.0,
+            "slope": 0.5,
+        },
+    ), (
+        socket: "turret_2",
+        family: Some("turret_missile"),
+        params: {
+            "armour_mm": 15.0,
+            "elevation": 35.0,
+            "seeker": 0.8,
+            "tube_mm": 130.0,
+            "tubes": 8.0,
+            "warhead": 0.3,
+        },
+        spin: 180.0,
+    ), (
+        socket: "mast_1",
+        family: Some("sensor"),
+        params: {
+            "aperture_m": 0.4,
+            "height_m": 1.5,
+            "radar": 0.4,
+        },
+    )],
+)

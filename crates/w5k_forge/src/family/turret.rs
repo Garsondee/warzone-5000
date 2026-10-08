@@ -11,7 +11,7 @@
 //! ammunition and the loader. Armour thickness and slope shape the shell; more slope makes a squatter,
 //! steeper turret with less room, so it must grow. Mass, armour and inertia are then measured as for any part.
 
-use super::{stat, style, Family, Param, Role, Scale, Stat, Values};
+use super::{stat, style, Family, Host, Param, Role, Scale, Stat, Values};
 use crate::convex::Convex;
 use crate::geom::{v3, Plane, V3};
 use crate::schema::{MaterialLibrary, Axis, Category, Function, Node, PartDef, SizeClass, SocketDef, SocketKind, Slot, WeaponFn};
@@ -331,6 +331,10 @@ impl Family for TankTurret {
 
     fn fits(&self) -> &'static [SocketKind] {
         &[SocketKind::TurretRing]
+    }
+
+    fn host(&self) -> Option<Host> {
+        Some(Host { hull: "hull_lancer", hull_params: &[("length_m", 7.0), ("width_m", 3.0), ("height_m", 1.1)], socket: "turret", kw_per_t: 18.0 })
     }
 
     fn params(&self) -> Vec<Param> {

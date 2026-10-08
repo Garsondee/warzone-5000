@@ -1,0 +1,44 @@
+#![enable(implicit_some)]
+// Fitted by `w5k fit` from swarm_hover.ron: running gear and engine sized to the vehicle.
+(
+    id: "swarm_hover",
+    name: "Swarm Hover",
+    hull: "hull_skiff",
+    hull_params: {
+        "cabin": 0.1,
+        "front_mm": 8.0,
+        "height_m": 0.6,
+        "length_m": 3.5,
+        "side_mm": 5.0,
+        "sweep": 0.6,
+        "width_m": 1.7,
+    },
+    palette: Some("verdant"),
+    attach: [(
+        socket: "belly",
+        family: Some("hover"),
+        params: {
+            "cushion_kpa": 2.756,
+            "fans": 1.0,
+            "skirt_m": 0.3,
+        },
+    ), (
+        socket: "engine",
+        family: Some("engine"),
+        params: {
+            "power_kw": 59.41,
+            "tech": 1.0,
+        },
+    ), (
+        socket: "turret",
+        family: Some("turret_gun"),
+        params: {
+            "ammo": 200.0,
+            "armour_mm": 5.0,
+            "barrel_cal": 40.0,
+            "calibre_mm": 20.0,
+            "loader": 1.0,
+            "slope": 0.4,
+        },
+    )],
+)

@@ -22,6 +22,7 @@ const MELT_J_M3: f64 = 1.0e10;
 const CAP_J_KG: f64 = 25_000.0;
 const CAP_DENSITY: f64 = 1500.0;
 
+#[allow(clippy::too_many_arguments)]
 fn param(id: &'static str, name: &'static str, unit: &'static str, min: f64, max: f64, default: f64, scale: Scale, role: Role, help: &'static str) -> Param {
     Param { id, name, unit, min, max, default, scale, role, help }
 }
