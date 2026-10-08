@@ -133,6 +133,17 @@ In the turret family, **profile** is implemented: low turrets measure a smaller 
 Sweeps are `w5k sweeps`: each family on its host hull, the engine sized to the whole vehicle, red text where the
 physics objects.
 
+## Footprints and moving parts (M1c)
+Two things every running-gear family states, for the time trial ([08](08-time-trial.md)):
+* **Its footprint**: `contact_m2` (area of one unit), `contact_w_m` (width, the smaller dimension: it sets the soil's stiffness under it)
+  and `contact_len_m` (length along the direction of travel: how far it shears the soil). Tracks state `0.8 x` their length, wheels a
+  patch `0.35 x` the diameter, legs half a round pad. The soil needs it (a ground vehicle without one cannot run a course with soft
+  ground); the sheet's ground pressure is the weight over the sum of the areas.
+* **What moves**: `Node::Joint { name, pivot, axis, motion, children }` around the shapes that move, with the pivot and axis in the part's
+  own frame. It moves nothing in the part; it labels its children. Wheels and road wheels roll (`Roll { radius }`; a bar across the hub
+  makes the turning visible), rotors and fans spin (`Spin { rps }`), legs have a hip (`Hip { foot, stride }`) with a knee (`Knee { foot,
+  lift }`) nested inside it. Viewers animate them from the replay: nothing about them reaches the simulation.
+
 ## Mounts: why any gear fits any hull
 Hulls publish a **standard vocabulary of sockets**, and families declare which kinds they fit:
 

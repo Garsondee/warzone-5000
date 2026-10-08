@@ -55,7 +55,7 @@ machines).
 | `crates/w5k_math` | `Fx` (Q32.32 fixed point), `FxVec3`, deterministic sqrt/trig, PCG32 RNG, FNV-1a state hasher | M0 |
 | `crates/w5k_forge` | Part schema (RON), convex-primitive mesher, per-vertex attributes, voxeliser, physical stats, armour tables, sockets, vehicle assembly, software preview renderer, GLB export | M1 |
 | `crates/w5k_tools` | Command-line tools: render part previews and stats cards; later replays, seed sweeps, balance runs | M1 |
-| `crates/w5k_sim` | Deterministic simulation | M3+ |
+| `crates/w5k_sim` | Deterministic simulation: courses and soils, the mover (slope, power, grip, drag, soft ground), replays and state hashes (time trials: [08](08-time-trial.md)) | M1c done; M3+ for battles |
 | `crates/w5k_godot` | GDExtension bridge | M2 |
 | `game/` | Godot project | M2 |
 | `content/` | Parts, materials, vehicle designs (later technology) as RON text | M1 |

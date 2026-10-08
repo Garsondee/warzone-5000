@@ -1,0 +1,45 @@
+# Tests on Linux and Windows, in the debug profile (integer overflow panics) and in release. The golden replays in
+# crates/w5k_sim/tests/golden.rs must give the same hashes everywhere: that is the determinism gate (docs/design/02-determinism-rules.md).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tests (debug)
+        run: cargo test --workspace
+      - name: Tests (release)
+        run: cargo test --workspace --release
+      - name: Check the content
+        run: cargo run --release -p w5k_tools --bin w5k -- check content
+      - name: Run the time trial and build the viewer
+        run: |
+          cargo run --release -p w5k_tools --bin w5k -- trial content --out out/trial
+          python tools/trial/build.py out/trial out/trial/page.html
+      - name: Keep the trial results
+        uses: actions/upload-artifact@v4
+        with:
+          name: time-trial-${{ matrix.os }}
+          path: |
+            out/trial/page.html
+            out/trial/results.png
+            out/trial/traces.png
+            out/trial/course.png
+            out/trial/results.md

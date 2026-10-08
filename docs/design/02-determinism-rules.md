@@ -36,3 +36,10 @@ about plus or minus 2.1 billion with a resolution of about 0.23 billionths, far 
 ## How to check
 - `cargo test -p w5k_math` includes the golden hash test.
 - From M3, every simulation scenario test records its final hash; CI compares builds on different platforms.
+- The time trial ([08](08-time-trial.md)) is the first scenario to do so: `crates/w5k_sim/tests/golden.rs` replays the baked spec of every
+  design of the army and compares its final hash with `fixtures/roster.json`, in debug (integer overflow panics there, so nothing wraps) and
+  in release, with 1, 2, 4 and 8 threads, alone and in a batch; `.github/workflows/ci.yml` runs it on Linux and Windows. It follows the
+  rules above this way: floats are converted exactly once, when a spec or a course is *loaded*; the units are tonnes, kN, kW, m and s so
+  nothing nears the range of Q32.32; no `pow`, `exp` or `ln` (soils use the exponent n = 1, the governor is five squarings, the shear law
+  a hyperbola); integer sub-steps; every run independent of every other. **Updating a golden hash is a deliberate act** (regenerate with
+  `w5k trial content --out DIR --golden crates/w5k_sim/tests/fixtures/roster.json` and say why in the commit), never the fix for a failing test.

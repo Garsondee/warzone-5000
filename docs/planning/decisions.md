@@ -2,6 +2,31 @@
 
 Short records of decisions that are expensive to reverse. Newest first. Each entry: what, why, alternatives, consequences.
 
+## D11 (2026-10-08): Designs are proven in time trials; every outcome is explainable; animation comes from the replay
+- **What:** before combat, a design is tested by driving **one vehicle over one course** (`content/courses/*.ron`, soils in
+  `content/terrain.ron`) in the deterministic simulation (`w5k_sim`: Q32.32, tonnes / kN / kW / m / s, 20 Hz with three sub-steps).
+  The forge bakes each design into a `MoverSpec` from the same running-gear summary the vehicle sheet uses. A run is recorded as a
+  **replay** (20 bytes per tick plus a state hash every second) that any viewer plays: the browser page and MP4 now, Godot later.
+  **Failing to finish is an expected result**: bogged, stalled, timed out or did not start, each with the numbers and the lever. The
+  moving parts of a vehicle are **joints** in the part definitions, and wheels, rotors and legs are animated by viewers from the
+  replay (distance rolled, clock, gait phase from distance over stride); the simulation does not know about them.
+  Soft ground uses n = 1 Bekker sinkage, Mohr-Coulomb thrust through the hyperbola `x / (x + 2)`, compaction and a cubic hull ramp, and
+  is *tuned for a good course*, not measured.
+- **Why:** the owner's brief: physics, terrain and design choices must come together into an auto-battler worth watching, and a design
+  that cannot get across a valley is information. An explainable outcome teaches the designer which lever to pull. A replay as the
+  interface keeps the simulation independent of any engine, makes desyncs checkable (hash chain) and lets the same record drive a
+  web page today and Godot tomorrow. Deriving animation from the replay keeps floats out of the simulation and costs nothing in
+  determinism.
+- **Alternatives:** a general rigid-body engine (not deterministic across platforms, and the interesting failures are not rigid-body
+  failures); an engine-only prototype in Godot first (cannot run in cloud sessions; would delay the physics); an exponent soil model
+  with `powf` (libm differs across platforms: if wanted later, committed integer tables with a re-bake test); a hard speed cap in place
+  of the governor (makes the engine irrelevant above the rating, as in Warzone 2100); animating from simulated joint state (puts
+  presentation in the lockstep path).
+- **Consequences:** the golden fixture `crates/w5k_sim/tests/fixtures/roster.json` pins every design's hash, so any change to the
+  physics or the content must regenerate it on purpose (`w5k trial content --out DIR --golden <file>`); CI runs the gate on Linux and
+  Windows; a new running-gear family must state its footprint (`contact_m2`, `contact_w_m`, `contact_len_m`) and tag what moves;
+  the quick path's mass is 5-20 % off for giant walkers, so trial results from it are approximate (the full build is exact).
+
 ## D10 (2026-10-08, proposed): Trade-offs come from price and physics gates, not from mass alone
 - **What:** the sampled possibility space ([../design/07-possibility-space.md](../design/07-possibility-space.md)) shows that at
   equal mass firepower, armour and speed are nearly independent (rank correlations -0.17, +0.01, +0.05); speed is almost free

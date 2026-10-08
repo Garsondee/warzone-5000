@@ -300,6 +300,7 @@ version = "0.1.0"
 name = "w5k_sim"
 version = "0.1.0"
 dependencies = [
+ "ron",
  "serde",
  "serde_json",
  "w5k_math",

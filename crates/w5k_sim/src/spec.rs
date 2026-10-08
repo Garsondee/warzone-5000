@@ -48,8 +48,10 @@ fn default_launch() -> f64 {
     0.2
 }
 
-/// One vehicle, as the simulation sees it.
+/// One vehicle, as the simulation sees it. Unknown fields are refused, so a spec baked by a newer forge fails loudly instead of
+/// quietly dropping something the physics needs.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MoverSpec {
     pub id: String,
     pub class: GearClass,

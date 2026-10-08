@@ -168,7 +168,34 @@ fn course_png(course: &Course, path: &Path) {
     }
 }
 
-pub fn run(forge: &Forge, course_path: &Path, terrain_path: &Path, only: Option<&[String]>, limit_s: Option<f64>, mode: &str, out: &Path) -> bool {
+/// Write the golden fixture: every vehicle's baked spec with the final hash and outcome of its run, which `crates/w5k_sim/tests/golden.rs`
+/// replays. Regenerate it only when the simulation or the content *meant* to change (docs/design/02-determinism-rules.md).
+fn write_golden(path: &Path, entries: &[Entry]) -> bool {
+    let mut roster: Vec<&Entry> = entries.iter().collect();
+    roster.sort_by(|a, b| a.id.cmp(&b.id));
+    let v = json!({
+        "about": "Golden replays of the time trial: the baked spec of every design and the final state hash of its run on content/courses/hill_valley.ron with content/terrain.ron. Regenerate with `w5k trial content --out DIR --golden <this file>` when the simulation or the content meant to change.",
+        "roster": roster.iter().map(|e| json!({
+            "id": e.id,
+            "hash": format!("{:016x}", e.run.final_hash),
+            "outcome": outcome_json(&e.run.outcome),
+            "ticks": e.run.frames.len(),
+            "spec": e.spec,
+        })).collect::<Vec<_>>(),
+    });
+    match std::fs::write(path, serde_json::to_string_pretty(&v).expect("json") + "\n") {
+        Ok(()) => {
+            println!("wrote golden fixture {} ({} designs)", path.display(), roster.len());
+            true
+        }
+        Err(e) => {
+            eprintln!("error: {}: {e}", path.display());
+            false
+        }
+    }
+}
+
+pub fn run(forge: &Forge, course_path: &Path, terrain_path: &Path, only: Option<&[String]>, limit_s: Option<f64>, mode: &str, golden: Option<&Path>, out: &Path) -> bool {
     let t0 = Instant::now();
     let text = match std::fs::read_to_string(course_path) {
         Ok(t) => t,
@@ -301,7 +328,10 @@ pub fn run(forge: &Forge, course_path: &Path, terrain_path: &Path, only: Option<
             }
         }
     };
-    let ok = write("scene.json", &scene) & write("replay.json", &replay) & write("results.json", &results);
+    let mut ok = write("scene.json", &scene) & write("replay.json", &replay) & write("results.json", &results);
+    if let Some(g) = golden {
+        ok &= write_golden(g, &entries);
+    }
 
     // A readable table, fastest first, then the ones that did not finish.
     let mut order: Vec<&Entry> = entries.iter().collect();

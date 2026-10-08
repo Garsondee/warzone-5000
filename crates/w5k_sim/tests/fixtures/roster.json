@@ -1,0 +1,794 @@
+{
+  "about": "Golden replays of the time trial: the baked spec of every design and the final state hash of its run on content/courses/hill_valley.ron with content/terrain.ron. Regenerate with `w5k trial content --out DIR --golden <this file>` when the simulation or the content meant to change.",
+  "roster": [
+    {
+      "hash": "283f415ec948b778",
+      "id": "apc_6x6",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          164,
+          359,
+          668
+        ],
+        "ticks": 668,
+        "time_s": 33.4
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.0,
+        "c_roll": 0.03,
+        "cd_a_m2": 3.3273726646153845,
+        "class": "Wheels",
+        "clearance_m": 0.835,
+        "contact_area_m2": 0.876,
+        "contact_len_m": 0.385,
+        "contact_units": 6,
+        "contact_width_m": 0.37999999999999995,
+        "dns": null,
+        "drive_kw": 224.1,
+        "grip_mu": 0.6,
+        "id": "apc_6x6",
+        "launch_floor": 0.2,
+        "mass_t": 7.313691725692698,
+        "rated_ms": 29.166666666666664,
+        "skirt_drag": false,
+        "span_m": 4.0,
+        "stride_m": 0.0,
+        "thrust_w": 0.0
+      },
+      "ticks": 808
+    },
+    {
+      "hash": "80c91c036409b3f7",
+      "id": "bastion_twin",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          259,
+          502,
+          892
+        ],
+        "ticks": 892,
+        "time_s": 44.6
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.0,
+        "c_roll": 0.06,
+        "cd_a_m2": 9.541533338360288,
+        "class": "Tracks",
+        "clearance_m": 0.5800000000000001,
+        "contact_area_m2": 8.2432,
+        "contact_len_m": 5.888000000000001,
+        "contact_units": 2,
+        "contact_width_m": 0.7,
+        "dns": null,
+        "drive_kw": 705.4796761684349,
+        "grip_mu": 0.9,
+        "id": "bastion_twin",
+        "launch_floor": 0.2,
+        "mass_t": 72.59021352846692,
+        "rated_ms": 19.444444444444443,
+        "skirt_drag": false,
+        "span_m": 5.888000000000001,
+        "stride_m": 0.0,
+        "thrust_w": 0.0
+      },
+      "ticks": 967
+    },
+    {
+      "hash": "51a215e96ebbeead",
+      "id": "beam_titan",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          776,
+          1917,
+          2969
+        ],
+        "ticks": 2969,
+        "time_s": 148.45
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.6,
+        "c_roll": 0.0,
+        "cd_a_m2": 71.66654108797796,
+        "class": "Legs",
+        "clearance_m": 6.742000000000001,
+        "contact_area_m2": 30.659983945220542,
+        "contact_len_m": 3.1239999999999997,
+        "contact_units": 8,
+        "contact_width_m": 3.1239999999999997,
+        "dns": null,
+        "drive_kw": 4124.696914799336,
+        "grip_mu": 0.7999999999999999,
+        "id": "beam_titan",
+        "launch_floor": 0.2,
+        "mass_t": 270.1195857709919,
+        "rated_ms": 8.858893836140041,
+        "skirt_drag": false,
+        "span_m": 12.205623148742688,
+        "stride_m": 12.8,
+        "thrust_w": 0.0
+      },
+      "ticks": 2995
+    },
+    {
+      "hash": "005c81062218beb9",
+      "id": "dreadnought_trio",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          238,
+          515,
+          951
+        ],
+        "ticks": 951,
+        "time_s": 47.55
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.0,
+        "c_roll": 0.06,
+        "cd_a_m2": 24.760133584615392,
+        "class": "Tracks",
+        "clearance_m": 0.7199999999999999,
+        "contact_area_m2": 37.98502399999999,
+        "contact_len_m": 4.522026666666666,
+        "contact_units": 6,
+        "contact_width_m": 1.4000000000000001,
+        "dns": null,
+        "drive_kw": 4746.894034294768,
+        "grip_mu": 0.9,
+        "id": "dreadnought_trio",
+        "launch_floor": 0.2,
+        "mass_t": 404.93492396706205,
+        "rated_ms": 19.444444444444443,
+        "skirt_drag": false,
+        "span_m": 4.522026666666666,
+        "stride_m": 0.0,
+        "thrust_w": 0.0
+      },
+      "ticks": 1034
+    },
+    {
+      "hash": "e8b65ad355721f42",
+      "id": "drone_scout",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          181,
+          297,
+          395
+        ],
+        "ticks": 395,
+        "time_s": 19.75
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.0,
+        "c_roll": 0.0,
+        "cd_a_m2": 0.058044774617241286,
+        "class": "Rotor",
+        "clearance_m": 0.0,
+        "contact_area_m2": 0.0,
+        "contact_len_m": 0.0,
+        "contact_units": 0,
+        "contact_width_m": 0.0,
+        "dns": null,
+        "drive_kw": 0.6876677244477307,
+        "grip_mu": 0.0,
+        "id": "drone_scout",
+        "launch_floor": 0.2,
+        "mass_t": 0.008259895662707446,
+        "rated_ms": 33.333333333333336,
+        "skirt_drag": false,
+        "span_m": 1.0,
+        "stride_m": 0.0,
+        "thrust_w": 0.3
+      },
+      "ticks": 557
+    },
+    {
+      "hash": "ef9761ecc5745e30",
+      "id": "hover_sniper",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          266,
+          412,
+          535
+        ],
+        "ticks": 535,
+        "time_s": 26.75
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.0,
+        "c_roll": 0.03,
+        "cd_a_m2": 8.623846650147412,
+        "class": "Cushion",
+        "clearance_m": 0.0,
+        "contact_area_m2": 0.0,
+        "contact_len_m": 0.0,
+        "contact_units": 0,
+        "contact_width_m": 0.0,
+        "dns": null,
+        "drive_kw": 214.3223555721427,
+        "grip_mu": 0.0,
+        "id": "hover_sniper",
+        "launch_floor": 0.2,
+        "mass_t": 17.3617251754603,
+        "rated_ms": 33.61111111111111,
+        "skirt_drag": true,
+        "span_m": 10.2798864,
+        "stride_m": 0.0,
+        "thrust_w": 0.12
+      },
+      "ticks": 725
+    },
+    {
+      "hash": "4ca164916711d0b0",
+      "id": "lancer_mk1",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          218,
+          387,
+          561
+        ],
+        "ticks": 561,
+        "time_s": 28.05
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.0,
+        "c_roll": 0.06,
+        "cd_a_m2": 5.317292088118873,
+        "class": "Tracks",
+        "clearance_m": 0.43,
+        "contact_area_m2": 6.340864,
+        "contact_len_m": 5.1136,
+        "contact_units": 2,
+        "contact_width_m": 0.62,
+        "dns": null,
+        "drive_kw": 470.5271816998571,
+        "grip_mu": 0.9,
+        "id": "lancer_mk1",
+        "launch_floor": 0.2,
+        "mass_t": 32.25389621137022,
+        "rated_ms": 19.444444444444443,
+        "skirt_drag": false,
+        "span_m": 5.1136,
+        "stride_m": 0.0,
+        "thrust_w": 0.0
+      },
+      "ticks": 691
+    },
+    {
+      "hash": "63c90caa5e4e5828",
+      "id": "lancer_scout",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          143,
+          288,
+          414
+        ],
+        "ticks": 414,
+        "time_s": 20.7
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.0,
+        "c_roll": 0.06,
+        "cd_a_m2": 2.0408171873884395,
+        "class": "Tracks",
+        "clearance_m": 0.37,
+        "contact_area_m2": 2.4003840000000003,
+        "contact_len_m": 3.1584000000000003,
+        "contact_units": 2,
+        "contact_width_m": 0.38,
+        "dns": null,
+        "drive_kw": 318.8117724715209,
+        "grip_mu": 0.9,
+        "id": "lancer_scout",
+        "launch_floor": 0.2,
+        "mass_t": 4.9977420217086195,
+        "rated_ms": 19.444444444444443,
+        "skirt_drag": false,
+        "span_m": 3.1584000000000003,
+        "stride_m": 0.0,
+        "thrust_w": 0.0
+      },
+      "ticks": 607
+    },
+    {
+      "hash": "8245ed1b8751e4ec",
+      "id": "maglev_lancer",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          296,
+          440,
+          555
+        ],
+        "ticks": 555,
+        "time_s": 27.75
+      },
+      "spec": {
+        "altitude_m": 2.0,
+        "c_internal": 0.0,
+        "c_roll": 0.0,
+        "cd_a_m2": 4.781742768631318,
+        "class": "AntiGrav",
+        "clearance_m": 0.0,
+        "contact_area_m2": 0.0,
+        "contact_len_m": 0.0,
+        "contact_units": 0,
+        "contact_width_m": 0.0,
+        "dns": null,
+        "drive_kw": 277.943425667593,
+        "grip_mu": 0.0,
+        "id": "maglev_lancer",
+        "launch_floor": 0.2,
+        "mass_t": 24.181959443960547,
+        "rated_ms": 66.66666666666667,
+        "skirt_drag": false,
+        "span_m": 6.408722770885345,
+        "stride_m": 0.0,
+        "thrust_w": 0.5
+      },
+      "ticks": 744
+    },
+    {
+      "hash": "062d39e0087a0a02",
+      "id": "mech_bastion",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          547,
+          1415,
+          2193
+        ],
+        "ticks": 2193,
+        "time_s": 109.65
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.6,
+        "c_roll": 0.0,
+        "cd_a_m2": 11.94461371764321,
+        "class": "Legs",
+        "clearance_m": 3.02,
+        "contact_area_m2": 7.883762298702335,
+        "contact_len_m": 1.8292,
+        "contact_units": 6,
+        "contact_width_m": 1.8292,
+        "dns": null,
+        "drive_kw": 1687.8525166803215,
+        "grip_mu": 0.7999999999999999,
+        "id": "mech_bastion",
+        "launch_floor": 0.2,
+        "mass_t": 77.26484779456824,
+        "rated_ms": 5.602856414365801,
+        "skirt_drag": false,
+        "span_m": 5.219999999999999,
+        "stride_m": 5.120000000000001,
+        "thrust_w": 0.0
+      },
+      "ticks": 2229
+    },
+    {
+      "hash": "141f19276cef1f3d",
+      "id": "quad_skiff",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          235,
+          356,
+          449
+        ],
+        "ticks": 449,
+        "time_s": 22.45
+      },
+      "spec": {
+        "altitude_m": 6.0,
+        "c_internal": 0.0,
+        "c_roll": 0.0,
+        "cd_a_m2": 3.481482141022615,
+        "class": "Rotor",
+        "clearance_m": 0.0,
+        "contact_area_m2": 0.0,
+        "contact_len_m": 0.0,
+        "contact_units": 0,
+        "contact_width_m": 0.0,
+        "dns": null,
+        "drive_kw": 101.54405624915898,
+        "grip_mu": 0.0,
+        "id": "quad_skiff",
+        "launch_floor": 0.2,
+        "mass_t": 3.8855172634897626,
+        "rated_ms": 88.88888888888889,
+        "skirt_drag": false,
+        "span_m": 8.0,
+        "stride_m": 0.0,
+        "thrust_w": 0.3
+      },
+      "ticks": 599
+    },
+    {
+      "hash": "0000000000000000",
+      "id": "rail_battery",
+      "outcome": {
+        "cause": "rail-bound: this course has no rails",
+        "kind": "dns"
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.0,
+        "c_roll": 0.0,
+        "cd_a_m2": 16.677178667734704,
+        "class": "Rail",
+        "clearance_m": 0.0,
+        "contact_area_m2": 0.0,
+        "contact_len_m": 0.0,
+        "contact_units": 0,
+        "contact_width_m": 0.0,
+        "dns": "rail-bound: this course has no rails",
+        "drive_kw": 0.0,
+        "grip_mu": 0.0,
+        "id": "rail_battery",
+        "launch_floor": 0.2,
+        "mass_t": 374.7043228758919,
+        "rated_ms": 0.0,
+        "skirt_drag": false,
+        "span_m": 1.0,
+        "stride_m": 0.0,
+        "thrust_w": 0.0
+      },
+      "ticks": 0
+    },
+    {
+      "hash": "aead8ed2ef5cc480",
+      "id": "recon_drone",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          235,
+          361,
+          461
+        ],
+        "ticks": 461,
+        "time_s": 23.05
+      },
+      "spec": {
+        "altitude_m": 28.0,
+        "c_internal": 0.0,
+        "c_roll": 0.0,
+        "cd_a_m2": 1.5114437787813266,
+        "class": "Rotor",
+        "clearance_m": 0.0,
+        "contact_area_m2": 0.0,
+        "contact_len_m": 0.0,
+        "contact_units": 0,
+        "contact_width_m": 0.0,
+        "dns": null,
+        "drive_kw": 23.6769382535566,
+        "grip_mu": 0.0,
+        "id": "recon_drone",
+        "launch_floor": 0.2,
+        "mass_t": 0.9159857993862374,
+        "rated_ms": 88.88888888888889,
+        "skirt_drag": false,
+        "span_m": 4.77584,
+        "stride_m": 0.0,
+        "thrust_w": 0.3
+      },
+      "ticks": 623
+    },
+    {
+      "hash": "c414c4a0d6347095",
+      "id": "rotor_gunship",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          201,
+          307,
+          388
+        ],
+        "ticks": 388,
+        "time_s": 19.4
+      },
+      "spec": {
+        "altitude_m": 6.0,
+        "c_internal": 0.0,
+        "c_roll": 0.0,
+        "cd_a_m2": 3.825923640125763,
+        "class": "Rotor",
+        "clearance_m": 0.0,
+        "contact_area_m2": 0.0,
+        "contact_len_m": 0.0,
+        "contact_units": 0,
+        "contact_width_m": 0.0,
+        "dns": null,
+        "drive_kw": 240.90912279579823,
+        "grip_mu": 0.0,
+        "id": "rotor_gunship",
+        "launch_floor": 0.2,
+        "mass_t": 6.5891503912616916,
+        "rated_ms": 88.88888888888889,
+        "skirt_drag": false,
+        "span_m": 11.240000000000002,
+        "stride_m": 0.0,
+        "thrust_w": 0.3
+      },
+      "ticks": 515
+    },
+    {
+      "hash": "2a2919d6fea4a518",
+      "id": "sky_battery",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          291,
+          433,
+          545
+        ],
+        "ticks": 545,
+        "time_s": 27.25
+      },
+      "spec": {
+        "altitude_m": 14.0,
+        "c_internal": 0.0,
+        "c_roll": 0.0,
+        "cd_a_m2": 32.12887919965626,
+        "class": "AntiGrav",
+        "clearance_m": 0.0,
+        "contact_area_m2": 0.0,
+        "contact_len_m": 0.0,
+        "contact_units": 0,
+        "contact_width_m": 0.0,
+        "dns": null,
+        "drive_kw": 4742.920494447671,
+        "grip_mu": 0.0,
+        "id": "sky_battery",
+        "launch_floor": 0.2,
+        "mass_t": 402.9724048398264,
+        "rated_ms": 66.66666666666667,
+        "skirt_drag": false,
+        "span_m": 37.58748059176895,
+        "stride_m": 0.0,
+        "thrust_w": 0.5
+      },
+      "ticks": 727
+    },
+    {
+      "hash": "61dd8a4995f64e85",
+      "id": "spider_artillery",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          831,
+          2124,
+          3293
+        ],
+        "ticks": 3293,
+        "time_s": 164.65
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.6,
+        "c_roll": 0.0,
+        "cd_a_m2": 18.30655613822991,
+        "class": "Legs",
+        "clearance_m": 2.908000000000001,
+        "contact_area_m2": 2.601552876437708,
+        "contact_len_m": 0.91,
+        "contact_units": 8,
+        "contact_width_m": 0.91,
+        "dns": null,
+        "drive_kw": 350.0458833815457,
+        "grip_mu": 0.7999999999999999,
+        "id": "spider_artillery",
+        "launch_floor": 0.2,
+        "mass_t": 24.608203719232993,
+        "rated_ms": 5.859607495387384,
+        "skirt_drag": false,
+        "span_m": 5.5797134394252295,
+        "stride_m": 5.6000000000000005,
+        "thrust_w": 0.0
+      },
+      "ticks": 3317
+    },
+    {
+      "hash": "fb5148f544baf4fa",
+      "id": "swarm_hover",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          269,
+          421,
+          554
+        ],
+        "ticks": 554,
+        "time_s": 27.7
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.0,
+        "c_roll": 0.03,
+        "cd_a_m2": 1.3515422490829996,
+        "class": "Cushion",
+        "clearance_m": 0.0,
+        "contact_area_m2": 0.0,
+        "contact_len_m": 0.0,
+        "contact_units": 0,
+        "contact_width_m": 0.0,
+        "dns": null,
+        "drive_kw": 13.483479543323496,
+        "grip_mu": 0.0,
+        "id": "swarm_hover",
+        "launch_floor": 0.2,
+        "mass_t": 0.9001958437930319,
+        "rated_ms": 21.38888888888889,
+        "skirt_drag": true,
+        "span_m": 2.9723008,
+        "stride_m": 0.0,
+        "thrust_w": 0.12
+      },
+      "ticks": 727
+    },
+    {
+      "hash": "c9199a8bcf5adc2b",
+      "id": "tank_medium",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          253,
+          472,
+          785
+        ],
+        "ticks": 785,
+        "time_s": 39.25
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.0,
+        "c_roll": 0.06,
+        "cd_a_m2": 5.240444109461967,
+        "class": "Tracks",
+        "clearance_m": 0.45,
+        "contact_area_m2": 5.52,
+        "contact_len_m": 4.6,
+        "contact_units": 2,
+        "contact_width_m": 0.6,
+        "dns": null,
+        "drive_kw": 344.0,
+        "grip_mu": 0.9,
+        "id": "tank_medium",
+        "launch_floor": 0.2,
+        "mass_t": 34.58155854209694,
+        "rated_ms": 18.055555555555554,
+        "skirt_drag": false,
+        "span_m": 4.6,
+        "stride_m": 0.0,
+        "thrust_w": 0.0
+      },
+      "ticks": 864
+    },
+    {
+      "hash": "e74e243004f07828",
+      "id": "walker_spider",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          252,
+          751,
+          1211
+        ],
+        "ticks": 1211,
+        "time_s": 60.55
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.12,
+        "c_roll": 0.0,
+        "cd_a_m2": 10.361782037944952,
+        "class": "Legs",
+        "clearance_m": 3.0499999999999994,
+        "contact_area_m2": 0.504,
+        "contact_len_m": 0.39999999999999997,
+        "contact_units": 8,
+        "contact_width_m": 0.39999999999999997,
+        "dns": null,
+        "drive_kw": 484.2,
+        "grip_mu": 0.8,
+        "id": "walker_spider",
+        "launch_floor": 0.2,
+        "mass_t": 22.197500262363143,
+        "rated_ms": 9.722222222222221,
+        "skirt_drag": false,
+        "span_m": 1.802,
+        "stride_m": 4.879999999999999,
+        "thrust_w": 0.0
+      },
+      "ticks": 1306
+    },
+    {
+      "hash": "6c78c9a47df8fb97",
+      "id": "walking_cathedral",
+      "outcome": {
+        "kind": "finished",
+        "splits": [
+          594,
+          1445,
+          2234
+        ],
+        "ticks": 2234,
+        "time_s": 111.7
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.5999999999999999,
+        "c_roll": 0.0,
+        "cd_a_m2": 215.26179790881164,
+        "class": "Legs",
+        "clearance_m": 9.965,
+        "contact_area_m2": 167.04038205492478,
+        "contact_len_m": 6.522,
+        "contact_units": 10,
+        "contact_width_m": 6.522,
+        "dns": null,
+        "drive_kw": 28743.949416118343,
+        "grip_mu": 0.7999999999999999,
+        "id": "walking_cathedral",
+        "launch_floor": 0.2,
+        "mass_t": 1430.1802330205358,
+        "rated_ms": 10.849884792015075,
+        "skirt_drag": false,
+        "span_m": 19.180264948024224,
+        "stride_m": 19.200000000000003,
+        "thrust_w": 0.0
+      },
+      "ticks": 2268
+    },
+    {
+      "hash": "337372d346afd161",
+      "id": "wheel_scout",
+      "outcome": {
+        "cause": "Bogged",
+        "detail": "sunk 0.19 m into soft ground and stopped: the soil and the slope resisted with 12 kN (compaction 10, hull dragging 1, slope 1, rolling 1, air 0) but the tyres could push with only 9 kN, while the soil would have given 14 kN: it needs more engine power",
+        "kind": "dnf",
+        "s_m": 246.734,
+        "ticks": 638
+      },
+      "spec": {
+        "altitude_m": 0.0,
+        "c_internal": 0.0,
+        "c_roll": 0.02430193883868388,
+        "cd_a_m2": 3.141005561566872,
+        "class": "Wheels",
+        "clearance_m": 0.3910466736018631,
+        "contact_area_m2": 0.3464999999999999,
+        "contact_len_m": 0.385,
+        "contact_units": 6,
+        "contact_width_m": 0.15,
+        "dns": null,
+        "drive_kw": 69.76464376017452,
+        "grip_mu": 0.7400000000000001,
+        "id": "wheel_scout",
+        "launch_floor": 0.2,
+        "mass_t": 3.8812945902502407,
+        "rated_ms": 38.888888888888886,
+        "skirt_drag": false,
+        "span_m": 2.7999999999999994,
+        "stride_m": 0.0,
+        "thrust_w": 0.0
+      },
+      "ticks": 639
+    }
+  ]
+}

@@ -35,18 +35,21 @@ code or assets. Tables in `docs/research/warzone-2100/data/` are derived referen
 | [05 Game loop](design/05-game-loop.md) | draft, design, deploy, battle, shop; Lanchester and terramechanics |
 | [06 Art direction](design/06-art-direction.md) | colour theory, faction palettes, stylised light, the shared design language |
 | [07 Possibility space](design/07-possibility-space.md) | the whole catalogue mixed and sampled: atlas, fun mixes, viability, the trade triangle, corners |
+| [08 Time trials](design/08-time-trial.md) | one vehicle on a hill-and-valley course: real physics, soft earth that sinks and bogs, wheels that roll and legs that walk, every outcome explained |
 | [Roadmap](planning/roadmap.md) | milestones and status |
-| [Decision log](planning/decisions.md) | D1 to D10 |
+| [Decision log](planning/decisions.md) | D1 to D11 |
 | [Development environment](planning/dev-environment.md) | Rust, Godot, Blender, cloud sessions |
 | [Theory note: Part Forge](notes/m1-part-forge-theory.md) | half-spaces, sloped armour, sampling, composition, power balance, hover, scaling |
 | [Theory note: movement, weapons and mixing](notes/m1b-movement-and-mixing-theory.md) | square-cube law, buckling, rotors, cushions, rockets, beams, the horizon, auto-fit, stratified sampling |
+| [Theory note: the physics of a time trial](notes/m1c-the-physics-of-a-time-trial.md) | the felt slope, power and the lowest gear, grip, coherent units, soil as a spring and a wedge, why tracks float, legs, replays as the interface |
 
 Renders: [atlas: every hull with every gear](assets/forge/atlas.png), [fun mixes](assets/forge/showcase.png),
 [possibility space](design/07-possibility-space.md), [overview](assets/forge/overview.png), [medium tank](assets/forge/tank_medium.png),
 [spider walker](assets/forge/walker_spider.png), [scout drone](assets/forge/drone_scout.png), [6x6 APC](assets/forge/apc_6x6.png),
 [turret sweep](assets/forge/turret_gun_sweep.png), [slider coupling](assets/forge/turret_gun_coupling.png),
 [army lineup](assets/forge/lineup_vanguard.png), [factions](assets/forge/factions_bastion_twin.png),
-[hull variants](assets/forge/hull_variants.png).
+[hull variants](assets/forge/hull_variants.png). Time trials: [results](assets/trial/results.png), [speed traces](assets/trial/traces.png),
+[soil ladders](assets/trial/soil_ladders_lancer_mk1.png), [a bog](assets/trial/bog_wheel_scout.png), [a gait](assets/trial/gait.png).
 
 ## Warzone 2100 research dossier
 

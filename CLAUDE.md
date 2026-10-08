@@ -14,6 +14,8 @@
   parade` is the physics-free reference lap); then `python3 -I tools/trial/build.py DIR page.html` builds the 3D replay page and
   `node tools/trial/capture.js` records an MP4 (see `tools/trial/README.md`; the sim is the `w5k_sim` crate).
   Every outcome must be explainable: the replay records what limited the vehicle each tick, and a run that ends early says why.
+  `w5k soil content --design ID --out DIR` sweeps a design's hull plating and track width against the soft earth (the ladder chart);
+  `node tools/trial/frames.js` renders chosen moments of a run (to check an animation).
 - **Art direction** is in `docs/design/06-art-direction.md`; every new family decorates itself through
   `crates/w5k_forge/src/family/style.rs` so the army stays consistent.
 - **Teach the theory.** The owner has a computer graphics background and wants to learn: explain the principle
@@ -28,5 +30,10 @@
 - A new family needs: `fits()` (the socket kinds), `host()` (where sweeps show it), `fit_to_load` if it carries weight, a
   `style.rs`-based look, an entry in `family::all()`, physics tests in `crates/w5k_forge/tests/mixing.rs`, and a row in
   `docs/design/04-parametric-components.md`.
+- A running-gear family also needs: a footprint in its `Function` (`contact_m2`, `contact_w_m`, `contact_len_m`; the soil model needs it,
+  and a ground vehicle without one cannot run a course with soft ground) and `Node::Joint` tags on whatever moves (wheels `Roll`, rotors and
+  fans `Spin`, legs `Hip` and `Knee`; see `docs/design/08-time-trial.md`). Moving shapes keep their positions: a joint only labels them.
+- Changing the physics (`w5k_sim`) or the content a trial reads changes the golden hashes in `crates/w5k_sim/tests/fixtures/roster.json`:
+  that is a deliberate act (`w5k trial content --out DIR --golden <that file>`), never a fix for a failing test.
 - Do not copy Warzone 2100 code or assets (GPL); research notes only.
 - Commit trailers carry no model identifier.
