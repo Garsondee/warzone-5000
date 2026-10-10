@@ -49,3 +49,13 @@ Substep ordering follows `CONTRACTS.md`; the glue loops over substeps and owns t
 - CCR-2 `CONTRACTS.md` substep rule: define `f_max` as the stiffest mechanical mode including the engaged bump stop; the slip mode is excluded because the relaxation update is exact (S1).
 - CCR-3 `IntegrationDef`: allow the rig to carry its computed `f_max_hz` (diagnostic) so the cap is checkable in `validate()`.
 - No change to substep order expected; step 4 (spin integration by the chassis) is as written.
+
+## 9. CCR-chassis-4: tyre load sensitivity (slice 2, stage A)
+**Problem.** `TyreDef` gives peak friction and slip stiffnesses *per unit load*, constant, so a tyre at twice its load makes twice the force and lateral load
+transfer never costs an axle any grip. Real tyres are load sensitive, and that is what makes the anti-roll split front/rear (a player lever) set the handling balance.
+**Model.** With `Fz0` the tyre's static load and `s(k) = 1 / (1 + k (Fz / Fz0 - 1))`: peak friction `mu * s(k_mu)`, slip and cornering stiffness `C * s(k_c)`.
+`s = 1` at the static load (static results unchanged); above it the force `s * Fz` rises ever more slowly and tends to `Fz0 / k`, so it never falls. `k` in 0..1.
+**Contract change (additive, `#[serde(default)]`, 0 = off):** `TyreDef.mu_load_sensitivity: f64`, `TyreDef.stiffness_load_sensitivity: f64`, and optionally
+`TyreDef.nominal_load_n: f64` (0 = the solver uses the static load from the rig, preload plus unsprung weight). FORGE compiles them from the tyre archetype.
+**Until the CCR lands:** one shared value per coefficient in `content/physics/chassis/tuning.ron` (`tyre_mu_load_sensitivity` 0.15, `tyre_stiffness_load_sensitivity` 0.3,
+ESTIMATE from Pacejka ch. 4), tagged PROVISIONAL(CCR-chassis-4).
