@@ -10,4 +10,6 @@
 pub mod bvh;
 pub mod cavity;
 pub mod edge;
+pub mod loft;
+pub mod mass;
 pub mod mesh;
