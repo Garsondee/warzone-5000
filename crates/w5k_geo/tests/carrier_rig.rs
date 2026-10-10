@@ -243,7 +243,8 @@ fn the_instanced_export_has_a_valid_track_run_a_side_naming_the_rigs_wheels_and_
             let joints: Vec<usize> =
                 run.wheels.iter().map(|w| r.nodes[w.node].joint.expect("a wheel spins").index).collect();
             let (mut a, mut b) = (joints.clone(), track.stations.clone());
-            (a.sort_unstable(), b.sort_unstable());
+            a.sort_unstable();
+            b.sort_unstable();
             assert_eq!(a, b, "{node} (sprocket at the front: {front}): the wheels are the track's stations");
             assert_eq!(joints[run.sprocket], run.sprocket_joint);
             assert_eq!(rig.stations[run.sprocket_joint].wheel.kind, WheelKind::Sprocket);
@@ -259,6 +260,9 @@ fn the_instanced_export_has_a_valid_track_run_a_side_naming_the_rigs_wheels_and_
             assert_eq!(link.node, run.node);
             assert_eq!((r.nodes[run.node].role, r.nodes[run.node].rest), (NodeRole::Track, Transform::IDENTITY));
             assert!(link.indices.len() / 3 < 1000, "{} triangles in one link", link.indices.len() / 3);
+            // its flags are baked alone: in place, inside the hull, the cavity bake would read as dirt all over it (0.7 against 0.4)
+            let dirt = link.cavity.iter().map(|&c| f64::from(c)).sum::<f64>() / link.cavity.len() as f64;
+            assert!(dirt < 0.55, "{node}: the link's mean cavity is {dirt:.2}");
         }
     }
 }

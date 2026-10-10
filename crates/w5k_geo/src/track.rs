@@ -534,10 +534,13 @@ pub fn place_link(one: &Mesh, x_m: f64, p: [f64; 2], t: [f64; 2]) -> Mesh {
     Mesh { v: one.v.iter().map(at).collect(), t: one.t.clone() }
 }
 
+/// A point of the side plane (z, y) and the unit tangent of the path there.
+pub type Frame = ([f64; 2], [f64; 2]);
+
 /// The viewer's job for one `TrackRun` (counter-clockwise loops, `direction` +1, as GEOMETRY writes them): the point (z, y) and unit tangent
 /// of every link, given the wheels' current centres (z, y) in the hull frame and the sprocket's spin. The band round the circles has length
 /// `L`; link `k` sits at arc length `k L / links + direction * R_sprocket * spin`.
-pub fn link_frames(run: &TrackRun, centres: &[[f64; 2]], spin_rad: f64) -> Result<Vec<([f64; 2], [f64; 2])>, String> {
+pub fn link_frames(run: &TrackRun, centres: &[[f64; 2]], spin_rad: f64) -> Result<Vec<Frame>, String> {
     if centres.len() != run.wheels.len() || run.sprocket >= run.wheels.len() || run.links == 0 {
         return Err("a track run needs a centre for each of its wheels, a sprocket among them and links".into());
     }
