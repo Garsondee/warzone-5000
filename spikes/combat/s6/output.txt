@@ -1,0 +1,77 @@
+S6: impulse J = 19800.0 N s (factor 1.5 x 8 kg x 1650 m/s)
+
+== servo inertia and damping ratio at the box_tank gains (nominal turret mass) ==
+joint 0: I_held=63943 I_free-hull=41774 kg m^2; zeta(held)=0.646 zeta(free)=0.799; wn(held)=0.969 rad/s; alpha_max=min(0.7, 0.626)
+joint 1: I_held=17817 I_free-hull=13584 kg m^2; zeta(held)=0.562 zeta(free)=0.644; wn(held)=1.298 rad/s; alpha_max=min(0.9, 0.674)
+
+== 1. swivel chair: coaxial turret slew on a free hull ==
+I_h=135333 I_t=25387; turret relative angle 1.2000 rad, hull yaw -0.189550 rad, predicted -q I_t/(I_h+I_t) = -0.189550; worst |error| over the run = 1.28e-8 rad
+final |P|=1.52e-12 N s, |L|=9.67e-12 N m s
+
+== 2. yaw servo 0.5 rad step, limits off, held hull, 0.5x 1x 2x turret mass, FIXED gains: box_tank gains ==
+mass x0.5: I=53483, zeta=0.706, overshoot measured 4.359% predicted 4.359%, |diff| = 0.000 points
+mass x1: I=63943, zeta=0.646, overshoot measured 7.030% predicted 7.015%, |diff| = 0.016 points
+mass x2: I=84863, zeta=0.561, overshoot measured 11.966% predicted 11.924%, |diff| = 0.042 points
+
+== 2. yaw servo 0.5 rad step, limits off, held hull, 0.5x 1x 2x turret mass, FIXED gains: derived gains (wn=4 rad/s, zeta=0.8 at 1x) ==
+mass x0.5: I=53483, zeta=0.875, overshoot measured 0.299% predicted 0.344%, |diff| = 0.046 points
+mass x1: I=63943, zeta=0.800, overshoot measured 1.464% predicted 1.516%, |diff| = 0.053 points
+mass x2: I=84863, zeta=0.694, overshoot measured 4.833% predicted 4.823%, |diff| = 0.010 points
+
+== 2b. real limits and latency: 90 deg slew time against d/w + w/alpha, held hull and free hull ==
+box_tank gains  held hull: midpoint crossed at 2.139 s -> 2x = 4.278 s against trapezoid 3.363 s (+27.2%); stays within 2% after 6.75 s; overshoot 19.70%
+box_tank gains  free hull: midpoint crossed at 1.919 s -> 2x = 3.839 s against trapezoid 3.244 s (+18.3%); stays within 2% after 5.98 s; overshoot 13.84%
+derived gains   held hull: midpoint crossed at 1.728 s -> 2x = 3.456 s against trapezoid 3.363 s (+2.8%); stays within 2% after 4.00 s; overshoot 5.93%
+derived gains   free hull: midpoint crossed at 1.625 s -> 2x = 3.250 s against trapezoid 3.244 s (+0.2%); stays within 2% after 2.84 s; overshoot 1.85%
+
+== 3. firing while the turret is slewing, 20 deg elevation demanded, bore off the hull COM ==
+scheme       n    max|dP|/J max|dL|/(J*1m)   max recoil m   ends q m  hullv m/s
+A-RK4        1     5.305e-6     7.101e-6         0.3094    -0.0010     0.4350
+A-RK4        2     4.407e-7     1.012e-6         0.3099    -0.0010     0.4348
+A-RK4        3     9.636e-8     2.535e-7         0.3098    -0.0010     0.4348
+A-RK4        4     3.524e-8     1.033e-7         0.3097    -0.0010     0.4349
+A-RK4        6     1.006e-8     3.223e-8         0.3097    -0.0010     0.4349
+A-RK4        8     4.052e-9     1.348e-8         0.3096    -0.0010     0.4349
+A-RK4       12    1.675e-10    4.868e-10         0.3096    -0.0010     0.4349
+A-Euler      1     1.535e-2     5.815e-2         0.2016     0.0675     0.4390
+A-Euler      2     7.786e-3     2.935e-2         0.2460    -0.0010     0.4348
+A-Euler      3     5.180e-3     1.947e-2         0.2673    -0.0010     0.4348
+A-Euler      4     3.885e-3     1.458e-2         0.2779    -0.0010     0.4348
+A-Euler      6     2.586e-3     9.687e-3         0.2885    -0.0010     0.4348
+A-Euler      8     1.939e-3     7.258e-3         0.2938    -0.0010     0.4348
+A-Euler     12     1.292e-3     4.834e-3         0.2991    -0.0010     0.4349
+B-Euler      1     DIVERGED
+B-Euler      2     DIVERGED
+B-Euler      3     DIVERGED
+B-Euler      4     DIVERGED
+B-Euler      6     DIVERGED
+B-Euler      8     DIVERGED
+B-Euler     12     DIVERGED
+
+== 3b. recoil mechanism: barrel free-recoil speed and stroke used ==
+barrel speed just after the shot 9.90 m/s (J/m_barrel = 9.90); peak stroke 0.310 m of 0.35 m; peak mechanism force 480 kN; back in battery at 0.39 s
+hull speed after the shot has settled: 0.4307 m/s (momentum-only estimate J/M_total = 0.4500)
+
+== 3c-0. slew only (no shot), 6 substeps: worst |P| and |L| over 4 s (turret angular momentum is of the order 4e4 N m s) ==
+A-RK4    max|P| = 1.114e-8 N s, max|L| = 9.176e-9 N m s
+A-Euler  max|P| = 1.008e1 N s, max|L| = 2.776e1 N m s
+B-Euler  max|P| = inf N s, max|L| = inf N m s
+
+== 3c. scheme B (reaction wrench one substep late) against hull mass, chain unchanged, 6 substeps, same shot ==
+chain/hull mass ratio 0.5714: max |dP|/J = DIVERGED
+chain/hull mass ratio 0.0571: max |dP|/J = 7.06e-2
+chain/hull mass ratio 0.0057: max |dP|/J = 7.06e-2
+chain/hull mass ratio 0.0006: max |dP|/J = 7.06e-2
+
+== 4. stabiliser law |1 - r e^(-j w tau)/(1 + j f/f_b)| on the gun pitch joint; hull driven by a sine torque about X ==
+(servo law: rate feed-forward -r*LP(hull rate); the position loop follows the stabilised command)
+-- box_tank gains, latency 0.05 s, f_b 3 Hz
+f=  0.1 Hz: hull rate amplitude 0.0299 rad/s; residual |w_gun|/|w_hull| measured 0.219, law 0.107, diff +104.6% (no stabiliser: 1.000)
+f= 0.25 Hz: hull rate amplitude 0.0305 rad/s; residual |w_gun|/|w_hull| measured 0.537, law 0.139, diff +285.4% (no stabiliser: 1.000)
+f=  0.5 Hz: hull rate amplitude 0.0326 rad/s; residual |w_gun|/|w_hull| measured 0.504, law 0.216, diff +133.2% (no stabiliser: 1.000)
+f=    1 Hz: hull rate amplitude 0.0331 rad/s; residual |w_gun|/|w_hull| measured 0.483, law 0.382, diff +26.3% (no stabiliser: 1.000)
+-- electric: latency 0.01 s, f_b 0.5 Hz, rate loop 8 f_b
+f=  0.1 Hz: hull rate amplitude 0.0302 rad/s; residual |w_gun|/|w_hull| measured 0.226, law 0.224, diff +0.7% (no stabiliser: 1.000)
+f= 0.25 Hz: hull rate amplitude 0.0294 rad/s; residual |w_gun|/|w_hull| measured 0.467, law 0.468, diff -0.4% (no stabiliser: 1.000)
+f=  0.5 Hz: hull rate amplitude 0.0281 rad/s; residual |w_gun|/|w_hull| measured 0.725, law 0.731, diff -0.7% (no stabiliser: 1.000)
+f=    1 Hz: hull rate amplitude 0.0270 rad/s; residual |w_gun|/|w_hull| measured 0.917, law 0.921, diff -0.4% (no stabiliser: 1.000)

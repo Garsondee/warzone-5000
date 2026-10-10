@@ -5,4 +5,8 @@ CouplingTuning(
     lockup_hysteresis_speed_ratio: Param(v: 0.05, lo: Some(0.02), hi: Some(0.15), prov: Estimate, src: "lock-up releases this far below the speed ratio at which it locked (a Schmitt trigger against hunting)"),
     lockup_engage_time_s: Param(v: 0.4, lo: Some(0.1), hi: Some(1.0), prov: Estimate, src: "lock-up clutch capacity ramps in over this time (a smooth apply, no jerk)"),
     lockup_capacity_over_peak_torque: Param(v: 1.5, lo: Some(1.1), hi: Some(2.5), prov: Estimate, src: "lock-up clutch capacity as a multiple of peak engine torque (must hold the engine, with margin)"),
+    clutch_launch_rpm_over_peak_torque_rpm: Param(v: 1.0, lo: Some(0.7), hi: Some(1.2), prov: Estimate, src: "a driver pulling away hard slips the clutch to hold the engine near its peak-torque speed; at full throttle an automatic clutch here does the same"),
+    clutch_apply_rate_per_s: Param(v: 2.5, lo: Some(1.0), hi: Some(10.0), prov: Estimate, src: "a clutch takes a few tenths of a second to close from open to full capacity, whatever the engine speed"),
+    clutch_launch_hold_s: Param(v: 1.5, lo: Some(0.3), hi: Some(5.0), prov: Estimate, src: "time constant over which an automatic clutch forgets a launch pedal after it is lifted, so it does not grab a revved engine"),
+    clutch_slip_until_fraction: Param(v: 0.6, lo: Some(0.2), hi: Some(0.9), prov: Estimate, src: "a driver keeps slipping the clutch until the car is going about as fast as the engine's launch speed would give in this gear, then lets it out"),
 )

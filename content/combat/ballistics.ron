@@ -1,0 +1,24 @@
+// Ballistics data for lane COMBAT. Every number carries provenance. UNVALIDATED: no published table has been opened yet (see docs/swarm/status/combat.md).
+Ballistics(
+    air: AirDef(
+        density_kg_m3: Param(v: 1.225, prov: Spec, src: "ISA sea level, 15 C"),
+        sound_speed_m_s: Param(v: 340.29, prov: Spec, src: "ISA sea level, 15 C"),
+    ),
+    projectiles: [
+        ProjectileDef(
+            id: "stand_in_120mm_apfsds",
+            mass_kg: Param(v: 8.0, prov: Estimate, lo: Some(6.0), hi: Some(10.0), src: "stand-in matching box_tank()'s WeaponDef; order of magnitude for a 120 mm dart with sabot removed"),
+            drag_diameter_m: Param(v: 0.036, prov: Estimate, lo: Some(0.025), hi: Some(0.05), src: "reference diameter of the sub-calibre dart, estimate"),
+            // Shape of a G7-like curve (subsonic plateau, transonic rise, supersonic decay), from memory: UNVERIFIED. Replace with a McCoy table when opened.
+            cd_table: [
+                (0.0, Param(v: 0.12, prov: Estimate, lo: Some(0.08), hi: Some(0.20), src: "G7-like shape, from memory, UNVERIFIED")),
+                (0.8, Param(v: 0.12, prov: Estimate, lo: Some(0.08), hi: Some(0.20), src: "G7-like shape, from memory, UNVERIFIED")),
+                (1.0, Param(v: 0.30, prov: Estimate, lo: Some(0.20), hi: Some(0.45), src: "G7-like shape, from memory, UNVERIFIED")),
+                (1.2, Param(v: 0.37, prov: Estimate, lo: Some(0.25), hi: Some(0.50), src: "G7-like shape, from memory, UNVERIFIED")),
+                (2.0, Param(v: 0.28, prov: Estimate, lo: Some(0.20), hi: Some(0.40), src: "G7-like shape, from memory, UNVERIFIED")),
+                (3.0, Param(v: 0.22, prov: Estimate, lo: Some(0.15), hi: Some(0.32), src: "G7-like shape, from memory, UNVERIFIED")),
+                (5.0, Param(v: 0.18, prov: Estimate, lo: Some(0.12), hi: Some(0.28), src: "G7-like shape, from memory, UNVERIFIED")),
+            ],
+        ),
+    ],
+)

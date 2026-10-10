@@ -181,6 +181,19 @@ pub struct TyreDef {
     /// Contract 0.2. Slip angle at which the lateral force peaks, rad. 0 = the solver's built-in shape.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub alpha_peak_rad: f64,
+    /// Contract 0.3 (CHASSIS CCR-4). Load sensitivity of peak friction, 0..1. With `Fz0` the nominal load and
+    /// `s(k) = 1 / (1 + k (Fz / Fz0 - 1))`, the peak friction coefficient is `mu * s(k)`: it is unchanged at `Fz0`, and above it the force
+    /// `s * Fz` keeps rising, ever more slowly, towards `Fz0 / k` (it never falls). This is what makes load transfer cost grip, so the
+    /// anti-roll split between axles sets the handling balance. 0 = no sensitivity (the 0.2 behaviour).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub mu_load_sensitivity: f64,
+    /// Contract 0.3 (CHASSIS CCR-4). The same law for the slip and cornering stiffnesses (`C * s(k)`), 0..1. 0 = none.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub stiffness_load_sensitivity: f64,
+    /// Contract 0.3 (CHASSIS CCR-4). The nominal load `Fz0`, N. 0 = the solver uses the tyre's static load from the rig (spring preload plus
+    /// the unsprung weight).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub nominal_load_n: f64,
 }
 
 /// `skip_serializing_if` helper: new defaulted fields stay out of the serialised rig while they are 0, so `rig_hash()` of a 0.1 rig is unchanged.
@@ -327,6 +340,13 @@ pub struct TrackDef {
     /// Belt (shoe and pad) thickness under the road wheels, m: the ground plane lies this far below the lowest road-wheel bottoms.
     #[serde(default)]
     pub thickness_m: f64,
+    /// Contract 0.3 (TRACKS CCR-1). Grouser (cleat) height, m: the extra depth over which the belt shears soft ground. 0 = none (the 0.2
+    /// behaviour); it will replace the blunt `shoe_mu_scale_soft` once validated.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub grouser_height_m: f64,
+    /// Contract 0.3 (TRACKS CCR-2). Belt stiffness along its length, N/m. 0 = derive the sag from `tension_n` and the belt weight (the 0.2 behaviour).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub belt_stiffness_n_m: f64,
     /// Running resistance of the track system on hard ground: `F = (c0 + c1 v) N` with `N` the track's normal load (dimensionless; s/m).
     #[serde(default)]
     pub resist_c0: f64,
@@ -695,6 +715,12 @@ pub enum CrewRole {
 
 /// A servo. The slew acceleration it can reach is `alpha = min(max_accel_si, max_effort_si / I)` with `I` the inertia of the joint's whole
 /// subtree about the axis; `validate()` rejects a rig whose `max_accel_si` exceeds what the effort allows.
+///
+/// **The law** (contract 0.3, COMBAT CCR-C2, pinned so that FORGE, COMBAT and VALIDATION mean the same thing): after `latency_s`,
+/// `effort = clamp(kp (q_cmd - q) + kd (qd_cmd - qd), +-max_effort_si)`, where `q_cmd` and `qd_cmd` come from a trapezoidal profile limited by
+/// `max_rate_si` and `alpha`. A stabiliser adds `-r LP(parent rate)` to `qd_cmd` and its integral to `q_cmd` (see `StabiliserDef`). FORGE
+/// **derives** the gains rather than authoring them (CCR-C3): `kp = I wn^2`, `kd = 2 z I wn`, with `wn` set by the slew accuracy and `z`
+/// about 0.8 at the nominal ammunition load; a stabiliser's achieved bandwidth, not the dossier's wish, is what goes in `StabiliserDef`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ServoDef {
     pub max_rate_si: f64,
@@ -727,6 +753,11 @@ pub struct StabiliserDef {
 
 /// A passive recoil mechanism on a prismatic joint (positive recoil = rearward). The slide is a spring, a damper and a stop, not a servo.
 /// `stroke_m` equals the joint's `limits.1`. The preload must hold the barrel in battery at the highest elevation (`preload_n > m g sin(el_max)`).
+///
+/// **The law** (contract 0.3, COMBAT CCR-C2): the barrel rests against a stop at zero recoil with the preload on it, and for recoil `x > 0` with
+/// velocity `v` the force on it is `F = -(preload_n + k x) - c v - q v |v|`, with `k` the spring's rate; the two ends of the stroke are
+/// penalty springs stiff enough that `w_stop dt <= 1` at the substep. FORGE's bake check integrates the slide (the 4/e rule of thumb holds only
+/// for a linear buffer) and requires 10% of the stroke in hand after the design shot.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RecoilDef {
     pub stroke_m: f64,

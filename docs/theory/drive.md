@@ -30,6 +30,13 @@ is refused if it would land next to the opposite point. The map runs on the gear
 will see; engine rpm is blurred by converter slip. A manual box under automatic control is shifted by the same rules with the clutch opened for the shift time (torque
 interruption: the vehicle coasts, losing speed of load*time/inertia).
 
+## Pulling away: the clutch and the hill
+A clutch passes torque only up to its capacity, so a driver pulling away hard slips it and holds the engine near its torque peak: all the engine's pull reaches the wheels while the
+car is still slow. An engine that is allowed to sag to idle-ish revs, or a clutch that grabs by engine speed alone, delivers only the torque found at those lower revs. Gearing makes
+the same point from the other side: first gear has the most wheel force, and on a steep grade a gear change is expensive because for 0.5-0.8 s no drive reaches the wheels while
+gravity pulls the truck back (about g sin(theta) x t = 2 m/s on a 25% grade). So the automatic refuses an upshift at low speed unless the higher gear could pull the present load with room
+to spare, the same reasoning a production "grade logic" uses.
+
 ## Differentials: split torque, not speed
 An open differential gives each side an equal share of the torque and lets the speeds differ. Its famous weakness follows directly: the torque on *both* sides is limited
 by the side that can transmit least, because the shares are equal. A wheel on ice cannot push back, so it takes half the torque to spin freely and the other wheel gets the

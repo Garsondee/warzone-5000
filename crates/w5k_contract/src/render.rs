@@ -13,6 +13,41 @@ pub struct RenderRig {
     pub material_slots: Vec<MaterialSlot>,
     /// Number of joint coordinates a frame carries for this rig: `PhysRig::joint_names().len()` (a coordinate may be unbound, e.g. a spare).
     pub joint_count: usize,
+    /// Contract 0.3 (GEOMETRY CCR). One entry per track belt: what a viewer needs to move the belt's links round their path. Empty for a wheeled
+    /// vehicle, and for a tracked one whose belt is drawn as a static mesh (the 0.2 behaviour).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub track_runs: Vec<TrackRun>,
+}
+
+/// A track belt, to be drawn as instanced links on a path. The path is the taut band round the circles of `wheels` (loop order, the
+/// sprocket's pitch circle included); its length `L` is closed-form, and the `links` links sit at arc-length spacing `L / links`. A viewer
+/// advances the links by the sprocket's rolling distance (`sprocket_joint` times the pitch radius, times `direction`), so the belt moves
+/// exactly as the simulated sprocket turns.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TrackRun {
+    /// The `Track` node of this side; the links are drawn in its frame.
+    pub node: usize,
+    /// The wheels the belt wraps, in loop order (`TrackDef::stations`); the band round them is the belt path.
+    pub wheels: Vec<TrackWheel>,
+    /// Index into `RenderRig::meshes`: ONE link at the origin, +X along the direction of travel, +Y out of the belt (instanced).
+    pub link_mesh: usize,
+    /// Design link count `n`; the viewer uses the spacing `L / n` for the path length `L` it computes, so the links always close the loop.
+    pub links: u16,
+    /// Index into `wheels` of the driven wheel.
+    pub sprocket: usize,
+    /// Index into `VehicleFrame::joints` of the sprocket's spin (rad, positive = rolling forward).
+    pub sprocket_joint: usize,
+    /// +1 if a positive sprocket spin advances the links along the `wheels` order, -1 if against it (a front sprocket).
+    pub direction: i8,
+}
+
+/// One wheel on a belt path.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TrackWheel {
+    /// The node carrying the wheel's spin (its position follows the suspension).
+    pub node: usize,
+    /// The path radius, m: the wheel's tip radius plus half the belt thickness (the sprocket's pitch radius).
+    pub radius_m: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -116,6 +151,29 @@ impl RenderRig {
                         n.name, j.index, self.joint_count
                     ));
                 }
+            }
+        }
+        for (i, run) in self.track_runs.iter().enumerate() {
+            let w = format!("track run {i}");
+            if run.node >= self.nodes.len() || run.link_mesh >= self.meshes.len() {
+                e.push(format!("{w}: node or link mesh out of range"));
+            }
+            if run.wheels.len() < 3
+                || run
+                    .wheels
+                    .iter()
+                    .any(|x| x.node >= self.nodes.len() || !(x.radius_m > 0.0 && x.radius_m.is_finite()))
+            {
+                e.push(format!("{w}: needs at least 3 wheels, each on an existing node with a positive radius"));
+            }
+            if run.sprocket >= run.wheels.len() {
+                e.push(format!("{w}: sprocket {} is not one of the {} wheels", run.sprocket, run.wheels.len()));
+            }
+            if run.sprocket_joint >= self.joint_count {
+                e.push(format!("{w}: sprocket joint {} >= joint_count {}", run.sprocket_joint, self.joint_count));
+            }
+            if run.links < 3 || !(run.direction == 1 || run.direction == -1) {
+                e.push(format!("{w}: needs at least 3 links and a direction of +1 or -1"));
             }
         }
         for (i, m) in self.meshes.iter().enumerate() {

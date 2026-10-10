@@ -1,0 +1,50 @@
+#![enable(implicit_some)]
+// Reference soils with exponent n != 1, for the soil benches and oracles (the textbook cases of spike S4). They are not WORLD's course table:
+// WORLD owns content/world/materials.ron. SI units: kc in Pa/m^(n-1), kphi in Pa/m^n, cohesion in Pa, K in m.
+[
+    MaterialDef(
+        name: "lete_sand",
+        mu_peak: Param(v: 0.6, lo: 0.420, hi: 0.780, prov: Estimate, src: "UNVALIDATED stand-in; shoe friction on the surface, order of magnitude"),
+        mu_slide: Param(v: 0.510, lo: 0.360, hi: 0.600, prov: Estimate, src: "UNVALIDATED stand-in"),
+        rolling_coeff: Param(v: 0.0, lo: 0.0, hi: 0.01, prov: Estimate, src: "the soil law supplies the compaction resistance"),
+        roughness_rms_m: Param(v: 0.0, lo: 0.0, hi: 0.05, prov: Estimate, src: "not used by the soil benches"),
+        soil: Some(SoilDef(
+            n: Param(v: 0.79, lo: 0.55, hi: 1.03, prov: Estimate, src: "UNVALIDATED: sandy soil (LETE sand class) from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+            kc_pa_m_n1: Param(v: 102000.0, lo: 30600.0, hi: 306000.0, prov: Estimate, src: "UNVALIDATED: sandy soil (LETE sand class) from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+            kphi_pa_m_n: Param(v: 5301000.0, lo: 2650500.0, hi: 10602000.0, prov: Estimate, src: "UNVALIDATED: sandy soil (LETE sand class) from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+            cohesion_pa: Param(v: 1300.0, lo: 390.0, hi: 3900.0, prov: Estimate, src: "UNVALIDATED: sandy soil (LETE sand class) from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+            friction_angle_deg: Param(v: 31.1, lo: 21.8, hi: 40.4, prov: Estimate, src: "UNVALIDATED: sandy soil (LETE sand class) from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+            shear_k_m: Param(v: 0.025, lo: 0.0125, hi: 0.05, prov: Estimate, src: "UNVALIDATED: sandy soil (LETE sand class) from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+        )),
+    ),
+    MaterialDef(
+        name: "clayey",
+        mu_peak: Param(v: 0.4, lo: 0.280, hi: 0.520, prov: Estimate, src: "UNVALIDATED stand-in; shoe friction on the surface, order of magnitude"),
+        mu_slide: Param(v: 0.340, lo: 0.240, hi: 0.400, prov: Estimate, src: "UNVALIDATED stand-in"),
+        rolling_coeff: Param(v: 0.0, lo: 0.0, hi: 0.01, prov: Estimate, src: "the soil law supplies the compaction resistance"),
+        roughness_rms_m: Param(v: 0.0, lo: 0.0, hi: 0.05, prov: Estimate, src: "not used by the soil benches"),
+        soil: Some(SoilDef(
+            n: Param(v: 0.5, lo: 0.35, hi: 0.65, prov: Estimate, src: "UNVALIDATED: clayey soil / heavy clay class from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+            kc_pa_m_n1: Param(v: 13190.0, lo: 3957.0, hi: 39570.0, prov: Estimate, src: "UNVALIDATED: clayey soil / heavy clay class from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+            kphi_pa_m_n: Param(v: 692150.0, lo: 346075.0, hi: 1384300.0, prov: Estimate, src: "UNVALIDATED: clayey soil / heavy clay class from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+            cohesion_pa: Param(v: 4140.0, lo: 1242.0, hi: 12420.0, prov: Estimate, src: "UNVALIDATED: clayey soil / heavy clay class from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+            friction_angle_deg: Param(v: 13.0, lo: 9.1, hi: 16.9, prov: Estimate, src: "UNVALIDATED: clayey soil / heavy clay class from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+            shear_k_m: Param(v: 0.025, lo: 0.0125, hi: 0.05, prov: Estimate, src: "UNVALIDATED: clayey soil / heavy clay class from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+        )),
+    ),
+    MaterialDef(
+        name: "snow",
+        mu_peak: Param(v: 0.2, lo: 0.140, hi: 0.260, prov: Estimate, src: "UNVALIDATED stand-in; shoe friction on the surface, order of magnitude"),
+        mu_slide: Param(v: 0.170, lo: 0.120, hi: 0.200, prov: Estimate, src: "UNVALIDATED stand-in"),
+        rolling_coeff: Param(v: 0.0, lo: 0.0, hi: 0.01, prov: Estimate, src: "the soil law supplies the compaction resistance"),
+        roughness_rms_m: Param(v: 0.0, lo: 0.0, hi: 0.05, prov: Estimate, src: "not used by the soil benches"),
+        soil: Some(SoilDef(
+            n: Param(v: 1.6, lo: 1.12, hi: 2.08, prov: Estimate, src: "UNVALIDATED: snow class (Harrison); n above 1 from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+            kc_pa_m_n1: Param(v: 4370.0, lo: 1311.0, hi: 13110.0, prov: Estimate, src: "UNVALIDATED: snow class (Harrison); n above 1 from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+            kphi_pa_m_n: Param(v: 196720.0, lo: 98360.0, hi: 393440.0, prov: Estimate, src: "UNVALIDATED: snow class (Harrison); n above 1 from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+            cohesion_pa: Param(v: 1030.0, lo: 309.0, hi: 3090.0, prov: Estimate, src: "UNVALIDATED: snow class (Harrison); n above 1 from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+            friction_angle_deg: Param(v: 19.7, lo: 13.8, hi: 25.6, prov: Estimate, src: "UNVALIDATED: snow class (Harrison); n above 1 from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+            shear_k_m: Param(v: 0.0254, lo: 0.0127, hi: 0.0508, prov: Estimate, src: "UNVALIDATED: snow class (Harrison); n above 1 from memory of the Bekker-Wong tables in Wong, Theory of Ground Vehicles, ch. 2 (table and page not checked; card C-017)"),
+        )),
+    ),
+]
