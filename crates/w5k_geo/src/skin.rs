@@ -10,7 +10,7 @@ use serde::Deserialize;
 use w5k_contract::def::{RunningGearDef, VehicleDef};
 
 /// Every skin id, smallest vehicle first.
-pub const IDS: [&str; 2] = ["scout_4x4", "utility_4x4"];
+pub const IDS: [&str; 3] = ["scout_4x4", "utility_4x4", "hauler_4x4"];
 
 /// A hull family with its dimensions and the axles it is cut for (z in the hull frame, front first).
 #[derive(Clone, Debug)]
@@ -44,6 +44,9 @@ impl Skin {
                 })
             }
             "scout_4x4" => Some(Skin::from_spec(TruckKind::Scout, include_str!("../shapes/placeholder_scout_4x4.ron"))),
+            "hauler_4x4" => {
+                Some(Skin::from_spec(TruckKind::Hauler, include_str!("../shapes/placeholder_hauler_4x4.ron")))
+            }
             _ => None,
         }
     }
@@ -60,6 +63,7 @@ impl Skin {
     pub fn from_def(def: &VehicleDef) -> Result<Skin, String> {
         let kind = match def.id.as_str() {
             "scout_4x4" => TruckKind::Scout,
+            "hauler_4x4" => TruckKind::Hauler,
             "mule_4x4" | "utility_4x4" => {
                 return Skin::for_id("utility_4x4").ok_or_else(|| "no utility skin".to_string())
             }
@@ -68,7 +72,7 @@ impl Skin {
         let RunningGearDef::Wheeled(gear) = &def.running_gear else { return Err(format!("{} is tracked", def.id)) };
         let (first, last) = (gear.axles.first().ok_or("no axles")?, gear.axles.last().ok_or("no axles")?);
         let h = &def.hull;
-        // the wheel's rim and lugs are the stand-in wheel's proportions at this radius
+        // the wheel's rim and lug depth are the stand-in wheel's proportions at this radius, and it has at most as many lugs (the triangle budget)
         let (radius, base) = (gear.tyre.outer_diameter_m.v / 2.0, WheelDims::placeholder());
         let k = radius / base.outer_radius_m;
         let wheel = WheelDims {
@@ -76,7 +80,7 @@ impl Skin {
             width_m: gear.tyre.section_width_m.v,
             rim_radius_m: base.rim_radius_m * k,
             lug_depth_m: base.lug_depth_m * k,
-            lugs_around: (f64::from(base.lugs_around) * k).round() as u32,
+            lugs_around: ((f64::from(base.lugs_around) * k).round() as u32).min(base.lugs_around),
         };
         let dims = UtilityDims {
             length_m: h.length_m.v,

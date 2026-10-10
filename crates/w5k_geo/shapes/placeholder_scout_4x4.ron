@@ -1,7 +1,7 @@
 // Stand-in dimensions of the scout 4x4 for pictures and tests, PROVISIONAL(C-002) until the skin is built from FORGE's VehicleDef
 // (`skin::Skin::from_def`). They are the numbers of content/vehicles/game/scout_4x4.ron, and a test checks that they still agree: hull box
 // 3.7 x 1.65 x 1.55 m (above the underside, which is 0.30 m off the ground), axles 0.65 m and 2.85 m from the front, track 1.35 m, tyre 0.70 m
-// across by 0.20 m. The rim and the lugs are the utility wheel's proportions at this radius (0.35 / 0.41). Provenance ESTIMATE, band +-5% each.
+// across by 0.20 m. The rim and the lugs are the stand-in wheel's proportions (placeholder_wheel.ron) at this radius (0.35 / 0.40), as `Skin::from_def` makes them. Provenance ESTIMATE, band +-5% each.
 SkinSpec(
     dims: (
         length_m: 3.7,
@@ -10,7 +10,7 @@ SkinSpec(
         wheelbase_m: 2.2,
         track_m: 1.35,
         ground_clearance_m: 0.30,
-        wheel: (outer_radius_m: 0.35, width_m: 0.20, rim_radius_m: 0.213, lug_depth_m: 0.017, lugs_around: 24),
+        wheel: (outer_radius_m: 0.35, width_m: 0.20, rim_radius_m: 0.21, lug_depth_m: 0.0175, lugs_around: 25),
     ),
     axles_from_front_m: [0.65, 2.85],
     steered: [true, false],

@@ -13,7 +13,7 @@ use w5k_geo::wheel::{segments_for, wheel, WheelDims};
 use w5k_math::Vec3;
 
 const USAGE: &str =
-    "usage: w5k geometry sheet <wheel|truck|scout|hull|truck6|truck-ring>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close,gun] [--size WxH]";
+    "usage: w5k geometry sheet <wheel|truck|scout|hauler|hull|truck6|truck-ring>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close,gun] [--size WxH]";
 
 /// Entry point for `w5k geometry <args>`.
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -48,8 +48,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
             let cols = if views.len() == 1 { 1 } else { 2 };
             let (pw, ph) = (cols * w, subjects.len() * views.len().div_ceil(cols) * h);
             let mut pixels = Vec::new();
-            for name in &subjects {
-                pixels.extend(sheet(&subject(name, detail)?, mode, &views, w, h)?);
+            let all = subjects.iter().map(|name| subject(name, detail)).collect::<Result<Vec<_>, _>>()?;
+            // one scale for every tile, the largest vehicle's, so that sizes can be compared
+            let min_ext = all.iter().map(|p| extent(p)).fold(0.0, f64::max);
+            for parts in &all {
+                pixels.extend(sheet(parts, mode, &views, w, h, min_ext)?);
             }
             write_png(&path, pw as u32, ph as u32, &pixels)?;
             println!("wrote {path}");
@@ -115,6 +118,7 @@ fn skin_id(subject: &str) -> Option<&'static str> {
     match subject {
         "truck" => Some("utility_4x4"),
         "scout" => Some("scout_4x4"),
+        "hauler" => Some("hauler_4x4"),
         _ => None,
     }
 }
@@ -132,8 +136,8 @@ fn subject(what: &str, detail: u8) -> Result<Vec<(Mesh, [f64; 3], bool)>, String
                 (w.nuts, [0.7, 0.7, 0.7], true),    // const-ok: picture colours and camera framing
             ])
         }
-        "scout" => {
-            let skin = Skin::for_id("scout_4x4").ok_or("no scout skin")?;
+        "scout" | "hauler" => {
+            let skin = skin_id(what).and_then(Skin::for_id).ok_or("no such skin")?;
             Ok(skin
                 .parts(detail)
                 .iter()
@@ -178,8 +182,25 @@ const VIEWS: [(&str, [f64; 3], bool); 9] = [
     ("gun", [0.8, 0.45, -1.0], true),     // const-ok: camera direction
 ];
 
+/// The diagonal of the box around the parts that count for the camera framing.
+fn extent(parts: &[(Mesh, [f64; 3], bool)]) -> f64 {
+    let (lo, hi) = parts
+        .iter()
+        .filter(|p| p.2)
+        .map(|p| p.0.bounds())
+        .fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(a, b), (l, u)| (a.min(l), b.max(u)));
+    (hi - lo).length()
+}
+
 /// One picture per name in `views`: a single view fills the image, four views make a 2 x 2 sheet.
-fn sheet(parts: &[(Mesh, [f64; 3], bool)], mode: Mode, views: &[&str], w: usize, h: usize) -> Result<Vec<u8>, String> {
+fn sheet(
+    parts: &[(Mesh, [f64; 3], bool)],
+    mode: Mode,
+    views: &[&str],
+    w: usize,
+    h: usize,
+    min_ext: f64,
+) -> Result<Vec<u8>, String> {
     let flags = bake(&parts.iter().map(|p| &p.0).collect::<Vec<_>>(), &FlagParams::default_params());
     let items: Vec<Item> = parts
         .iter()
@@ -191,7 +212,7 @@ fn sheet(parts: &[(Mesh, [f64; 3], bool)], mode: Mode, views: &[&str], w: usize,
         .filter(|p| p.2)
         .map(|p| p.0.bounds())
         .fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(a, b), (l, u)| (a.min(l), b.max(u)));
-    let (c, ext) = ((lo + hi) * 0.5, (hi - lo).length());
+    let (c, ext) = ((lo + hi) * 0.5, (hi - lo).length().max(min_ext));
     let cols = if views.len() == 1 { 1 } else { 2 };
     let mut out = vec![0u8; cols * w * views.len().div_ceil(cols) * h * 3];
     for (i, name) in views.iter().enumerate() {
