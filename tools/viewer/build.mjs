@@ -13,7 +13,7 @@ const j = (s) => JSON.stringify(s).replace(/</g, '\\u003c');
 //   node build.mjs --live [--out dist/index.html] [--check]     (--check: fail if the committed file is not what this would write)
 const live = process.argv.includes('--live');
 // Modules in dependency order; `from 'three'` and `from './x.js'` are rewritten to blob URLs at run time.
-const order = live ? ['world', 'viewer', 'look', 'live-audio', 'live-input', 'live'] : ['replay', 'scope', 'world', 'viewer', 'look', 'debug', 'main'];
+const order = live ? ['world', 'viewer', 'look', 'skin', 'live-audio', 'live-input', 'live'] : ['replay', 'scope', 'world', 'viewer', 'look', 'debug', 'main'];
 const sources = { three: read(path.join(here, 'node_modules/three/build/three.module.min.js')) };
 for (const m of order) sources[m] = read(path.join(here, `src/${m}.js`));
 
@@ -27,7 +27,9 @@ const look = {
   cdf: JSON.parse(read(path.join(camoDir, 'cdf.json')))['o3_l2_g0.5'],
 };
 const terrain = !live && process.argv.includes('--terrain') ? JSON.parse(read(arg('terrain'))) : null; // heightfield from `w5k viewer render --strip`
-const data = live ? { look } : { terrain, rigs: arg('rig').split(',').map((f) => JSON.parse(read(f))), replay: fs.readFileSync(arg('replay')).toString('base64'), look };
+// the skins the page may ask for: whatever `dist/skins/*.skin` holds when it is built (so it never probes for a file that is not there)
+const skins = live && fs.existsSync(path.join(here, 'dist/skins')) ? fs.readdirSync(path.join(here, 'dist/skins')).filter((f) => f.endsWith('.skin')).map((f) => f.replace(/\.skin$/, '')).sort() : [];
+const data = live ? { look, skins } : { terrain, rigs: arg('rig').split(',').map((f) => JSON.parse(read(f))), replay: fs.readFileSync(arg('replay')).toString('base64'), look };
 
 const boot = `
 const blob = (s) => URL.createObjectURL(new Blob([s], { type: 'text/javascript' }));

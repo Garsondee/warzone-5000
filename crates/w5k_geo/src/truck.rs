@@ -543,12 +543,13 @@ fn shell(f: &Frame, b: &BodySpec, a: &Arches, band: f64) -> Mesh {
     loft_beveled(&sections, b.lower_chamfer_m, band, &creases, 0.5) // const-ok: a vertex at least every half metre along a hard edge (spike S-G)
 }
 
-/// The hull families of the game garage: the utility truck (the Mule's skin), the light scout. Each is a template of the same machinery
+/// The hull families of the game garage: the utility truck (the Mule's skin), the light scout, the heavy hauler. Each is a template of the same machinery
 /// (`shapes/<id>.ron`: a lines plan and a part list), so they share the wheel modules, the sockets and the joint layout of the export.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TruckKind {
     Utility,
     Scout,
+    Hauler,
 }
 
 impl TruckKind {
@@ -556,6 +557,7 @@ impl TruckKind {
         match self {
             TruckKind::Utility => "utility_4x4",
             TruckKind::Scout => "scout_4x4",
+            TruckKind::Hauler => "hauler_4x4",
         }
     }
 
@@ -563,6 +565,7 @@ impl TruckKind {
         match self {
             TruckKind::Utility => include_str!("../shapes/utility_4x4.ron"),
             TruckKind::Scout => include_str!("../shapes/scout_4x4.ron"),
+            TruckKind::Hauler => include_str!("../shapes/hauler_4x4.ron"),
         }
     }
 }

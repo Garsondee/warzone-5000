@@ -11,7 +11,7 @@ use w5k_contract::testing::{box_tank, box_truck, tank_slew_and_pitch, truck_over
 use w5k_contract::world::WorldQuery;
 use w5k_geo::export::render_rig;
 use w5k_geo::flags::FlagParams;
-use w5k_geo::truck::{utility_4x4, UtilityDims};
+use w5k_geo::skin::Skin;
 use w5k_replay::ReplayFile;
 use w5k_world::strip::DataStrip;
 
@@ -19,6 +19,7 @@ const USAGE: &str = "usage:
   w5k viewer render <replay.json|replay.w5kr> --out clip.mp4 [--rig rig.json] [--rig a.json,b.json] [--skin utility_4x4[,..]] [--strip standard] [--terrain terrain.json] [--camera rts|quarter|front|chase|orbit] [--plots inset|full|off] [--seconds N] [--start S] [--fps N]
   w5k viewer page   <replay.json|replay.w5kr> --out page.html [--rig rig.json]   (a self-contained page to open in a browser)
   w5k viewer fake-fleet <replay> --out fleet.w5kr [--n 3] [--offset S]   (test data: the first vehicle repeated n times, each S seconds behind the last)
+  w5k viewer pack-skin <utility_4x4|scout_4x4|rig.json> --out tools/viewer/dist/skins/<id>.skin   (the compact skin file the test-drive page fetches)
   w5k viewer plot   <data.csv> --out chart.png [--title T] [--xlabel X] [--ylabel Y] [--width W] [--height H]
   w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.w5kr, replay.json and rig.json)";
 
@@ -30,6 +31,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some("page") => render(&args[1..], false),
         Some("plot") => plot(&args[1..]),
         Some("fake-fleet") => fake_fleet(&args[1..]),
+        Some("pack-skin") => pack_skin(&args[1..]),
         _ => Err(USAGE.to_string()),
     }
 }
@@ -60,19 +62,16 @@ fn read_any(path: &Path) -> Result<ReplayFile, String> {
     }
 }
 
-/// The meshes to draw over the physics rig's skeleton: a built-in rig id or a serialised `RenderRig` file.
+/// The meshes to draw over the physics rig's skeleton: one of GEOMETRY's skins by id (`utility_4x4`, `scout_4x4`, built the way
+/// `w5k geometry export` builds them) or a serialised `RenderRig` file.
 fn skin_rig(name: &str) -> Result<RenderRig, String> {
-    match name {
-        "utility_4x4" => {
-            Ok(render_rig("utility_4x4", &utility_4x4(&UtilityDims::placeholder(), 1), &FlagParams::default_params()))
-        }
-        file => {
-            let s = std::fs::read_to_string(file).map_err(|e| {
-                format!("--skin is a built-in rig id (utility_4x4) or a rig file; cannot read {file}: {e}")
-            })?;
-            serde_json::from_str(&s).map_err(|e| format!("cannot parse {file}: {e}"))
-        }
+    if let Some(skin) = Skin::for_id(name) {
+        return Ok(render_rig(skin.kind.id(), &skin.parts(1), &FlagParams::default_params()));
     }
+    let s = std::fs::read_to_string(name).map_err(|e| {
+        format!("--skin is a GEOMETRY skin id (utility_4x4, scout_4x4) or a rig file; cannot read {name}: {e}")
+    })?;
+    serde_json::from_str(&s).map_err(|e| format!("cannot parse {name}: {e}"))
 }
 
 /// A heightfield of the ground the replay drove over, sampled from the world model on a regular grid (x, z, in metres) and written as
@@ -124,9 +123,7 @@ fn rig_for(replay: &ReplayFile, vehicle: usize, rig_arg: Option<&str>) -> Result
         Some("box_truck") => Ok(box_truck().1),
         Some("box_tank") => Ok(box_tank().1),
         // GEOMETRY's utility truck (same node layout as the stand-in truck, so the canned truck replay drives it).
-        Some("utility_4x4") => {
-            Ok(render_rig("utility_4x4", &utility_4x4(&UtilityDims::placeholder(), 1), &FlagParams::default_params()))
-        }
+        Some(id) if Skin::for_id(id).is_some() => skin_rig(id),
         Some(other) => Err(format!("no built-in rig for {other}; pass --rig <rig.json>")),
         None => Err("the replay has no vehicles".to_string()),
     }
@@ -210,6 +207,20 @@ fn dump_canned(args: &[String]) -> Result<(), String> {
     w5k_replay::write_json(&out.join("replay.json"), &replay)?;
     let rig_json = serde_json::to_string(&rig).map_err(|e| format!("cannot serialise the rig: {e}"))?;
     std::fs::write(out.join("rig.json"), rig_json).map_err(|e| format!("cannot write rig.json: {e}"))?;
+    Ok(())
+}
+
+/// Packs a detailed rig (GEOMETRY's truck, or a serialised `RenderRig`) into the compact skin file the live page loads.
+fn pack_skin(args: &[String]) -> Result<(), String> {
+    let name = args.first().ok_or(USAGE)?;
+    let out = opt(args, "--out").ok_or("--out is required")?;
+    let rig = skin_rig(name)?;
+    let bytes = w5k_replay::skinpack::pack(&rig);
+    if let Some(dir) = Path::new(out).parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    }
+    std::fs::write(out, &bytes).map_err(|e| format!("cannot write {out}: {e}"))?;
+    println!("{out}: {} bytes, {} triangles, {} meshes", bytes.len(), rig.triangle_count(), rig.meshes.len());
     Ok(())
 }
 

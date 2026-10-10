@@ -97,6 +97,17 @@ check(true, 'letting go of GO releases the throttle');
 const sizes = await page.$$eval('.btn', (bs) => bs.map((b) => Math.min(b.getBoundingClientRect().width, b.getBoundingClientRect().height)));
 check(Math.min(...sizes) >= 70, `every button is at least 70 px (smallest ${Math.round(Math.min(...sizes))})`);
 
+// The detailed skins are fitted: smaller for the scout, bigger for the hauler (and no 404s probing for skins that are not there).
+const fits = {};
+for (const id of ['scout_4x4', 'mule_4x4', 'hauler_4x4']) {
+  await live((id) => window.__live.pick(id), id);
+  await page.waitForFunction((id) => window.__live.vehicle() === id && window.__live.fit(), id, { timeout: 60000 });
+  fits[id] = await live(() => window.__live.fit());
+}
+// the scout has a skin of its own (scale near 1); the mule wears the utility truck as it is; the hauler wears it grown to its wheelbase
+check(Math.abs(fits.scout_4x4.scale - 1) < 0.1 && Math.abs(fits.mule_4x4.scale - 1) < 0.05 && fits.hauler_4x4.scale > 1.1, `the skin fits each vehicle: scale scout ${fits.scout_4x4.scale.toFixed(2)}, mule ${fits.mule_4x4.scale.toFixed(2)}, hauler ${fits.hauler_4x4.scale.toFixed(2)}`);
+await page.screenshot({ path: `${out}/hauler.png` });
+
 // The garage button opens the picker again.
 await page.click('#garage');
 check(await live(() => window.__live.picking()), 'the garage button reopens the picker');
