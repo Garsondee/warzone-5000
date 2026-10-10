@@ -20,9 +20,10 @@
 - **Owner goal (2026-10-10): a vehicle is a separate hull, separate propulsion, separate weapon mount and separate weapons** (the first truck was parametric but one monolith: audit in design note section 9). The modules series, one PR each, stacked:
   1. #56 `module.rs`: sockets, modules, `Assembly::attach` (kind and size gating, mirroring for left sockets, caller-labelled names, refusals that change nothing); 14 tests, each new behaviour checked by deliberately breaking the code.
   2. #68 the truck is a hull module (`utility_hull`, publishes `Station` sockets, any number of axles) plus wheel modules (`gear.rs`) joined by the recipe `utility_truck`; golden hash unchanged and the exported rig JSON and GLB byte-identical to the monolith's; pictures `media/modules-propulsion-*.png` (hull alone, 4x4, 6x6).
-  3. this branch (stacked on #68): the ring mount (`mount.rs`, `hardware.rs`, `shapes/ring_mount.ron`) on a `Ring` socket the hull publishes from its RON on the cab roof; truck 37.3k of 40k triangles; pictures `media/modules-mount-*.png`.
-  4. next: weapon families (machine gun, autocannon) on the mount's trunnion, with swap pictures; 5. export for N stations and turret / gun / recoil nodes, exploded views, interface request to FORGE; 6. hull regions in metres.
-  `PROVISIONAL(status:geometry)`: the socket vocabulary (`Station`, `Ring`, `Trunnion`) and frame convention.
+  3. #74 (stacked on #68): the ring mount (`mount.rs`, `hardware.rs`, `shapes/ring_mount.ron`) on a `Ring` socket the hull publishes from its RON on the cab roof; truck 37.3k of 40k triangles; pictures `media/modules-mount-*.png`.
+  4. this branch (stacked on #74): weapon families (`weapon.rs`, `shapes/weapons.ron`: machine gun, autocannon) on the mount's trunnion; swapping the gun leaves every other part bit-identical (test); armed truck 38.8k of 40k triangles; pictures `media/modules-weapons-swap-*.png`.
+  5. next: export for N stations and turret / gun / recoil nodes, exploded views, interface request to FORGE; 6. hull regions in metres.
+  `PROVISIONAL(status:geometry)`: the socket vocabulary (`Station`, `Ring`, `Trunnion`) and frame convention. Triangle budget note: the autocannon truck leaves 1.2k of 40k; the wheels (48-gon tyres with lugs) are the big spender, so a wheel LOD is the first thing to try if more hardware is added.
 - After the modules: the M113 (sloped hull, road wheels, sprocket, idler, track run and link: A10 A11), after FORGE/ARCH answer on the CCRs.
 
 ## Blocked

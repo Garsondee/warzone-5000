@@ -13,6 +13,7 @@ use w5k_geo::module::{Assembly, SocketKind};
 use w5k_geo::mount::{ring_mount, RingMountDims};
 use w5k_geo::part::Part;
 use w5k_geo::truck::{utility_4x4, utility_assembly, utility_hull, utility_truck, UtilityDims};
+use w5k_geo::weapon::{gun_module, GunDims};
 use w5k_math::{scalar, Pcg32, Quat, StateHasher, Vec3};
 
 fn dims_in_range(r: &mut Pcg32) -> UtilityDims {
@@ -488,6 +489,78 @@ fn nothing_on_the_mounted_truck_floats_the_mount_clears_the_hull_and_the_budget_
     check_parts(&parts);
     let rig = render_rig("mounted_utility", &parts, &FlagParams::default_params());
     println!("truck with the ring mount in the rig: {} triangles", rig.triangle_count());
+    assert!(rig.triangle_count() < 40_000, "{} triangles, budget 40,000 (wheeled)", rig.triangle_count());
+}
+
+/// The 4x4 with the standard ring mount on its roof socket and the named gun on the mount's trunnion.
+fn armed(gun: &str) -> Vec<Part> {
+    let d = UtilityDims::placeholder();
+    let z = d.wheelbase_m / 2.0;
+    let mut asm = utility_assembly(&d, &[-z, z], &[true, false], 1);
+    asm.attach("roof", &ring_mount(&RingMountDims::standard(), 1), 0.0, "ring").unwrap();
+    let cradle = asm.socket("trunnion.ring").unwrap().hint("cradle_w_m").unwrap();
+    asm.attach("trunnion.ring", &gun_module(&GunDims::preset(gun).unwrap(), cradle, 1), 0.0, "gun").unwrap();
+    asm.parts
+}
+
+#[test]
+fn nothing_on_the_armed_truck_floats_and_the_gun_clears_the_hull() {
+    for gun in ["machine_gun_12_7", "autocannon_25"] {
+        let parts = armed(gun);
+        let mut attached: Vec<Mesh> = parts
+            .iter()
+            .filter(|p| p.role == NodeRole::Hull && !p.name.ends_with(".ring"))
+            .map(Part::in_hull_frame)
+            .collect();
+        let mut pending: Vec<&Part> =
+            parts.iter().filter(|p| p.name.ends_with(".ring") || p.name.ends_with(".gun")).collect();
+        loop {
+            let before = pending.len();
+            let mut keep = Vec::new();
+            for p in pending {
+                let m = p.in_hull_frame();
+                if attached.iter().any(|h| overlap(&m, h)) {
+                    attached.push(m);
+                } else {
+                    keep.push(p);
+                }
+            }
+            pending = keep;
+            if pending.is_empty() || pending.len() == before {
+                break;
+            }
+        }
+        let floating: Vec<&str> = pending.iter().map(|p| p.name.as_str()).collect();
+        assert!(floating.is_empty(), "{gun}: floating {floating:?}");
+        // the gun (receiver, boxes, grips, barrel, muzzle) stands clear of the shell: the barrel clears the windscreen
+        let shell = parts.iter().find(|p| p.name == "shell").unwrap().in_hull_frame();
+        for p in parts.iter().filter(|p| matches!(p.role, NodeRole::GunPitch | NodeRole::Recoil)) {
+            for &v in p.in_hull_frame().v.iter().step_by(3) {
+                assert!(!inside(&shell, v), "{gun}: {} reaches into the shell at {v:?}", p.name);
+            }
+        }
+    }
+}
+
+#[test]
+fn swapping_the_gun_changes_only_the_gun_parts_and_the_armed_truck_stays_inside_the_budget() {
+    let (mg, ac) = (armed("machine_gun_12_7"), armed("autocannon_25"));
+    let key = |p: &Part| {
+        let bits = p.mesh.v.iter().flat_map(|v| v.as_array().map(f64::to_bits)).collect::<Vec<_>>();
+        (p.name.clone(), bits, p.mesh.t.clone(), p.pose.pos.as_array().map(f64::to_bits))
+    };
+    let rest = |parts: &[Part]| parts.iter().filter(|p| !p.name.ends_with(".gun")).map(key).collect::<Vec<_>>();
+    assert_eq!(rest(&mg), rest(&ac), "hull, wheels and mount are bit-identical whichever gun is on them");
+    assert_ne!(
+        mg.iter().filter(|p| p.name.ends_with(".gun")).count(),
+        ac.iter().filter(|p| p.name.ends_with(".gun")).count()
+    );
+    check_parts(&mg);
+    check_parts(&ac);
+    assert_eq!(fingerprint(&mg), fingerprint(&armed("machine_gun_12_7")), "same recipe, same bytes");
+    // the heavier gun, as exported (flags baked, so parts are subdivided): inside the wheeled budget
+    let rig = render_rig("armed_utility", &ac, &FlagParams::default_params());
+    println!("armed truck (autocannon) in the rig: {} triangles", rig.triangle_count());
     assert!(rig.triangle_count() < 40_000, "{} triangles, budget 40,000 (wheeled)", rig.triangle_count());
 }
 
