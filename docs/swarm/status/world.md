@@ -1,6 +1,6 @@
 # Status: WORLD
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/world/soft | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/world/stats | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
 
 ## Done
 - PR 17 settling (merged): spike S-W, design note, CCR text. PR 21 data-driven bump strip (merged).
@@ -28,6 +28,10 @@
 - (3b) bridges + multi-road [`lane/world/bridges`, stacked on the river PR]: `plan_road` extracted (per-road width, grade, surface, mud crossings, rough sections; slice/ridge/river golden hashes unchanged by the refactor), `extra_roads`, `BridgeDef` (Wooden / Road, width, load rating as data, rails as `Wall` props), decks laid after the clamp, `Course.bridges`/`extra_roads`, `terrain.json` gains `bridges` and `extra_roads_m`. Course `content/world/courses/crossing.ron`: road bridge (west, long), wooden bridge on a track (mid, short, light-rated), ford (east), swim anywhere else. Next: (4) soft-ground patch, (5) `w5k world stats`, then the route survey.
 
 - (4) soft ground [`lane/world/soft`, stacked on #71]: `sand` material with Bekker-Wong soil parameters (dry-sand class, every number UNVALIDATED with bands; VALIDATION to verify the table and page), `SoftPatchDef` (a disc laid in any soft material, refused if the material has no soil), a sand patch on the slice course, and the brief's material tests (`material_ron_round_trips_and_every_param_checks`, `soil_params_are_inside_their_published_bands`).
+
+- (5) `w5k world stats` [`lane/world/stats`, stacked on #72]: slope shares (>5, >10, >20, >30 deg), road grade distributions, roughness PSD (Welch, Hann, detrended) with the ISO 8608 class A to H and waviness exponent for each road and five cross-country lines, material numbers beside `content/world/published_ranges.ron` (all UNVERIFIED), `stats.json` + one-page `stats.png`. Reports for the four courses in `docs/lanes/world/media/stats-*/`. Theory note `docs/theory/world.md` written. Findings for VALIDATION: mud `soil.n` 0.8 is OUT of the (unverified) clay range 0.1 to 0.7; the slice course is hilly (about half of the ground over 5 deg, 14.5% over 10) and its main road reads class F at n0 because the 12 m whoops sit at the ISO reference frequency.
+
+- Owner's visual target (4 reference images, 2026-10-10): `docs/lanes/world/visual-target.md` (observations, what it implies per lane, plan V0 to V8: perspective preview, decimated flat-shaded terrain mesh, rule-based material painting, procedural rocks, road dressing, decor, compound generator, lakes, diorama preset). Next: V0.
 
 ## Blocked
 - Nothing.

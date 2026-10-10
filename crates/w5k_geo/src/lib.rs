@@ -7,6 +7,7 @@
 //!
 //! Settling round: the indexed triangle `mesh`, the `edge` flag, a `bvh` and the `cavity` bake (spike S-G, `docs/lanes/geometry/spike-g.md`).
 
+pub mod budget;
 pub mod bvh;
 pub mod cavity;
 pub mod edge;
@@ -21,6 +22,7 @@ pub mod module;
 pub mod mount;
 pub mod part;
 pub mod raster;
+pub mod skin;
 pub mod truck;
 pub mod weapon;
 pub mod wheel;

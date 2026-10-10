@@ -12,7 +12,7 @@ use w5k_geo::mesh::Mesh;
 use w5k_geo::module::{Assembly, SocketKind};
 use w5k_geo::mount::{ring_mount, RingMountDims};
 use w5k_geo::part::Part;
-use w5k_geo::truck::{utility_4x4, utility_assembly, utility_hull, utility_truck, UtilityDims};
+use w5k_geo::truck::{utility_4x4, utility_assembly, utility_hull, utility_truck, TruckKind, UtilityDims};
 use w5k_geo::weapon::{gun_module, GunDims};
 use w5k_math::{scalar, Pcg32, Quat, StateHasher, Vec3};
 
@@ -213,7 +213,8 @@ fn utility_4x4_dimensions_match_the_stated_hull_box_and_the_triangle_budget_hold
     assert!(((hi.z - lo.z) / d.length_m - 1.0).abs() < 0.03, "length");
     let tris: usize = parts.iter().map(|p| p.mesh.t.len()).sum();
     println!("triangles at detail 1: {tris}");
-    assert!(tris < 40_000, "{tris} triangles, budget 40,000 (wheeled)");
+    let budget = w5k_geo::budget::wheeled_triangles();
+    assert!(tris < budget, "{tris} triangles, budget {budget} (wheeled)");
 }
 
 // ---- cohesion: nothing floats
@@ -489,7 +490,8 @@ fn nothing_on_the_mounted_truck_floats_the_mount_clears_the_hull_and_the_budget_
     check_parts(&parts);
     let rig = render_rig("mounted_utility", &parts, &FlagParams::default_params());
     println!("truck with the ring mount in the rig: {} triangles", rig.triangle_count());
-    assert!(rig.triangle_count() < 40_000, "{} triangles, budget 40,000 (wheeled)", rig.triangle_count());
+    let budget = w5k_geo::budget::wheeled_triangles();
+    assert!(rig.triangle_count() < budget, "{} triangles, budget {budget} (wheeled)", rig.triangle_count());
 }
 
 /// The 4x4 with the standard ring mount on its roof socket and the named gun on the mount's trunnion.
@@ -561,7 +563,117 @@ fn swapping_the_gun_changes_only_the_gun_parts_and_the_armed_truck_stays_inside_
     // the heavier gun, as exported (flags baked, so parts are subdivided): inside the wheeled budget
     let rig = render_rig("armed_utility", &ac, &FlagParams::default_params());
     println!("armed truck (autocannon) in the rig: {} triangles", rig.triangle_count());
-    assert!(rig.triangle_count() < 40_000, "{} triangles, budget 40,000 (wheeled)", rig.triangle_count());
+    let budget = w5k_geo::budget::wheeled_triangles();
+    assert!(rig.triangle_count() < budget, "{} triangles, budget {budget} (wheeled)", rig.triangle_count());
+}
+
+// ---- the hull is built from regions in metres
+
+fn z_from_front(p: &Part, length_m: f64) -> Vec<f64> {
+    p.in_hull_frame().v.iter().map(|v| v.z + length_m / 2.0).collect()
+}
+
+#[test]
+fn regions_equal_to_the_templates_proportions_build_the_same_truck_and_a_longer_bed_moves_only_the_bed() {
+    let d0 = UtilityDims::placeholder();
+    let (same, long) = (d0.with_bed_stretch(TruckKind::Utility, 0.0), d0.with_bed_stretch(TruckKind::Utility, 1.2));
+    let hull = |d: &UtilityDims| utility_hull(d, &d.axles_z(d0.overhang_m(), None), 0);
+    let (a, b, c) = (hull(&d0), hull(&same), hull(&long));
+    assert_eq!((a.parts.len(), c.parts.len()), (b.parts.len(), b.parts.len()));
+    // regions that are the template's proportions: the same truck (to rounding)
+    for (p, q) in a.parts.iter().zip(&b.parts) {
+        assert_eq!(p.name, q.name);
+        let (pm, qm) = (p.in_hull_frame(), q.in_hull_frame());
+        assert_eq!(pm.v.len(), qm.v.len(), "{}", p.name);
+        assert!(pm.v.iter().zip(&qm.v).all(|(u, v)| (*u - *v).length() < 1e-9), "{} differs", p.name);
+    }
+    // a bed 1.2 m longer: what lies in front of the back wall of the cab (0.745 of the length in the template) is untouched, and what is
+    // anchored to the tail moves back by exactly the stretch
+    let cab_end = 0.745 * same.length_m;
+    let (mut kept, mut moved) = (0, 0);
+    for (p, q) in b.parts.iter().zip(&c.parts) {
+        assert_eq!(p.name, q.name);
+        if p.name.starts_with("arch_lip") {
+            continue;
+        }
+        let (zp, zq) = (z_from_front(p, same.length_m), z_from_front(q, long.length_m));
+        let (pm, qm) = (p.in_hull_frame(), q.in_hull_frame());
+        if zp.iter().all(|&z| z < cab_end - 1e-9) {
+            assert!(zp.iter().zip(&zq).all(|(u, v)| (u - v).abs() < 1e-9), "{} moved", p.name);
+            assert!(
+                pm.v.iter().zip(&qm.v).all(|(u, v)| (u.x - v.x).abs() < 1e-9 && (u.y - v.y).abs() < 1e-9),
+                "{} changed shape",
+                p.name
+            );
+            kept += 1;
+        }
+        if ["tailgate", "tail_lamp.r", "tail_lamp.l", "exhaust", "pintle"].contains(&p.name.as_str()) {
+            assert!(
+                zp.iter().zip(&zq).all(|(u, v)| (u + 1.2 - v).abs() < 1e-9),
+                "{} did not move with the tail",
+                p.name
+            );
+            moved += 1;
+        }
+    }
+    assert!(kept > 15 && moved == 5, "{kept} parts in front of the bed, {moved} anchored to the tail");
+    // the overall length grew by exactly the stretch, and the roof mount stays over the hatch
+    let length = |m: &w5k_geo::module::Module| {
+        let (lo, hi) = m
+            .parts
+            .iter()
+            .filter(|p| p.role == NodeRole::Hull && !p.fitting)
+            .map(|p| p.in_hull_frame().bounds())
+            .fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(l, h), (a, b)| (l.min(a), h.max(b)));
+        hi.z - lo.z
+    };
+    assert!((length(&c) - length(&b) - 1.2).abs() < 1e-9, "the hull box, bumpers included, is exactly 1.2 m longer");
+    let seat =
+        |m: &w5k_geo::module::Module, l: f64| m.sockets.iter().find(|s| s.name == "roof").unwrap().pose.pos.z + l / 2.0;
+    assert!((seat(&b, same.length_m) - seat(&c, long.length_m)).abs() < 1e-9);
+}
+
+#[test]
+#[should_panic(expected = "regions must fit in the length")]
+fn regions_longer_than_the_length_are_refused() {
+    let mut d = UtilityDims::placeholder().with_bed_stretch(TruckKind::Utility, 0.0);
+    d.length_m -= 1.0;
+    let _ = utility_hull(&d, &[-1.0, 1.0], 0);
+}
+
+#[test]
+fn a_stretched_six_wheeler_has_closed_parts_clear_wheels_and_its_sill_step_between_the_first_two_arches() {
+    let d0 = UtilityDims::placeholder();
+    let z = d0.wheelbase_m / 2.0;
+    assert_eq!(
+        d0.axles_z(d0.overhang_m(), None).iter().map(|a| (a * 1e9).round()).collect::<Vec<_>>(),
+        [-z, z].map(|a| (a * 1e9).round()),
+        "the helper reproduces the 4x4"
+    );
+    let long = d0.with_bed_stretch(TruckKind::Utility, 1.2);
+    let axles = long.axles_z(d0.overhang_m(), Some(1.2));
+    assert!(
+        (axles[2] - axles[1] - 1.2).abs() < 1e-12 && (axles[2] - long.length_m / 2.0 + d0.overhang_m()).abs() < 1e-12
+    );
+    let parts = utility_truck(&long, &axles, &[true, false, false], 0);
+    check_parts(&parts);
+    let shell = parts.iter().find(|p| p.name == "shell").unwrap().in_hull_frame();
+    for p in parts.iter().filter(|p| p.role == NodeRole::Wheel) {
+        for &v in p.in_hull_frame().v.iter().step_by(5) {
+            assert!(!inside(&shell, v), "{} reaches into the shell at {:?}", p.name, v);
+        }
+    }
+    let bounds = |name: &str| {
+        parts.iter().find(|p| p.name == name).unwrap_or_else(|| panic!("no part {name}")).in_hull_frame().bounds()
+    };
+    let ((step_lo, step_hi), (front_lip, _), (mid_lip, _)) =
+        (bounds("sill_step.r"), bounds("arch_lip.0.r"), bounds("arch_lip.1.r"));
+    let _ = front_lip;
+    let (_, front_lip_hi) = bounds("arch_lip.0.r");
+    assert!(
+        step_lo.z > front_lip_hi.z && step_hi.z < mid_lip.z,
+        "the sill step runs between the first two arches, not across one"
+    );
 }
 
 // ---- the glazing lines up

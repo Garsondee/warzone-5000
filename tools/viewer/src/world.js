@@ -81,3 +81,14 @@ export function roadMesh(t) {
   g.computeVertexNormals();
   return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide }));
 }
+
+// Ground height at (x, z): bilinear on the heightfield, the same patch the physics reads (the display mesh is two triangles per cell and differs
+// from it by a few millimetres). Used by the live page to keep the camera above the ground.
+export function heightSampler(t) {
+  const { nx, nz, cell_m: s } = t, ox = t.origin_m.x, oz = t.origin_m.z, h = t.heights_m;
+  return (x, z) => {
+    const u = Math.min(nx - 1.001, Math.max(0, (x - ox) / s)), v = Math.min(nz - 1.001, Math.max(0, (z - oz) / s));
+    const i = Math.floor(u), j = Math.floor(v), a = u - i, b = v - j, k = j * nx + i;
+    return h[k] * (1 - a) * (1 - b) + h[k + 1] * a * (1 - b) + h[k + nx] * (1 - a) * b + h[k + nx + 1] * a * b;
+  };
+}

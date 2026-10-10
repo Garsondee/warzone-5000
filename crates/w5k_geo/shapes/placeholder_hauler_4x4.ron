@@ -1,0 +1,18 @@
+// Stand-in dimensions of the hauler 4x4 for pictures and tests, PROVISIONAL(C-002) until the skin is built from FORGE's VehicleDef
+// (`skin::Skin::from_def`). They are the numbers of content/vehicles/game/hauler_4x4.ron, and a test checks that they still agree: hull box
+// 6.0 x 2.45 x 2.6 m (above the underside, which is 0.45 m off the ground), axles 1.1 m and 4.9 m from the front, track 2.05 m, tyre 1.05 m
+// across by 0.35 m. The rim and the lugs are the stand-in wheel's proportions (placeholder_wheel.ron) at this radius (0.525 / 0.40), as
+// `Skin::from_def` makes them. Provenance ESTIMATE, band +-5% each.
+SkinSpec(
+    dims: (
+        length_m: 6.0,
+        width_m: 2.45,
+        height_m: 2.6,
+        wheelbase_m: 3.8,
+        track_m: 2.05,
+        ground_clearance_m: 0.45,
+        wheel: (outer_radius_m: 0.525, width_m: 0.35, rim_radius_m: 0.315, lug_depth_m: 0.02625, lugs_around: 28),
+    ),
+    axles_from_front_m: [1.1, 4.9],
+    steered: [true, false],
+)

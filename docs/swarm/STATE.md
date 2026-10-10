@@ -22,6 +22,17 @@ assists on by default; CI packages a Windows zip (`w5k.exe`, `content/`, the pag
 local folder `C:\Users\Hivemind\Documents\Warzone 5000` (cloud sessions cannot write to the owner's machine). The owner also praised GEOMETRY's parametric,
 modular vehicles; GEOMETRY continues with scout/hauler skins, then modules.
 
+## Owner direction, round 3 (2026-10-10 16:20 UTC): the demo works; faster; what next
+The owner ran the Windows package ("I love the demo", the exe alone did nothing but `START.bat` worked) and asked for two things. (1) **Remove the speed
+limiter**: `START.bat` now passes `w5k drive --no-speed-limit` (the other assists stay), and a new `START-KID.bat` keeps the 25 km/h cap for the five-year-old;
+VIEWER widened the speed bar to 0-100 km/h when the cap is off. (2) **A good objective for a second slice**, "something that elevates most parts of the
+systems": my proposal is `docs/swarm/SLICE-2.md` ("The Design Loop": the first tracked vehicle and soft ground that decides who passes, the Impact Matrix
+running for real, a Workshop page where a design change moves measured numbers and can be driven), with cards C-016 (go), C-017 (where real published figures
+come from) and C-018 (oracle tolerance class). **Nothing new launches until the owner says go in chat** (it spends money). The owner's goal was completed in
+the same window: *produce the first slice (vehicles that tackle the whole course, a simple way to view it, a kid test-drive mode, three wheeled vehicles);
+once all lanes are merged and clean, stop and give the GitHub download link.* The owner also gave WORLD four reference images (a low-poly, flat-shaded,
+diorama look): WORLD's plan V0 to V8 is `docs/lanes/world/visual-target.md`.
+
 ## Owner instruction in force (2026-10-10 02:30 UTC): run without checking in
 The owner is asleep and has authorised ARCH to run the swarm without asking them, aiming for a fun, visible slice: **a truck-class 4x4 with real
 suspension, tyres and powertrain driving the bump strip and a short obstacle course, played back in the browser viewer with forces drawn on, with
@@ -53,14 +64,14 @@ pictures and a clip.** For every lane this means:
 | Lane | Rank | Session | Branch | State | Last check-in | Burn so far |
 |---|---|---|---|---|---|---|
 | ARCH | 1 | this session (ARCH works one thing at a time and keeps spend small until the reset) | `claude/sharp-babbage-d702f7` | Wave 0 done; Saturday prep done; idle until the owner's go | 2026-10-08 | owner reported $8 left on the evening of 2026-10-08; ARCH planned about $1.5 for the Saturday prep |
-| CHASSIS | 1 | `session_01XM5mBbvTKALXsmmYDsXWPb` (launched 2026-10-10 02:17 UTC) | `lane/chassis/strip` | wheeled assembly, Ackermann steering and strip merged; ledger next | 2026-10-10 13:28 | $9.43 |
-| DRIVE | 1 | `session_01TdNQzDAmB9474QZgKrRqJk` (02:18) | `lane/drive/build` | gearbox, brakes, Powertrain, calm shift map merged; diffs and bench left | 2026-10-10 13:28 | $4.73 |
-| WORLD | 1 | `session_017uza2dP2h1uH55XYRiM5x9` (10:33) | `lane/world/rocks` | course generator, mud, trees, barricade, terrain export, rock fields merged; river, cliffs, bridges planned | 2026-10-10 13:28 | $5.33 |
-| FORGE | 1 | `session_01SSPL2gMKDaa4tzGcsU74vP` (02:19) | `lane/forge/render` | compile and render_rig merged (Mule 4x4) | 2026-10-10 13:28 | $4.61 |
-| VIEWER | 1 | `session_01BHwQYQhC6JtyZVDpdJkp8r` (10:33) | `lane/viewer/front-cam` | terrain, road, props, plot layouts, follow camera merged; front camera and steer readout in progress | 2026-10-10 13:28 | $6.52 |
-| VALIDATION | 1 | `session_01TBBxTxyT1moXwGWjRx6YWx` (10:33) | `lane/validation/harness` | harness v0 and dashboard merged; scoring the Mule replay next | 2026-10-10 13:28 | $1.86 |
-| GEOMETRY | 2 | `session_01Wrh5HHcDHQFnFuNE1iqJNv` (10:33, effort max) | `lane/geometry/modules` | loft kernel, truck shell, silhouette and glazing merged; costliest lane | 2026-10-10 13:28 | $15.99 |
-| LOOK | 2 | `session_01QXtWzjyYsNM1xnhBwd8MRk` (10:33) | `lane/look/weathering` | camouflage and weathering merged; idle | 2026-10-10 13:28 | $2.35 |
+| CHASSIS | 1 | `session_01XM5mBbvTKALXsmmYDsXWPb` (launched 2026-10-10 02:17 UTC) | `lane/chassis/strip` | wheeled assembly, Ackermann steering and strip merged; ledger next | 2026-10-10 13:28 | $20.92 |
+| DRIVE | 1 | `session_01TdNQzDAmB9474QZgKrRqJk` (02:18) | `lane/drive/build` | gearbox, brakes, Powertrain, calm shift map merged; diffs and bench left | 2026-10-10 13:28 | $9.68 |
+| WORLD | 1 | `session_017uza2dP2h1uH55XYRiM5x9` (10:33) | `lane/world/rocks` | course generator, mud, trees, barricade, terrain export, rock fields merged; river, cliffs, bridges planned | 2026-10-10 13:28 | $16.36 |
+| FORGE | 1 | `session_01SSPL2gMKDaa4tzGcsU74vP` (02:19) | `lane/forge/render` | compile and render_rig merged (Mule 4x4) | 2026-10-10 13:28 | $8.49 |
+| VIEWER | 1 | `session_01BHwQYQhC6JtyZVDpdJkp8r` (10:33) | `lane/viewer/front-cam` | terrain, road, props, plot layouts, follow camera merged; front camera and steer readout in progress | 2026-10-10 13:28 | $13.99 |
+| VALIDATION | 1 | `session_01TBBxTxyT1moXwGWjRx6YWx` (10:33) | `lane/validation/harness` | harness v0 and dashboard merged; scoring the Mule replay next | 2026-10-10 13:28 | $4.00 |
+| GEOMETRY | 2 | `session_01Wrh5HHcDHQFnFuNE1iqJNv` (10:33, effort max) | `lane/geometry/modules` | loft kernel, truck shell, silhouette and glazing merged; costliest lane | 2026-10-10 13:28 | $45.54 |
+| LOOK | 2 | `session_01QXtWzjyYsNM1xnhBwd8MRk` (10:33) | `lane/look/weathering` | camouflage and weathering merged; idle | 2026-10-10 13:28 | $3.07 |
 | TRACKS | 2 | - | - | not launched | - | - |
 | GODOT | 2 | - | - | not launched | - | - |
 | COMBAT | 2 | - | - | not launched | - | - |
@@ -89,6 +100,7 @@ See `docs/decisions/QUEUE.md` (C-001, C-002, C-003 and C-007 answered on 2026-10
 | 2026-10-08 16:00 | 1 (this session) | meter ~ $204 after ~20 h |
 | 2026-10-08 18:05 | 1 (this session) | owner warned of about $20 of credit left; ARCH stopped new work and left the tree green; no lanes launched, no background agents running |
 | 2026-10-10 02:17 | 2 (ARCH, CHASSIS) | owner said go; preflight green (integration and nightly CI); CHASSIS launched with the lane model passed explicitly; overnight card answers recorded (C-004 parametric everything; C-005, C-006, C-008, C-010 to C-012 as (a); C-013 and C-014 done by the owner). Wave A = CHASSIS, DRIVE, FORGE; Wave B = WORLD, VIEWER, VALIDATION after the first measured hour |
+| 2026-10-10 16:55 | 9 (ARCH + 8 lanes, helper for the proving runner finished) | lanes total about $122 by `list_sessions` (GEOMETRY 45.5, CHASSIS 20.9, WORLD 16.4, VIEWER 14.0, DRIVE 9.7, FORGE 8.5, VALIDATION 4.0, LOOK 3.1); `get_session` usage can lag and read old numbers, so read the cost from `list_sessions`. Slice 1 delivered and shipped as a Windows zip (START.bat full speed, START-KID.bat capped). Slice 2 proposed, nothing launched. |
 | 2026-10-10 13:28 | 9 (ARCH + 8 lanes) | lanes total about $50.8 this window (CHASSIS 9.4, GEOMETRY 16.0, VIEWER 6.5, WORLD 5.3, DRIVE 4.7, FORGE 4.6, LOOK 2.4, VALIDATION 1.9); under the $60 stop line, so no further lane is launched but none is paused. The truck drives the 520 m course (WORLD terrain, DRIVE powertrain, CHASSIS suspension and Ackermann steering, GEOMETRY skin, VIEWER render); clips and Control Room v9 sent. TRACKS, GODOT, COMBAT, AI not launched. |
 | 2026-10-08 19:55 | 1 (this session) | the owner's notes are in (four cards answered); answers applied to `BRIEF.md`, `NON-GOALS.md`, `QUEUE.md`, five lane briefs and `LAUNCH.md`; Saturday checklist and launch sheet written; docs-only, about $1 to $1.5 of the owner's remaining $8 |
 | 2026-10-08 19:35 | 1 (this session) | Control Room version 5: a roomy, autosaving notes box on every card (60,000 characters) and a general box; the owner is filling in the cards; nothing launched (25 behaviour checks pass on a stubbed database; see `tools/control_room/template.html`) |

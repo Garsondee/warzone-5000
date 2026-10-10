@@ -24,6 +24,8 @@ fn roof() -> Assembly {
             pose: frame(Vec3::new(0.0, 1.5, 0.3), Vec3::Y, -Vec3::Z),
             size_m: 0.9,
             station: None,
+            carrier: NodeRole::Hull,
+            owner: None,
             hints: Vec::new(),
         }],
         mount: None,

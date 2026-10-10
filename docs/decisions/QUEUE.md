@@ -102,7 +102,31 @@ Options: (a) a native `w5k drive` program (Windows exe built by CI) that runs th
 Recommendation: (a) now, (b) as the long-term front end. (a) needs no new dependency and no Godot work, reuses the three.js viewer and the real physics, and can be built and tested in the cloud; the owner downloads one zip from GitHub Actions into the local folder and double-clicks. (c) needs a wasm toolchain and likely a new dependency (a card).
 Cost of being wrong: (a) is thrown away when Godot lands, but the protocol, the assists and the kid-mode design carry over; low.
 Default: (a).
-Answer: (pending; the owner asked for the capability but did not choose the route)
+Answer: (pending; the owner asked for the capability but did not choose the route). In practice: the owner downloaded and ran the Windows package on 2026-10-10 ("I love the demo") and asked for the speed limiter to be removed from `START.bat`; `START-KID.bat` keeps it. Route (a) is working.
+
+### C-016  What is slice 2?
+Asked by: ARCH | Date: 2026-10-10 | Status: OPEN, default taken (the owner asked for "a good objective ... something that elevates most parts of the systems")
+Options: (a) "The Design Loop" (`docs/swarm/SLICE-2.md`): the first tracked vehicle and soft ground that decides who passes, the Design Impact Matrix running for real, and a Workshop page where a design change moves measured numbers and can be driven; TRACKS launched, COMBAT for the S6 spike only; (b) guns and targets first (M3); (c) the AI driver first (M4); (d) the Godot front end first.
+Recommendation: (a). It retires the two contract regions no code has touched (tracks and soil S3 and S4, articulation S6) before the freeze, measures the claim the whole project rests on (design changes outcomes) before stacking guns and AI on it, and gives the owner a tank and a workshop. (b), (c) and (d) are easier after it.
+Cost of being wrong: (a) is bigger than slice 1 (about two five-hour windows); drop stage C first if the budget is tight. (b) to (d) risk building on an unmeasured base.
+Default: (a), but no new lane (TRACKS, COMBAT) launches until the owner says go in chat, because it spends money.
+Answer: (pending)
+
+### C-017  Where do validation's published figures come from?
+Asked by: VALIDATION (spike S9), numbered by ARCH | Date: 2026-10-10 | Status: OPEN, default taken
+Options: (a) the owner allows the source sites in the cloud environment's Network access settings (Edit, Allowed domains: army.mil, apps.dtic.mil, archive.org, Wikipedia and similar); (b) the owner drops manuals and papers into `content/dossier/sources/`; (c) carry on with `UNVERIFIED` secondary figures that are never promoted to verified.
+Recommendation: (a) or (b): without published numbers "validated against real vehicles" stays a claim. (b) is the more controlled; (a) is the less work.
+Cost of being wrong: (c) leaves every real-vehicle light grey; the closed-form oracles still judge the physics.
+Default: (c).
+Answer: (pending)
+
+### C-018  Tolerance class for closed-form oracle tests
+Asked by: VALIDATION, numbered by ARCH | Date: 2026-10-10 | Status: OPEN, default taken
+Options: (a) green within 10%, amber within 20% (an oracle is exact for an idealised vehicle, so the band is for what the idealisation leaves out); (b) the published-figure classes of ADR-0007 (3% to 15%); (c) per-test bands.
+Recommendation: (a), tagged `PROVISIONAL(C-018)`: measured stops are +11%, +30% and +76% from the braking oracle for the Mule, Scout and Hauler, which is information, not noise.
+Cost of being wrong: lights change colour; no physics changes.
+Default: (a).
+Answer: (pending)
 
 ## Answered cards
 *(the owner's four scoping answers are recorded as ADR-0001 to ADR-0004; the cards below were answered in the Control Room on 2026-10-08.)*

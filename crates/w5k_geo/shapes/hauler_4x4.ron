@@ -1,0 +1,71 @@
+// Parametric hauler 4x4: a fictional heavy cargo truck of the 5 to 7 t class, cab-over with a flat bed (lane GEOMETRY). One shell, everything
+// else anchored to it (see utility_4x4.ron for the conventions: fractions of the hull box, x of W from the centre line, y of H from the
+// underside, z of L from the front; `_m` sizes are metres; `Upper`/`Lower`/`Top`/`Belt`/`Front`/`Rear` are surface anchors). Provenance
+// ESTIMATE for every number, bands +-15% for fractions and +-50% for the small absolute sizes, reason: an original design, not a copy of a
+// real vehicle. The silhouette is the point: a tall flat-faced cab over the front axle and a long, low, flat bed behind it, so from the
+// side it is two boxes of very different heights, nothing like the utility truck's one-box body or the scout's runabout.
+(
+    body: (
+        // (z, lower half-width, belt height, upper half-width, top height, tilt, underside): the lines plan of the shell. The lower body (bottom
+        // to belt) is the chassis and the deck's box and carries the wheel arches; the upper block is the cab (to the roof) and then only the
+        // deck plate.
+        stations: [
+            (z: 0.010, w: 0.90, yb: 0.34, wu: 0.80, yt: 0.62, yo: 0.12),            // nose face, underside raised (approach ramp)
+            (z: 0.022, w: 0.97, yb: 0.34, wu: 0.88, yt: 0.64, yo: 0.05),
+            (z: 0.034, w: 1.00, yb: 0.34, wu: 0.92, yt: 0.66, tilt: 0.03),          // full width: the cab front below the windscreen
+            (z: 0.065, w: 1.00, yb: 0.34, wu: 0.92, yt: 0.935, tilt: 0.03),         // windscreen top: a ramp of about 75 degrees
+            (z: 0.075, w: 1.00, yb: 0.34, wu: 0.92, yt: 1.00, tilt: 0.03),          // roof
+            (z: 0.262, w: 1.00, yb: 0.34, wu: 0.92, yt: 1.00, tilt: 0.03),
+            (z: 0.270, w: 1.00, yb: 0.34, wu: 0.92, yt: 0.96, tilt: 0.03),          // roof edge
+            (z: 0.273, w: 1.00, yb: 0.34, wu: 0.98, yt: 0.37),                      // the cab's back wall steps down to the deck plate
+            (z: 0.975, w: 1.00, yb: 0.34, wu: 0.98, yt: 0.37),
+            (z: 0.985, w: 0.98, yb: 0.335, wu: 0.96, yt: 0.37, yo: 0.05),           // departure ramp
+            (z: 1.0, w: 0.94, yb: 0.33, wu: 0.92, yt: 0.365, yo: 0.12),             // tail face (the shell is the full length: no rear bumper)
+        ],
+        // where the cab starts (its front wall, there is no hood) and ends (its back wall): the cuts between the three regions (front, cab,
+        // bed) that `regions_m` of the dimensions sets in metres; every `Frac` along z follows its region
+        cab_f: (0.034, 0.273),
+        lip_proud_m: 0.05,
+        lower_chamfer_m: 0.05,
+        sill_chamfer_m: 0.10,
+        upper_chamfer_m: 0.08,
+        arch_gap_m: 0.05,
+        well_gap_m: 0.06,
+        arch_samples: 12,
+        min_wall_m: 0.12,
+        min_notch_m: 0.002,
+    ),
+    parts: [
+        // ---- arch lips, the front bumper
+        (name: "arch_lip", role: Hull, slot: Paint, fitting: false, mirror: false, shape: ArchLip(inner_m: -0.012, width_m: 0.12, embed_m: 0.04, proud_m: 0.05, corner_m: 0.02)),
+        (name: "bumper_front", role: Hull, slot: Metal, fitting: false, mirror: false, shape: Block(x: Frac(-0.49, 0.49), y: Frac(0.07, 0.17), z: Frac(0.0, 0.015), corner_m: 0.03)),
+        (name: "bumper_rear", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.47, 0.47), y: Frac(0.13, 0.22), z: Rear(-0.14, 0.08), corner_m: 0.03)),
+        // ---- the cab: glass, doors, steps, mirrors
+        (name: "windscreen", role: Hull, slot: Glass, fitting: true, mirror: false, shape: Windscreen(from_f: 0.034, to_f: 0.065, margin_m: 0.12, inset_m: 0.14, thickness_m: 0.02, proud_m: 0.004, corner_m: 0.05, bezel: Some(Bezel(width_m: 0.05, proud_m: 0.02)))),
+        (name: "door", role: Hull, slot: Paint, fitting: true, mirror: true, shape: Block(x: Upper(-0.02, 0.006), y: Frac(0.40, 0.90), z: Frac(0.085, 0.215), corner_m: 0.006)),
+        (name: "door_handle", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Upper(-0.01, 0.035), y: Frac(0.60, 0.615), z: Frac(0.19, 0.205), corner_m: 0.005)),
+        (name: "window", role: Hull, slot: Glass, fitting: true, mirror: true, shape: Pane(x: Upper(-0.02, 0.012), front: Vertical(0.095), rear_f: 0.205, bottom: 0.66, top_offset_m: 0.14, corner_m: 0.04, bezel: Some(Bezel(width_m: 0.045, proud_m: 0.018)))),
+        (name: "cab_step", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Lower(-0.05, 0.16), y: Frac(0.20, 0.215), z: Frac(0.095, 0.205), corner_m: 0.01)),
+        (name: "mirror_arm", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Upper(-0.04, 0.30), y: Frac(0.80, 0.815), z: Frac(0.058, 0.07), corner_m: 0.006)),
+        (name: "mirror", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Upper(0.28, 0.36), y: Frac(0.64, 0.86), z: Frac(0.052, 0.078), corner_m: 0.02)),
+        // ---- the front: grille, lamps
+        (name: "grille", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.28, 0.28), y: Frac(0.20, 0.42), z: Front(-0.04, 0.04), corner_m: 0.015)),
+        (name: "grille_slat_1", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.26, 0.26), y: Frac(0.245, 0.257), z: Front(-0.06, -0.01), corner_m: 0.004)),
+        (name: "grille_slat_2", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.26, 0.26), y: Frac(0.285, 0.297), z: Front(-0.06, -0.01), corner_m: 0.004)),
+        (name: "grille_slat_3", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.26, 0.26), y: Frac(0.325, 0.337), z: Front(-0.06, -0.01), corner_m: 0.004)),
+        (name: "grille_slat_4", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.26, 0.26), y: Frac(0.365, 0.377), z: Front(-0.06, -0.01), corner_m: 0.004)),
+        (name: "roof_lamp", role: Hull, slot: Optics, fitting: true, mirror: true, shape: Cyl(axis: Z, x: Frac(0.14, 0.19), y: Top(-0.03, 0.10), z: Frac(0.062, 0.088), radius_m: 0.07)),
+        (name: "headlamp", role: Hull, slot: Optics, fitting: true, mirror: true, shape: Cyl(axis: Z, x: Frac(0.36, 0.44), y: Frac(0.28, 0.36), z: Front(-0.05, 0.035), radius_m: 0.11)),
+        // ---- the flat bed: headboard, side boards, a load, the exhaust stack, fuel tanks (the tail is open: a drop-side flatbed)
+        (name: "headboard", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.47, 0.47), y: Top(-0.01, 0.60), z: Frac(0.276, 0.288), corner_m: 0.012)),
+        (name: "side_board", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Upper(-0.06, 0.0), y: Top(-0.01, 0.32), z: Frac(0.290, 0.975), corner_m: 0.012)),
+        (name: "cargo_a", role: Hull, slot: Paint, fitting: true, mirror: false, shape: Block(x: Frac(-0.42, -0.06), y: Top(-0.02, 0.80), z: Frac(0.70, 0.90), corner_m: 0.03)),
+        (name: "tailgate", role: Hull, slot: Paint, fitting: true, mirror: false, shape: Block(x: Frac(-0.47, 0.47), y: Top(-0.01, 0.30), z: Frac(0.962, 0.975), corner_m: 0.012)),
+        (name: "cargo_b", role: Hull, slot: Paint, fitting: true, mirror: false, shape: Block(x: Frac(0.04, 0.40), y: Top(-0.02, 1.10), z: Frac(0.50, 0.66), corner_m: 0.03)),
+        (name: "exhaust_stack", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Y, x: Frac(0.44, 0.44), y: Top(-0.02, 1.55), z: Frac(0.296, 0.296), radius_m: 0.07)),
+        (name: "fuel_tank", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Cyl(axis: Z, x: Lower(0.15, 0.15), y: Frac(0.20, 0.20), z: Frac(0.40, 0.62), radius_m: 0.27)),
+        (name: "antenna", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Y, x: Frac(-0.38, -0.38), y: Top(-0.03, 0.55), z: Frac(0.15, 0.15), radius_m: 0.008)),
+    ],
+    knuckle_radius_m: 0.12,
+    sockets: [],
+)

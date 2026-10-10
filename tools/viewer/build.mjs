@@ -9,8 +9,11 @@ const arg = (k) => process.argv[process.argv.indexOf('--' + k) + 1];
 const read = (p) => fs.readFileSync(p, 'utf8');
 const j = (s) => JSON.stringify(s).replace(/</g, '\\u003c');
 
+// `--live` builds the test-drive page instead: no replay and no rig inside, it fetches those from `w5k drive` (same origin) at run time.
+//   node build.mjs --live [--out dist/index.html] [--check]     (--check: fail if the committed file is not what this would write)
+const live = process.argv.includes('--live');
 // Modules in dependency order; `from 'three'` and `from './x.js'` are rewritten to blob URLs at run time.
-const order = ['replay', 'scope', 'world', 'viewer', 'look', 'debug', 'main'];
+const order = live ? ['world', 'viewer', 'look', 'skin', 'live-audio', 'live-input', 'live'] : ['replay', 'scope', 'world', 'viewer', 'look', 'debug', 'main'];
 const sources = { three: read(path.join(here, 'node_modules/three/build/three.module.min.js')) };
 for (const m of order) sources[m] = read(path.join(here, `src/${m}.js`));
 
@@ -23,17 +26,26 @@ const look = {
   weathering: JSON.parse(read(path.join(repo, 'assets/materials/baked/weathering.json'))),
   cdf: JSON.parse(read(path.join(camoDir, 'cdf.json')))['o3_l2_g0.5'],
 };
-const terrain = process.argv.includes('--terrain') ? JSON.parse(read(arg('terrain'))) : null; // heightfield from `w5k viewer render --strip`
-const data = { terrain, rigs: arg('rig').split(',').map((f) => JSON.parse(read(f))), replay: fs.readFileSync(arg('replay')).toString('base64'), look };
+const terrain = !live && process.argv.includes('--terrain') ? JSON.parse(read(arg('terrain'))) : null; // heightfield from `w5k viewer render --strip`
+// the skins the page may ask for: whatever `dist/skins/*.skin` holds when it is built (so it never probes for a file that is not there)
+const skins = live && fs.existsSync(path.join(here, 'dist/skins')) ? fs.readdirSync(path.join(here, 'dist/skins')).filter((f) => f.endsWith('.skin')).map((f) => f.replace(/\.skin$/, '')).sort() : [];
+const data = live ? { look, skins } : { terrain, rigs: arg('rig').split(',').map((f) => JSON.parse(read(f))), replay: fs.readFileSync(arg('replay')).toString('base64'), look };
 
 const boot = `
 const blob = (s) => URL.createObjectURL(new Blob([s], { type: 'text/javascript' }));
 const src = ${j(sources)};
 const url = { three: blob(src.three) };
 for (const m of ${j(order)}) {
-  url[m] = blob(src[m].replace(/from '(three|\\.\\/(\\w+)\\.js)'/g, (_, a, b) => "from '" + url[b ?? a] + "'"));
+  url[m] = blob(src[m].replace(/from '(three|\\.\\/([\\w-]+)\\.js)'/g, (_, a, b) => "from '" + url[b ?? a] + "'"));
 }
-await import(url.main);`;
-const html = read(path.join(here, 'src/page.html')).replace('__DATA__', () => j(data)).replace('__BOOT__', () => boot);
-fs.writeFileSync(arg('out'), html);
-console.log(`wrote ${arg('out')} (${(html.length / 1e6).toFixed(2)} MB)`);
+await import(url.${live ? 'live' : 'main'});`;
+const html = read(path.join(here, live ? 'src/live.html' : 'src/page.html')).replace('__DATA__', () => j(data)).replace('__BOOT__', () => boot);
+const out = process.argv.includes('--out') ? arg('out') : path.join(here, 'dist/index.html');
+if (process.argv.includes('--check')) {
+  if (!fs.existsSync(out) || read(out) !== html) { console.error(`${out} is not up to date: run node tools/viewer/build.mjs --live`); process.exit(1); }
+  console.log(`${out} is up to date`);
+} else {
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, html);
+  console.log(`wrote ${out} (${(html.length / 1e6).toFixed(2)} MB)`);
+}
