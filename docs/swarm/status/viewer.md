@@ -1,6 +1,6 @@
 # Status: VIEWER
 
-**Last updated:** 2026-10-10 17:50 UTC | **Branch:** lane/viewer/charts | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** slice 2 stage A (charts, Workshop note) done; idle until stage B
+**Last updated:** 2026-10-10 18:01 UTC | **Branch:** lane/viewer/charts | **Contract pinned:** contract-v0.3 (commit 0982843) | **Phase:** slice 2 stage A (charts, Workshop note) done; idle until stage B
 
 ## Done
 - Spike S-V passes (WebGL 2 under SwiftShader, 46 ms/frame, 10 s clip = 72 KB): `docs/lanes/viewer/spike-v.md`.
@@ -45,7 +45,7 @@
 - Nothing. (Lane to ARCH messaging was enabled by ARCH; the old request `viewer-lane-messaging.md` is answered.)
 
 ## Next
-1. Stage B when TRACKS lands track contact: track animation in the replay page (links along the belt), a sinkage and ground-pressure overlay under each vehicle. 2. Swap the stub samples for VALIDATION's and TRACKS's real output the day they land. 3. Stage C (Workshop) only after ARCH launches it; the note lists the requests I will file first.
+1. Stage B when TRACKS lands track contact: track animation in the replay page (links along the belt, from the contract's `RenderRig.track_runs`, new in 0.3.0 and carried through `skinpack` by ARCH's migration edit), a sinkage and ground-pressure overlay under each vehicle. 2. Swap the stub samples for VALIDATION's and TRACKS's real output the day they land. 3. Stage C (Workshop) only after ARCH launches it; the note lists the requests I will file first.
 
 ## Cards needed / PROVISIONAL decisions in force
 - None. Compression (flate2) deferred: would need a dependency card.
