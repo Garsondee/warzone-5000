@@ -243,3 +243,26 @@ fn fake_fleet(args: &[String]) -> Result<(), String> {
     }
     w5k_replay::write_bin(Path::new(out), &replay)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `w5k drive --web tools/viewer/dist` serves the committed page; no Node runs on the player's PC, so the build output is in git.
+    /// `node tools/viewer/build.mjs --live --check` (a developer's check) says whether it is current; this one says it is there and
+    /// speaks the protocol.
+    #[test]
+    fn the_test_drive_page_is_built_into_dist_and_calls_every_endpoint_it_needs() {
+        let page = viewer_dir().join("dist/index.html");
+        let html = std::fs::read_to_string(&page)
+            .unwrap_or_else(|e| panic!("{} is missing ({e}): run node tools/viewer/build.mjs --live", page.display()));
+        for endpoint in ["/api/vehicles", "/api/world", "/api/rig/", "/api/select", "/api/input", "/api/stream"] {
+            assert!(html.contains(endpoint), "the page never mentions {endpoint}");
+        }
+        assert!(
+            html.len() < 1024 * 1024,
+            "the page is {} bytes: the media lint refuses committed files over 1 MiB",
+            html.len()
+        ); // const-ok: the lint's limit
+    }
+}

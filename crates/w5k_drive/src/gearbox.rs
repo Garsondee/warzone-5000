@@ -28,6 +28,12 @@ pub struct ShiftTuning {
     /// How much the pedal moves the downshift point (0 = it stays at the light-throttle value, 1 = it follows the pedal like the upshift point).
     /// Kept low so a pedal swing at one road speed can never turn an upshift into a downshift: that is what makes a box hunt.
     pub downshift_pedal_influence: Param,
+    /// Smoothed brake pedal above which the automatic holds or drops a gear for engine braking (a long descent), 0..1.
+    pub engine_brake_pedal: Param,
+    /// Time constant of the brake-pedal filter, s: only sustained braking (a descent) asks for engine braking, not a stab into a corner.
+    pub engine_brake_filter_s: Param,
+    /// A downshift for engine braking may land up to this fraction of the full-throttle upshift point.
+    pub engine_brake_limit_fraction: Param,
     pub reverse_engage_max_speed_m_s: Param,
     /// The upshift point is capped at this fraction of the engine's redline, so a schedule written for another engine cannot pin the box.
     pub upshift_max_fraction_of_redline: Param,
@@ -41,6 +47,9 @@ impl ShiftTuning {
         self.min_gear_dwell_s.check("min_gear_dwell_s")?;
         self.pedal_filter_s.check("pedal_filter_s")?;
         self.downshift_pedal_influence.check("downshift_pedal_influence")?;
+        self.engine_brake_pedal.check("engine_brake_pedal")?;
+        self.engine_brake_filter_s.check("engine_brake_filter_s")?;
+        self.engine_brake_limit_fraction.check("engine_brake_limit_fraction")?;
         self.reverse_engage_max_speed_m_s.check("reverse_engage_max_speed_m_s")?;
         self.upshift_max_fraction_of_redline.check("upshift_max_fraction_of_redline")
     }
@@ -76,6 +85,10 @@ pub struct Gearbox {
     dwell_min_s: f64,
     pedal_tau_s: f64,
     down_influence: f64,
+    brake_pedal_min: f64,
+    brake_tau_s: f64,
+    brake_limit: f64,
+    brake: f64,
     pedal: f64,
     pedal_seeded: bool,
     reverse_max_speed: f64,
@@ -119,6 +132,10 @@ impl Gearbox {
             dwell_min_s: tuning.min_gear_dwell_s.v,
             pedal_tau_s: tuning.pedal_filter_s.v,
             down_influence: tuning.downshift_pedal_influence.v,
+            brake_pedal_min: tuning.engine_brake_pedal.v,
+            brake_tau_s: tuning.engine_brake_filter_s.v,
+            brake_limit: tuning.engine_brake_limit_fraction.v,
+            brake: 0.0,
             pedal: 0.0,
             pedal_seeded: false,
             reverse_max_speed: tuning.reverse_engage_max_speed_m_s.v,
@@ -128,6 +145,12 @@ impl Gearbox {
             dwell_s: tuning.min_gear_dwell_s.v,
             driving: true,
         })
+    }
+
+    /// Tell the shift logic where the brake pedal is (smoothed like the throttle). A driver who is braking on a descent wants engine braking:
+    /// the automatic then refuses upshifts and may drop a gear, as grade-braking logic does.
+    pub fn note_brake(&mut self, dt: f64, brake: f64) {
+        self.brake += (brake.clamp(0.0, 1.0) - self.brake) * (1.0 - exp(-dt / self.brake_tau_s));
     }
 
     pub fn gear(&self) -> i8 {
@@ -223,9 +246,13 @@ impl Gearbox {
                     return None;
                 }
                 let g = self.gear;
-                if self.wants_upshift(g, w_out, throttle) {
+                let braking = self.brake > self.brake_pedal_min;
+                if !braking && self.wants_upshift(g, w_out, throttle) {
                     Some(g + 1)
                 } else if self.wants_downshift(g, w_out, throttle, true) {
+                    Some(g - 1)
+                } else if braking && g > 1 && self.input_rpm(g - 1, w_out) <= self.brake_limit * self.up_rpm {
+                    // braking on a descent: a lower gear takes some of the load off the brakes
                     Some(g - 1)
                 } else {
                     None
@@ -291,6 +318,7 @@ impl Gearbox {
         h.write_f64(self.shift_left_s);
         h.write_f64(self.dwell_s);
         h.write_f64(self.pedal);
+        h.write_f64(self.brake);
         h.write_u8(u8::from(self.driving));
     }
 }
@@ -501,5 +529,26 @@ mod tests {
             g.update(0.01, GearRequest::Auto, 1.0, w_out, 9.0);
         }
         assert_eq!(g.gear(), 2, "a held full pedal must kick down");
+    }
+
+    #[test]
+    fn braking_down_a_grade_drops_a_gear_for_engine_braking_and_refuses_upshifts() {
+        let mut def = def();
+        def.forward_ratios = vec![2.48, 1.48, 1.0, 0.75];
+        let mut g = Gearbox::new(&def, 4000.0, &shift_tuning()).unwrap();
+        g.gear = 4;
+        let w_out = 1280.0 * RPM / 0.75; // input 1280 rpm in fourth: 1707 in third, 2527 in second (just under 0.8 x the 3200 upshift point), 4233 in first
+                                         // coasting with no brake: the box stays where it is
+        for _ in 0..800 {
+            g.note_brake(0.01, 0.0);
+            g.update(0.01, GearRequest::Auto, 0.0, w_out, 12.0);
+        }
+        assert_eq!(g.gear(), 4);
+        // brake held: it steps down (one gear per dwell) to where the engine can take it, and no further
+        for _ in 0..2000 {
+            g.note_brake(0.01, 0.6);
+            g.update(0.01, GearRequest::Auto, 0.0, w_out, 12.0);
+        }
+        assert_eq!(g.gear(), 2, "should settle where the next gear down would exceed the engine-braking limit");
     }
 }

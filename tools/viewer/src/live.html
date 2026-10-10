@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Test drive</title>
+<link rel="icon" href="data:,">
+<style>
+:root{--u:clamp(76px,13vmin,150px);--gap:2vmin;--edge:3vmin}
+html,body{margin:0;height:100%;overflow:hidden;background:#bfd4e6;font-family:system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none}
+#c{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+.btn{position:fixed;display:grid;place-items:center;align-content:center;border:0;border-radius:26%;color:#fff;box-shadow:0 .7vmin 0 #0007,0 1.4vmin 2.4vmin #0005;cursor:pointer;touch-action:none;font-weight:700;font-size:calc(var(--u)*.17);line-height:1;letter-spacing:.04em;padding:0}
+.btn svg{width:58%;height:58%;fill:currentColor;display:block}
+.btn small{font-size:.9em;margin-top:-.2em;opacity:.95}
+.btn.held{transform:translateY(.7vmin) scale(.97);filter:brightness(1.2);box-shadow:0 0 0 #0007}
+.btn:focus-visible{outline:.6vmin solid #fff}
+#left,#right{width:calc(var(--u)*1.1);height:calc(var(--u)*1.1);bottom:var(--edge);background:#2f7be5}
+#left{left:var(--edge)}
+#right{left:calc(var(--edge) + var(--u)*1.1 + var(--gap))}
+#go{right:var(--edge);bottom:var(--edge);width:calc(var(--u)*1.45);height:calc(var(--u)*1.45);background:#2fbf5b}
+#stop{right:calc(var(--edge) + var(--u)*1.45 + var(--gap));bottom:var(--edge);width:calc(var(--u)*1.1);height:calc(var(--u)*1.1);background:#e5453a}
+#back{right:calc(var(--edge) + var(--u)*1.45 + var(--gap));bottom:calc(var(--edge) + var(--u)*1.1 + var(--gap));width:calc(var(--u)*.78);height:calc(var(--u)*.78);background:#d98a14}
+#garage{left:var(--edge);top:var(--edge);width:calc(var(--u)*.8);height:calc(var(--u)*.8);background:#6a4bd6}
+#reset{right:var(--edge);top:var(--edge);width:calc(var(--u)*.9);height:calc(var(--u)*.9);background:#f08a1c}
+#camera{right:calc(var(--edge) + var(--u)*.9 + var(--gap));top:var(--edge);width:calc(var(--u)*.8);height:calc(var(--u)*.8);background:#2a8fa8}
+#sound{right:calc(var(--edge) + var(--u)*1.7 + var(--gap)*2);top:var(--edge);width:calc(var(--u)*.8);height:calc(var(--u)*.8);background:#5a6b7d}
+#sound.off svg .wave{display:none}
+#speed{position:fixed;left:50%;transform:translateX(-50%);top:var(--edge);width:min(40vw,70vmin);height:calc(var(--u)*.62);border-radius:999px;background:#0006;box-shadow:inset 0 0 0 .5vmin #fff9;overflow:hidden}
+#speedfill{position:absolute;inset:0;background:linear-gradient(90deg,#3ddc84 0,#9be22b 45%,#f5d90a 72%,#ff9f1a 100%);clip-path:inset(0 100% 0 0 round 999px);transition:clip-path .12s linear}
+#speedtxt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:.4em;color:#fff;font-weight:800;font-size:calc(var(--u)*.42);line-height:1;text-shadow:0 .4vmin 1vmin #000a}
+#speedtxt small{font-size:.38em;font-weight:700;opacity:.9}
+#limit{position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--edge) + var(--u)*.62 + var(--gap));padding:.3em .9em;border-radius:999px;background:#f5a623;color:#fff;font-weight:800;font-size:calc(var(--u)*.3);line-height:1.2;box-shadow:0 .5vmin 0 #0006;opacity:0;transition:opacity .2s;pointer-events:none}
+#limit.on{opacity:1}
+#banner{position:fixed;left:50%;top:30%;transform:translate(-50%,-50%) scale(.6);padding:.35em .9em;border-radius:.6em;background:#2fbf5b;color:#fff;font-weight:800;font-size:calc(var(--u)*.78);line-height:1.1;text-align:center;box-shadow:0 1vmin 0 #0007,0 2vmin 5vmin #0006;opacity:0;pointer-events:none;white-space:nowrap}
+#banner.on{animation:pop 2.6s ease-out forwards}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,-50%) scale(.5)}12%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}22%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scale(1)}}
+#conn,#fatal{position:fixed;left:50%;transform:translateX(-50%);padding:.4em 1em;border-radius:999px;background:#0008;color:#fff;font-weight:700;font-size:calc(var(--u)*.26);line-height:1.3;display:none}
+#conn{bottom:calc(var(--edge) + var(--u)*1.7)}
+#fatal{top:40%;max-width:80vw;text-align:center;border-radius:1em;padding:1em 1.4em}
+#picker{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:3vmin;background:rgba(18,28,46,.58);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px)}
+body.picking #picker{display:flex}
+body.picking .btn,body.picking #speed,body.picking #limit{display:none}
+#picker h1{margin:0;color:#fff;font-weight:800;font-size:clamp(28px,7vmin,80px);line-height:1.1;text-shadow:0 .5vmin 1.5vmin #000a}
+#cards{display:flex;flex-wrap:wrap;gap:3vmin;justify-content:center;max-width:96vw}
+.card{width:min(29vw,62vmin);min-width:150px;border:0;border-radius:4vmin;padding:0 0 1.6vmin;background:linear-gradient(#cfe6ff,#e9f3d8);color:#16324f;cursor:pointer;box-shadow:0 1vmin 0 #0007,0 2vmin 4vmin #0006;font-weight:800;font-size:clamp(22px,5.4vmin,64px);line-height:1.1;overflow:hidden}
+.card img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;background:linear-gradient(#bcd7f3,#dfeccb)}
+.card span{display:block;margin-top:1vmin}
+.card:hover,.card:focus-visible{transform:scale(1.05);outline:.8vmin solid #fff}
+.card:active{transform:scale(.98)}
+</style>
+<canvas id="c"></canvas>
+<button class="btn" id="left" aria-label="Turn left"><svg viewBox="0 0 24 24"><polygon points="17,2.5 4,12 17,21.5"/></svg></button>
+<button class="btn" id="right" aria-label="Turn right"><svg viewBox="0 0 24 24"><polygon points="7,2.5 20,12 7,21.5"/></svg></button>
+<button class="btn" id="stop" aria-label="Stop"><svg viewBox="0 0 24 24"><polygon points="8,2 16,2 22,8 22,16 16,22 8,22 2,16 2,8"/></svg><small>STOP</small></button>
+<button class="btn" id="go" aria-label="Go"><svg viewBox="0 0 24 24"><polygon points="12,1.5 23,14 15.5,14 15.5,22.5 8.5,22.5 8.5,14 1,14"/></svg><small>GO</small></button>
+<button class="btn" id="back" aria-label="Back up"><svg viewBox="0 0 24 24"><polygon points="12,22.5 1,10 8.5,10 8.5,1.5 15.5,1.5 15.5,10 23,10"/></svg><small>BACK</small></button>
+<button class="btn" id="garage" aria-label="Choose a vehicle"><svg viewBox="0 0 24 24"><path d="M12 2 1.5 9.5V22h21V9.5z M5 12h14v10H5z"/><rect x="7" y="15" width="10" height="2"/><rect x="7" y="18.5" width="10" height="2"/></svg></button>
+<button class="btn" id="reset" aria-label="Back on the road"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 8.6 11.6h-3.4A5.8 5.8 0 1 1 12 6.2c1.6 0 3 .6 4.1 1.7L12.8 11.2H21V3l-2.9 2.9A9 9 0 0 0 12 3z"/></svg></button>
+<button class="btn" id="camera" aria-label="Change camera"><svg viewBox="0 0 24 24"><path d="M4 7h3.2L9 4.5h6L16.8 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"/><circle cx="12" cy="13.2" r="3.8" fill="#2a8fa8"/></svg></button>
+<button class="btn" id="sound" aria-label="Sound on or off"><svg viewBox="0 0 24 24"><polygon points="2,9 6.5,9 12,4 12,20 6.5,15 2,15"/><path class="wave" d="M15 8.5a5 5 0 0 1 0 7M17.6 5.8a9 9 0 0 1 0 12.4" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+<div id="speed"><div id="speedfill"></div><div id="speedtxt"><span id="speednum">0</span><small>km/h</small></div></div>
+<div id="limit">TOP SPEED!</div>
+<div id="banner"></div>
+<div id="conn">Reconnecting…</div>
+<div id="fatal"></div>
+<div id="picker"><h1>Pick your truck!</h1><div id="cards"></div></div>
+<script id="data" type="application/json">__DATA__</script>
+<script type="module">__BOOT__</script>
+</html>

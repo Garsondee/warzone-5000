@@ -18,3 +18,24 @@ Clips and pages are CI artifacts: do not commit videos; a PNG under `docs/lanes/
 Tests: `cargo test -p w5k_replay` (codec), `node tools/viewer/test-decoder.mjs <dir>` (JS decoder against the Rust one),
 `node tools/viewer/smoke.mjs page.html part1,part2` (triangle count, console errors, each joint alone moves the picture; SKIP means the rig has nothing to see there).
 Controls: drag to orbit, wheel to zoom, space to pause, click the scope to seek.
+
+## The test-drive page (`w5k drive`)
+A five-year-old can drive with it. Start the server from the folder that holds `content/`:
+`w5k drive --vehicle content/vehicles/game/mule_4x4.ron --course content/world/courses/slice.ron --web tools/viewer/dist --open`
+then the page is at http://127.0.0.1:8787/. It is **one self-contained file, `tools/viewer/dist/index.html`, committed to git** (no Node on the player's PC; under 1 MiB, the media-lint limit).
+Rebuild it after changing `tools/viewer/src/live*.js`, `live.html`, `world.js`, `viewer.js` or `look.js` with `node tools/viewer/build.mjs --live` (`--check` says whether the committed file is current).
+It talks to the server over the protocol in `docs/swarm/requests/arch-drive-protocol.md` (same origin; this is a deliberate, owner-driven exception to "no network at run time", localhost only) and computes no physics.
+
+| Control | Keyboard | Screen | Gamepad |
+|---|---|---|---|
+| go | up arrow, W | big green GO | right trigger |
+| stop | space | big red STOP | left trigger |
+| down: brake, held after the stop it backs up | down arrow, S | amber BACK (backs up at once) | A |
+| steer | left and right arrows, A and D | blue arrows | left stick |
+| back on the road | R | orange circle arrow | Y |
+| camera: chase or RTS | C | camera button | X |
+| choose a vehicle | G or Escape; 1, 2, 3 in the picker | garage button | |
+| sound on or off | M | speaker button | |
+
+The picker shows a picture of each vehicle (rendered by the page from the rig the server sends). The HUD is a huge speed bar (green to amber, `TOP SPEED!` when the kid cap holds the throttle back), a banner when the server reports `message_event` ("Back on the road!"), and nothing else: no plots, no numbers beyond the speed.
+Test: start the server, then `node tools/viewer/live-smoke.mjs http://127.0.0.1:8787/ out/live` (headless Chromium: picker pictures, picking, keyboard, on-screen buttons, gamepad, camera key, reset and banner, backing up, sound, big targets, no console errors).
