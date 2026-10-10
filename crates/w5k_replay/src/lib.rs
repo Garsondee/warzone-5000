@@ -5,6 +5,8 @@
 //! with a JSON header) behind the same function names, and keeps this JSON form as the debugging format. The data model itself
 //! (`Frame`, `ReplayHeader`) belongs to the contract (`w5k_contract::frame`), not to this crate.
 
+pub mod binary;
+
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -34,6 +36,17 @@ pub fn write_json(path: &Path, r: &ReplayFile) -> Result<(), String> {
 pub fn read_json(path: &Path) -> Result<ReplayFile, String> {
     let s = std::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     from_json_str(&s)
+}
+
+pub fn write_bin(path: &Path, r: &ReplayFile) -> Result<(), String> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    }
+    std::fs::write(path, binary::encode(r)?).map_err(|e| format!("cannot write {}: {e}", path.display()))
+}
+
+pub fn read_bin(path: &Path) -> Result<ReplayFile, String> {
+    binary::decode(&std::fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?)
 }
 
 #[cfg(test)]

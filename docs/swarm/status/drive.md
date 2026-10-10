@@ -10,7 +10,7 @@
 - Design note `docs/lanes/drive/design-note.md` with the CCRs expected (all additive, none blocking).
 
 ## In progress
-- Build step 1 (engine) in PR on lane/drive/build. Next: coupling (build order 2).
+- Build step 2 (coupling) in PR on lane/drive/build. Next: gearbox and shift logic (build order 3).
 
 ## Blocked
 - Nothing.
@@ -22,6 +22,7 @@
 - None. Fuel map shape (quadratic bowl around the BSFC best point) is an ESTIMATE, not a card.
 
 ## Evidence
+- Coupling tests (5, incl. the speed-dependent-load lock at 60-480 Hz vs a 4 kHz reference, and lock-up removing slip) pass; contract-v0.2 merged (pin 80adac2). Found and fixed: lock-up must share load with the converter while it ramps in (a hard switch hunted).
 - Engine tests (7, named per brief) pass: `cargo test -p w5k_drive`. New: `serde` dep (workspace) and `ron` dev-dep in w5k_drive; `content/physics/drive/engine_tuning.ron` (idle gains, limiter fade, all Params).
 - `python3 -I spikes/drive/spike_d.py` output in `docs/lanes/drive/spike-d-output.txt`. No image yet (no plotter); spike plots to follow with the first bench.
 

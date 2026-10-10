@@ -6,3 +6,4 @@
 //! `heightfield`, `props`, `noise` and `generator` modules.
 
 pub mod spike_w;
+pub mod strip;
