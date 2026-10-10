@@ -13,6 +13,10 @@ A vehicle design is a short list of **choices**. Everything else about the vehic
 
 **Mass is a consequence.** `hull.mass_kg` in the vehicle file today is a hand-authored all-in number for the three trucks; it is a stage-1 shortcut (the coherence tests in FORGE's brief, "node masses sum to the sheet mass", were always meant to make mass, inertia and centre of mass come from the parts and their geometry). It has to become the sum of the parts. The same holds for the centre-of-mass position, the inertia, the springs' working loads and the ground pressure.
 
+![What you choose, what the vehicle becomes, what happens](../lanes/arch/media/design-model.png)
+
+*The same idea as one picture: choices on the left, consequences computed from them in the middle, outcomes (and failures) on the right. The two worked chains at the bottom are the owner's examples.*
+
 ## Why, in four principles (the theory, for the owner)
 1. **Independent and dependent variables.** A design space has a small number of independent knobs; everything else is dependent. Graphics analogy: a rig gives the animator controls, and the vertex positions are the *result*; a modeller sets dimensions, not "polygon count". A mass slider makes mass independent, so you can fit a huge engine to a light hull and "tune" the weight away, which breaks the causal chain that makes a design choice matter.
 2. **No free lunch.** Every slider must charge a price on some other axis, otherwise the best setting is always the end of the slider and the game collapses to "maximum everything". Engineers call the set of best compromises the *Pareto front*; our job is to make sure a real front exists. The price list below is that front.
