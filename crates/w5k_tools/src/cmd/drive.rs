@@ -1,6 +1,6 @@
 //! `w5k drive`: the command line of lane DRIVE (only that lane edits this file).
 //!
-//! `w5k drive bench <engine|shift|launch|brake|fuel> [--vehicle a.ron,b.ron,...] [--out DIR] [--tank-l N]` runs one bench per vehicle
+//! `w5k drive bench <engine|shift|launch|brake|fuel|skidpad> [--vehicle a.ron,b.ron,...] [--out DIR] [--tank-l N]` runs one bench per vehicle
 //! (the garage's three trucks by default) on DRIVE's real powertrain and a lumped point-mass vehicle (`w5k_drive::bench`), prints a summary
 //! and writes CSVs (first column x, the others series: `w5k viewer plot file.csv --out chart.png` draws them):
 //! * `engine`: the dyno curve, torque, power and specific fuel consumption against rpm (`engine_<id>.csv`);
@@ -14,17 +14,23 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use w5k_contract::rig::PhysRig;
+use w5k_chassis::bench::{skidpad as chassis_skidpad, Skidpad};
+use w5k_chassis::tuning::ChassisTuning;
+use w5k_contract::ports::DrivePort;
+use w5k_contract::rig::{DiffKind, DriveNode, PhysRig};
+use w5k_contract::{DriveInputs, DriveTelemetry, ShaftState};
 use w5k_drive::benches::{self, Bed, BenchWorld, Report};
+use w5k_drive::powertrain::{Powertrain, Tunings};
 
 const USAGE: &str =
-    "usage: w5k drive bench <engine|shift|launch|brake|fuel> [--vehicle a.ron,b.ron,...] [--out DIR] [--tank-l N]";
+    "usage: w5k drive bench <engine|shift|launch|brake|fuel|skidpad> [--vehicle a.ron,b.ron,...] [--out DIR] [--tank-l N]";
 const GARAGE_FILES: [&str; 3] = [
     "content/vehicles/game/scout_4x4.ron",
     "content/vehicles/game/mule_4x4.ron",
     "content/vehicles/game/hauler_4x4.ron",
 ];
 const WORLD_FILE: &str = "content/physics/drive/bench.ron";
+const CHASSIS_TUNING_FILE: &str = "content/physics/chassis/tuning.ron";
 
 /// The repository root: the working directory when the command runs from it, else (under `cargo test`, which runs in the crate) two levels up.
 fn root() -> PathBuf {
@@ -63,6 +69,126 @@ fn emit(r: &Report, out: &Path) -> Result<(), String> {
     write_csv(out, &r.file, r.header, &r.rows)
 }
 
+/// A powertrain that counts how often its gear changes (a hunting box shows up as a high count in a steady turn).
+struct GearLog {
+    inner: Powertrain,
+    last: i8,
+    changes: usize,
+}
+
+impl DrivePort for GearLog {
+    fn output_count(&self) -> usize {
+        self.inner.output_count()
+    }
+    fn step(&mut self, dt_s: f64, inputs: &DriveInputs, shafts: &[ShaftState], torque_nm_out: &mut [f64]) {
+        self.inner.step(dt_s, inputs, shafts, torque_nm_out);
+        let g = self.inner.telemetry().gear;
+        if g != self.last {
+            self.changes += 1;
+            self.last = g;
+        }
+    }
+    fn telemetry(&self) -> DriveTelemetry {
+        self.inner.telemetry()
+    }
+    fn hash_state(&self, h: &mut w5k_math::StateHasher) {
+        self.inner.hash_state(h);
+    }
+}
+
+/// Set the centre and axle differentials of a four-wheel-drive tree (a root differential over two axle differentials); a two-wheel-drive
+/// root is an axle differential.
+fn set_diffs(node: &mut DriveNode, centre: (DiffKind, f64), axle: (DiffKind, f64)) {
+    if let DriveNode::Diff { kind, bias, children, .. } = node {
+        if children.iter().all(|c| matches!(c, DriveNode::Diff { .. })) {
+            (*kind, *bias) = centre;
+            children.iter_mut().for_each(|c| set_diffs(c, centre, axle));
+        } else {
+            (*kind, *bias) = axle;
+        }
+    }
+}
+
+/// What a skidpad run found.
+struct Skid {
+    max_lat_g: f64,
+    shifts: usize,
+    end_speed_m_s: f64,
+}
+
+/// The skidpad of ARCH's proving runner (constant steer for the circle, speed ramped) on `rig` with the given centre and axle differentials,
+/// with the gear changes counted. `ramp` and `max_s` override the world's (a zero ramp holds the start speed: a steady turn).
+fn skid(
+    rig: &PhysRig,
+    world: &BenchWorld,
+    centre: (DiffKind, f64),
+    axle: (DiffKind, f64),
+    start_m_s: f64,
+    ramp: f64,
+    max_s: f64,
+) -> Result<Skid, String> {
+    let mut rig = rig.clone();
+    set_diffs(&mut rig.drivetrain.driveline, centre, axle);
+    let text =
+        std::fs::read_to_string(root().join(CHASSIS_TUNING_FILE)).map_err(|e| format!("{CHASSIS_TUNING_FILE}: {e}"))?;
+    let tuning = ChassisTuning::from_ron(&text).map_err(|e| format!("{CHASSIS_TUNING_FILE}: {e:?}"))?;
+    let z = rig.stations.iter().map(|s| s.rest_pos_m.z);
+    let wheelbase = z.clone().fold(f64::MIN, f64::max) - z.fold(f64::MAX, f64::min);
+    let lock = rig.stations.iter().filter_map(|s| s.steer.as_ref()).map(|d| d.max_angle_rad).fold(0.0, f64::max);
+    let pad = Skidpad {
+        steer: w5k_math::scalar::clamp(w5k_math::scalar::atan(wheelbase / world.skid_radius_m.v) / lock, 0.0, 1.0), // Ackermann angle of the circle as a share of full lock
+        start_speed_m_s: start_m_s,
+        ramp_m_s2: ramp,
+        speed_gain_per_m_s: world.skid_speed_gain_per_m_s.v,
+        warmup_s: world.skid_warmup_s.v,
+        max_s,
+        slide_out_frac: world.skid_slide_out_frac.v,
+    };
+    let mut log = GearLog { inner: Powertrain::new(&rig.drivetrain, &Tunings::shipped())?, last: 1, changes: 0 };
+    let flat = super::arch_proving::flat_world();
+    let run =
+        chassis_skidpad(&rig, &tuning, flat.as_ref(), &mut log, &pad).map_err(|e| format!("CHASSIS refused: {e:?}"))?;
+    Ok(Skid {
+        max_lat_g: run.max_lateral_acc_m_s2 / world.gravity_m_s2.v,
+        shifts: log.changes,
+        end_speed_m_s: run.points.last().map_or(0.0, |p| p.speed_m_s),
+    })
+}
+
+/// The skidpad with each centre differential kind on every vehicle (axle differentials open): the diff as a design lever.
+fn skidpad_bench(rigs: &[PhysRig], world: &BenchWorld, out: &Path) -> Result<(), String> {
+    let kinds = [
+        ("open", DiffKind::Open, 1.0),
+        ("limited slip x3", DiffKind::LimitedSlip, 3.0),
+        ("locked", DiffKind::Locked, 1.0),
+    ];
+    let mut rows = Vec::new();
+    for (i, rig) in rigs.iter().enumerate() {
+        for (j, (name, kind, bias)) in kinds.iter().enumerate() {
+            let r = skid(
+                rig,
+                world,
+                (*kind, *bias),
+                (DiffKind::Open, 1.0),
+                world.skid_start_speed_m_s.v,
+                world.skid_ramp_m_s2.v,
+                world.skid_max_s.v,
+            )?;
+            println!(
+                "{}: centre {name}: {:.3} g, ended at {:.1} m/s, {} gear changes",
+                rig.id, r.max_lat_g, r.end_speed_m_s, r.shifts
+            );
+            rows.push(vec![i as f64, j as f64, r.max_lat_g, r.end_speed_m_s, r.shifts as f64]);
+        }
+    }
+    write_csv(
+        out,
+        "skidpad_diffs.csv",
+        "vehicle_index,centre_diff(0 open 1 lsd 2 locked),max_lat_g,end_speed_m_s,gear_changes",
+        &rows,
+    )
+}
+
 fn bench(args: &[String]) -> Result<(), String> {
     let what = args.first().ok_or(USAGE)?.as_str();
     let (mut vehicles, mut out, mut tank) =
@@ -78,6 +204,10 @@ fn bench(args: &[String]) -> Result<(), String> {
         }
     }
     let world = load_world()?;
+    if what == "skidpad" {
+        let rigs = vehicles.iter().map(|v| compile(v)).collect::<Result<Vec<_>, _>>()?;
+        return skidpad_bench(&rigs, &world, &out);
+    }
     let mut fuel_rows = Vec::new();
     for v in &vehicles {
         let b = Bed::new(compile(v)?, &world)?;
@@ -281,5 +411,47 @@ mod tests {
         }
         let _ = std::fs::remove_dir_all(&dir);
         assert!(super::run(&["bench".to_string(), "nonsense".to_string()]).is_err());
+    }
+
+    #[test]
+    fn a_turn_with_spinning_inner_wheels_does_not_make_the_box_hunt() {
+        // the Hauler on the skidpad circle, speed ramped from 4 m/s: the inner wheels unload and spin on the open differentials, which used to
+        // inflate the carrier speed the shift map reads (29 gear changes in a ramped run); now it reads the slowest wheel
+        let world = super::load_world().unwrap();
+        let rig = super::compile(super::GARAGE_FILES[2]).unwrap();
+        let open = (w5k_contract::rig::DiffKind::Open, 1.0);
+        let r = super::skid(
+            &rig,
+            &world,
+            open,
+            open,
+            world.skid_start_speed_m_s.v,
+            world.skid_ramp_m_s2.v,
+            world.skid_max_s.v,
+        )
+        .unwrap();
+        assert!(r.shifts <= 6, "{} gear changes in a slowly accelerating turn", r.shifts);
+    }
+
+    #[test]
+    fn a_limited_slip_and_a_lock_raise_the_haulers_cornering_speed_on_the_skidpad() {
+        use w5k_contract::rig::DiffKind;
+        let world = super::load_world().unwrap();
+        let rig = super::compile(super::GARAGE_FILES[2]).unwrap();
+        let axle = (DiffKind::Open, 1.0);
+        let run = |c: (DiffKind, f64)| {
+            super::skid(&rig, &world, c, axle, world.skid_start_speed_m_s.v, world.skid_ramp_m_s2.v, world.skid_max_s.v)
+                .unwrap()
+        };
+        let (open, lsd, locked) =
+            (run((DiffKind::Open, 1.0)), run((DiffKind::LimitedSlip, 3.0)), run((DiffKind::Locked, 1.0)));
+        // the Hauler is power-limited in the turn (its unloaded inner wheels spin): a torque bias or a lock sends the drive to the wheels that grip
+        assert!(lsd.max_lat_g > 1.03 * open.max_lat_g, "open {} g, limited slip {} g", open.max_lat_g, lsd.max_lat_g);
+        assert!(
+            locked.max_lat_g > 1.03 * lsd.max_lat_g,
+            "limited slip {} g, locked {} g",
+            lsd.max_lat_g,
+            locked.max_lat_g
+        );
     }
 }
