@@ -2,7 +2,7 @@
 //! road-wheel springs, the steer unit and the sprocket brakes. The render rig follows in T3.
 
 use w5k_contract::combat::CombatDef;
-use w5k_contract::def::{TrackedDef, VehicleDef};
+use w5k_contract::def::{SuspensionKind, TrackedDef, VehicleDef};
 use w5k_contract::rig::*;
 use w5k_math::{scalar, Transform, Vec3};
 
@@ -116,6 +116,17 @@ pub(crate) fn tracked(def: &VehicleDef, t: &TrackedDef, ex: &Extras) -> Result<C
                 if k_s >= k_wc {
                     return Err(format!("road wheel {i}: the spring rate {k_s:.0} N/m is not below the belt contact stiffness {k_wc:.0} N/m"));
                 }
+                let f0 = m_corner * g; // the vertical force the spring carries at rest
+                let spring = if su.kind == SuspensionKind::TorsionBar {
+                    // The wheel rate k at rest from the slider; the bar rate K that gives it, F = T / (L cos phi), sin(phi) = sin(phi0) - c / L:
+                    // k = K / (L cos phi0)^2 - F0 sin(phi0) / (L cos^2 phi0).
+                    let (l, phi0) = (tx.torsion_arm_length_m.v, tx.torsion_rest_angle_rad.v);
+                    let (sp, cp) = (scalar::sin(phi0), scalar::cos(phi0));
+                    let rate_nm_rad = (k_s + f0 * sp / (l * cp * cp)) * (l * cp) * (l * cp);
+                    SpringKind::Torsion { rate_nm_rad, arm_length_m: l, rest_arm_angle_rad: phi0 }
+                } else {
+                    SpringKind::Linear { rate_n_m: k_s }
+                };
                 let c_mean = 2.0 * su.damping_ratio.v * scalar::sqrt(k_s * m_corner);
                 let (c_bump, c_reb) = (2.0 * c_mean / (1.0 + rebound), 2.0 * c_mean * rebound / (1.0 + rebound));
                 let engage_m = engage * su.bump_travel_m.v;
@@ -124,7 +135,7 @@ pub(crate) fn tracked(def: &VehicleDef, t: &TrackedDef, ex: &Extras) -> Result<C
                 omega_max = omega_max.max(scalar::sqrt((k_wc + k_s + k_stop) / m_u));
                 k_series_sum += 2.0 * k_s * k_wc / (k_s + k_wc);
                 SuspensionDef {
-                    spring: SpringKind::Linear { rate_n_m: k_s },
+                    spring,
                     preload_n: m_corner * g,
                     damper: DamperDef {
                         bump_ns_m: c_bump,
@@ -163,11 +174,23 @@ pub(crate) fn tracked(def: &VehicleDef, t: &TrackedDef, ex: &Extras) -> Result<C
                     },
                 }
             };
+            // The belt contact carries the wheel's whole load at rest (the spring's preload plus the unsprung weight): the wheel stands that
+            // much into the belt, which is the design pose the solver starts from (static penetration, validated within the contract's tolerance).
+            let pen = if road { (suspension.preload_n + m_u * g) / k_wc } else { 0.0 };
+            let rest = Vec3::new(sx, y - pen - ride_height, *z);
+            let arm_pivot_m = match suspension.spring {
+                SpringKind::Torsion { arm_length_m, rest_arm_angle_rad, .. } => Some(Vec3::new(
+                    sx,
+                    rest.y + arm_length_m * scalar::sin(rest_arm_angle_rad),
+                    rest.z - arm_length_m * scalar::cos(rest_arm_angle_rad),
+                )),
+                _ => None,
+            };
             stations.push(StationDef {
                 name: format!("{prefix}_{name}"),
                 side,
                 axle: k as u8,
-                rest_pos_m: Vec3::new(sx, y - ride_height, *z),
+                rest_pos_m: rest,
                 bump_dir: Vec3::Y,
                 bump_travel_m: if road { su.bump_travel_m.v } else { 0.0 },
                 droop_travel_m: if road { su.droop_travel_m.v } else { 0.0 },
@@ -184,7 +207,7 @@ pub(crate) fn tracked(def: &VehicleDef, t: &TrackedDef, ex: &Extras) -> Result<C
                     patches_x_m: vec![],
                 },
                 drive_output: (*kind == WheelKind::Sprocket).then_some(usize::from(side == Side::Right)),
-                arm_pivot_m: None,
+                arm_pivot_m,
             });
         }
     }
@@ -240,6 +263,17 @@ pub(crate) fn tracked(def: &VehicleDef, t: &TrackedDef, ex: &Extras) -> Result<C
     let (hull, size) = hull_body(h, com);
     let (engine, coupling, gearbox) = powertrain_parts(def, ex)?;
     let su_def = pt.steering_unit.as_ref().ok_or("a tracked def needs `powertrain.steering_unit` (kind and ratio)")?;
+    let sl = &tx.steer_law;
+    let steer_law = SteerLaw {
+        diff_ratio_by_gear: sl.diff_ratio_by_gear.iter().map(|p| p.v).collect(),
+        detents: sl.detents.iter().map(|p| p.v).collect(),
+        diff_speed_rad_s: sl.diff_speed_rad_s.as_ref().map(|p| p.v),
+        works_in_neutral: sl.works_in_neutral,
+        max_steer_torque_nm: sl.max_steer_torque_nm.as_ref().map_or(0.0, |p| p.v),
+        // Clutch-brake and controlled-differential units steer with the sprocket brakes (indices into `brakes`: [left, right]).
+        steer_brakes: matches!(su_def.kind, SteerUnitKind::ClutchBrake | SteerUnitKind::ControlledDifferential)
+            .then_some([0, 1]),
+    };
     let outputs = [0, per_side]
         .iter()
         .map(|&s| OutputDef {
@@ -304,7 +338,7 @@ pub(crate) fn tracked(def: &VehicleDef, t: &TrackedDef, ex: &Extras) -> Result<C
             driveline: DriveNode::SteerUnit {
                 kind: su_def.kind,
                 ratio: su_def.ratio.v,
-                law: SteerLaw::default(),
+                law: steer_law,
                 children: vec![DriveNode::Output(0), DriveNode::Output(1)],
             },
             outputs,
@@ -318,14 +352,35 @@ pub(crate) fn tracked(def: &VehicleDef, t: &TrackedDef, ex: &Extras) -> Result<C
             frontal_area_m2: def.aero.frontal_area_m2.v,
             centre_of_pressure_m: Vec3::new(0.0, ex.aero_cop_height_m.v, 0.0),
         },
-        proxies: vec![CollisionProxy {
-            name: "hull".into(),
-            shape: ProxyShape::Box { half_m: 0.5 * size },
-            pose: Transform::IDENTITY,
-            attached_to: None,
-            attached_station: None,
-            role: ProxyRole::Hull,
-        }],
+        proxies: vec![
+            CollisionProxy {
+                name: "belly".into(),
+                // The belly plate: between the tracks, underside exactly `ground_clearance_m` above the ground (the shape TRACKS' belly drag needs).
+                shape: ProxyShape::Box {
+                    half_m: Vec3::new(
+                        0.5 * (t.track_gauge_m.v - t.track_width_m.v),
+                        0.5 * tx.belly_thickness_m.v,
+                        0.5 * tx.belly_length_m.v,
+                    ),
+                },
+                pose: Transform::from_pos(Vec3::new(
+                    0.0,
+                    h.ground_clearance_m.v + 0.5 * tx.belly_thickness_m.v - ride_height,
+                    z_c,
+                )),
+                attached_to: None,
+                attached_station: None,
+                role: ProxyRole::Belly,
+            },
+            CollisionProxy {
+                name: "hull".into(),
+                shape: ProxyShape::Box { half_m: 0.5 * size },
+                pose: Transform::IDENTITY,
+                attached_to: None,
+                attached_station: None,
+                role: ProxyRole::Hull,
+            },
+        ],
         muzzles: vec![],
         combat: CombatDef::default(),
         integration: IntegrationDef { substeps, f_max_hz: Some(f_max_hz) },
