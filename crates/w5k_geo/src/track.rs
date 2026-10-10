@@ -6,6 +6,7 @@
 use crate::hardware::cyl_x;
 use crate::loft::{loft, Section};
 use crate::mesh::Mesh;
+use crate::module::{frame, Module, ModuleKind, Socket, SocketKind};
 use crate::part::{Part, Side};
 use crate::wheel::{revolve, segments_for};
 use serde::Deserialize;
@@ -337,4 +338,112 @@ pub fn run_parts(spec: &RunSpec, link: &LinkSpec, detail: u8) -> Result<Vec<Part
     let centre = Transform::from_pos(Vec3::new(spec.track_x_m, 0.0, 0.0));
     parts.push(part("belt".into(), NodeRole::Track, SlotKind::Track, belt_mesh(&belt, spec, link, 0.0), centre));
     Ok(parts)
+}
+
+/// The sockets a hull publishes for this run, on both sides: one `Station` per wheel (at the hub, normal outward, size the wheel's radius,
+/// `station` its index in the loop) and one `Run` on each track centre line (size the belt width). Named `station.<index>.<r|l>` and `run.<r|l>`.
+pub fn run_sockets(spec: &RunSpec) -> Vec<Socket> {
+    let socket = |name: String, kind, side: Side, at: Vec3, size_m: f64, station: Option<u8>| Socket {
+        name,
+        kind,
+        side,
+        pose: frame(at, Vec3::new(if side == Side::Right { 1.0 } else { -1.0 }, 0.0, 0.0), -Vec3::Z),
+        size_m,
+        station,
+        carrier: NodeRole::Hull,
+        owner: None,
+        hints: Vec::new(),
+    };
+    let mut sockets = Vec::new();
+    for (side, tag) in [(Side::Right, "r"), (Side::Left, "l")] {
+        let sx = if side == Side::Right { 1.0 } else { -1.0 };
+        for (i, w) in spec.wheels.iter().enumerate() {
+            let hub = Vec3::new(sx * spec.track_x_m, w.y_m, w.z_m);
+            sockets.push(socket(
+                format!("station.{i}.{tag}"),
+                SocketKind::Station,
+                side,
+                hub,
+                w.radius_m,
+                Some(i as u8),
+            ));
+        }
+        let centre = Vec3::new(sx * spec.track_x_m, 0.0, 0.0);
+        sockets.push(socket(format!("run.{tag}"), SocketKind::Run, side, centre, spec.belt_width_m, None));
+    }
+    sockets
+}
+
+/// One wheel as a module (hub at the origin, authored for the right side, mount facing the hull and as big as the wheel), the same shape as
+/// `gear::wheel_module`: it fits a `Station` socket sized for a wheel at least this large.
+pub fn wheel_module(w: &RunWheel, spec: &RunSpec, detail: u8) -> Module {
+    let (role, kind) = role_of(w.kind);
+    let parts = wheel_meshes(w, spec, segments_for(detail))
+        .into_iter()
+        .map(|(what, slot, mesh)| Part {
+            name: what.into(),
+            role,
+            station: None,
+            side: Side::Right,
+            slot,
+            fitting: false,
+            mesh: mesh.finished(),
+            pose: Transform::IDENTITY,
+            placement: None,
+        })
+        .collect();
+    let mount = Socket {
+        name: "mount".into(),
+        kind: SocketKind::Station,
+        side: Side::Right,
+        pose: frame(Vec3::ZERO, -Vec3::X, -Vec3::Z),
+        size_m: w.radius_m,
+        station: None,
+        carrier: NodeRole::Hull,
+        owner: None,
+        hints: Vec::new(),
+    };
+    Module {
+        name: kind.into(),
+        kind: ModuleKind::Gear,
+        parts,
+        sockets: Vec::new(),
+        mount: Some(mount),
+        symmetric: false,
+    }
+}
+
+/// The belt of one side as a module (the links at phase 0, one `Track` part about the track centre line), for a `Run` socket.
+pub fn belt_module(spec: &RunSpec, link: &LinkSpec) -> Result<Module, String> {
+    let belt = Belt::round(&spec.circles())?;
+    let part = Part {
+        name: "belt".into(),
+        role: NodeRole::Track,
+        station: None,
+        side: Side::Right,
+        slot: SlotKind::Track,
+        fitting: false,
+        mesh: belt_mesh(&belt, spec, link, 0.0).finished(),
+        pose: Transform::IDENTITY,
+        placement: None,
+    };
+    let mount = Socket {
+        name: "mount".into(),
+        kind: SocketKind::Run,
+        side: Side::Right,
+        pose: frame(Vec3::ZERO, -Vec3::X, -Vec3::Z),
+        size_m: spec.belt_width_m,
+        station: None,
+        carrier: NodeRole::Hull,
+        owner: None,
+        hints: Vec::new(),
+    };
+    Ok(Module {
+        name: "belt".into(),
+        kind: ModuleKind::Gear,
+        parts: vec![part],
+        sockets: Vec::new(),
+        mount: Some(mount),
+        symmetric: false,
+    })
 }

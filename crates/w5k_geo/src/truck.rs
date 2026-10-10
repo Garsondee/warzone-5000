@@ -522,6 +522,13 @@ fn shell(f: &Frame, b: &BodySpec, a: &Arches, band: f64) -> Mesh {
             let y0 = s.yo;
             let h = a.height(z, y0).clamp(b.min_notch_m, (s.yb - y0 - b.min_wall_m).max(b.min_notch_m));
             let (xn, xl, xu, xt) = (a.x_n, s.xl, s.xu, s.xt);
+            if a.axle_z.is_empty() {
+                // no wheel arches (a tracked hull): the lower hull between the tracks under the upper hull, whose sides stand over them
+                let poly =
+                    [[-xl, y0], [xl, y0], [xl, s.yb], [xu, s.yb], [xt, s.yt], [-xt, s.yt], [-xu, s.yb], [-xl, s.yb]];
+                let chamfers = [cl, cl, 0.0, cl, ct, ct, cl, 0.0];
+                return Section { z_m: z, ring: polygon_ring(&poly, &chamfers, band) };
+            }
             let poly = [
                 [-xn, y0],
                 [xn, y0],
@@ -550,6 +557,8 @@ pub enum TruckKind {
     Utility,
     Scout,
     Hauler,
+    /// The tracked carrier's hull (a template of the same machinery, with no wheel arches: `carrier.rs`).
+    Carrier,
 }
 
 impl TruckKind {
@@ -558,6 +567,7 @@ impl TruckKind {
             TruckKind::Utility => "utility_4x4",
             TruckKind::Scout => "scout_4x4",
             TruckKind::Hauler => "hauler_4x4",
+            TruckKind::Carrier => "carrier_tracked",
         }
     }
 
@@ -566,6 +576,7 @@ impl TruckKind {
             TruckKind::Utility => include_str!("../shapes/utility_4x4.ron"),
             TruckKind::Scout => include_str!("../shapes/scout_4x4.ron"),
             TruckKind::Hauler => include_str!("../shapes/hauler_4x4.ron"),
+            TruckKind::Carrier => include_str!("../shapes/carrier_tracked.ron"),
         }
     }
 }

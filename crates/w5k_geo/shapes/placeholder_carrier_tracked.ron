@@ -1,0 +1,16 @@
+// Stand-in dimensions of the tracked carrier's hull box, for pictures and tests: PROVISIONAL(C-002) until FORGE's definition supplies them. An
+// original design in the class of a light armoured personnel carrier of about 11 t, ESTIMATE for every number, bands +-10%, reason: not a copy
+// of any vehicle. The box is measured the way the trucks' is (no fittings): `width_m` is the overall width over the tracks (the upper hull's
+// sides stand flush with the tracks' outer faces), `height_m` the hull box from the belly to the roof (hatches, the ring and the antenna are
+// fittings), `ground_clearance_m` the belly to the ground, `length_m` the hull body (the tracks may overhang it). `track_m` is the gauge,
+// centre to centre of the belts; `wheelbase_m` the first to the last road wheel; the `wheel` is a road wheel (the running gear itself is
+// `placeholder_carrier_run.ron`).
+UtilityDims(
+    length_m: 5.0,
+    width_m: 2.7,
+    height_m: 1.85,
+    wheelbase_m: 3.0,
+    track_m: 2.3,
+    ground_clearance_m: 0.43,
+    wheel: (outer_radius_m: 0.305, width_m: 0.25, rim_radius_m: 0.19, lug_depth_m: 0.0, lugs_around: 0),
+)
