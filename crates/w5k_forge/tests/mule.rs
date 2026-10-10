@@ -6,6 +6,7 @@ use w5k_contract::rig::*; // also TICK_HZ and SAMPLES_PER_PERIOD
 use w5k_forge::compile::{compile, parse_def, parse_extras, Compiled};
 use w5k_forge::curve::rpm_to_rad_s;
 use w5k_forge::extras::Extras;
+use w5k_forge::render::render_rig;
 use w5k_math::scalar::{self, G};
 
 fn load() -> (VehicleDef, Extras) {
@@ -38,6 +39,7 @@ fn the_def_files_check_clean_and_the_mule_compiles_to_valid_rigs() {
     d.check().unwrap();
     assert!(x.check().is_empty());
     c.rig.validate().unwrap();
+    render_rig(&c.rig, c.hull_size_m).validate().unwrap();
     assert_eq!(c.rig.stations.len(), 4);
 }
 
@@ -46,6 +48,7 @@ fn compile_is_deterministic() {
     let (_, _, a) = built();
     let (_, _, b) = built();
     assert_eq!(a.rig.rig_hash(), b.rig.rig_hash());
+    assert_eq!(render_rig(&a.rig, a.hull_size_m), render_rig(&b.rig, b.hull_size_m));
     assert_eq!(a.report, b.report);
 }
 
@@ -152,6 +155,37 @@ fn brake_torque_gives_the_stated_service_decel_on_the_axle_loads() {
         rig.drivetrain.brakes.iter().filter(|b| rig.stations[b.station].axle == 0).map(|b| b.max_torque_nm).sum();
     let all: f64 = rig.drivetrain.brakes.iter().map(|b| b.max_torque_nm).sum();
     assert!((front / all - d.brakes.front_share.v).abs() < 1e-9);
+}
+
+#[test]
+fn wheel_radius_in_rig_equals_tyre_diameter_over_two_and_the_mesh_agrees_to_a_millimetre() {
+    let (d, _, c) = built();
+    let rr = render_rig(&c.rig, c.hull_size_m);
+    for s in &c.rig.stations {
+        assert!((s.wheel.radius_m - 0.5 * wheeled(&d).tyre.outer_diameter_m.v).abs() < 1e-12);
+        let m = rr.meshes.iter().find(|m| m.name == format!("{}.tyre", s.name)).unwrap();
+        let r = m.positions.iter().map(|p| scalar::hypot(f64::from(p[1]), f64::from(p[2]))).fold(0.0, f64::max);
+        assert!((r - s.wheel.radius_m).abs() < 1e-3);
+    }
+}
+
+#[test]
+fn render_rig_joint_layout_matches_the_rig() {
+    let (_, _, c) = built();
+    let names = c.rig.joint_names();
+    let rr = render_rig(&c.rig, c.hull_size_m);
+    assert_eq!(rr.joint_count, names.len());
+    for n in &rr.nodes {
+        if let Some(j) = n.joint {
+            let station = n.name.split('.').next().unwrap();
+            let suffix = n.name.split('.').nth(1).unwrap();
+            let want = match suffix {
+                "wheel" => format!("{station}.spin"),
+                other => format!("{station}.{other}"),
+            };
+            assert_eq!(names[j.index], want, "node {}", n.name);
+        }
+    }
 }
 
 #[test]

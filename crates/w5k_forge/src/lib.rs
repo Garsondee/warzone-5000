@@ -6,3 +6,4 @@
 pub mod compile;
 pub mod curve;
 pub mod extras;
+pub mod render;
