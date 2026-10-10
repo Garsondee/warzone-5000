@@ -151,3 +151,47 @@ if __name__ == "__main__":
     if sys.argv[1:2] == ["cdf"]:  # python3 -I assets/reference/w5k_look.py cdf > assets/materials/camo/cdf.json
         pat = {"octaves": 3, "lacunarity": 2.0, "gain": 0.5}
         print(json.dumps({cdf_key(pat): build_cdf(pat)}, indent=1))
+
+
+# ---- weathering (spec: docs/art/WEATHERING.md). Parameters come from assets/materials/weathering.ron via `w5k look bake`. ----
+def smoothstep(a, b, x):
+    t = min(max((x - a) / (b - a), 0.0), 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def mixv(a, b, t):
+    return tuple(x + (y - x) * t for x, y in zip(a, b))
+
+
+def triplanar_weights(n, sharpness=4):
+    """Box-mapping weights |n_i|^k normalised to sum 1; 0.5 / 0.5 at a 45 degree normal."""
+    w = [abs(c) ** sharpness for c in n]
+    t = sum(w)
+    return [x / t for x in w]
+
+
+def wear_amount(W, edge, n, footprint=0.0):
+    wd = max(W["wear_soft"], footprint * W["wear_freq"])
+    return smoothstep(-wd, wd, edge * W["wear_edge_gain"] + W["wear_noise_amp"] * (n - 0.5) - W["wear_bias"])
+
+
+def dirt_amount(W, cavity, n):
+    return min(max(cavity * (W["dirt_base"] + W["dirt_var"] * n), 0.0), W["dirt_max"])
+
+
+def splash_amount(W, height_m, n):
+    return W["splash_max"] * (1.0 - smoothstep(0.0, W["splash_height_m"], height_m + (n - 0.5) * W["splash_noise_m"]))
+
+
+def dust_amount(W, up_y, n):
+    return min(W["dust_max"] * smoothstep(W["dust_lo"], W["dust_hi"], up_y) * (W["dust_mod_base"] + W["dust_mod_var"] * n), W["dust_max"])
+
+
+def weathered(W, paint, bare, p, edge, cavity, height_m, up_y, seed, footprint=0.0):
+    """Linear paint colour in, weathered linear colour out. p is node-local; height_m is the height above the ground in the design pose
+    (the node's rest offset plus the ground height, supplied by the viewer); up_y is the world-up component of the unit normal."""
+    n = [vnoise(p[0] * f, p[1] * f, p[2] * f, (seed ^ k) & M) for f, k in ((W["wear_freq"], 0xA511E9B3), (W["dirt_freq"], 0x68E31DA4), (W["splash_freq"], 0x1B873593), (W["dust_freq"], 0xCC9E2D51))]
+    c = mixv(paint, bare, wear_amount(W, edge, n[0], footprint))
+    c = mixv(c, W["dirt_linear"], dirt_amount(W, cavity, n[1]))
+    c = mixv(c, W["splash_linear"], splash_amount(W, height_m, n[2]))
+    return mixv(c, W["dust_linear"], dust_amount(W, up_y, n[3]))
