@@ -13,6 +13,8 @@
 - Branch `lane/world/props` (stacked on PR 40): mud by drainage area (D8 flow accumulation, spread), Poisson-disc tree stands, barricade across the road with a gap, props in the preview; slice course hash is a committed constant. Tests: mud_appears_only_where_the_drainage_rule_puts_it, no_tree_overlaps_a_road_or_a_building, trees_keep_their_minimum_spacing, every_prop_lies_inside_the_bounds, barricade_stands_across_the_road_and_leaves_the_stated_gap.
 - PROVISIONAL(C-004): barricade placed at a fixed road fraction (chokepoint detection later).
 
+- `w5k world export` + `docs/swarm/requests/world-viewer-terrain.md` (format `w5k-terrain-1`, no contract change: `WorldHeader.terrain` already exists). ARCH asks: (1) terrain in the replay header, then (2) land #41 and a mud/barricade section.
+
 ## Blocked
 - Nothing.
 
