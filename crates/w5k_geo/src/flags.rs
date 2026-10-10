@@ -12,6 +12,7 @@ pub struct FlagParams {
     pub edge_ramp_lo_deg: f64,
     pub edge_ramp_hi_deg: f64,
     pub edge_band_m: f64,
+    pub smooth_angle_deg: f64,
     pub max_edge_m: f64,
     pub cavity_rays: u32,
     pub cavity_cap_m: f64,

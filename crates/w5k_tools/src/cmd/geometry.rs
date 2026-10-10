@@ -1,8 +1,10 @@
 //! `w5k geometry`: the command line of lane GEOMETRY (only that lane edits this file). Pictures of generated parts.
 
-use w5k_contract::render::SlotKind;
+use w5k_contract::render::NodeRole;
+use w5k_geo::export::{glb, render_rig, slot_colour};
 use w5k_geo::flags::{bake, FlagParams};
 use w5k_geo::mesh::Mesh;
+use w5k_geo::part::Part;
 use w5k_geo::raster::{render, Camera, Item, Mode};
 use w5k_geo::truck::{utility_4x4, UtilityDims};
 use w5k_geo::wheel::{segments_for, wheel, WheelDims};
@@ -32,8 +34,58 @@ pub fn run(args: &[String]) -> Result<(), String> {
             println!("wrote {path}");
             Ok(())
         }
+        (Some("export"), Some(what)) if what == "truck" => {
+            let out = get("--out").ok_or(USAGE)?;
+            let detail: u8 = get("--detail").map_or(Ok(1), |d| d.parse()).map_err(|_| USAGE.to_string())?;
+            let (dims, parts) = (UtilityDims::placeholder(), utility_4x4(&UtilityDims::placeholder(), detail));
+            let rig = render_rig("utility_4x4", &parts, &FlagParams::default_params());
+            rig.validate().map_err(|e| e.join("; "))?;
+            std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+            std::fs::write(
+                format!("{out}/utility_4x4.renderrig.json"),
+                serde_json::to_string(&rig).map_err(|e| e.to_string())?,
+            )
+            .map_err(|e| e.to_string())?;
+            std::fs::write(format!("{out}/utility_4x4.glb"), glb(&rig)).map_err(|e| e.to_string())?;
+            let table = dimension_table(&dims, &parts, rig.triangle_count());
+            std::fs::write(format!("{out}/utility_4x4.dimensions.md"), &table).map_err(|e| e.to_string())?;
+            print!("{table}");
+            Ok(())
+        }
         _ => Err(USAGE.to_string()),
     }
+}
+
+/// Generated against stated, in percent. PLACEHOLDER until the dossier lands (`PROVISIONAL(C-002)`): "stated" is the number the part list was scaled to.
+fn dimension_table(d: &UtilityDims, parts: &[Part], triangles: usize) -> String {
+    let (lo, hi) = parts
+        .iter()
+        .filter(|p| p.role == NodeRole::Hull && !p.fitting)
+        .map(|p| p.in_hull_frame().bounds())
+        .fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(a, b), (l, u)| (a.min(l), b.max(u)));
+    let hubs: Vec<Vec3> =
+        parts.iter().filter(|p| p.role == NodeRole::Wheel && p.name.starts_with("rim")).map(|p| p.pose.pos).collect();
+    let (xmax, zmin, zmax) =
+        hubs.iter().fold((0.0_f64, f64::MAX, f64::MIN), |(x, a, b), h| (x.max(h.x), a.min(h.z), b.max(h.z)));
+    let tyre = parts
+        .iter()
+        .find(|p| p.name == "tread.0.r")
+        .map_or(0.0, |p| p.mesh.v.iter().fold(0.0_f64, |r, v| r.max(w5k_math::scalar::hypot(v.y, v.z))));
+    let rows = [
+        ("length (hull box, no fittings)", hi.z - lo.z, d.length_m),
+        ("width (hull box, no fittings)", hi.x - lo.x, d.width_m),
+        ("height (hull box, no fittings)", hi.y - lo.y, d.height_m),
+        ("wheelbase (hub to hub)", zmax - zmin, d.wheelbase_m),
+        ("track (hub to hub)", 2.0 * xmax, d.track_m),
+        ("wheel diameter (over the tread)", 2.0 * tyre, 2.0 * d.wheel.outer_radius_m),
+        ("ground clearance (box bottom to ground)", d.ride_height_m() + lo.y, d.ground_clearance_m),
+    ];
+    let mut s = String::from("PLACEHOLDER dimensions, PROVISIONAL(C-002): generated against the numbers the part list was scaled to; the dossier comparison (A10) waits for VALIDATION.\n\n| dimension | generated (m) | stated (m) | error |\n|---|---|---|---|\n");
+    for (name, got, want) in rows {
+        // const-ok: percent
+        s += &format!("| {name} | {got:.3} | {want:.3} | {:+.2}% |\n", (got / want - 1.0) * 100.0);
+    }
+    s + &format!("\nTriangles in the rig: {triangles} (budget 40,000 for a wheeled vehicle).\n")
 }
 
 /// Parts as (mesh, base colour).
@@ -56,19 +108,6 @@ fn subject(what: &str, detail: u8) -> Result<Vec<(Mesh, [f64; 3])>, String> {
         _ => Err(format!("unknown subject {what}; {USAGE}")),
     }
 }
-
-/// Picture colours by material slot kind (LOOK owns the real materials).
-fn slot_colour(k: SlotKind) -> [f64; 3] {
-    match k {
-        SlotKind::Paint => [0.30, 0.34, 0.22],  // const-ok: picture colours, not physics
-        SlotKind::Metal => [0.45, 0.46, 0.47],  // const-ok: picture colours, not physics
-        SlotKind::Rubber => [0.10, 0.10, 0.10], // const-ok: picture colours, not physics
-        SlotKind::Glass => [0.30, 0.45, 0.55],  // const-ok: picture colours, not physics
-        SlotKind::Canvas => [0.50, 0.46, 0.34], // const-ok: picture colours, not physics
-        SlotKind::Optics => [0.85, 0.80, 0.55], // const-ok: picture colours, not physics
-        _ => [0.5, 0.5, 0.5],
-    }
-} // const-ok: picture colours, not physics
 
 /// Four views in a 2 x 2 sheet: three-quarter, side, front, top.
 fn sheet(parts: &[(Mesh, [f64; 3])], mode: Mode, w: usize, h: usize) -> Vec<u8> {
