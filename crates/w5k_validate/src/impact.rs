@@ -157,9 +157,6 @@ pub struct Observations {
     pub regimes: BTreeMap<String, Regime>,
     /// The baseline run's deciding label per (vehicle, benchmark): side slope `mode` (roll or slide), skidpad `limited_by`.
     pub labels: BTreeMap<(String, String), String>,
-    /// (vehicle, benchmark) cells whose response is a transient, not a smooth one (the Hauler's gradeability is a launch-transient limit,
-    /// DRIVE): reported with a `transient` tag and left out of the sign count.
-    pub transient: std::collections::BTreeSet<(String, String)>,
 }
 
 /// Where the table's sign depends on the regime, what the lever must do **in that regime** (IMPACT-MATRIX.md, "Regimes"):
@@ -223,7 +220,7 @@ impl Report {
 }
 
 pub fn evaluate(table: &[Expected], levers: &[Lever], obs: &Observations) -> Report {
-    evaluate_full(table, levers, obs, &[])
+    evaluate_full(table, levers, obs, &[], &Default::default())
 }
 
 /// The benchmark ids and names of the table's first section (`| B1 | 0-32 km/h time (s) | ... |`).
@@ -240,7 +237,15 @@ pub fn parse_benchmarks(md: &str) -> Vec<Named> {
 
 /// `evaluate`, plus which benchmarks have no runner and which table rows were therefore not tested (`all_benchmarks` from
 /// [`parse_benchmarks`]).
-pub fn evaluate_full(table: &[Expected], levers: &[Lever], obs: &Observations, all_benchmarks: &[Named]) -> Report {
+/// `transient` lists (vehicle, benchmark) cells whose response is a transient, not a smooth one (the Hauler's gradeability is a
+/// launch-transient limit, DRIVE): reported with a `transient` tag and left out of the sign count.
+pub fn evaluate_full(
+    table: &[Expected],
+    levers: &[Lever],
+    obs: &Observations,
+    all_benchmarks: &[Named],
+    transient: &std::collections::BTreeSet<(String, String)>,
+) -> Report {
     let mut entries = Vec::new();
     for ((vehicle, lever_id, bench), (base, pert)) in &obs.pairs {
         let Some(lever) = levers.iter().find(|l| l.id == lever_id) else { continue };
@@ -281,7 +286,7 @@ pub fn evaluate_full(table: &[Expected], levers: &[Lever], obs: &Observations, a
             observed,
             allowed,
             verdict,
-            transient: obs.transient.contains(&(vehicle.clone(), bench.clone())),
+            transient: transient.contains(&(vehicle.clone(), bench.clone())),
         });
     }
     let scored =
@@ -446,7 +451,6 @@ mod tests {
                 .collect(),
             regimes: BTreeMap::new(),
             labels: BTreeMap::new(),
-            transient: Default::default(),
         }
     }
 
@@ -547,7 +551,7 @@ mod tests {
     #[test]
     fn the_report_lists_benchmarks_with_no_runner_and_the_rows_that_cannot_be_tested() {
         let o = obs(&[("engine_power", "B1", -0.08)]);
-        let r = evaluate_full(&table(), &levers(), &o, &parse_benchmarks(&matrix()));
+        let r = evaluate_full(&table(), &levers(), &o, &parse_benchmarks(&matrix()), &Default::default());
         assert!(
             r.not_run_benchmarks.iter().any(|b| b.id == "B2") && !r.not_run_benchmarks.iter().any(|b| b.id == "B1")
         );
@@ -585,9 +589,9 @@ mod tests {
 
     #[test]
     fn a_transient_cell_is_shown_with_its_tag_and_left_out_of_the_count() {
-        let mut o = obs(&[("engine_power", "B6", -0.11), ("engine_power", "B1", -0.08)]);
-        o.transient.insert(("t".into(), "B6".into()));
-        let r = evaluate(&table(), &levers(), &o);
+        let o = obs(&[("engine_power", "B6", -0.11), ("engine_power", "B1", -0.08)]);
+        let transient = [("t".to_string(), "B6".to_string())].into();
+        let r = evaluate_full(&table(), &levers(), &o, &[], &transient);
         assert_eq!((r.right, r.scored), (1, 1), "only the smooth B1 cell counts");
         assert!(r.entries.iter().any(|e| e.bench == "B6" && e.transient && e.verdict == Verdict::Wrong));
         assert!(render_markdown(&r).contains("transient"));

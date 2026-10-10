@@ -7,7 +7,7 @@ Same runner, same levers (`levers::apply_both`), same table as `impact-v1-correc
 
 ## What changed against v1, and why
 - **The score fell, and the cause is the Hauler's step climb, which is mostly resolution noise.** The step test bisects in quanta of about 7.8 mm (0.102, 0.109, 0.117 m on the Hauler: 6.7% per quantum), and the Hauler's base step moved from 0.102 to 0.117 m with the mass budget, so five Hauler B11 cells now read -6.7% or -13.3% (one or two quanta down) where they read 0 or +7.7% before. Four of the five are lenient rows that fail only on a loss. That is one quantum of the bisection, not evidence of a torque effect. **Ask for ARCH:** echo the step bisection tolerance in the result (`step_resolution_m`) so the matrix can treat a change of one quantum as unresolved.
-- **Engine power now carries mass, so it moves braking, side slope and skidpad (new, physically right).** Hauler +10% engine power adds 253 kg (+4%) and lowers the centre of mass about 0.1 m: braking distance +1.7% (the Mule +2.3%, the Scout +1.9%), side-slope angle +1.4%, skidpad +1.4%. The table has no row for these (unlisted): a bigger engine lengthening a brake-limited stop is the mass coupling the table's mass row already expects.
+- **Engine power now carries mass, so it moves braking, side slope and skidpad (new, physically right).** Hauler +10% engine power adds 253 kg (+4%) and lowers the centre of mass slightly (1.3 to 1.2 m at the precision I printed): braking distance +1.7% (the Mule +2.3%, the Scout +1.9%), side-slope angle +1.4%, skidpad +1.4%. The table has no row for these (unlisted): a bigger engine lengthening a brake-limited stop is the mass coupling the table's mass row already expects.
 - **Baselines moved:** Hauler grade 0.375 to 0.416, Hauler skidpad 0.59 to 0.571 g, Mule step 0.344 to 0.305 m, Scout skidpad 0.738 to 0.755 g, Scout step 0.109 to 0.117 m.
 - **The Mule's ground clearance now agrees with the table** (+2.6% on the step; was -2.3%); the Scout's no longer does (0.0%; was +14%), which makes it a dead lever on that vehicle. The Scout's limited-slip centre differential is also dead (its grade is engine-limited).
 - No orphan benchmark. Dead levers: Scout `centre_diff_limited_slip`, Scout `ground_clearance`.
@@ -31,7 +31,7 @@ A sweep of Hauler engine power (0.8 to 1.3 of baseline, `--factor` and `--only`)
 - Mule centre differential on B11 (-17.9%): a limited slip makes the step worse; momentum-dominated (ARCH gap 4), possibly a launch effect (DRIVE).
 - Scout ground clearance on B11 (0.0%, table `+`): dead on this vehicle now.
 - Mule and Scout ride frequency on B12 (0.0%, +0.2%, table `+`): barely moves a grip-plateau or slide-out limit (CHASSIS).
-- Mule and Scout centre-of-mass height and track on B7 (-0.7% to +0.9%, table `~0`): they slide before they tip; sub-1% couplings (three of four are right at 1%).
+- Mule and Scout centre-of-mass height and track on B7 (-0.7% to +0.9%, table `~0`): they slide before they tip; sub-1% couplings (all four are right at 1%).
 - Scout tyre friction on B4 (-0.2%, table `-`): brake-limited, friction is not the limit (DRIVE content).
 
 # Full result

@@ -145,17 +145,13 @@ fn impact(args: &[String]) -> Result<(), String> {
     let matrix = std::fs::read_to_string(root().join("docs/validation/IMPACT-MATRIX.md")).map_err(|e| e.to_string())?;
     let table = impact::parse_table(&matrix);
     let all_benchmarks = impact::parse_benchmarks(&matrix);
+    let transient = IMPACT_TRANSIENT.iter().map(|(v, b)| (v.to_string(), b.to_string())).collect();
     // `--factor X` perturbs by X instead of +10% (a sweep); `--only a,b` runs just those levers (lever ids of `impact::levers`)
     let factor =
         flag(args, "--factor").map_or(Ok(IMPACT_FACTOR), |f| f.parse::<f64>().map_err(|e| format!("--factor: {e}")))?;
     let only: Option<Vec<&str>> = flag(args, "--only").map(|o| o.split(',').collect());
     let levers = impact::levers();
-    let mut obs = impact::Observations {
-        pairs: BTreeMap::new(),
-        regimes: BTreeMap::new(),
-        labels: BTreeMap::new(),
-        transient: IMPACT_TRANSIENT.iter().map(|(v, b)| (v.to_string(), b.to_string())).collect(),
-    };
+    let mut obs = impact::Observations { pairs: BTreeMap::new(), regimes: BTreeMap::new(), labels: BTreeMap::new() };
     for path in list.split(',').filter(|v| !v.is_empty()) {
         let path = root().join(path);
         let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -220,7 +216,7 @@ fn impact(args: &[String]) -> Result<(), String> {
             }
         }
     }
-    let report = impact::evaluate_full(&table, &levers, &obs, &all_benchmarks);
+    let report = impact::evaluate_full(&table, &levers, &obs, &all_benchmarks, &transient);
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     std::fs::write(out.join("impact.json"), serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?)
         .map_err(|e| e.to_string())?;
