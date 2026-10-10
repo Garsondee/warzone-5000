@@ -32,4 +32,11 @@
             shear_k_m: Param(v: 0.025, lo: 0.01, hi: 0.05, prov: Estimate, src: "UNVALIDATED stand-in"),
         )),
     ),
+    MaterialDef(
+        name: "gravel",
+        mu_peak: Param(v: 0.6, lo: 0.4, hi: 0.75, prov: Estimate, src: "UNVALIDATED stand-in; loose stone and gravel, between dirt and mud"),
+        mu_slide: Param(v: 0.5, lo: 0.35, hi: 0.65, prov: Estimate, src: "UNVALIDATED stand-in"),
+        rolling_coeff: Param(v: 0.06, lo: 0.03, hi: 0.1, prov: Estimate, src: "UNVALIDATED stand-in; loose surfaces cost more than firm dirt"),
+        roughness_rms_m: Param(v: 0.06, lo: 0.03, hi: 0.12, prov: Estimate, src: "UNVALIDATED stand-in; stones the 1 m grid does not resolve"),
+    ),
 ]

@@ -16,7 +16,7 @@ use w5k_replay::ReplayFile;
 use w5k_world::strip::DataStrip;
 
 const USAGE: &str = "usage:
-  w5k viewer render <replay.json|replay.w5kr> --out clip.mp4 [--rig rig.json] [--skin utility_4x4] [--strip standard] [--camera chase|orbit] [--seconds N] [--start S] [--fps N]
+  w5k viewer render <replay.json|replay.w5kr> --out clip.mp4 [--rig rig.json] [--skin utility_4x4] [--strip standard] [--terrain terrain.json] [--camera rts|quarter|front|chase|orbit]  (default rts) [--plots inset|full|off] [--seconds N] [--start S] [--fps N]
   w5k viewer page   <replay.json|replay.w5kr> --out page.html [--rig rig.json]   (a self-contained page to open in a browser)
   w5k viewer plot   <data.csv> --out chart.png [--title T] [--xlabel X] [--ylabel Y] [--width W] [--height H]
   w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.w5kr, replay.json and rig.json)";
@@ -74,7 +74,7 @@ fn skin_rig(name: &str) -> Result<RenderRig, String> {
 }
 
 /// A heightfield of the ground the replay drove over, sampled from the world model on a regular grid (x, z, in metres) and written as
-/// JSON for the page: `{x0, z0, step, nx, nz, h: [..], mat: [..], materials: [..]}`, rows of constant z. Wide enough for the whole drive.
+/// JSON for the page in WORLD's `w5k-terrain-1` format (rows of constant z, no props). Wide enough for the whole drive.
 fn terrain_json(world: &dyn WorldQuery, replay: &ReplayFile) -> String {
     const STEP_M: f64 = 0.25; // const-ok: viewer mesh resolution
     const MARGIN_M: f64 = 20.0; // const-ok: ground shown beyond the driven path
@@ -99,7 +99,11 @@ fn terrain_json(world: &dyn WorldQuery, replay: &ReplayFile) -> String {
     let names: Vec<String> = (0..=mat.iter().copied().max().unwrap_or(0))
         .map(|k| world.materials().get(w5k_contract::world::MaterialId(k)).name.clone())
         .collect();
-    serde_json::json!({ "x0": x0, "z0": z0, "step": STEP_M, "nx": nx, "nz": nz, "h": h, "mat": mat, "materials": names }).to_string()
+    serde_json::json!({
+        "format": "w5k-terrain-1", "course": "strip", "nx": nx, "nz": nz, "cell_m": STEP_M, "origin_m": { "x": x0, "z": z0 },
+        "heights_m": h, "material_ids": mat, "materials": names, "road_m": [], "props": []
+    })
+    .to_string()
 }
 
 /// The rig to draw: `--rig file.json` (a serialised `RenderRig`), or, for the canned stand-ins, the rig named in the header.
@@ -135,7 +139,18 @@ fn render(args: &[String], record: bool) -> Result<(), String> {
     std::fs::write(&rig_json, serde_json::to_string(&rig).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     let mut extra = Vec::new();
     match opt(args, "--strip") {
-        None => {}
+        None => {
+            // A terrain file named in the header (relative to the replay) or given with --terrain: WORLD's export.
+            let named = replay
+                .header
+                .world
+                .terrain
+                .as_ref()
+                .map(|t| Path::new(input).parent().unwrap_or(Path::new(".")).join(t));
+            if let Some(file) = opt(args, "--terrain").map(PathBuf::from).or(named.filter(|p| p.exists())) {
+                extra.extend(["--terrain".to_string(), file.display().to_string()]);
+            }
+        }
         Some("standard") => {
             let terrain = tmp.join("terrain.json");
             std::fs::write(&terrain, terrain_json(&DataStrip::standard(), &replay)).map_err(|e| e.to_string())?;
@@ -158,7 +173,7 @@ fn render(args: &[String], record: bool) -> Result<(), String> {
     node("build.mjs", &build)?;
     if record {
         let mut a = vec![page.display().to_string(), "--out".to_string(), out.to_string()];
-        for k in ["--camera", "--seconds", "--start", "--fps", "--width", "--height"] {
+        for k in ["--camera", "--plots", "--seconds", "--start", "--fps", "--width", "--height"] {
             if let Some(v) = opt(args, k) {
                 a.extend([k.to_string(), v.to_string()]);
             }

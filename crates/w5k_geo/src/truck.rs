@@ -1,18 +1,20 @@
 //! The parametric 4x4 utility truck. The hull is one lofted shell (`shapes/utility_4x4.ron`, `body`): its cross-section is a full-width
-//! lower body with a narrower hood, cab or bed block on top, and the wheel arches are openings whose height follows the wheel circle, cut
-//! into the section along the loft. Everything else in the part list is anchored to a surface of that shell (its walls, its roof line, its
-//! front and rear faces) and overlaps it, so nothing floats. Wheels sit at the four stations in their node frames.
+//! lower body with a narrower hood, cab or bed block on top (the upper walls lean inward, the tumblehome), the underside rises towards the
+//! nose and tail (approach and departure ramps), and the wheel arches are openings whose height follows the wheel circle, cut into the
+//! section along the loft. Everything else in the part list is anchored to a surface of that shell (its walls, its roof line, its front
+//! and rear faces) and overlaps it, so nothing floats; glass is a panel set into the wall with a raised frame around it. Wheels sit at the
+//! four stations in their node frames.
 //!
 //! Hull frame: origin at the hull box centre, +Y up, -Z forward, +X right; the ground is `ride_height_m` below the origin.
 
 use crate::flags::FlagParams;
-use crate::loft::{bevel_ring, loft_beveled, polygon_ring, sweep_arc, Section};
+use crate::loft::{bevel_ring, chamfer_polygon, loft_beveled, polygon_ring, sweep_arc, sweep_loop, Section};
 use crate::mesh::Mesh;
 use crate::part::{Part, Side};
 use crate::wheel::{cylinder_x, segments_for, wheel, WheelDims};
 use serde::Deserialize;
 use w5k_contract::render::{NodeRole, SlotKind};
-use w5k_math::{scalar, Quat, Transform, Vec3};
+use w5k_math::{scalar, Transform, Vec3};
 
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -47,16 +49,32 @@ struct Template {
     knuckle_radius_m: f64,
 }
 
-/// The shell. `stations` are (z as a fraction of L from the front, lower half-width, belt height, upper half-width, top height), the
-/// half-widths as fractions of the nominal half-width and the heights as fractions of H from the hull box bottom. Lower body: from the
-/// bottom to the belt; upper block: from the belt to the top (hood, cab roof, bed rail).
+/// One station of the shell's lines plan. Lengths are fractions: `z` of L from the front, half-widths of the nominal half-width, heights
+/// of H from the hull box bottom. The lower body runs from the underside `yo` to the belt `yb`; the upper block (hood, cab roof, bed rail)
+/// from the belt to the top `yt`, leaning inward by `tilt` metres per metre of height.
+#[derive(Deserialize, Clone, Copy)]
+#[serde(deny_unknown_fields)]
+struct StationSpec {
+    z: f64,
+    w: f64,
+    yb: f64,
+    wu: f64,
+    yt: f64,
+    #[serde(default)]
+    tilt: f64,
+    #[serde(default)]
+    yo: f64,
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct BodySpec {
-    stations: Vec<(f64, f64, f64, f64, f64)>,
+    stations: Vec<StationSpec>,
     /// How far the arch lips stand outside the lower wall: the hull box width includes them.
     lip_proud_m: f64,
     lower_chamfer_m: f64,
+    /// The bevel along the bottom outer edge (the sill) and around the arch edge: a larger one tucks the lower body in.
+    sill_chamfer_m: f64,
     upper_chamfer_m: f64,
     /// Clearance between the tyre and the arch edge, and between the tyre's inner face and the wheel well's inner wall.
     arch_gap_m: f64,
@@ -110,6 +128,23 @@ enum ZR {
     Rear(f64, f64),
 }
 
+/// Where a side window's front edge runs.
+#[derive(Deserialize)]
+enum PaneFront {
+    /// Vertical, at z (a fraction of L).
+    Vertical(f64),
+    /// Parallel to the roof line between two stations (the A-pillar and the windscreen), `pillar_m` behind it measured square to it, so the
+    /// window's slanted edge and the windscreen lean at exactly the same angle.
+    Pillar { from_f: f64, to_f: f64, pillar_m: f64 },
+}
+
+/// A frame around a window: a band `width_m` wide standing `proud_m` off the wall (the glass is recessed behind it), mitered at the corners.
+#[derive(Deserialize)]
+struct Bezel {
+    width_m: f64,
+    proud_m: f64,
+}
+
 #[derive(Deserialize)]
 enum Shape {
     /// Sections (z, full width, y0, y1) as fractions of L, W, H, lofted with bevels of `corner_m`.
@@ -139,22 +174,29 @@ enum Shape {
         proud_m: f64,
         corner_m: f64,
     },
-    /// A side window set into a wall: z (fractions of L), a bottom edge (fraction of H) and a top edge that follows the roof line at
-    /// `top_offset_m` below it, so the pane keeps inside the greenhouse where the roof line rises (the A-pillar).
+    /// A side window set into the (leaning) upper wall: a front edge (vertical, or parallel to the A-pillar), a vertical rear edge at
+    /// `rear_f`, a bottom edge (fraction of H) and a horizontal top edge `top_offset_m` below the roof line at the rear edge. Corners are
+    /// cut by `corner_m`; the glass lies on the wall plane, embedded and proud by the `x` offsets, with an optional frame.
     Pane {
         x: XR,
-        z: (f64, f64),
+        front: PaneFront,
+        rear_f: f64,
         bottom: f64,
         top_offset_m: f64,
         corner_m: f64,
+        bezel: Option<Bezel>,
     },
-    /// The glass between two stations of the roof line (a raked plane), inset from the upper walls.
+    /// The glass on the raked plane of the roof line between two stations, `margin_m` short of each end along the slope and `inset_m`
+    /// in from the upper walls, with an optional frame.
     Windscreen {
         from_f: f64,
         to_f: f64,
+        margin_m: f64,
         inset_m: f64,
         thickness_m: f64,
         proud_m: f64,
+        corner_m: f64,
+        bezel: Option<Bezel>,
     },
     /// A lip around each wheel arch, swept along the arch circle and standing `proud_m` outside the lower wall.
     ArchLip {
@@ -166,20 +208,23 @@ enum Shape {
     },
 }
 
-/// One station of the shell in metres: lower and upper half-widths, belt height and top height.
+/// One station of the shell in metres: lower half-width, belt height, upper half-width at the belt and at the top, top height, the
+/// height of the underside and the lean of the upper wall.
 #[derive(Clone, Copy)]
 struct St {
     z: f64,
     xl: f64,
     yb: f64,
     xu: f64,
+    xt: f64,
     yt: f64,
+    yo: f64,
+    tilt: f64,
 }
 
 /// The shell's lines: stations interpolated linearly in z (as the loft does between sections).
 struct Frame {
     st: Vec<St>,
-    y0: f64,
     dims: UtilityDims,
 }
 
@@ -189,15 +234,22 @@ impl Frame {
         let st = b
             .stations
             .iter()
-            .map(|&(f, w, yb, wu, yt)| St {
-                z: (f - 0.5) * d.length_m,
-                xl: w * half,
-                yb: (yb - 0.5) * d.height_m,
-                xu: wu * half,
-                yt: (yt - 0.5) * d.height_m,
+            .map(|s| {
+                let (yb, yt) = ((s.yb - 0.5) * d.height_m, (s.yt - 0.5) * d.height_m);
+                let xu = s.wu * half;
+                St {
+                    z: (s.z - 0.5) * d.length_m,
+                    xl: s.w * half,
+                    yb,
+                    xu,
+                    xt: xu - s.tilt * (yt - yb),
+                    yt,
+                    yo: (s.yo - 0.5) * d.height_m,
+                    tilt: s.tilt,
+                }
             })
             .collect();
-        Frame { st, y0: -d.height_m / 2.0, dims: *d }
+        Frame { st, dims: *d }
     }
 
     fn at(&self, z: f64) -> St {
@@ -212,7 +264,23 @@ impl Frame {
         let (p, q) = (self.st[i], self.st[i + 1]);
         let t = (z - p.z) / (q.z - p.z);
         let l = |u: f64, v: f64| u + (v - u) * t;
-        St { z, xl: l(p.xl, q.xl), yb: l(p.yb, q.yb), xu: l(p.xu, q.xu), yt: l(p.yt, q.yt) }
+        St {
+            z,
+            xl: l(p.xl, q.xl),
+            yb: l(p.yb, q.yb),
+            xu: l(p.xu, q.xu),
+            xt: l(p.xt, q.xt),
+            yt: l(p.yt, q.yt),
+            yo: l(p.yo, q.yo),
+            tilt: l(p.tilt, q.tilt),
+        }
+    }
+
+    /// The x of the upper wall at height y (it leans inward from the belt to the top).
+    fn wall_x(&self, z: f64, y: f64) -> f64 {
+        let s = self.at(z);
+        let t = ((y - s.yb) / (s.yt - s.yb).max(1e-9)).clamp(0.0, 1.0); // const-ok: guards a zero-height block
+        s.xu + (s.xt - s.xu) * t
     }
 
     fn front_z(&self) -> f64 {
@@ -232,21 +300,21 @@ impl Frame {
         }
     }
 
-    fn x(&self, r: &XR, z: f64) -> (f64, f64) {
-        let s = self.at(z);
-        match *r {
-            XR::Frac(a, b) => (a * self.dims.width_m, b * self.dims.width_m),
-            XR::Upper(a, b) => (s.xu + a, s.xu + b),
-            XR::Lower(a, b) => (s.xl + a, s.xl + b),
-        }
-    }
-
     fn y(&self, r: &YR, z: f64) -> (f64, f64) {
         let s = self.at(z);
         match *r {
             YR::Frac(a, b) => ((a - 0.5) * self.dims.height_m, (b - 0.5) * self.dims.height_m),
             YR::Belt(a, b) => (s.yb + a, s.yb + b),
             YR::Top(a, b) => (s.yt + a, s.yt + b),
+        }
+    }
+
+    /// x range at station z and height y (the upper wall leans, so its x depends on the height).
+    fn x(&self, r: &XR, z: f64, y: f64) -> (f64, f64) {
+        match *r {
+            XR::Frac(a, b) => (a * self.dims.width_m, b * self.dims.width_m),
+            XR::Upper(a, b) => (self.wall_x(z, y) + a, self.wall_x(z, y) + b),
+            XR::Lower(a, b) => (self.at(z).xl + a, self.at(z).xl + b),
         }
     }
 }
@@ -258,6 +326,34 @@ fn shaped(secs: &[(f64, f64, f64, f64)], corner_m: f64, band_m: f64) -> Mesh {
         .map(|&(z, w, y0, y1)| Section { z_m: z, ring: bevel_ring(w, y1 - y0, (y0 + y1) / 2.0, corner_m, band_m) })
         .collect();
     loft_beveled(&sections, corner_m, band_m, &[], 0.5) // const-ok: a vertex at least every half metre along a hard edge (spike S-G)
+}
+
+/// A flat panel: the polygon `outline` (u, v) with its corners cut by `corner_m`, extruded from w = `w0` to `w1`, returned as local
+/// points (u, v, w) for the caller to place.
+fn panel(outline: &[[f64; 2]], corner_m: f64, w0: f64, w1: f64, band_m: f64) -> Mesh {
+    let ring = polygon_ring(outline, &vec![corner_m; outline.len()], band_m);
+    loft_beveled(
+        &[Section { z_m: w0, ring: ring.clone() }, Section { z_m: w1, ring }],
+        corner_m,
+        band_m,
+        &[],
+        // const-ok: a panel is one strip
+        10.0,
+    )
+}
+
+/// The frame around a panel: the outline at `to_world(u, v, 0)`, swept with a chamfered band profile that starts 4 mm under the glass edge
+/// (so there is no gap) and stands `proud_m` off the surface; it is embedded 2 cm into the wall.
+fn bezel(
+    outline: &[[f64; 2]],
+    corner_m: f64,
+    b: &Bezel,
+    normal: Vec3,
+    to_world: &dyn Fn(f64, f64, f64) -> Vec3,
+) -> Mesh {
+    let pts: Vec<Vec3> = chamfer_polygon(outline, corner_m).iter().map(|p| to_world(p[0], p[1], 0.0)).collect();
+    let (s0, s1, e, p, c) = (-0.004, b.width_m - 0.004, 0.02, b.proud_m, b.proud_m / 2.0); // const-ok: 4 mm glass overlap, 2 cm embed, chamfer half the relief
+    sweep_loop(&pts, normal, &[[s0, -e], [s1, -e], [s1, p - c], [s1 - c, p], [s0 + c, p], [s0, p - c]])
 }
 
 /// Where the arches are: the wheel circle's centre in the hull frame, the arch radius, the arch's half angle at the body bottom, the
@@ -285,14 +381,14 @@ impl Arches {
         }
     }
 
-    /// Height of the arch above the body bottom at station z (0 outside it).
-    fn height(&self, z: f64, y0: f64) -> f64 {
+    /// Height of the arch above the underside `y_o` at station z (0 outside it).
+    fn height(&self, z: f64, y_o: f64) -> f64 {
         self.axle_z
             .iter()
             .map(|&zc| {
                 let dz = z - zc;
                 if dz.abs() < self.r_a {
-                    self.y_c + scalar::sqrt(self.r_a * self.r_a - dz * dz) - y0
+                    self.y_c + scalar::sqrt(self.r_a * self.r_a - dz * dz) - y_o
                 } else {
                     0.0
                 }
@@ -312,14 +408,15 @@ fn shell(f: &Frame, b: &BodySpec, a: &Arches, band: f64) -> Mesh {
     }
     zs.sort_by(f64::total_cmp);
     zs.dedup_by(|p, q| (*p - *q).abs() < 1e-4); // const-ok: sections closer than 0.1 mm are one
-    let (cl, ct) = (b.lower_chamfer_m, b.upper_chamfer_m);
-    let chamfers = [cl, cl, 0.0, cl, cl, 0.0, ct, ct, 0.0, cl, cl, 0.0];
+    let (cl, cs, ct) = (b.lower_chamfer_m, b.sill_chamfer_m, b.upper_chamfer_m);
+    let chamfers = [cl, cl, 0.0, cs, cl, 0.0, ct, ct, 0.0, cl, cs, 0.0];
     let sections: Vec<Section> = zs
         .iter()
         .map(|&z| {
-            let (s, y0) = (f.at(z), f.y0);
+            let s = f.at(z);
+            let y0 = s.yo;
             let h = a.height(z, y0).clamp(b.min_notch_m, (s.yb - y0 - b.min_wall_m).max(b.min_notch_m));
-            let (xn, xl, xu) = (a.x_n, s.xl, s.xu);
+            let (xn, xl, xu, xt) = (a.x_n, s.xl, s.xu, s.xt);
             let poly = [
                 [-xn, y0],
                 [xn, y0],
@@ -327,8 +424,8 @@ fn shell(f: &Frame, b: &BodySpec, a: &Arches, band: f64) -> Mesh {
                 [xl, y0 + h],
                 [xl, s.yb],
                 [xu, s.yb],
-                [xu, s.yt],
-                [-xu, s.yt],
+                [xt, s.yt],
+                [-xt, s.yt],
                 [-xu, s.yb],
                 [-xl, s.yb],
                 [-xl, y0 + h],
@@ -365,14 +462,14 @@ pub fn utility_4x4(d: &UtilityDims, detail: u8) -> Vec<Part> {
         mesh: finish(shell(&frame, &tpl.body, &arches, band)),
         pose: Transform::IDENTITY,
     });
-    let mut add = |spec: &PartSpec, name: String, side: Side, station: Option<u8>, mesh: Mesh| {
+    let mut add = |spec: &PartSpec, name: String, slot: SlotKind, side: Side, station: Option<u8>, mesh: Mesh| {
         let mesh = if side == Side::Left { mesh.mirrored_x() } else { mesh };
         parts.push(Part {
             name,
             role: spec.role,
             station,
             side,
-            slot: spec.slot,
+            slot,
             fitting: spec.fitting,
             mesh: finish(mesh),
             pose: Transform::IDENTITY,
@@ -389,30 +486,27 @@ pub fn utility_4x4(d: &UtilityDims, detail: u8) -> Vec<Part> {
             match &spec.shape {
                 Shape::Loft { corner_m, sections } => {
                     let secs: Vec<_> = sections.iter().map(|s| (fz(s.0), fx(s.1), fy(s.2), fy(s.3))).collect();
-                    add(spec, name, side, None, shaped(&secs, *corner_m, band));
+                    add(spec, name, spec.slot, side, None, shaped(&secs, *corner_m, band));
                 }
                 Shape::Block { x, y, z, corner_m } => {
                     let (z0, z1) = frame.z(z);
                     let zm = (z0 + z1) / 2.0;
-                    let ((x0, x1), (y0, y1)) = (frame.x(x, zm), frame.y(y, zm));
+                    let (y0, y1) = frame.y(y, zm);
+                    let (x0, x1) = frame.x(x, zm, (y0 + y1) / 2.0);
                     let (bw, bh, bl) = (x1 - x0, y1 - y0, z1 - z0);
                     let m = shaped(
                         &[(-bl / 2.0, bw, -bh / 2.0, bh / 2.0), (bl / 2.0, bw, -bh / 2.0, bh / 2.0)],
                         *corner_m,
                         band,
                     );
-                    add(
-                        spec,
-                        name,
-                        side,
-                        None,
-                        m.transformed(&Transform::from_pos(Vec3::new((x0 + x1) / 2.0, (y0 + y1) / 2.0, zm))),
-                    );
+                    let at = Vec3::new((x0 + x1) / 2.0, (y0 + y1) / 2.0, zm);
+                    add(spec, name, spec.slot, side, None, m.transformed(&Transform::from_pos(at)));
                 }
                 Shape::Cyl { axis, x, y, z, radius_m } => {
                     let (z0, z1) = frame.z(z);
                     let zm = (z0 + z1) / 2.0;
-                    let ((x0, x1), (y0, y1)) = (frame.x(x, zm), frame.y(y, zm));
+                    let (y0, y1) = frame.y(y, zm);
+                    let (x0, x1) = frame.x(x, zm, (y0 + y1) / 2.0);
                     let len = match axis {
                         Axis::X => x1 - x0,
                         Axis::Y => y1 - y0,
@@ -426,7 +520,7 @@ pub fn utility_4x4(d: &UtilityDims, detail: u8) -> Vec<Part> {
                     };
                     let c = Vec3::new((x0 + x1) / 2.0, (y0 + y1) / 2.0, zm);
                     m.v = m.v.iter().map(|&p| rot(p) + c).collect();
-                    add(spec, name, side, None, m);
+                    add(spec, name, spec.slot, side, None, m);
                 }
                 Shape::Overlay { z, inset_m, embed_m, proud_m, corner_m } => {
                     let (za, zb) = ((z.0 - 0.5) * l, (z.1 - 0.5) * l);
@@ -437,47 +531,93 @@ pub fn utility_4x4(d: &UtilityDims, detail: u8) -> Vec<Part> {
                         .iter()
                         .map(|&zz| {
                             let s = frame.at(zz);
-                            (zz, 2.0 * (s.xu - inset_m), s.yt - embed_m, s.yt + proud_m)
+                            (zz, 2.0 * (s.xt - inset_m), s.yt - embed_m, s.yt + proud_m)
                         })
                         .collect();
-                    add(spec, name, side, None, shaped(&secs, *corner_m, band));
+                    add(spec, name, spec.slot, side, None, shaped(&secs, *corner_m, band));
                 }
-                Shape::Pane { x, z, bottom, top_offset_m, corner_m } => {
-                    let (z0, z1) = ((z.0 - 0.5) * l, (z.1 - 0.5) * l);
-                    let (x0, x1) = frame.x(x, (z0 + z1) / 2.0);
-                    let top = |zz: f64| frame.at(zz).yt - top_offset_m;
-                    let yb = fy(*bottom);
-                    // the outline in (y, z), lofted along x: local (x', y', z') = (y, z, x), then permuted back to (x, y, z) = (z', x', y')
-                    let poly = [[yb, z0], [yb, z1], [top(z1), z1], [top(z0), z0]];
-                    let ring = polygon_ring(&poly, &[*corner_m; 4], band);
-                    let m = loft_beveled(
-                        &[Section { z_m: x0, ring: ring.clone() }, Section { z_m: x1, ring }],
-                        *corner_m,
-                        band,
-                        &[],
-                        // const-ok: a pane is one strip
-                        10.0,
-                    );
-                    let m = Mesh { v: m.v.iter().map(|p| Vec3::new(p.z, p.x, p.y)).collect(), t: m.t };
-                    add(spec, name, side, None, m);
+                Shape::Pane { x, front, rear_f, bottom, top_offset_m, corner_m, bezel: frame_spec } => {
+                    let z_rear = fz(*rear_f);
+                    let y_sill = fy(*bottom);
+                    let y_top = frame.at(z_rear).yt - top_offset_m;
+                    // the front edge at the sill and at the top edge
+                    let (z_fb, z_ft) = match front {
+                        PaneFront::Vertical(f) => (fz(*f), fz(*f)),
+                        PaneFront::Pillar { from_f, to_f, pillar_m } => {
+                            let (za, zb) = (fz(*from_f), fz(*to_f));
+                            let (ya, yb) = (frame.at(za).yt, frame.at(zb).yt);
+                            let (dz, dy) = (zb - za, yb - ya);
+                            let len = scalar::hypot(dz, dy);
+                            // the roof-line ramp moved `pillar_m` into the cab, square to itself, then cut by the sill and top lines
+                            let (az, ay) = (za + pillar_m * dy / len, ya - pillar_m * dz / len);
+                            let at_y = |y: f64| az + (y - ay) / dy * dz;
+                            (at_y(y_sill), at_y(y_top).min(z_rear - 0.05)) // const-ok: the top edge keeps 5 cm of length
+                        }
+                    };
+                    let zm = (z_fb.min(z_ft) + z_rear) / 2.0;
+                    let ym = (y_sill + y_top) / 2.0;
+                    let (g0, g1) = frame.x(x, zm, ym); // glass: from embedded to proud of the wall at mid height
+                    let wall = frame.wall_x(zm, ym);
+                    let tilt = frame.at(zm).tilt;
+                    // local (u, v) = (to the right as seen from outside, up), counter-clockwise as seen from outside
+                    let outline = [
+                        [zm - z_rear, y_sill - ym],
+                        [zm - z_fb, y_sill - ym],
+                        [zm - z_ft, y_top - ym],
+                        [zm - z_rear, y_top - ym],
+                    ];
+                    let to_world = |u: f64, v: f64, wn: f64| Vec3::new(wall + wn - tilt * v, ym + v, zm - u);
+                    let glass = panel(&outline, *corner_m, g0 - wall, g1 - wall, band);
+                    let world =
+                        |m: &Mesh| Mesh { v: m.v.iter().map(|p| to_world(p.x, p.y, p.z)).collect(), t: m.t.clone() };
+                    add(spec, name.clone(), spec.slot, side, None, world(&glass));
+                    if let Some(b) = frame_spec {
+                        let n = Vec3::new(1.0, tilt, 0.0).normalized_or_zero();
+                        add(
+                            spec,
+                            format!("{name}_frame"),
+                            SlotKind::Paint,
+                            side,
+                            None,
+                            bezel(&outline, *corner_m, b, n, &to_world),
+                        );
+                    }
                 }
-                Shape::Windscreen { from_f, to_f, inset_m, thickness_m, proud_m } => {
+                Shape::Windscreen {
+                    from_f,
+                    to_f,
+                    margin_m,
+                    inset_m,
+                    thickness_m,
+                    proud_m,
+                    corner_m,
+                    bezel: frame_spec,
+                } => {
                     let (z0, z1) = (fz(*from_f), fz(*to_f));
                     let (s0, s1) = (frame.at(z0), frame.at(z1));
                     let (dy, dz) = (s1.yt - s0.yt, z1 - z0);
                     let len = scalar::hypot(dy, dz);
-                    let width = 2.0 * (frame.at((z0 + z1) / 2.0).xu - inset_m);
-                    let t = *thickness_m;
-                    let m = shaped(
-                        &[(-len / 2.0, width, -t / 2.0, t / 2.0), (len / 2.0, width, -t / 2.0, t / 2.0)],
-                        t / 4.0, // const-ok: bevel a quarter of the thickness
-                        band,
-                    );
-                    let (ny, nz) = (dz / len, -dy / len); // the surface normal, up and forward
-                    let off = proud_m - t / 2.0;
-                    let at = Vec3::new(0.0, (s0.yt + s1.yt) / 2.0 + ny * off, (z0 + z1) / 2.0 + nz * off);
-                    let pose = Transform::new(at, Quat::from_axis_angle(Vec3::X, scalar::atan2(-dy, dz)));
-                    add(spec, name, side, None, m.transformed(&pose));
+                    let half_w = frame.at((z0 + z1) / 2.0).xt - inset_m;
+                    let half_l = len / 2.0 - margin_m;
+                    // the plane of the roof line: origin at its middle, v up the slope, w along the normal (up and forward)
+                    let mid = Vec3::new(0.0, (s0.yt + s1.yt) / 2.0, (z0 + z1) / 2.0);
+                    let (slope, n) = (Vec3::new(0.0, dy / len, dz / len), Vec3::new(0.0, dz / len, -dy / len));
+                    let outline = [[-half_w, -half_l], [half_w, -half_l], [half_w, half_l], [-half_w, half_l]];
+                    let to_world = |u: f64, v: f64, wn: f64| mid + Vec3::X * u + slope * v + n * wn;
+                    let glass = panel(&outline, *corner_m, proud_m - thickness_m, *proud_m, band);
+                    let world =
+                        |m: &Mesh| Mesh { v: m.v.iter().map(|p| to_world(p.x, p.y, p.z)).collect(), t: m.t.clone() };
+                    add(spec, name.clone(), spec.slot, side, None, world(&glass));
+                    if let Some(b) = frame_spec {
+                        add(
+                            spec,
+                            format!("{name}_frame"),
+                            SlotKind::Paint,
+                            side,
+                            None,
+                            bezel(&outline, *corner_m, b, n, &to_world),
+                        );
+                    }
                 }
                 Shape::ArchLip { inner_m, width_m, embed_m, proud_m, corner_m } => {
                     for (axle, zc) in arches.axle_z.iter().enumerate() {
@@ -489,13 +629,25 @@ pub fn utility_4x4(d: &UtilityDims, detail: u8) -> Vec<Part> {
                                     .iter()
                                     .map(|p| [p[0] + xl + (proud_m - embed_m) / 2.0, p[1]])
                                     .collect();
+                            // the lip runs from where the arch meets the underside in front of the wheel to where it meets it behind
+                            // (the underside rises towards the nose and tail, so the two ends differ)
+                            let reach = |sign: f64| {
+                                let ok = |a: f64| {
+                                    let z = zc + sign * arches.r_a * scalar::sin(a);
+                                    // const-ok: the arch keeps 3 cm of height at the lip's end
+                                    arches.y_c + arches.r_a * scalar::cos(a) - frame.at(z).yo > 0.03
+                                };
+                                let step = arches.phi_m / 90.0; // const-ok: 90 steps to search for the end
+                                (0..=90).map(|k| f64::from(k) * step).take_while(|&a| ok(a)).last().unwrap_or(0.0)
+                            };
+                            let (a_front, a_rear) = (reach(-1.0), reach(1.0));
                             let n = 18; // const-ok: steps along the arch: a 9 degree step keeps the sag under 3 mm
                             let angles: Vec<f64> =
-                                (0..=n).map(|k| arches.phi_m * (2.0 * f64::from(k) / f64::from(n) - 1.0)).collect();
+                                (0..=n).map(|k| -a_front + (a_front + a_rear) * f64::from(k) / f64::from(n)).collect();
                             let m = sweep_arc(&ring, (arches.y_c, *zc), &angles);
                             let n =
                                 format!("{}.{}.{}", spec.name, axle, if lip_side == Side::Right { "r" } else { "l" });
-                            add(spec, n, lip_side, Some(axle as u8), m);
+                            add(spec, n, spec.slot, lip_side, Some(axle as u8), m);
                         }
                     }
                     break;

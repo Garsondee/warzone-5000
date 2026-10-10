@@ -1,11 +1,15 @@
-// PLACEHOLDER dimensions for the utility 4x4, PROVISIONAL(C-002) (the M998 dossier has not landed; nothing is quoted from memory).
-// Provenance ESTIMATE, band +-20% each, reason: pictures and tests only until FORGE passes the real hull Params.
+// Dimensions of the utility 4x4 for pictures and tests, PROVISIONAL(C-002) until FORGE passes the real hull Params. Set to the M998 class:
+// the dossier (content/dossier/m998.ron, every figure there UNVERIFIED secondary) gives static.length_m 4.572, static.width_m 2.159,
+// static.height_m 1.7907 (band 1.7526 to 1.8288, ground to roof), static.wheelbase_m 3.302 and static.ground_clearance_m 0.4064 to 0.4318;
+// the track and the tyre (diameter 0.82, section 0.30) are the Mule's (content/vehicles/game/mule_4x4.ron: track 1.82, wheelbase 3.30),
+// so the skin sits on the Mule's physics rig. The hull box is measured from the underside, so its height is the overall height minus the
+// clearance: 1.79 - 0.42 = 1.37 m. Provenance ESTIMATE, band +-5% each, reason: the vehicle is a fictional design in the M998 class.
 UtilityDims(
-    length_m: 4.6,
-    width_m: 2.1,
-    height_m: 1.45,
-    wheelbase_m: 3.3,
-    track_m: 1.8,
+    length_m: 4.572,
+    width_m: 2.159,
+    height_m: 1.37,
+    wheelbase_m: 3.302,
+    track_m: 1.82,
     ground_clearance_m: 0.42,
-    wheel: (outer_radius_m: 0.40, width_m: 0.28, rim_radius_m: 0.24, lug_depth_m: 0.02, lugs_around: 28),
+    wheel: (outer_radius_m: 0.41, width_m: 0.30, rim_radius_m: 0.25, lug_depth_m: 0.02, lugs_around: 28),
 )

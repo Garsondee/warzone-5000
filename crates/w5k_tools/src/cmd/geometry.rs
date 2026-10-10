@@ -102,22 +102,22 @@ fn dimension_table(d: &UtilityDims, parts: &[Part], triangles: usize) -> String 
     s + &format!("\nTriangles in the rig: {triangles} (budget 40,000 for a wheeled vehicle).\n")
 }
 
-/// Parts as (mesh, base colour).
-fn subject(what: &str, detail: u8) -> Result<Vec<(Mesh, [f64; 3])>, String> {
+/// Parts as (mesh, base colour, counts for the camera framing: a tall antenna should not move the view).
+fn subject(what: &str, detail: u8) -> Result<Vec<(Mesh, [f64; 3], bool)>, String> {
     match what {
         "wheel" => {
             let w = wheel(&WheelDims::placeholder(), segments_for(detail));
             // const-ok: picture colours, not physics
             Ok(vec![
-                (w.tyre, [0.10, 0.10, 0.10]), // const-ok: picture colours and camera framing
-                (w.lugs, [0.13, 0.13, 0.13]), // const-ok: picture colours and camera framing
-                (w.rim, [0.55, 0.57, 0.52]),  // const-ok: picture colours and camera framing
-                (w.nuts, [0.7, 0.7, 0.7]),    // const-ok: picture colours and camera framing
+                (w.tyre, [0.10, 0.10, 0.10], true), // const-ok: picture colours and camera framing
+                (w.lugs, [0.13, 0.13, 0.13], true), // const-ok: picture colours and camera framing
+                (w.rim, [0.55, 0.57, 0.52], true),  // const-ok: picture colours and camera framing
+                (w.nuts, [0.7, 0.7, 0.7], true),    // const-ok: picture colours and camera framing
             ])
         }
         "truck" => {
             let parts = utility_4x4(&UtilityDims::placeholder(), detail);
-            Ok(parts.iter().map(|p| (p.in_hull_frame(), slot_colour(p.slot))).collect())
+            Ok(parts.iter().map(|p| (p.in_hull_frame(), slot_colour(p.slot), p.name != "antenna")).collect())
         }
         _ => Err(format!("unknown subject {what}; {USAGE}")),
     }
@@ -137,7 +137,7 @@ const VIEWS: [(&str, [f64; 3], bool); 8] = [
 ];
 
 /// One picture per name in `views`: a single view fills the image, four views make a 2 x 2 sheet.
-fn sheet(parts: &[(Mesh, [f64; 3])], mode: Mode, views: &[&str], w: usize, h: usize) -> Result<Vec<u8>, String> {
+fn sheet(parts: &[(Mesh, [f64; 3], bool)], mode: Mode, views: &[&str], w: usize, h: usize) -> Result<Vec<u8>, String> {
     let flags = bake(&parts.iter().map(|p| &p.0).collect::<Vec<_>>(), &FlagParams::default_params());
     let items: Vec<Item> = parts
         .iter()
@@ -146,6 +146,7 @@ fn sheet(parts: &[(Mesh, [f64; 3])], mode: Mode, views: &[&str], w: usize, h: us
         .collect();
     let (lo, hi) = parts
         .iter()
+        .filter(|p| p.2)
         .map(|p| p.0.bounds())
         .fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(a, b), (l, u)| (a.min(l), b.max(u)));
     let (c, ext) = ((lo + hi) * 0.5, (hi - lo).length());
@@ -154,17 +155,20 @@ fn sheet(parts: &[(Mesh, [f64; 3])], mode: Mode, views: &[&str], w: usize, h: us
     for (i, name) in views.iter().enumerate() {
         let &(_, dir, persp) = VIEWS.iter().find(|v| v.0 == *name).ok_or(format!("unknown view {name}"))?;
         let single = views.len() == 1;
+        let close = *name == "close";
+        // the close-up looks at the greenhouse: a little above and ahead of the vehicle centre, from nearer
+        let focus = if close { c + Vec3::new(0.0, ext * 0.09, -ext * 0.06) } else { c }; // const-ok: camera framing
         let cam = Camera {
-            eye: c + Vec3::new(dir[0], dir[1], dir[2]).normalized_or_zero() * ext * 1.7, // const-ok: camera framing
-            target: if *name == "close" { c + Vec3::new(0.0, 0.0, -ext * 0.18) } else { c }, // const-ok: camera framing
+            eye: focus + Vec3::new(dir[0], dir[1], dir[2]).normalized_or_zero() * ext * if close { 0.85 } else { 1.7 }, // const-ok: camera framing
+            target: focus,
             // const-ok: camera field of view in radians
-            fov_rad: persp.then_some(if *name == "close" {
-                0.55 // const-ok: camera field of view
+            fov_rad: persp.then_some(if close {
+                0.45 // const-ok: camera field of view
             } else if single {
                 0.42 // const-ok: camera field of view
             } else {
-                0.5
-            }), // const-ok: camera framing
+                0.5 // const-ok: camera field of view
+            }),
             ortho_half_h_m: ext * if single { 0.30 } else { 0.40 }, // const-ok: camera framing
         };
         // const-ok: picture background

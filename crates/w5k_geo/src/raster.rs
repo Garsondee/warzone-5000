@@ -102,12 +102,20 @@ pub fn render(items: &[Item], cam: &Camera, w: usize, h: usize, mode: Mode, back
                     if l0 < 0.0 || l1 < 0.0 || l2 < 0.0 {
                         continue;
                     }
-                    let z = l0 * p[0].2 + l1 * p[1].2 + l2 * p[2].2;
+                    // Under perspective, 1/z (not z) varies linearly across the screen, so depth and the flags are interpolated with
+                    // weights l_i / z_i; with screen-space weights a large triangle's depth is off by more than a glass pane stands proud.
+                    let (l, z) = if cam.fov_rad.is_some() {
+                        let (a0, a1, a2) = (l0 / p[0].2, l1 / p[1].2, l2 / p[2].2);
+                        let sum = a0 + a1 + a2;
+                        ([a0 / sum, a1 / sum, a2 / sum], 1.0 / sum)
+                    } else {
+                        ([l0, l1, l2], l0 * p[0].2 + l1 * p[1].2 + l2 * p[2].2)
+                    };
                     if z >= depth[py * sw + px] {
                         continue;
                     }
                     depth[py * sw + px] = z;
-                    let (e, c) = (at(it.edge, [l0, l1, l2]), at(it.cavity, [l0, l1, l2]));
+                    let (e, c) = (at(it.edge, l), at(it.cavity, l));
                     let base = it.colour.map(|v| v * shade);
                     col[py * sw + px] = match mode {
                         Mode::Shaded => base,

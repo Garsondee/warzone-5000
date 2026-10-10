@@ -23,6 +23,7 @@ use w5k_drive::powertrain::{Powertrain, Tunings};
 use w5k_math::{scalar, Quat, StateHasher, Vec3};
 use w5k_replay::ReplayFile;
 use w5k_world::course::{generate, CourseDef};
+use w5k_world::grid::GridWorld;
 
 const USAGE: &str = "usage: w5k scenario mule-course [--scenario FILE.ron] --out DIR";
 const DEFAULT_SCENARIO: &str = "content/physics/arch/mule_course.ron";
@@ -33,7 +34,7 @@ const SEARCH_SAMPLES: usize = 400; // const-ok: how many centreline samples ahea
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct MuleCourse {
+pub(crate) struct MuleCourse {
     vehicle: String,
     extras: String,
     course: String,
@@ -89,7 +90,7 @@ impl MuleCourse {
 }
 
 /// The road centreline as a polyline with arclength.
-struct RoadPath {
+pub(crate) struct RoadPath {
     pts: Vec<(f64, f64)>,
     s: Vec<f64>,
 }
@@ -168,24 +169,68 @@ impl RoadPath {
 }
 
 /// What a finished run leaves behind.
-struct RunResult {
-    frame_every_ticks: u32,
-    frames: Vec<Frame>,
-    hashes: Vec<u64>,
-    final_hash: u64,
-    stop_reason: String,
-    stopped_at_s_m: f64,
-    route_m: f64,
-    time_s: f64,
+#[derive(Clone)]
+pub(crate) struct RunResult {
+    pub frame_every_ticks: u32,
+    pub frames: Vec<Frame>,
+    pub hashes: Vec<u64>,
+    pub final_hash: u64,
+    pub stop_reason: String,
+    pub stopped_at_s_m: f64,
+    pub route_m: f64,
+    pub time_s: f64,
     max_speed_m_s: f64,
     max_cross_track_m: f64,
     gears_used: Vec<i8>,
     fuel_kg: f64,
-    speed: String,
-    rpm: String,
-    gear: String,
-    track: String,
-    loads: String,
+    pub speed: String,
+    pub rpm: String,
+    pub gear: String,
+    pub track: String,
+    pub loads: String,
+}
+
+/// The driver scenario, the chassis tuning and the generated course: everything a run needs that is not the vehicle.
+pub(crate) struct Setup {
+    sc: MuleCourse,
+    tuning: ChassisTuning,
+    world: GridWorld,
+    path: RoadPath,
+    pub course_name: String,
+    pub course_seed: u64,
+}
+
+impl Setup {
+    /// Read the scenario (paths relative to `root`); `course` replaces the scenario's course file when given.
+    pub(crate) fn load(root: &Path, scenario: &str, course: Option<&str>) -> Result<Setup, String> {
+        let sc: MuleCourse = ron::from_str(&read(root, scenario)?).map_err(|e| format!("{scenario}: {e}"))?;
+        sc.check()?;
+        let tuning = ChassisTuning::from_ron(&read(root, &sc.chassis_tuning)?)
+            .map_err(|e| format!("{}: {e}", sc.chassis_tuning))?;
+        let course_def = CourseDef::from_ron(&read(root, course.unwrap_or(&sc.course))?)?;
+        let generated = generate(&course_def)?;
+        let path = RoadPath::new(&generated.road)?;
+        Ok(Setup {
+            sc,
+            tuning,
+            world: generated.world,
+            path,
+            course_name: course_def.name,
+            course_seed: course_def.seed,
+        })
+    }
+
+    /// Run `rig` over the course twice from scratch and demand identical hashes (determinism).
+    pub(crate) fn run_checked(&self, rig: &PhysRig) -> Result<RunResult, String> {
+        let run = simulate(&self.sc, rig, &self.tuning, &self.world, &self.path)?;
+        let again = simulate(&self.sc, rig, &self.tuning, &self.world, &self.path)?;
+        println!("{}: state hash, run 1: {:016x}, run 2: {:016x}", rig.id, run.final_hash, again.final_hash);
+        if run.final_hash != again.final_hash || run.hashes != again.hashes {
+            return Err(format!("{}: the two runs differ: the simulation is not deterministic", rig.id));
+        }
+        println!("{}: deterministic: identical ({} per-second hashes compared)", rig.id, run.hashes.len());
+        Ok(run)
+    }
 }
 
 /// Everything a scenario produces before it is written to disk.
@@ -200,35 +245,19 @@ struct Outcome {
 
 /// Load the scenario (paths relative to `root`), compile the truck, generate the course, run it twice and demand identical hashes.
 fn run_scenario(root: &Path, scenario: &str) -> Result<Outcome, String> {
-    let sc: MuleCourse = ron::from_str(&read(root, scenario)?).map_err(|e| format!("{scenario}: {e}"))?;
-    sc.check()?;
-    let tuning =
-        ChassisTuning::from_ron(&read(root, &sc.chassis_tuning)?).map_err(|e| format!("{}: {e}", sc.chassis_tuning))?;
-    let def = w5k_forge::compile::parse_def(&read(root, &sc.vehicle)?)?;
-    let extras = w5k_forge::compile::parse_extras(&read(root, &sc.extras)?)?;
+    let setup = Setup::load(root, scenario, None)?;
+    let def = w5k_forge::compile::parse_def(&read(root, &setup.sc.vehicle)?)?;
+    let extras = w5k_forge::compile::parse_extras(&read(root, &setup.sc.extras)?)?;
     let compiled =
-        w5k_forge::compile::compile(&def, &extras).map_err(|e| format!("FORGE refused {}: {e:?}", sc.vehicle))?;
-    let course_def = CourseDef::from_ron(&read(root, &sc.course)?)?;
-    let course = generate(&course_def)?;
-    let path = RoadPath::new(&course.road)?;
-    let rig = compiled.rig;
-
-    // Determinism: the whole run twice, from scratch, must give the same hashes.
-    let run = simulate(&sc, &rig, &tuning, &course.world, &path)?;
-    let again = simulate(&sc, &rig, &tuning, &course.world, &path)?;
-    println!("state hash, run 1: {:016x}", run.final_hash);
-    println!("state hash, run 2: {:016x}", again.final_hash);
-    if run.final_hash != again.final_hash || run.hashes != again.hashes {
-        return Err("the two runs differ: the simulation is not deterministic".into());
-    }
-    println!("deterministic: identical ({} per-second hashes compared)", run.hashes.len());
+        w5k_forge::compile::compile(&def, &extras).map_err(|e| format!("FORGE refused {}: {e:?}", setup.sc.vehicle))?;
+    let run = setup.run_checked(&compiled.rig)?;
     Ok(Outcome {
         run,
-        rig,
+        rig: compiled.rig,
         hull_size_m: compiled.hull_size_m,
         vehicle_id: def.id,
-        course_name: course_def.name,
-        course_seed: course_def.seed,
+        course_name: setup.course_name,
+        course_seed: setup.course_seed,
     })
 }
 
@@ -289,7 +318,7 @@ pub fn mule_course(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-fn read(root: &Path, path: &str) -> Result<String, String> {
+pub(crate) fn read(root: &Path, path: &str) -> Result<String, String> {
     std::fs::read_to_string(root.join(path)).map_err(|e| format!("cannot read {path}: {e}"))
 }
 
@@ -476,7 +505,7 @@ fn state_hash(chassis: &WheeledChassis, drive: &Powertrain) -> u64 {
 
 /// The replay frame: hull datum pose, joints in `PhysRig::joint_names()` order (spin, steer of steered stations, travel), one contact per
 /// station. (Same layout as `w5k chassis strip`; CHASSIS owns that copy, see docs/swarm/requests/arch-glue-gaps.md.)
-fn vehicle_frame(c: &WheeledChassis, rig: &PhysRig, telemetry: &DriveTelemetry) -> VehicleFrame {
+pub(crate) fn vehicle_frame(c: &WheeledChassis, rig: &PhysRig, telemetry: &DriveTelemetry) -> VehicleFrame {
     let mut joints: Vec<f32> = c.stations.iter().map(|s| s.spin_angle_rad as f32).collect();
     joints.extend(
         c.stations.iter().zip(&rig.stations).filter(|(_, d)| d.steer.is_some()).map(|(s, _)| s.steer_rad as f32),
