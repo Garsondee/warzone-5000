@@ -75,6 +75,7 @@ pub fn gun_module(d: &GunDims, cradle_w_m: f64, detail: u8) -> Module {
         fitting: false,
         mesh: mesh.finished(),
         pose: Transform::IDENTITY,
+        placement: None,
     };
     let (pitch, recoil) = (NodeRole::GunPitch, NodeRole::Recoil);
     let mut parts = vec![
@@ -155,6 +156,8 @@ pub fn gun_module(d: &GunDims, cradle_w_m: f64, detail: u8) -> Module {
         pose: frame(Vec3::ZERO, Vec3::Z, Vec3::Y),
         size_m: rw,
         station: None,
+        carrier: NodeRole::Hull,
+        owner: None,
         hints: Vec::new(),
     };
     Module {

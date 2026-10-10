@@ -458,12 +458,13 @@ fn shell(f: &Frame, b: &BodySpec, a: &Arches, band: f64) -> Mesh {
     loft_beveled(&sections, b.lower_chamfer_m, band, &creases, 0.5) // const-ok: a vertex at least every half metre along a hard edge (spike S-G)
 }
 
-/// The hull families of the game garage: the utility truck (the Mule's skin), the light scout. Each is a template of the same machinery
+/// The hull families of the game garage: the utility truck (the Mule's skin), the light scout, the heavy hauler. Each is a template of the same machinery
 /// (`shapes/<id>.ron`: a lines plan and a part list), so they share the wheel modules, the sockets and the joint layout of the export.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TruckKind {
     Utility,
     Scout,
+    Hauler,
 }
 
 impl TruckKind {
@@ -471,6 +472,7 @@ impl TruckKind {
         match self {
             TruckKind::Utility => "utility_4x4",
             TruckKind::Scout => "scout_4x4",
+            TruckKind::Hauler => "hauler_4x4",
         }
     }
 
@@ -478,6 +480,7 @@ impl TruckKind {
         match self {
             TruckKind::Utility => include_str!("../shapes/utility_4x4.ron"),
             TruckKind::Scout => include_str!("../shapes/scout_4x4.ron"),
+            TruckKind::Hauler => include_str!("../shapes/hauler_4x4.ron"),
         }
     }
 }
@@ -547,6 +550,7 @@ pub fn truck_hull(kind: TruckKind, d: &UtilityDims, axles_z: &[f64], detail: u8)
         fitting: false,
         mesh: finish(shell(&frame, &tpl.body, &arches, band)),
         pose: Transform::IDENTITY,
+        placement: None,
     });
     let mut add = |spec: &PartSpec, name: String, slot: SlotKind, side: Side, station: Option<u8>, mesh: Mesh| {
         let mesh = if side == Side::Left { mesh.mirrored_x() } else { mesh };
@@ -559,6 +563,7 @@ pub fn truck_hull(kind: TruckKind, d: &UtilityDims, axles_z: &[f64], detail: u8)
             fitting: spec.fitting,
             mesh: finish(mesh),
             pose: Transform::IDENTITY,
+            placement: None,
         });
     };
     let sides_n = segments_for(detail) / 4; // const-ok: a quarter of the wheel segments for small cylinders
@@ -754,6 +759,8 @@ pub fn truck_hull(kind: TruckKind, d: &UtilityDims, axles_z: &[f64], detail: u8)
                 pose: socket_frame(hub, Vec3::new(sx, 0.0, 0.0), -Vec3::Z),
                 size_m: d.wheel.outer_radius_m,
                 station: Some(axle as u8),
+                carrier: NodeRole::Hull,
+                owner: None,
                 hints: vec![("well_x_m".into(), arches.x_n), ("max_width_m".into(), d.wheel.width_m)],
             });
         }
@@ -772,6 +779,8 @@ pub fn truck_hull(kind: TruckKind, d: &UtilityDims, axles_z: &[f64], detail: u8)
             pose: socket_frame(Vec3::new((x0 + x1) / 2.0, ym, zm), Vec3::new(n.0, n.1, n.2), Vec3::new(r.0, r.1, r.2)),
             size_m: spec.size_m,
             station: None,
+            carrier: NodeRole::Hull,
+            owner: None,
             hints: Vec::new(),
         });
     }

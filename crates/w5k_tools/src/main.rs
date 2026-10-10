@@ -47,10 +47,12 @@ const LANES: [&str; 13] = [
 /// `w5k scenario first-light --out DIR`: run the integration spine on the stand-ins (see w5k_sim).
 /// `w5k scenario mule-course --out DIR`: the Mule with DRIVE's real powertrain on WORLD's slice course (ARCH glue).
 /// `w5k scenario course-compare --course FILE --vehicles a.ron,b.ron --out DIR`: N vehicles over one course, one replay, a report.
+/// `w5k scenario proving --vehicle a.ron[,b.ron] --test <name|all> [--out PATH]`: scripted proving-ground tests, one result JSON each.
 fn scenario(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
         Some("mule-course") => cmd::arch_course::mule_course(&args[1..]),
         Some("course-compare") => cmd::arch_compare::course_compare(&args[1..]),
+        Some("proving") => cmd::arch_proving::proving(&args[1..]),
         _ => w5k_sim::cli::scenario(args),
     }
 }

@@ -15,8 +15,9 @@
 //! Nothing here knows what a hull or a gun is: the families (`hull`, `gear`, `mount`, `weapon`) build modules, and this file composes
 //! them, so a new hull can take an old weapon and a new weapon an old mount.
 
-use crate::part::{Part, Side};
+use crate::part::{Part, Placement, Side};
 use serde::Deserialize;
+use w5k_contract::render::NodeRole;
 use w5k_math::{scalar, Quat, Transform, Vec3};
 
 /// The standard socket vocabulary (extended as families need it: keel, belly, mast, engine bay, track run).
@@ -41,6 +42,10 @@ pub struct Socket {
     pub size_m: f64,
     /// The axle or road-wheel index of a `Station` socket; the parts attached there that have no index of their own take it.
     pub station: Option<u8>,
+    /// The role of the node whose frame the socket rides in: `Hull` for a fixed socket, `Turret` for the trunnion on a turntable.
+    pub carrier: NodeRole,
+    /// The label of the placement that offers the socket (`None`: the hull module's own socket); set by `attach`.
+    pub owner: Option<String>,
     pub hints: Vec<(String, f64)>,
 }
 
@@ -244,7 +249,7 @@ impl Assembly {
         }
         for (p, name) in child.parts.iter().zip(part_names) {
             let mut p = p.clone();
-            if p.role == w5k_contract::render::NodeRole::Hull {
+            if p.role == NodeRole::Hull {
                 // fixed to the hull: the mesh goes into the hull frame
                 p.mesh = p.mesh.transformed(&placement.compose(&p.pose));
                 p.pose = Transform::IDENTITY;
@@ -253,12 +258,17 @@ impl Assembly {
             }
             p.name = name;
             p.station = p.station.or(parent.station);
+            p.placement = Some(Placement {
+                label: label.to_string(),
+                carrier: parent.owner.clone().map(|o| (o, parent.carrier)),
+            });
             self.parts.push(p);
         }
         for (s, name) in child.sockets.iter().zip(socket_names) {
             let mut s = s.clone();
             s.pose = canonical(placement.compose(&s.pose));
             s.name = name;
+            s.owner = Some(label.to_string());
             self.sockets.push(s);
         }
         self.taken.push(socket.to_string());
