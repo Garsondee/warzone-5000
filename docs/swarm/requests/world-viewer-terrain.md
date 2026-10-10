@@ -16,5 +16,6 @@ What I will do meanwhile: `w5k world export <course.ron> --out DIR [--step N]` (
 - Shapes: `cylinder {radius_m, height_m}` stands on `pos_m` (base); `box {half_m: [x,y,z]}` is centred on `pos_m` and rotated by `rot_wxyz`; `sphere {radius_m}` centred.
 - Triangulate each cell with the diagonal from (i, j) to (i+1, j+1). The physics surface is the bilinear patch, which differs from the two triangles by at most `|h00 - h10 - h01 + h11| / 4` (8 mm on the spike terrain): invisible, and the reason the viewer must not be used to judge contact.
 - Colour by `material_ids` (`asphalt` grey, `dirt` green/brown by height, `mud` dark brown). LOOK may restyle; the ids are the contract.
+- `water_m` (optional, additive; same indexing as `heights_m`): the water surface height at nodes whose ground is below it, `null` elsewhere. Draw a translucent plane at that height, clipped to the non-null nodes; colour by depth (`water_m - heights_m`).
 - Heights are rounded to 1 mm (display precision); the simulation never reads this file.
 --- ARCH answer: 
