@@ -283,6 +283,12 @@ impl Driveline {
         })
     }
 
+    /// Reduction from the driveline input to the first driven shaft, including its final drive (the same for every shaft on a plain
+    /// open driveline): overall ratio = gear ratio x this.
+    pub fn overall_ratio(&self) -> f64 {
+        self.active().next().map_or(1.0, |l| l.ratio)
+    }
+
     pub fn output_count(&self) -> usize {
         self.outputs
     }
