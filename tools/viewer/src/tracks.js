@@ -84,3 +84,12 @@ export function linkMatrix(out, at, frames, k, x, mirrored) {
   const z = frames[4 * k], y = frames[4 * k + 1], tz = frames[4 * k + 2], ty = frames[4 * k + 3], sigma = mirrored ? -1 : 1;
   out.set([0, ty, tz, 0, 0, -sigma * tz, sigma * ty, 0, sigma, 0, 0, 0, x, y, z, 1], at);
 }
+
+// How much of the links' light-and-dark pattern a belt may show when it advances `step` metres between two displayed frames. The pattern repeats
+// every two links, so a pattern that moves by half of that, one pitch, between frames cannot be told from one that moves the other way (the
+// wagon-wheel effect) and shows false motion. Film's 180 degree shutter does not cure it (it keeps sinc(1/4) = 90% of the pattern at that speed);
+// the cure is a low-pass filter matched to the frame rate, so the contrast is faded to nothing as the step grows from 0 to one pitch: a raised
+// cosine, smooth, with no pop. 1 at rest, 0 from one pitch of advance a frame (4.5 m/s at 30 frames a second for the carrier's 0.149 m pitch).
+export function contrast(step, pitch) {
+  return 0.5 * (1 + Math.cos(Math.PI * Math.min(Math.abs(step) / pitch, 1)));
+}

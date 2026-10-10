@@ -17,6 +17,7 @@ console.log('GL:', await page.evaluate(() => window.__v.renderer), 'triangles', 
 const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(fps), '-c:v', 'mjpeg', '-i', '-', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '22', '-movflags', '+faststart', opt('out', 'clip.mp4')], { stdio: ['pipe', 'inherit', 'inherit'] });
 const done = new Promise((r) => ff.on('close', r));
 await page.evaluate(([m, l]) => { window.__v.pause(); window.__v.setCamera(m === 'rts' ? { mode: m } : { mode: m, dist: m === 'orbit' ? 12 : m === 'front' ? 7 : 9, pitch: m === 'orbit' ? 0.28 : m === 'front' ? 0.22 : 0.3 }); window.__v.setLayout(l); }, [opt('camera', 'rts'), opt('plots', 'inset')]);
+await page.evaluate((f) => window.__v.setFrameRate(f), fps); // the belts fade their pattern by how far they move between frames
 const n = Math.round(Math.min(secs, (await page.evaluate(() => window.__v.duration)) - t0) * fps), t = Date.now();
 for (let i = 0; i < n; i++) {
   // The orbit camera circles slowly (about 17 degrees a second); chase follows the hull.
