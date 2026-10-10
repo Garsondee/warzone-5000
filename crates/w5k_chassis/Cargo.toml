@@ -15,3 +15,6 @@ w5k_contract.workspace = true
 serde.workspace = true
 ron.workspace = true
 w5k_terramech.workspace = true
+
+[dev-dependencies]
+w5k_forge.workspace = true
