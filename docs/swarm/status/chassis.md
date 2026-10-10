@@ -21,12 +21,11 @@
 - **Not trusted yet:** tyre curve linear to the cap (no slide drop; locked braking reads high); roll centre at wheel-centre height (sliding struts);
   single-ray contact; `relaxation_length_m`, `slip_damping_time_s` are estimates.
 - **6x6:** expressible today with independent axles; walking beams / inboard leaves (`LinkageDef`) are refused until linkages land (about one PR).
-
 ## Blocked
 - Nothing.
 
 ## Next
-- suspension, tyre (rolling-resistance speed scale as a Param, not a const-ok literal), hull, wheeled assembly on the bump strip, ledger, glue API.
+- On ARCH's call: tyre load sensitivity (CCR), linkages (6x6), slide drop; then the M1 timing bench (20 us/vehicle-tick) and the slider fuzz.
 
 ## Cards needed / PROVISIONAL decisions in force
 - None.
