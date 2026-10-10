@@ -16,10 +16,11 @@
 //! them, so a new hull can take an old weapon and a new weapon an old mount.
 
 use crate::part::{Part, Side};
+use serde::Deserialize;
 use w5k_math::{scalar, Quat, Transform, Vec3};
 
 /// The standard socket vocabulary (extended as families need it: keel, belly, mast, engine bay, track run).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 pub enum SocketKind {
     /// A wheel or road-wheel position on a side of the hull; the size is the largest wheel radius it was cut for.
     Station,
@@ -121,7 +122,24 @@ fn quat_from_basis(x: Vec3, y: Vec3, z: Vec3) -> Quat {
         let s = 2.0 * scalar::sqrt(1.0 + z.z - x.x - y.y);
         Quat::new((x.y - y.x) / s, (z.x + x.z) / s, (z.y + y.z) / s, 0.25 * s)
     };
-    q.normalized()
+    Quat::new(snap(q.w), snap(q.x), snap(q.y), snap(q.z)).normalized()
+}
+
+/// A component within a hair of 0, 1/2, 1/sqrt(2) or 1 is exactly that number, so frames on the axes (nearly every socket of a vehicle)
+/// compose without noise: a wheel placed by a chain of quarter turns lands with no rotation at all, not one of 1e-16.
+fn snap(c: f64) -> f64 {
+    let exact = [0.0, 0.5, std::f64::consts::FRAC_1_SQRT_2, 1.0];
+    exact.iter().find(|e| (c.abs() - **e).abs() < 1e-12).map_or(c, |e| if c < 0.0 { -e } else { *e })
+}
+
+/// The same pose with the rotation's w >= 0 (q and -q are one rotation), so a pose reads the same however the product came out.
+fn canonical(t: Transform) -> Transform {
+    let q = t.rot;
+    if q.w < 0.0 {
+        Transform::new(t.pos, Quat::new(-q.w, -q.x, -q.y, -q.z))
+    } else {
+        t
+    }
 }
 
 /// A pose reflected in the plane x = 0.
@@ -231,7 +249,7 @@ impl Assembly {
                 p.mesh = p.mesh.transformed(&placement.compose(&p.pose));
                 p.pose = Transform::IDENTITY;
             } else {
-                p.pose = placement.compose(&p.pose);
+                p.pose = canonical(placement.compose(&p.pose));
             }
             p.name = name;
             p.station = p.station.or(parent.station);
@@ -239,7 +257,7 @@ impl Assembly {
         }
         for (s, name) in child.sockets.iter().zip(socket_names) {
             let mut s = s.clone();
-            s.pose = placement.compose(&s.pose);
+            s.pose = canonical(placement.compose(&s.pose));
             s.name = name;
             self.sockets.push(s);
         }
