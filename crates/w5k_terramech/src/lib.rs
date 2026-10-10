@@ -11,5 +11,6 @@ pub mod reference;
 pub mod sample;
 pub mod soil;
 pub mod tuning;
+pub mod vehicle;
 
 pub use tuning::{TracksTuning, Tuning};
