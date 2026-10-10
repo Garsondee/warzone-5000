@@ -28,7 +28,7 @@ const USAGE: &str = "usage:
   w5k viewer render <replay.json|replay.w5kr> --out clip.mp4 [--rig rig.json] [--rig a.json,b.json] [--skin utility_4x4[,..]] [--strip standard] [--terrain terrain.json] [--camera rts|quarter|front|chase|orbit] [--plots inset|full|off] [--seconds N] [--start S] [--fps N]
   w5k viewer page   <replay.json|replay.w5kr> --out page.html [--rig rig.json]   (a self-contained page to open in a browser)
   w5k viewer fake-fleet <replay> --out fleet.w5kr [--n 3] [--offset S]   (test data: the first vehicle repeated n times, each S seconds behind the last)
-  w5k viewer pack-skin <utility_4x4|scout_4x4|rig.json> --out tools/viewer/dist/skins/<id>.skin   (the compact skin file the test-drive page fetches)
+  w5k viewer pack-skin <utility_4x4|scout_4x4|hauler_4x4|carrier_tracked|rig.json> --out tools/viewer/dist/skins/<id>.skin [--instanced]   (the compact skin file the test-drive page fetches; --instanced: the carrier's belt as links along track_runs)
   w5k viewer plot   <data.csv> --out chart.png [--title T] [--xlabel X] [--ylabel Y] [--width W] [--height H]
   w5k viewer tornado <impact.json> --out tornado.png [--theme light|dark] [--cols N] [--rows N]   (the impact.json of `w5k validation impact`: a panel per benchmark, a bar per vehicle for each lever; docs/lanes/viewer/charts.md)
   w5k viewer ladder  <ladder.json> --out ladder.png [--theme light|dark]   (sinkage up a ladder of load or track width, beside the soil theory)
@@ -79,10 +79,16 @@ fn read_any(path: &Path) -> Result<ReplayFile, String> {
 }
 
 /// The meshes to draw over the physics rig's skeleton: one of GEOMETRY's skins by id (`utility_4x4`, `scout_4x4`, built the way
-/// `w5k geometry export` builds them), a packed `.skin` file (`pack-skin`, `design`) or a serialised `RenderRig` file.
-fn skin_rig(name: &str) -> Result<RenderRig, String> {
+/// `w5k geometry export` builds them), a packed `.skin` file (`pack-skin`, `design`) or a serialised `RenderRig` file. The tracked carrier
+/// (`carrier_tracked`) has its belt as one static mesh unless `instanced`: then the links are instanced along `track_runs`, which only a page
+/// that draws them can use.
+fn skin_rig(name: &str, instanced: bool) -> Result<RenderRig, String> {
     if let Some(skin) = Skin::for_id(name) {
-        return Ok(render_rig(skin.kind.id(), &skin.parts(1), &FlagParams::default_params()));
+        let flags = FlagParams::default_params();
+        if skin.tracks.is_some() {
+            return if instanced { skin.rig_instanced(1, &flags) } else { Ok(skin.rig(1, &flags)) };
+        }
+        return Ok(render_rig(skin.kind.id(), &skin.parts(1), &flags));
     }
     if name.ends_with(".skin") {
         let bytes = std::fs::read(name).map_err(|e| format!("cannot read {name}: {e}"))?;
@@ -143,7 +149,7 @@ fn rig_for(replay: &ReplayFile, vehicle: usize, rig_arg: Option<&str>) -> Result
         Some("box_truck") => Ok(box_truck().1),
         Some("box_tank") => Ok(box_tank().1),
         // GEOMETRY's utility truck (same node layout as the stand-in truck, so the canned truck replay drives it).
-        Some(id) if Skin::for_id(id).is_some() => skin_rig(id),
+        Some(id) if Skin::for_id(id).is_some() => skin_rig(id, false),
         Some(other) => Err(format!("no built-in rig for {other}; pass --rig <rig.json>")),
         None => Err("the replay has no vehicles".to_string()),
     }
@@ -160,7 +166,7 @@ fn render(args: &[String], record: bool) -> Result<(), String> {
     for i in 0..replay.header.vehicles.len() {
         let mut rig = rig_for(&replay, i, pick(opt(args, "--rig"), i))?;
         if let Some(skin) = pick(opt(args, "--skin"), i) {
-            rig = w5k_replay::skin::retarget(&skin_rig(skin)?, &rig)?;
+            rig = w5k_replay::skin::retarget(&skin_rig(skin, false)?, &rig)?;
         }
         let file = tmp.join(format!("rig{i}.json"));
         std::fs::write(&file, serde_json::to_string(&rig).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
@@ -671,7 +677,7 @@ fn dump_canned(args: &[String]) -> Result<(), String> {
 fn pack_skin(args: &[String]) -> Result<(), String> {
     let name = args.first().ok_or(USAGE)?;
     let out = opt(args, "--out").ok_or("--out is required")?;
-    let rig = skin_rig(name)?;
+    let rig = skin_rig(name, args.iter().any(|a| a == "--instanced"))?;
     let bytes = w5k_replay::skinpack::pack(&rig);
     if let Some(dir) = Path::new(out).parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
@@ -758,7 +764,7 @@ mod tests {
             );
             let committed =
                 std::fs::read(&file).unwrap_or_else(|e| panic!("{} is missing ({e}); {fix}", file.display()));
-            let fresh = w5k_replay::skinpack::pack(&skin_rig(id).expect("a registry skin builds"));
+            let fresh = w5k_replay::skinpack::pack(&skin_rig(id, false).expect("a registry skin builds"));
             assert!(
                 committed == fresh,
                 "{id}.skin is stale ({} bytes committed, {} generated now); {fix}",
@@ -766,9 +772,26 @@ mod tests {
                 fresh.len()
             );
         }
+        // The tracked carrier is packed by GEOMETRY once FORGE's tracked rig is in; from then on it must be what pack-skin writes now, in the
+        // form it was packed (a belt of instanced links carries track_runs).
+        if let Ok(committed) = std::fs::read(viewer_dir().join("dist/skins/carrier_tracked.skin")) {
+            let instanced = !w5k_replay::skinpack::unpack(&committed).expect("a skin file").track_runs.is_empty();
+            let fix = format!(
+                "run `w5k viewer pack-skin carrier_tracked{} --out tools/viewer/dist/skins/carrier_tracked.skin` and `node tools/viewer/build.mjs --live`",
+                if instanced { " --instanced" } else { "" }
+            );
+            let fresh =
+                w5k_replay::skinpack::pack(&skin_rig("carrier_tracked", instanced).expect("the carrier builds"));
+            assert!(
+                committed == fresh,
+                "carrier_tracked.skin is stale ({} bytes committed, {} generated now); {fix}",
+                committed.len(),
+                fresh.len()
+            );
+        }
         for name in skin_files() {
             assert!(
-                w5k_geo::skin::IDS.contains(&name.as_str()),
+                w5k_geo::skin::IDS.contains(&name.as_str()) || name == "carrier_tracked",
                 "dist/skins/{name}.skin is not a skin of GEOMETRY's registry: delete it"
             );
         }
@@ -942,8 +965,8 @@ mod tests {
     #[test]
     fn a_packed_skin_file_is_accepted_where_a_skin_id_is() {
         let file = viewer_dir().join("dist/skins/scout_4x4.skin");
-        let rig = skin_rig(file.to_str().unwrap()).unwrap();
-        assert!(rig.triangle_count() > 0 && rig.id == skin_rig("scout_4x4").unwrap().id);
+        let rig = skin_rig(file.to_str().unwrap(), false).unwrap();
+        assert!(rig.triangle_count() > 0 && rig.id == skin_rig("scout_4x4", false).unwrap().id);
     }
 
     fn start() -> u16 {
@@ -1049,5 +1072,20 @@ mod tests {
         for endpoint in ["/api/bases", "/api/base/", "/api/design"] {
             assert!(html.contains(endpoint), "the page never calls {endpoint}");
         }
+    }
+
+    /// What GEOMETRY will run once FORGE's tracked rig is in: the carrier packs with its belt as one static mesh (what a page that does not
+    /// draw `track_runs` needs) or as instanced links with the runs, and both unpack to the rig they were packed from.
+    #[test]
+    fn the_carrier_packs_with_a_static_belt_or_with_instanced_links_and_its_runs() {
+        let (fixed, linked) = (skin_rig("carrier_tracked", false).unwrap(), skin_rig("carrier_tracked", true).unwrap());
+        assert!(fixed.track_runs.is_empty() && linked.track_runs.len() == 2, "one run a side only when instanced");
+        let back = w5k_replay::skinpack::unpack(&w5k_replay::skinpack::pack(&linked)).unwrap();
+        assert_eq!(back.track_runs, linked.track_runs);
+        assert!(
+            linked.triangle_count() < fixed.triangle_count(),
+            "one link a side is far fewer triangles than the whole belt"
+        );
+        assert!(w5k_replay::skinpack::unpack(&w5k_replay::skinpack::pack(&fixed)).unwrap().track_runs.is_empty());
     }
 }
