@@ -44,5 +44,8 @@ Needs: LOOK's material-slot parameters to apply camo (a hook by M1, the full loo
 ## Tripwires specific to this lane
 A viewer that computes physics (the page must be a pure function of the replay); a network fetch at run time; a dependency not in `package-lock.json`; a video committed to git (clips are CI artifacts).
 
+## Owner's direction 2026-10-10 (card C-020, `docs/architecture/DESIGN-MODEL.md`)
+- The Workshop shows **choices as sliders and consequences as read-only numbers**: no Mass, no centre-of-mass height, no top speed as a slider (tyre pressure replaces Mass now). Add a Consequences panel (mass budget bar, balance, ground pressure, power-to-weight) and a Flags panel fed by FORGE's design audit; later a hit map.
+
 ## Done
 M1 acceptance passes, the plotter and recorder are documented in `docs/lanes/viewer/README.md`, the status file has the handoff note, and you have idled.
