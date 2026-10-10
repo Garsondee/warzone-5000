@@ -79,6 +79,23 @@ fn modes(args: &[String]) -> Result<(), String> {
         );
     }
     println!("  f_max {:.2} Hz -> {} substeps (rig declares {})", r.f_max_hz, r.required_substeps, r.declared_substeps);
+    // ride: the corner mass a spring carries is its preload / g; damping ratio zeta = c / (2 sqrt(k m)) in bump and in rebound
+    for (s, m) in rig.stations.iter().zip(&r.stations) {
+        let corner_kg = s.suspension.preload_n / scalar::G;
+        let crit = 2.0 * scalar::sqrt(m.spring_rate_n_m * corner_kg);
+        let d = &s.suspension.damper;
+        println!(
+            "  {:6} corner {:5.0} kg  ride {:4.2} Hz  zeta bump {:4.2} rebound {:4.2}  bump stop at {:3.0} mm of {:3.0} mm travel, droop {:3.0} mm",
+            s.name,
+            corner_kg,
+            scalar::sqrt(m.spring_rate_n_m / corner_kg) / (2.0 * core::f64::consts::PI),
+            d.bump_ns_m / crit,
+            d.rebound_ns_m / crit,
+            s.suspension.bump_stop.engage_m * MM_PER_M,
+            s.bump_travel_m * MM_PER_M,
+            s.droop_travel_m * MM_PER_M
+        );
+    }
     Ok(())
 }
 
