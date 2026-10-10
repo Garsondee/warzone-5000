@@ -26,6 +26,9 @@ The compile bakes `integration.substeps` and `f_max_hz` from the stop-engaged wh
 ## Scout damping (CHASSIS #76 finding)
 The scout's mean damping ratio 0.25 with rebound/bump 1.5 meant only 0.20 on the bump side (what the whoops excite). Now zeta 0.30, rebound/bump 1.2: bump side 0.27, rebound 0.33. Slice course: scout peak az 13.43 -> 11.57 m/s2; mule and hauler unchanged.
 
+## Levers (slice 2, stage A)
+`levers.rs` + `docs/swarm/requests/forge-levers.md` for VALIDATION: 20 levers, each tested on the three trucks. The engine-curve template changed again to a torque-space power law `T = T_pk - c d^k` (concave, one power maximum by construction; both peaks exact); peaks that would need k < 1 are rejected as inconsistent.
+
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).
 
