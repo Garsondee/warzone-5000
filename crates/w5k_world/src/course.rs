@@ -17,8 +17,8 @@ use crate::cliff::{switchback_path, CliffDef, SwitchbackDef};
 use crate::corrugation::{Corrugation, Ripple};
 use crate::detail::{gd_from_rms, unit_layer};
 use crate::features::{
-    barricade_blocks, cell_slope, dilate, mud_mask, poisson_disc, poisson_disc_in, BarricadeDef, MudDef, RockFieldDef,
-    SoftPatchDef, TreesDef,
+    barricade_blocks, cell_slope, dilate, mud_mask, paint, poisson_disc, poisson_disc_in, BarricadeDef, MudDef,
+    PaintDef, RockFieldDef, SoftPatchDef, TreesDef,
 };
 use crate::grid::{warped_fbm, GridWorld, CELL_M};
 use crate::river::{carve, RiverDef};
@@ -128,6 +128,9 @@ pub struct CourseDef {
     pub rock_fields: Vec<RockFieldDef>,
     #[serde(default)]
     pub soft_patches: Vec<SoftPatchDef>,
+    /// Surface painting by rule: rock on steep ground, scree below it, a beach by the water.
+    #[serde(default)]
+    pub paint: Option<PaintDef>,
     #[serde(default)]
     pub cliffs: Vec<CliffDef>,
     #[serde(default)]
@@ -947,6 +950,10 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
             }
         }
     }
+    if let Some(p) = &def.paint {
+        let wet: Vec<bool> = (0..n * n).map(|c| water.as_ref().is_some_and(|w| w[c].is_finite())).collect();
+        paint(&def.name, p, &materials, ground, &h, &wet, &mut splat)?;
+    }
     let heights: Vec<f32> = h.iter().map(|&v| v as f32).collect();
     let mut world = GridWorld::from_arrays(n, heights, splat.clone(), materials);
     if let Some(c) = corr {
@@ -1071,9 +1078,9 @@ mod tests {
         CourseDef::from_ron(include_str!("../../../content/world/courses/slice.ron")).expect("slice.ron parses")
     }
 
-    const GOLDEN_CROSSING_HASH: u64 = 0x8cd3_c254_aaeb_8122;
-    const GOLDEN_RIVER_HASH: u64 = 0x1b2f_cee4_6477_75c7;
-    const GOLDEN_RIDGE_HASH: u64 = 0x1b71_3bff_9dbe_e466;
+    const GOLDEN_CROSSING_HASH: u64 = 0xa48a_a2f5_3731_7166;
+    const GOLDEN_RIVER_HASH: u64 = 0x9ca9_b3e9_f08d_81f7;
+    const GOLDEN_RIDGE_HASH: u64 = 0x666f_32b9_7511_11ed;
     const GOLDEN_SLICE_HASH: u64 = 0xd3b3_7972_eafb_b094;
 
     fn hash(c: &Course) -> u64 {
@@ -1988,5 +1995,95 @@ mod tests {
             with.world.material_at(road_at(&with, mid).0 .0, road_at(&with, mid).0 .1).soil.is_some(),
             "the pit is filled with mud"
         );
+    }
+
+    fn names_and_slopes(c: &Course) -> impl Iterator<Item = (&str, f64, f64, usize, usize)> {
+        let w = &c.world;
+        let n = w.n();
+        let h: Vec<f64> = (0..n * n).map(|k| w.height_at_node(k % n, k / n)).collect();
+        (0..n * n).map(move |k| {
+            let (i, j) = (k % n, k / n);
+            (
+                w.materials().get(MaterialId(u16::from(w.splat_at_node(i, j)))).name.as_str(),
+                cell_slope(&h, n, i, j),
+                h[k],
+                i,
+                j,
+            )
+        })
+    }
+
+    #[test]
+    fn no_plain_ground_is_steeper_than_the_rock_grade_and_rock_never_lies_on_gentler_ground() {
+        let d = ridge();
+        let p = d.paint.as_ref().expect("the ridge course paints");
+        let c = generate(&d).expect("generate");
+        let (mut rock, mut plain) = (0, 0);
+        for (name, slope, _, _, _) in names_and_slopes(&c) {
+            if name == "dirt" {
+                assert!(slope <= p.rock_grade.v + 1e-9, "dirt on a slope of {slope}");
+                plain += 1;
+            }
+            if name == p.rock_surface {
+                assert!(slope > p.rock_grade.v - 1e-9, "rock on a slope of {slope}");
+                rock += 1;
+            }
+        }
+        assert!(
+            rock > 1000 && plain > 100_000,
+            "the face is rock ({rock}) and most of the course is still ground ({plain})"
+        );
+    }
+
+    #[test]
+    fn scree_lies_only_within_its_reach_and_below_a_rock_face() {
+        let d = ridge();
+        let p = d.paint.as_ref().expect("paint");
+        let c = generate(&d).expect("generate");
+        let all: Vec<_> = names_and_slopes(&c).collect();
+        let rocks: Vec<_> = all.iter().filter(|t| t.0 == p.rock_surface).collect();
+        let scree: Vec<_> = all.iter().filter(|t| t.0 == "scree").collect();
+        assert!(scree.len() > 500, "there is scree ({})", scree.len());
+        for s in scree.iter().step_by(37) {
+            // Within reach of, and lower than, some rock cell.
+            let below = rocks.iter().any(|r| {
+                scalar::hypot(r.3 as f64 - s.3 as f64, r.4 as f64 - s.4 as f64) * CELL_M <= p.scree_reach_m.v + 1e-9
+                    && r.2 > s.2
+            });
+            assert!(below, "scree at ({}, {}) is not below a rock face within reach", s.3, s.4);
+            assert!(s.1 >= p.scree_min_grade.v - 1e-9, "scree on flat ground");
+        }
+    }
+
+    #[test]
+    fn a_beach_lies_only_beside_water_on_gentle_ground_and_never_on_the_road() {
+        let d = crossing();
+        let p = d.paint.as_ref().expect("paint");
+        let c = generate(&d).expect("generate");
+        let w = &c.world;
+        let n = w.n();
+        let wet: Vec<(usize, usize)> =
+            (0..n * n).filter(|&k| w.water_at_node(k % n, k / n).is_some()).map(|k| (k % n, k / n)).collect();
+        let all: Vec<_> = names_and_slopes(&c).collect();
+        let beach: Vec<_> = all.iter().filter(|t| t.0 == "beach").collect();
+        assert!(beach.len() > 500, "there is a beach ({})", beach.len());
+        for b in beach.iter().step_by(23) {
+            assert!(b.1 <= p.shore_max_grade.v + 1e-9, "beach on a bank of {}", b.1);
+            let near = wet.iter().any(|q| {
+                scalar::hypot(q.0 as f64 - b.3 as f64, q.1 as f64 - b.4 as f64) * CELL_M <= p.shore_band_m.v + 1e-9
+            });
+            assert!(near, "beach at ({}, {}) is not within {} m of water", b.3, b.4, p.shore_band_m.v);
+        }
+        let road_cells = all.iter().filter(|t| t.0 == "asphalt").count();
+        assert!(road_cells > 1000, "the road is still asphalt ({road_cells})");
+    }
+
+    #[test]
+    fn painting_refuses_an_unknown_or_soft_surface() {
+        let mut d = ridge();
+        d.paint.as_mut().expect("paint").rock_surface = "granit".into();
+        assert!(generate(&d).err().expect("unknown").contains("unknown surface"));
+        d.paint.as_mut().expect("paint").rock_surface = "mud".into();
+        assert!(generate(&d).err().expect("soft").contains("soft ground"));
     }
 }

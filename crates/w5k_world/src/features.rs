@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use w5k_contract::param::Param;
-use w5k_contract::world::{PropId, PropKind, PropRef, PropShape};
+use w5k_contract::world::{MaterialId, PropId, PropKind, PropRef, PropShape};
 use w5k_math::{scalar, Pcg32, Quat, Transform, Vec3};
 
 use crate::grid::CELL_M;
@@ -75,6 +75,95 @@ pub struct SoftPatchDef {
     pub radius_m: Param,
     /// Name of a soft material in the table.
     pub surface: String,
+}
+
+/// Rule-based surface painting (V2 of the visual target): the shape of the ground is untouched; only plain ground (the course's ground
+/// material) is repainted, never road, mud, water or anything a feature already laid. Rock where the ground is steeper than `rock_grade`,
+/// scree on the gentler ground just below a rock face, a beach beside water. Which rock it is, is a palette entry: the material's name.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaintDef {
+    pub rock_surface: String,
+    pub rock_grade: Param,
+    /// Loose stone below a face; `None` paints no scree.
+    #[serde(default)]
+    pub scree_surface: Option<String>,
+    /// Scree needs at least this slope (flatter ground below a face is just ground), rise over run.
+    pub scree_min_grade: Param,
+    /// How far below a rock cell scree can lie, m.
+    pub scree_reach_m: Param,
+    /// Shore surface beside water; `None` paints none.
+    #[serde(default)]
+    pub shore_surface: Option<String>,
+    pub shore_band_m: Param,
+    /// Steeper banks than this stay as they are (a bank, not a beach).
+    pub shore_max_grade: Param,
+}
+
+/// Apply `p` to `splat` (`ground` is the plain ground's material id; `wet` flags nodes under water).
+pub fn paint(
+    name: &str,
+    p: &PaintDef,
+    materials: &w5k_contract::world::MaterialTable,
+    ground: MaterialId,
+    h: &[f64],
+    wet: &[bool],
+    splat: &mut [u8],
+) -> Result<(), String> {
+    for (l, v) in [
+        ("rock_grade", &p.rock_grade),
+        ("scree_min_grade", &p.scree_min_grade),
+        ("scree_reach_m", &p.scree_reach_m),
+        ("shore_band_m", &p.shore_band_m),
+        ("shore_max_grade", &p.shore_max_grade),
+    ] {
+        v.check(&format!("{name}.paint.{l}"))?;
+    }
+    let hard = |what: &str, surface: &str| -> Result<u8, String> {
+        let id = materials.id_of(surface).ok_or_else(|| format!("{name}.paint.{what}: unknown surface `{surface}`"))?;
+        if materials.get(id).soil.is_some() {
+            return Err(format!("{name}.paint.{what}: `{surface}` is soft ground, not a painted surface"));
+        }
+        Ok(id.0 as u8)
+    };
+    let rock_id = hard("rock_surface", &p.rock_surface)?;
+    let scree_id = p.scree_surface.as_deref().map(|s| hard("scree_surface", s)).transpose()?;
+    let shore_id = p.shore_surface.as_deref().map(|s| hard("shore_surface", s)).transpose()?;
+    let n = (h.len() as f64).sqrt() as usize;
+    let plain: Vec<bool> = splat.iter().map(|&m| m == ground.0 as u8).collect();
+    let slope: Vec<f64> = (0..n * n).map(|c| cell_slope(h, n, c % n, c / n)).collect();
+    let rock: Vec<bool> = (0..n * n).map(|c| plain[c] && slope[c] > p.rock_grade.v).collect();
+    let mut scree = vec![false; n * n];
+    if scree_id.is_some() {
+        let r = (p.scree_reach_m.v / CELL_M).ceil() as i64;
+        for c in (0..n * n).filter(|&c| rock[c]) {
+            let (i, j) = ((c % n) as i64, (c / n) as i64);
+            for (dj, di) in (-r..=r).flat_map(|dj| (-r..=r).map(move |di| (dj, di))) {
+                let (ni, nj) = (i + di, j + dj);
+                if ni < 0
+                    || nj < 0
+                    || ni >= n as i64
+                    || nj >= n as i64
+                    || scalar::hypot(di as f64, dj as f64) * CELL_M > p.scree_reach_m.v
+                {
+                    continue;
+                }
+                let t = nj as usize * n + ni as usize;
+                scree[t] |= plain[t] && !rock[t] && slope[t] >= p.scree_min_grade.v && h[t] < h[c];
+            }
+        }
+    }
+    let near_water = if shore_id.is_some() { dilate(wet, n, p.shore_band_m.v) } else { vec![false; n * n] };
+    for c in 0..n * n {
+        if rock[c] {
+            splat[c] = rock_id;
+        } else if scree[c] {
+            splat[c] = scree_id.unwrap_or(splat[c]);
+        } else if plain[c] && near_water[c] && !wet[c] && slope[c] <= p.shore_max_grade.v {
+            splat[c] = shore_id.unwrap_or(splat[c]);
+        }
+    }
+    Ok(())
 }
 
 /// Cells within `r_m` of any cell flagged in `mask` (a disc dilation).

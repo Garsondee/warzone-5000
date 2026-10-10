@@ -1,5 +1,5 @@
 // scout: stand-in vehicle for `w5k world mobility`. Material ids follow content/world/materials.ron order:
-// 0 asphalt, 1 dirt, 2 mud, 3 gravel, 4 riverbed, 5 planks, 6 sand. A surface with no entry falls back to the vehicle's worst.
+// 0 asphalt, 1 dirt, 2 mud, 3 gravel, 4 riverbed, 5 planks, 6 sand, 7 sandy_loam (no row: worst), 8 rock_granite, 9 rock_sandstone, 10 scree, 11 beach (8 to 11 copy dirt, dirt, gravel, dirt: PLACEHOLDER). A surface with no entry falls back to the vehicle's worst.
 MobilitySpec(
     name: "scout",
     note: "PLACEHOLDER (UNVALIDATED): a light 4x4 scout, 1150 kg, 1.65 m wide. Numbers are guesses scaled from the mule; replace with a measured CapabilityTable.",
@@ -16,6 +16,10 @@ MobilitySpec(
             (MaterialId(4), 0.25),
             (MaterialId(5), 0.25),
             (MaterialId(6), 0.22),
+            (MaterialId(8), 0.42),
+            (MaterialId(9), 0.42),
+            (MaterialId(10), 0.4),
+            (MaterialId(11), 0.42),
         ],
         top_speed_m_s: [
             (MaterialId(0), 30.0),
@@ -25,6 +29,10 @@ MobilitySpec(
             (MaterialId(4), 5.0),
             (MaterialId(5), 12.0),
             (MaterialId(6), 6.0),
+            (MaterialId(8), 20.0),
+            (MaterialId(9), 20.0),
+            (MaterialId(10), 17.0),
+            (MaterialId(11), 20.0),
         ],
         soil_go: [
             (MaterialId(0), true),
@@ -34,6 +42,10 @@ MobilitySpec(
             (MaterialId(4), true),
             (MaterialId(5), true),
             (MaterialId(6), true),
+            (MaterialId(8), true),
+            (MaterialId(9), true),
+            (MaterialId(10), true),
+            (MaterialId(11), true),
         ],
         max_side_slope_rad: 0.35,
         max_step_m: 0.35,

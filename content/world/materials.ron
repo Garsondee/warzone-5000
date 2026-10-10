@@ -89,4 +89,33 @@
             shear_k_m: Param(v: 0.025, lo: 0.01, hi: 0.04, prov: Spec, src: "arXiv:2603.28965 Table 2, sandy loam row, 0.025 m (secondary; primary to verify)"),
         )),
     ),
+    // V2 painted surfaces (ids 8 to 11): hard ground, every number an UNVALIDATED stand-in, for the rule-based painting in `PaintDef`.
+    MaterialDef(
+        name: "rock_granite",
+        mu_peak: Param(v: 0.75, lo: 0.55, hi: 0.9, prov: Estimate, src: "UNVALIDATED stand-in; dry rough rock under a rubber tyre"),
+        mu_slide: Param(v: 0.65, lo: 0.45, hi: 0.8, prov: Estimate, src: "UNVALIDATED stand-in"),
+        rolling_coeff: Param(v: 0.02, lo: 0.01, hi: 0.04, prov: Estimate, src: "UNVALIDATED stand-in; firm but uneven"),
+        roughness_rms_m: Param(v: 0.05, lo: 0.02, hi: 0.1, prov: Estimate, src: "UNVALIDATED stand-in"),
+    ),
+    MaterialDef(
+        name: "rock_sandstone",
+        mu_peak: Param(v: 0.7, lo: 0.5, hi: 0.85, prov: Estimate, src: "UNVALIDATED stand-in; sandstone is a little slicker and softer than granite"),
+        mu_slide: Param(v: 0.6, lo: 0.4, hi: 0.75, prov: Estimate, src: "UNVALIDATED stand-in"),
+        rolling_coeff: Param(v: 0.02, lo: 0.01, hi: 0.04, prov: Estimate, src: "UNVALIDATED stand-in"),
+        roughness_rms_m: Param(v: 0.04, lo: 0.02, hi: 0.08, prov: Estimate, src: "UNVALIDATED stand-in"),
+    ),
+    MaterialDef(
+        name: "scree",
+        mu_peak: Param(v: 0.5, lo: 0.35, hi: 0.65, prov: Estimate, src: "UNVALIDATED stand-in; loose stone on a slope, a little below gravel"),
+        mu_slide: Param(v: 0.4, lo: 0.3, hi: 0.55, prov: Estimate, src: "UNVALIDATED stand-in"),
+        rolling_coeff: Param(v: 0.08, lo: 0.04, hi: 0.12, prov: Estimate, src: "UNVALIDATED stand-in; loose surfaces cost more than gravel"),
+        roughness_rms_m: Param(v: 0.1, lo: 0.05, hi: 0.18, prov: Estimate, src: "UNVALIDATED stand-in; stones the 1 m grid does not resolve"),
+    ),
+    MaterialDef(
+        name: "beach",
+        mu_peak: Param(v: 0.55, lo: 0.4, hi: 0.7, prov: Estimate, src: "UNVALIDATED stand-in; damp packed sand at a shore (no soil law: a thin hard-packed band, unlike the soft `sand` patch)"),
+        mu_slide: Param(v: 0.45, lo: 0.3, hi: 0.6, prov: Estimate, src: "UNVALIDATED stand-in"),
+        rolling_coeff: Param(v: 0.03, lo: 0.015, hi: 0.06, prov: Estimate, src: "UNVALIDATED stand-in"),
+        roughness_rms_m: Param(v: 0.02, lo: 0.01, hi: 0.04, prov: Estimate, src: "UNVALIDATED stand-in"),
+    ),
 ]

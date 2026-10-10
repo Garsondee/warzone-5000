@@ -196,6 +196,10 @@ fn ground_colour(name: &str, y: f64, y_lo: f64) -> [f64; 3] {
         "planks" => [120.0, 90.0, 55.0],                // const-ok: display colour
         "sand" | "sandy_loam" => [215.0, 190.0, 125.0], // const-ok: display colour
         "riverbed" => [110.0, 105.0, 95.0],             // const-ok: display colour
+        "rock_granite" => [122.0, 120.0, 116.0],        // const-ok: display colour
+        "rock_sandstone" => [178.0, 112.0, 80.0],       // const-ok: display colour
+        "scree" => [160.0, 150.0, 138.0],               // const-ok: display colour
+        "beach" => [224.0, 204.0, 150.0],               // const-ok: display colour
         _ => [GROUND_RGB[0] + (y - y_lo) * HEIGHT_TINT_PER_M, GROUND_RGB[1], GROUND_RGB[2]],
     }
 }

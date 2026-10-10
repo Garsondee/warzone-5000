@@ -67,3 +67,10 @@ A 400 m course at 1 m cells is 320 thousand triangles; a 2 km one is 8 million. 
 - **Padding.** The tree needs `2^k + 1` nodes per side; a 401-node course is padded to 513 by repeating its last row and column, and the padding is clipped away when the faces are built (the clip points are computed from the same two end points whichever triangle asks, so the border stays watertight).
 Result on the slice course: 175 thousand triangles at 5 cm, 84 thousand at 10 cm, 31 thousand at 25 cm, 26 thousand at 50 cm, against 320 thousand raw. The floor is set by the material boundaries, not the relief: the next gain is merging along them (V2).
 
+## 13. Painting by rule (`PaintDef`)
+Real ground has no painter: its surface follows what happened to it. Steep faces shed soil and show rock; the loose stone that falls off them piles up at the foot (scree, at its angle of repose); water sorts sand at its edge. So the generator paints the *splat map* (the per-cell material id) from three local rules, in this priority:
+1. **Rock** where the slope exceeds `rock_grade` (slope is the gradient magnitude, rise over run, by central differences). Which rock (grey granite, red sandstone) is just the name of the material, a palette choice per course.
+2. **Scree** on ground steeper than `scree_min_grade`, within `scree_reach_m` of a rock cell and lower than it ("below"). It is a stamp of a disc around each rock cell, kept only where the target is lower.
+3. **Beach** on gentle ground within `shore_band_m` of water: a dilation of the water mask (a disc around every wet cell), kept where the slope is below `shore_max_grade`.
+Only cells of the plain ground material are ever repainted: roads, mud, gravel, river bed and anything a feature laid first are untouched, so a rule cannot overwrite a design decision. The painted materials are hard ground with stated stand-in friction; they change what a wheel feels (scree has a high rolling coefficient) as well as what the eye sees, so the mobility maps now treat them with their own rows.
+
