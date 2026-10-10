@@ -80,6 +80,15 @@ fn a_wheel_raised_off_the_belt_is_refused_by_name() {
 }
 
 #[test]
+fn a_loop_listed_clockwise_is_refused_and_a_wheel_is_named() {
+    // the carrier's wheels in the opposite order: the formula walks the band counter-clockwise, so the loop is wrong and a wheel is named
+    let mut circles = RunSpec::placeholder().circles();
+    circles.reverse();
+    let e = Belt::round(&circles).unwrap_err();
+    assert!(e.contains("wheel"), "{e}");
+}
+
+#[test]
 fn links_tile_the_belt_with_no_gap_or_overlap() {
     let spec = RunSpec::placeholder();
     let link = LinkSpec::standard();
@@ -171,7 +180,8 @@ fn random_spec(rng: &mut Pcg32) -> RunSpec {
     let first = -spacing * (n - 1) as f64 / 2.0;
     let path_r = rw + thick / 2.0; // the road wheels' path circles are centred on y = 0, so their bottoms lie on y = -path_r
     let rs = pitch_radius_m(pitch, teeth);
-    let (sprocket_y, idler_y) = (rs - path_r + u(0.03, 0.2), u(0.03, 0.2));
+    // raised so that their bottoms and the top run both clear the road wheels (a sprocket much smaller than a road wheel needs raising most)
+    let (sprocket_y, idler_y) = ((path_r - rs).abs() + 0.03 + u(0.0, 0.15), 0.03 + u(0.0, 0.17));
     let mut wheels = vec![RunWheel {
         kind: WheelKind::Sprocket,
         z_m: -first + u(0.5, 0.9),
@@ -200,6 +210,7 @@ fn random_spec(rng: &mut Pcg32) -> RunSpec {
         pitch_m: pitch,
         sprocket_teeth: teeth,
         wheels,
+        stations: None,
     }
 }
 
