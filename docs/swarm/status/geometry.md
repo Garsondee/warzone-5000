@@ -1,6 +1,6 @@
 # Status: GEOMETRY
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/geometry/silhouette (from integration; settling #25, build #32, truck #34, export #35, hull #44-#46 are merged) | **Contract pinned:** `contract-v0.1` = commit `f8f5e5d` | **Phase:** settling round, continuing into the build (owner instruction in force: do not wait for review)
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/geometry/modules (from integration; settling #25, build #32, truck #34, export #35, hull #44-#46, silhouette #52-#53 are merged) | **Contract pinned:** `contract-v0.1` = commit `f8f5e5d` | **Phase:** settling round, continuing into the build (owner instruction in force: do not wait for review)
 
 ## Done
 - Settling PR: spike S-G (kernel in `crates/w5k_geo/src/{mesh,edge,bvh,cavity}.rs`, tests `tests/spike_g.rs`, report `docs/lanes/geometry/spike-g.md`, image `media/s-g.png`), design note, CCR text (`docs/swarm/requests/geometry-ccr-shapes-and-tracks.md`), theory starter.
@@ -17,19 +17,22 @@
 - Silhouette PR (this branch), owner feedback "improve the silhouette; the windows need to conform better; the front side window and the front top must line up": glass as panel + raised mitered frame on the leaning (tumblehome) walls; the front window's slanted edge is the windscreen ramp offset into the cab (test: both 57.8 degrees); steeper windscreen; approach and departure ramps (`yo`), sloped hood nose, tucked sill, sloped cover; lips end at the local underside; M998-class dimensions from the dossier and A10 for the HMMWV (`utility_4x4_dimensions_match_the_m998_dossier_within_3_percent`); `sweep_loop` and `chamfer_polygon` kernel functions; perspective-correct depth in the rasteriser (a picture-tool bug that made the shell speckle through glass). About 36k triangles of 40k. Pictures `media/truck-*-look.png`.
 
 ## In progress
-- Nothing blocking: M113 next (sloped hull, road wheels, sprocket, idler, track run and link: A10 A11), after FORGE/ARCH answer on the CCRs.
+- **Owner goal (2026-10-10): a vehicle is a separate hull, separate propulsion, separate weapon mount and separate weapons** (the first truck is parametric but one monolith: audit in design note section 9). Modules PR 1 (this branch): `module.rs` (sockets, modules, `Assembly::attach` with kind and size gating, mirroring for left sockets, refusals that change nothing), 12 tests, each checked by deliberately breaking the code. Next PRs, one each: (2) truck split into a hull module and wheel modules, N axles, golden hash unchanged; (3) ring mount and weapon families (machine gun, autocannon) with pictures; (4) export for N stations and turret/gun/recoil nodes, exploded and swap pictures (4x4 to 6x6, MG to cannon), interface request to FORGE; (5) hull regions in metres. `PROVISIONAL(status:geometry)`: the socket vocabulary (`Station`, `Ring`, `Trunnion`) and frame convention.
+- After the modules: the M113 (sloped hull, road wheels, sprocket, idler, track run and link: A10 A11), after FORGE/ARCH answer on the CCRs.
 
 ## Blocked
 - Nothing blocking. Later: FORGE agreement on the part API and datum (design note sections 4 and 6); VALIDATION's M998 dossier (A10; placeholder dimensions until then, `PROVISIONAL(C-002)`); `contract-v0.2` for `ShapeDef` and `track_runs`.
 
 ## Next
-1. `lines` plan (sections, sheer, half-breadth), then the M113 (sloped hull, road wheels, sprocket, idler, track run).
+1. Modules PRs 2 to 5 (above), each with a picture of a swap.
+2. `lines` plan (sections, sheer, half-breadth), then the M113 (sloped hull, road wheels, sprocket, idler, track run) built as a tracked-gear module on the same sockets.
 
 ## Cards needed / PROVISIONAL decisions in force
-- `PROVISIONAL(status:geometry)`: the edge definition until LOOK agrees. `PROVISIONAL(D3)`: hull datum = hull box centre (FORGE). No new card.
+- `PROVISIONAL(status:geometry)`: the edge definition until LOOK agrees. `PROVISIONAL(D3)`: hull datum = hull box centre (FORGE). `PROVISIONAL(status:geometry)`: socket vocabulary and frame convention (design note section 9). No new card.
 
 ## Evidence
 - `cargo test --release -p w5k_geo`: 5 spike tests pass; A7 worst error 0.0033 at 1024 rays; bake 1.6 s / 3.1 s / 11.6 s at 128 / 256 / 1024 rays for 15k vertices (the 1024 figure breaks the 10 s line, so the default is 256).
+- Modules PR 1: `cargo test -p w5k_geo --test modules` 12 pass; four mutations (no half turn, never mirror, no size check, reversed spin) each fail the intended tests; fmt, clippy, constants lint, line budget clean; about 210 lines of code, no golden touched.
 - fmt, clippy `-D warnings`, constants lint, line budget (223 of 8000), deps lint: clean. Not run: Windows, goldens (none touched), impact matrix (no contract touched).
 - Wheel sheet: `docs/lanes/geometry/media/wheel-look.png` (`w5k geometry sheet wheel --out DIR`, 0.5 s). A8 passes at the reference detail (128 segments, sag 0.12 mm).
 - Kill criterion "wear over 25% more triangles": hood alone +36%, nominal breach; the whole-vehicle test is at build step 6.

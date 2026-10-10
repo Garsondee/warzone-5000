@@ -23,6 +23,18 @@ CourseDef(
         shoulder_m: Param(v: 5.0, prov: Spec, src: "course design: blend from road to terrain"),
         max_grade: Param(v: 0.08, prov: Spec, src: "course design: road grade limit, 8 percent"),
         surface: "asphalt",
+        washboards: [RoughSectionDef(
+            at_fraction: Param(v: 0.12, prov: Spec, src: "course design: early on the road"),
+            length_m: Param(v: 60.0, prov: Spec, src: "course design"),
+            wavelength_m: Param(v: 0.8, prov: Spec, src: "course design: corrugation on an unsealed road, 0.5 to 1 m"),
+            amplitude_m: Param(v: 0.04, prov: Spec, src: "course design: peak to peak, a few cm"),
+        )],
+        whoops: [RoughSectionDef(
+            at_fraction: Param(v: 0.8, prov: Spec, src: "course design: after the barricade"),
+            length_m: Param(v: 90.0, prov: Spec, src: "course design"),
+            wavelength_m: Param(v: 12.0, prov: Spec, src: "course design: whoops, 8 to 15 m"),
+            amplitude_m: Param(v: 0.3, prov: Spec, src: "course design: peak to peak, 0.2 to 0.4 m"),
+        )],
         mud_crossings: [MudCrossing(
             at_fraction: Param(v: 0.35, prov: Spec, src: "course design: a washed-out stretch before the barricade"),
             length_m: Param(v: 25.0, prov: Spec, src: "course design: long enough for the truck to feel the soil law"),

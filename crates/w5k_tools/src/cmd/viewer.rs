@@ -16,7 +16,7 @@ use w5k_replay::ReplayFile;
 use w5k_world::strip::DataStrip;
 
 const USAGE: &str = "usage:
-  w5k viewer render <replay.json|replay.w5kr> --out clip.mp4 [--rig rig.json] [--skin utility_4x4] [--strip standard] [--terrain terrain.json] [--camera chase|quarter|front|orbit] [--plots inset|full|off] [--seconds N] [--start S] [--fps N]
+  w5k viewer render <replay.json|replay.w5kr> --out clip.mp4 [--rig rig.json] [--skin utility_4x4] [--strip standard] [--terrain terrain.json] [--camera rts|quarter|front|chase|orbit]  (default rts) [--plots inset|full|off] [--seconds N] [--start S] [--fps N]
   w5k viewer page   <replay.json|replay.w5kr> --out page.html [--rig rig.json]   (a self-contained page to open in a browser)
   w5k viewer plot   <data.csv> --out chart.png [--title T] [--xlabel X] [--ylabel Y] [--width W] [--height H]
   w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.w5kr, replay.json and rig.json)";

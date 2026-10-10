@@ -13,9 +13,12 @@
   powertrain), writes replay + CSV; plots and a clip frame in `docs/lanes/chassis/media/`.
 
 ## In progress
-- Next: the ledger (step 6), `steady_turn_lateral_load_transfer_matches_m_ay_h_over_track`, DRIVE's real DrivePort when it lands.
-- Simplifications to revisit: unsprung inertia uses the previous substep's hull acceleration (translation only); `kappa_peak`/`alpha_peak_rad` unused;
-  the viewer draws the strip flat until WORLD exports terrain.
+- Owner direction via ARCH (13:40Z): three trucks + proving ground. (1) this PR: `modes` (hop, hop-on-stop, heave; substeps = max(declared, rule)); Mule needs 5 (declares 4). Next: (2) ledger, (3) skidpad + side-slope benches.
+- **Parameters I would not trust yet:** tyre curve is linear to the friction-circle cap (no slide drop: `mu_slide`, `kappa_peak`, `alpha_peak_rad` unused) so locked
+  braking and the cornering limit read high; no tyre load sensitivity (heavy outer tyres grip too well: the Hauler's rollover margin reads low); single-ray contact (step and hole edges too harsh);
+  `relaxation_length_m`, `slip_damping_time_s` are estimates; unsprung inertia uses the previous substep's hull acceleration (translation only); brakes come from the stand-in powertrain.
+- **6x6:** expressible today if every axle is independent (any number of stations, Ackermann about the unsteered axles, one drive output per wheel); a walking beam or
+  inboard leaf (`LinkageDef`) is refused (`required_features`) until CHASSIS implements linkages (a weighted shared spring on the travel coordinates, about one PR).
 
 ## Blocked
 - Nothing.
