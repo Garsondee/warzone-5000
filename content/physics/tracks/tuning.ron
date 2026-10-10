@@ -1,0 +1,19 @@
+#![enable(implicit_some)]
+// Numerical and model constants of the track contact (not properties of one vehicle). Units are in the field names.
+// UNVALIDATED: none of these has a published source; each carries the reasoning and a band, and the S3/S4 spikes show how little they move.
+TracksTuning(
+    firm_shear_k_m: Param(v: 0.005, lo: 0.002, hi: 0.015, prov: Estimate,
+        src: "UNVALIDATED. Shear displacement at which a steel or rubber shoe on firm ground has mobilised 63% of its friction (Janosi K for a stiff surface); a few millimetres of shoe and pad compliance"),
+    shear_cap_k: Param(v: 12.0, lo: 8.0, hi: 20.0, prov: Estimate,
+        src: "Shear displacement is clamped at this many K (1 - e^-12 is 0.999994): a long slide must not store a displacement that delays the force reversal"),
+    damping_ratio: Param(v: 1.0, lo: 0.5, hi: 2.0, prov: Estimate,
+        src: "Viscous part of the shear stress at creep speed, as a damping ratio of the shear spring; stops a parked tank on a grade ringing on its own shear stiffness (spike S3)"),
+    damping_speed_m_s: Param(v: 0.01, lo: 0.005, hi: 0.1, prov: Estimate,
+        src: "The creep damping fades out above this slip speed (it is a 1/(1+(u/u_c)^2) bump), so it never shapes the thrust-slip curve"),
+    gravity_m_s2: Param(v: 9.80665, prov: Spec,
+        src: "Standard gravity; must equal the world's gravity. Only used to size the creep damping from the shear stiffness"),
+    direction_speed_m_s: Param(v: 0.05, lo: 0.01, hi: 0.2, prov: Estimate,
+        src: "Speed scale of the smooth sign v/(|v|+u0) that switches compaction resistance to the direction of travel; a parked tank gets none"),
+    belly_ramp_m: Param(v: 0.03, lo: 0.01, hi: 0.08, prov: Estimate,
+        src: "Belly drag grows with a smoothstep over this much sinkage beyond the ground clearance, never a cliff"),
+)
