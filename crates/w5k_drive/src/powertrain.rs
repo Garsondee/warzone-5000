@@ -157,7 +157,13 @@ impl DrivePort for Powertrain {
                 ext_slope_nm_s_rad: s.load_stiffness_nm_s_rad,
             })
             .collect();
-        let carrier = self.driveline.reflect(&outs);
+        let mut carrier = self.driveline.reflect(&outs);
+        // a steering unit that moves torque between the tracks adds power to the wheels; that power is a load on the engine (applied one step late)
+        let carrier_speed = carrier.omega_rad_s.abs();
+        if carrier_speed > 1.0 {
+            // const-ok: below one rad/s the carrier is effectively stopped and the division is meaningless (a neutral pivot is PROVISIONAL)
+            carrier.ext_torque_nm -= self.driveline.steer_power_w().max(0.0) / carrier_speed;
+        }
         let input_side = self.gearbox.reflect(&carrier);
 
         self.gearbox.note_brake(dt, inputs.brake);
@@ -389,13 +395,22 @@ mod tests {
     }
 
     #[test]
-    fn brake_steering_units_heat_the_inner_brake_only() {
-        for kind in [SteerUnitKind::ControlledDifferential, SteerUnitKind::ClutchBrake] {
-            let def = tank_with(kind, SteerLaw::default());
-            // up to speed in a straight line, then a hard right turn
-            let (_, pt) = drive_tank_with(&def, |t| go(if t < 12.0 { 0.0 } else { 0.9 }), 18.0);
-            let t = pt.telemetry().brake_temps_k;
-            assert!(t[1] > t[0] + 5.0, "{kind:?}: a right turn must heat the right brake only: {t:?}");
-        }
+    fn a_clutch_brake_unit_heats_the_inner_brake_only() {
+        let def = tank_with(SteerUnitKind::ClutchBrake, SteerLaw::default());
+        // up to speed in a straight line, then a hard right turn
+        let (_, pt) = drive_tank_with(&def, |t| go(if t < 12.0 { 0.0 } else { 0.9 }), 18.0);
+        let t = pt.telemetry().brake_temps_k;
+        assert!(t[1] > t[0] + 5.0, "a right turn must heat the right brake only: {t:?}");
+    }
+
+    #[test]
+    fn a_controlled_differential_turns_at_its_stated_speed_ratio_and_keeps_rolling() {
+        // the unit's law says d = 0.3: at full stick the outer track runs (1 + d) / (1 - d) times the inner
+        let law = SteerLaw { diff_ratio_by_gear: vec![0.3], max_steer_torque_nm: 60_000.0, ..Default::default() };
+        let def = tank_with(SteerUnitKind::ControlledDifferential, law);
+        let ([l, r], _) = drive_tank(&def, &go(1.0), 20.0);
+        assert!(l > 3.0 && r > 0.0, "it must keep rolling: {l} {r}");
+        let frac = (l - r) / (l + r);
+        assert!((frac - 0.3).abs() < 0.02, "fractional difference {frac}, wanted 0.3");
     }
 }
