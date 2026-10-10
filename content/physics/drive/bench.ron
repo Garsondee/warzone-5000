@@ -1,0 +1,9 @@
+// Constants of the lumped-vehicle benches (`w5k drive bench`): the world the point mass drives in.
+BenchWorld(
+    gravity_m_s2: Param(v: 9.80665, prov: Spec, src: "standard gravity, ISO 80000-3"),
+    air_density_kg_m3: Param(v: 1.225, prov: Spec, src: "ISA sea level, ICAO Doc 7488"),
+    rolling_resistance_coeff: Param(v: 0.015, lo: Some(0.01), hi: Some(0.03), prov: Estimate, src: "radial truck tyre on hard asphalt, Wong, Theory of Ground Vehicles table 3.1 range; the proving runner uses 0.02 for the same surface"),
+    fuel_density_kg_m3: Param(v: 832.0, lo: Some(800.0), hi: Some(860.0), prov: Estimate, src: "diesel fuel; petrol is about 745: the bench applies it to every engine and says so"),
+    cruise_kmh: Param(v: 50.0, prov: Spec, src: "docs/validation/IMPACT-MATRIX.md, B3: steady 50 km/h cruise on level hard ground"),
+    descent_grade_rad: Param(v: 0.21, lo: Some(0.1), hi: Some(0.3), prov: Estimate, src: "a 12 degree mountain road, the steep end of public roads (the switchback road of the proving ground)"),
+)
