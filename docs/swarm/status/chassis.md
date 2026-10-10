@@ -16,8 +16,8 @@
   v^2 delta / L (1.7) by 2x. The front wheels run 31-46 mm into the bump stops (196/211 of 220 mm travel; stops at 165 mm),
   no hard limit; Mule (102 of 150) and Hauler (63 of 120) never reach theirs. Plausible for a soft jeep near resonance. Would change
   it: Scout damping (zeta 0.25-0.35 bump is typical off-road) and no tyre load sensitivity (yaw jolt reads high). `modes` prints zeta.
-- **Known gap: no tyre load sensitivity** (grip and cornering stiffness per unit load are constant, so load transfer never costs grip; the limit
-  and the anti-roll front/rear balance read wrong). NOT-MODELLED row requested (`requests/chassis-not-modelled-tyre-load-sensitivity.md`); fix = CCR + one PR.
+- Slice 2 stage A (ARCH 17:13Z says the owner approved; C-016 still reads OPEN in QUEUE.md): tyre load sensitivity in progress on
+  `lane/chassis/load-sensitivity` (CCR-chassis-4 text in the design note; shared PROVISIONAL Params until it lands). Then: tracked-hull + sinking-tyre note.
 - **Not trusted yet:** tyre curve linear to the cap (no slide drop; locked braking reads high); roll centre at wheel-centre height (sliding struts);
   single-ray contact; `relaxation_length_m`, `slip_damping_time_s` are estimates.
 - **6x6:** expressible today with independent axles; walking beams / inboard leaves (`LinkageDef`) are refused until linkages land (about one PR).
