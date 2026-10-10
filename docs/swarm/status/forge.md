@@ -43,6 +43,9 @@ Design note: `docs/lanes/forge/tracked-design-note.md` (stations and loop order,
 ## Tracked T2 (carrier compiles end to end)
 **`carrier_tracked` now compiles end to end** with drivetrain, steer unit (with its law), sprocket brakes, torsion-bar road wheels (rate from the ride-frequency slider: `K = (k + F0 sin(phi0) / (L cos^2 phi0)) (L cos(phi0))^2`, preload = the wheel share of the sprung weight, `arm_pivot_m` set, trailing arm), the belt's static penetration baked into the road-wheel rest pose (`(preload + m_u g) / k_wc`, 4 mm), and a Belly proxy whose underside is the ground clearance. `w5k_forge::compile::{parse_def, parse_extras, compile}` on `content/vehicles/game/carrier_tracked{,.extras}.ron`; `Compiled.rig` is the `PhysRig` (render rig is T3). CHASSIS / ARCH can assemble the vehicle from it.
 
+## Tracked T3 (render rig)
+`render.rs` now builds the tracked render rig too (`tracked_render_rig`, dispatched by `render_rig` when the rig has tracks): `hull > travel > wheel` for every station in `PhysRig::joint_names()` order, a `Track` node per side, and a contract-0.3 `TrackRun` per side (wheels in loop order with path radii, links = belt length / pitch, sprocket joint, direction -1 for the front sprocket). `contact_names()` has one entry per belt sample. Placeholder meshes (GEOMETRY's skin replaces them); the link mesh is ONE link at the origin of the Track node, to be instanced. **GEOMETRY / VIEWER can consume it:** `w5k_forge::compile::compile` then `w5k_forge::render::render_rig(&c.rig, c.hull_size_m)` on `carrier_tracked`. Picture: `docs/lanes/forge/media/carrier-side-view.png`, report `carrier-compile-report.txt`.
+
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).
 

@@ -1,6 +1,7 @@
 //! The render rig of a compiled wheeled vehicle: node chains `hull > travel > (steer) > wheel` per station, joint indices in the order of
 //! `PhysRig::joint_names()`, and placeholder meshes (GEOMETRY's replace them). The wheel mesh takes its radius from the compiled station,
-//! so the physics and the picture cannot disagree.
+//! so the physics and the picture cannot disagree. A tracked rig gets a `Track` node per side and the contract-0.3 `track_runs` (the belt path
+//! and its instanced link), see [`tracked_render_rig`].
 
 use w5k_contract::render::*;
 use w5k_contract::rig::*;
@@ -12,10 +13,15 @@ const WHEEL_SEGMENTS: usize = 20; // const-ok: mesh resolution
 const RIM_RADIUS_FRAC: f64 = 0.62; // const-ok: placeholder art proportion
 const RIM_WIDTH_FRAC: f64 = 1.05; // const-ok: placeholder art proportion
 const LUG_RADIUS_FRAC: f64 = 0.8; // const-ok: placeholder art proportion
+const NOSE_MARKER_OFFSET_M: f64 = 0.3; // const-ok: placeholder art offset
+const NOSE_MARKER_HALF_M: Vec3 = Vec3 { x: 0.4, y: 0.03, z: 0.2 }; // const-ok: placeholder art size
 const LUG_HALF_M: Vec3 = Vec3 { x: 0.02, y: 0.04, z: 0.05 }; // const-ok: placeholder art size
 
 /// Node chains `hull > travel > (steer) > wheel` per station, with joint indices in the order of `PhysRig::joint_names()`.
 pub fn render_rig(rig: &PhysRig, hull_size: Vec3) -> RenderRig {
+    if !rig.tracks.is_empty() {
+        return tracked_render_rig(rig, hull_size);
+    }
     let n = rig.stations.len();
     let steered: Vec<usize> = (0..n).filter(|&i| rig.stations[i].steer.is_some()).collect();
     let mut rr = RenderRig {
@@ -91,6 +97,125 @@ pub fn render_rig(rig: &PhysRig, hull_size: Vec3) -> RenderRig {
             Vec3::new(hw * RIM_WIDTH_FRAC, 0.0, LUG_RADIUS_FRAC * r),
             LUG_HALF_M,
         )); // const-ok: spin marker
+    }
+    rr
+}
+
+fn wheel_role(kind: WheelKind) -> NodeRole {
+    match kind {
+        WheelKind::Tyre => NodeRole::Wheel,
+        WheelKind::RoadWheel => NodeRole::RoadWheel,
+        WheelKind::Sprocket => NodeRole::Sprocket,
+        WheelKind::Idler => NodeRole::Idler,
+        WheelKind::ReturnRoller => NodeRole::ReturnRoller,
+    }
+}
+
+/// The tracked render rig: `hull > travel > wheel` for every station (rigid stations keep their coordinates, at zero travel), a `Track`
+/// node per side, and one `TrackRun` per track: the wheels in loop order with their path radii (tip plus half the belt thickness, the
+/// sprocket's pitch radius), the link count from the belt length and pitch, the sprocket's spin joint, and the direction (+1 if a positive
+/// spin advances the links along the loop order: a rear sprocket; -1 for a front one, whose top run runs against the order).
+pub fn tracked_render_rig(rig: &PhysRig, hull_size: Vec3) -> RenderRig {
+    let n = rig.stations.len();
+    let mut rr = RenderRig {
+        id: rig.id.clone(),
+        nodes: vec![RenderNode {
+            name: "hull".into(),
+            parent: None,
+            role: NodeRole::Hull,
+            rest: Transform::IDENTITY,
+            joint: None,
+        }],
+        meshes: vec![],
+        track_runs: vec![],
+        material_slots: vec![
+            MaterialSlot { name: "paint".into(), kind: SlotKind::Paint },
+            MaterialSlot { name: "wheel".into(), kind: SlotKind::Metal },
+            MaterialSlot { name: "track".into(), kind: SlotKind::Track },
+        ],
+        joint_count: rig.joint_names().len(),
+    };
+    let half = 0.5 * hull_size;
+    rr.meshes.push(box_mesh("hull", 0, 0, Vec3::ZERO, half));
+    rr.meshes.push(box_mesh(
+        "nose_marker",
+        0,
+        1,
+        Vec3::new(0.0, half.y, -half.z + NOSE_MARKER_OFFSET_M),
+        NOSE_MARKER_HALF_M,
+    ));
+    let mut wheel_node = vec![0usize; n];
+    for (i, s) in rig.stations.iter().enumerate() {
+        let travel = rr.nodes.len();
+        rr.nodes.push(RenderNode {
+            name: format!("{}.travel", s.name),
+            parent: Some(0),
+            role: NodeRole::SuspensionArm,
+            rest: Transform::from_pos(s.rest_pos_m),
+            // Joint order: spins, steers (none), travels.
+            joint: Some(JointBinding { kind: JointAxisKind::Prismatic, axis: s.bump_dir, index: n + i }),
+        });
+        wheel_node[i] = rr.nodes.len();
+        rr.nodes.push(RenderNode {
+            name: format!("{}.wheel", s.name),
+            parent: Some(travel),
+            role: wheel_role(s.wheel.kind),
+            rest: Transform::IDENTITY,
+            joint: Some(JointBinding { kind: JointAxisKind::Revolute, axis: -Vec3::X, index: i }),
+        });
+        let slot = if s.wheel.kind == WheelKind::RoadWheel { 1 } else { 2 };
+        rr.meshes.push(cylinder_mesh(
+            &format!("{}.rim", s.name),
+            wheel_node[i],
+            slot,
+            Vec3::ZERO,
+            s.wheel.radius_m,
+            0.5 * s.wheel.width_m,
+            0,
+            WHEEL_SEGMENTS,
+        ));
+    }
+    for t in &rig.tracks {
+        let node = rr.nodes.len();
+        rr.nodes.push(RenderNode {
+            name: format!("{}.belt", t.name),
+            parent: Some(0),
+            role: NodeRole::Track,
+            rest: Transform::IDENTITY,
+            joint: None,
+        });
+        // One link at the origin: +X along the travel, +Y out of the belt.
+        let link_mesh = rr.meshes.len();
+        rr.meshes.push(box_mesh(
+            &format!("{}.link", t.name),
+            node,
+            2,
+            Vec3::ZERO,
+            Vec3::new(0.5 * t.pitch_m, 0.5 * t.thickness_m, 0.5 * t.width_m),
+        ));
+        let wheels = t
+            .stations
+            .iter()
+            .map(|&i| {
+                let s = &rig.stations[i];
+                let radius_m = if s.wheel.kind == WheelKind::Sprocket {
+                    s.wheel.radius_m
+                } else {
+                    s.wheel.radius_m + 0.5 * t.thickness_m
+                };
+                TrackWheel { node: wheel_node[i], radius_m }
+            })
+            .collect();
+        let front_sprocket = rig.stations[t.sprocket].rest_pos_m.z < rig.stations[t.idler].rest_pos_m.z;
+        rr.track_runs.push(TrackRun {
+            node,
+            wheels,
+            link_mesh,
+            links: (t.belt_length_m / t.pitch_m).round() as u16,
+            sprocket: 0, // the loop starts at the sprocket (validated)
+            sprocket_joint: t.sprocket,
+            direction: if front_sprocket { -1 } else { 1 },
+        });
     }
     rr
 }
