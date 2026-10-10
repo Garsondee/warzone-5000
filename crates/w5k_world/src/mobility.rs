@@ -12,7 +12,7 @@
 
 use serde::{Deserialize, Serialize};
 use w5k_contract::capability::CapabilityTable;
-use w5k_contract::world::{MaterialId, PropKind, PropShape, WorldQuery};
+use w5k_contract::world::{MaterialId, MaterialTable, PropKind, PropShape, WorldQuery};
 use w5k_math::scalar;
 
 use crate::bridge::BridgeKind;
@@ -73,9 +73,42 @@ const ROUTE_STRIDE: usize = 4; // const-ok: thins the route for output
 /// Largest speed assumed when a table lists none, m/s.
 const DEFAULT_TOP_SPEED_M_S: f64 = 10.0; // const-ok: fallback when the table is empty
 
+/// Limits measured by the proving ground (VALIDATION's capability export), on its flat dry asphalt plane. `None` = not measured, or a
+/// value the proving ground's own scorer rejected (red), which is not used.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Measured {
+    pub max_grade_ratio: Option<f64>,
+    pub max_side_slope_rad: Option<f64>,
+    pub max_step_m: Option<f64>,
+}
+
 impl MobilitySpec {
     pub fn from_ron(text: &str) -> Result<MobilitySpec, String> {
         ron::from_str(text).map_err(|e| format!("mobility spec: {e}"))
+    }
+
+    /// Replace the placeholder limits by measured ones. The measured grade is for asphalt; a grade is limited by traction (`tan(slope) <=
+    /// mu`), so on another surface it scales with the ratio of the surface's peak friction to asphalt's, never above the asphalt value.
+    /// PROVISIONAL(world-surface-grade): crude on soft ground, where soil thrust rather than friction decides; until the proving ground
+    /// runs on other surfaces. Fording, bog soils and per-surface speed are not measured and stay as the placeholders say.
+    pub fn with_measured(mut self, m: &Measured, table: &MaterialTable) -> MobilitySpec {
+        let mu = |id: MaterialId| table.materials.get(usize::from(id.0)).map(|x| x.mu_peak);
+        if let (Some(g), Some(ref_mu)) = (m.max_grade_ratio, table.id_of("asphalt").and_then(mu)) {
+            for row in &mut self.capability.max_grade {
+                row.1 = g * (mu(row.0).unwrap_or(ref_mu) / ref_mu).min(1.0);
+            }
+        }
+        if let Some(v) = m.max_side_slope_rad {
+            self.capability.max_side_slope_rad = v;
+        }
+        if let Some(v) = m.max_step_m {
+            self.capability.max_step_m = v;
+        }
+        if *m == Measured::default() {
+            return self;
+        }
+        self.note.push_str(" Grade, side slope and step then replaced by the proving ground's measured values where they exist and passed its scorer (grade scaled per surface by peak friction, PROVISIONAL(world-surface-grade)).");
+        self
     }
 
     fn grade_on(&self, m: MaterialId) -> f64 {
@@ -528,6 +561,22 @@ mod tests {
         assert!(open.uses.iter().any(|u| u.starts_with("bridge")));
         assert!(go(&bridged(4.0, 1_000.0), &spec, (-15.0, 0.0), (15.0, 0.0)).is_none(), "too heavy");
         assert!(go(&bridged(2.5, 10_000.0), &spec, (-15.0, 0.0), (15.0, 0.0)).is_none(), "too wide");
+    }
+
+    #[test]
+    fn measured_limits_replace_the_placeholders_and_a_grade_scales_with_surface_friction() {
+        let table = standard_material_table().expect("materials");
+        let m = Measured { max_grade_ratio: Some(0.6), max_side_slope_rad: Some(0.5), max_step_m: None };
+        let spec = mule().with_measured(&m, &table);
+        let mu = |name: &str| table.materials[usize::from(table.id_of(name).expect(name).0)].mu_peak;
+        let grade = |name: &str| spec.grade_on(table.id_of(name).expect(name));
+        assert!((grade("asphalt") - 0.6).abs() < 1e-12, "asphalt takes the measured grade");
+        assert!((grade("dirt") - 0.6 * mu("dirt") / mu("asphalt")).abs() < 1e-12, "dirt scales by the friction ratio");
+        assert!(grade("mud") < grade("dirt"), "slipperier ground climbs less");
+        assert_eq!(
+            (spec.capability.max_side_slope_rad, spec.capability.max_step_m),
+            (0.5, mule().capability.max_step_m)
+        );
     }
 
     #[test]

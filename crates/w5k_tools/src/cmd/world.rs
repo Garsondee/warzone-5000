@@ -17,7 +17,7 @@ use w5k_contract::world::{PropKind, PropShape, WorldQuery};
 use w5k_math::{scalar, Vec3};
 use w5k_world::course::{generate, CourseDef};
 use w5k_world::grid::CELL_M;
-use w5k_world::mobility::{classify, route, Mobility, MobilitySpec};
+use w5k_world::mobility::{classify, route, Measured, Mobility, MobilitySpec};
 use w5k_world::plot::{Canvas, CHAR_W, LINE_H};
 use w5k_world::stats::{
     check_materials, grade_stats, iso8608_class, profile_along, psd, segment_for, slope_stats, Psd, PublishedRange,
@@ -571,6 +571,26 @@ const DEFAULT_VEHICLES: [&str; 3] = [
     include_str!("../../../../content/world/mobility/mule.ron"),
     include_str!("../../../../content/world/mobility/hauler.ron"),
 ];
+/// VALIDATION's proving-ground export, embedded so the command works from any directory (`--capability FILE` overrides it).
+const DEFAULT_CAPABILITY: &str = include_str!("../../../../docs/lanes/validation/capability/capability.json");
+
+/// What the proving ground measured for the vehicle called `name` (its entry is `<name>_...`). A reading its scorer marked `red` is
+/// left out (a model result that failed its physics check), and so is anything missing.
+fn measured_for(json: &str, name: &str) -> Result<Measured, String> {
+    let all: serde_json::Value = serde_json::from_str(json).map_err(|e| format!("capability json: {e}"))?;
+    let entry =
+        all.as_array().into_iter().flatten().find(|v| v["vehicle"].as_str().is_some_and(|n| n.starts_with(name)));
+    let read = |key: &str| {
+        let r = entry?.get(key)?;
+        (r["light"] != "red").then(|| r["value"].as_f64()).flatten()
+    };
+    Ok(Measured {
+        max_grade_ratio: read("max_grade_ratio"),
+        max_side_slope_rad: read("max_side_slope_rad"),
+        max_step_m: read("max_step_m"),
+    })
+}
+
 const GO_RGB: [f64; 3] = [70.0, 170.0, 80.0]; // const-ok: display colour
 const SLOW_RGB: [f64; 3] = [225.0, 180.0, 50.0]; // const-ok: display colour
 const NOGO_RGB: [f64; 3] = [190.0, 55.0, 50.0]; // const-ok: display colour
@@ -581,10 +601,15 @@ const MAP_SHADE_FLOOR: f64 = 0.55; // const-ok: how dark the hill shading may ma
 
 fn mobility(args: &[String]) -> Result<(), String> {
     let (mut file, mut out, mut specs) = (None, None, Vec::new());
+    let mut capability = DEFAULT_CAPABILITY.to_string();
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--out" => out = it.next().map(PathBuf::from),
+            "--capability" => {
+                let f = it.next().ok_or("--capability needs a file")?;
+                capability = std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?;
+            }
             "--vehicle" => {
                 let f = it.next().ok_or("--vehicle needs a file")?;
                 specs.push(MobilitySpec::from_ron(&std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?)?);
@@ -603,6 +628,10 @@ fn mobility(args: &[String]) -> Result<(), String> {
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     let w = &course.world;
     let n = w.n();
+    for spec in &mut specs {
+        let measured = measured_for(&capability, &spec.name)?;
+        *spec = spec.clone().with_measured(&measured, w.materials());
+    }
     let (start, finish) = (course.road[0], course.road[course.road.len() - 1]);
     let step = n.div_ceil(PANEL_PX);
     let panel = n.div_ceil(step);
@@ -747,6 +776,17 @@ mod tests {
         let h = doc["heights_m"][j * nx + i].as_f64().expect("h");
         assert!((h - w.height_at_node(i * 4, j * 4)).abs() < 1e-3);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_red_reading_is_not_used_and_a_vehicle_is_found_by_its_name_prefix() {
+        let json = r#"[{"vehicle":"mule_4x4","max_grade_ratio":{"value":0.6,"light":"not scored"},
+            "max_side_slope_rad":{"value":0.7,"light":"green"},"max_step_m":{"value":0.3,"light":"red"}}]"#;
+        let m = measured_for(json, "mule").expect("parse");
+        assert_eq!((m.max_grade_ratio, m.max_side_slope_rad, m.max_step_m), (Some(0.6), Some(0.7), None));
+        assert_eq!(measured_for(json, "hauler").expect("parse"), Measured::default());
+        let shipped = measured_for(DEFAULT_CAPABILITY, "scout").expect("the shipped export parses");
+        assert!(shipped.max_grade_ratio.is_some(), "the shipped export has the scout's grade");
     }
 
     #[test]
