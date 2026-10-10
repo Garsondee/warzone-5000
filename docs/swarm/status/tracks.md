@@ -8,7 +8,7 @@
 - Rigid-wheel Bekker (`soil::rigid_wheel_*`) is a free function: CHASSIS's tyre can fill `sinkage_m` today (11 t on clay: tracks 0.9 mm, four tyres 112 mm).
 
 ## In progress
-- Nothing coded. Waiting for review and for the glue (below).
+- PR `lane/tracks/ladder-json`: `w5k tracks bench ladder` also writes VIEWER's `w5k-ladder-1` JSON (drawn: `media/ladder_viewer_snow.png`), plus the glue note `docs/lanes/tracks/glue-note.md`. Waiting for review and for the glue.
 
 ## Blocked
 - The tracked vehicle itself needs CHASSIS's tracked hull on the integrator and ARCH's glue calling `TrackedRunningGear` (interface: design note, "The object the glue calls"), WORLD's cited soil table and DRIVE's steering unit. Published-number checks (Wong's examples) wait on card C-017.
