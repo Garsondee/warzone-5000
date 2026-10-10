@@ -7,6 +7,7 @@
 
 pub mod binary;
 pub mod skin;
+pub mod skinpack;
 
 use std::path::Path;
 

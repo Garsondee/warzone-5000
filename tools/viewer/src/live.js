@@ -5,10 +5,11 @@ import * as THREE from 'three';
 import { buildRig, poseRig } from './viewer.js';
 import { terrainMesh, propsGroup, roadMesh, heightSampler } from './world.js';
 import { makeLook } from './look.js';
+import { unpackSkin, fitSkin } from './skin.js';
 import { makeEngineSound } from './live-audio.js';
 import { makeInput } from './live-input.js';
 
-const { look: lookData } = JSON.parse(document.getElementById('data').textContent);
+const { look: lookData, skins: skinNames } = JSON.parse(document.getElementById('data').textContent);
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const SKY = 0xbfd4e6;
@@ -68,6 +69,27 @@ function buildWorld(terrain) {
 // ---- vehicles ----------------------------------------------------------------------------------------------------------------
 const rigPromises = new Map();
 const rigFor = (id) => { if (!rigPromises.has(id)) rigPromises.set(id, getJSON(`/api/rig/${encodeURIComponent(id)}`)); return rigPromises.get(id); };
+// What to draw for a vehicle: the detailed skin (the look id the server names, else the truck) fitted onto the skeleton the server sent;
+// the server's own rig (plain boxes) if no skin file can be read.
+const FALLBACK_SKIN = 'utility_4x4';
+const skinPromises = new Map();
+function skinFile(name) {
+  if (!skinNames.includes(name)) return Promise.resolve(null);
+  if (!skinPromises.has(name)) skinPromises.set(name, fetch(`/skins/${encodeURIComponent(name)}.skin`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status))))).then(unpackSkin).catch(() => null));
+  return skinPromises.get(name);
+}
+const modelPromises = new Map();
+function modelFor(id) {
+  if (!modelPromises.has(id)) {
+    modelPromises.set(id, (async () => {
+      const phys = await rigFor(id), want = (vehicles.find((v) => v.id === id) || {}).skin || id;
+      const skin = (await skinFile(want)) || (want !== FALLBACK_SKIN ? await skinFile(FALLBACK_SKIN) : null);
+      if (!skin) return phys;
+      try { return fitSkin(skin, phys); } catch (e) { console.warn('skin does not fit', id, e); return phys; }
+    })());
+  }
+  return modelPromises.get(id);
+}
 let cur = null, loadToken = 0; // cur: { id, built, radius }
 
 function disposeTree(root) {
@@ -75,14 +97,14 @@ function disposeTree(root) {
 }
 async function ensureVehicle(id) {
   const token = ++loadToken; // the latest request wins, whatever order the rigs arrive in
-  const rig = await rigFor(id);
+  const rig = await modelFor(id);
   if (token !== loadToken) return;
   const built = buildRig(rig);
   built.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   makeLook(lookData, built.paint).set({ scheme: schemeFor(id), seed: hash(id) });
   if (cur) { scene.remove(cur.built.root); disposeTree(cur.built.root); }
   scene.add(built.root);
-  cur = { id, built, radius: built.radius, joints: new Array(rig.joint_count).fill(0) };
+  cur = { id, built, radius: built.radius, fit: rig.fit || null, joints: new Array(rig.joint_count).fill(0) };
   snap = true;
 }
 
@@ -147,7 +169,7 @@ async function buildPicker() {
   });
   for (const v of vehicles) {
     try {
-      const url = thumbnail(await rigFor(v.id), v.id);
+      const url = thumbnail(await modelFor(v.id), v.id);
       cards.querySelector(`[data-id="${CSS.escape(v.id)}"] img`).src = url;
       thumbs++;
     } catch (e) { console.warn('no picture for', v.id, e); }
@@ -211,16 +233,22 @@ function updateCamera(dt, pos, quat, speed) {
   cam.look.z += (pos.z - cam.look.z) * k(0.1);
   cam.look.y += (pos.y - cam.look.y) * k(0.35); // bumps do not shake the horizon
   const r = cur ? cur.radius : 3;
-  const dist = rts ? Math.max(50, 14 * r) : Math.max(7, 2.9 * r) * (1 + Math.min(Math.abs(speed), 12) / 48);
+  const dist = rts ? Math.max(40, 11 * r) : Math.max(8, 3.4 * r) * (1 + Math.min(Math.abs(speed), 12) / 48);
   const pitch = rts ? 0.96 : 0.3;
   const c = Math.cos(pitch);
-  aim.copy(cam.look).addScaledVector(fwd, rts ? 18 : 3);
-  aim.y += rts ? 0 : 1.1;
+  aim.copy(cam.look).addScaledVector(fwd, rts ? 18 : 1.5);
+  aim.y += rts ? 0 : 0.9;
   cam.eye.set(aim.x + dist * c * Math.sin(cam.yaw), aim.y + dist * Math.sin(pitch), aim.z + dist * c * Math.cos(cam.yaw));
   cam.eye.y = Math.max(cam.eye.y, ground(cam.eye.x, cam.eye.z) + 1.2); // never under the hill
   camera.position.copy(cam.eye);
   camera.lookAt(aim);
 }
+// In the RTS view the truck is small and trees hide it: a bright ring on the ground under it, drawn over everything, always shows where it is.
+const marker = new THREE.Mesh(new THREE.RingGeometry(2.1, 2.8, 48), new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.95, depthTest: false, side: THREE.DoubleSide }));
+marker.rotation.x = -Math.PI / 2;
+marker.renderOrder = 20;
+marker.visible = false;
+scene.add(marker);
 const setCamera = (mode) => { cam.mode = mode; snap = true; document.body.dataset.camera = mode; };
 const toggleCamera = () => setCamera(cam.mode === 'chase' ? 'rts' : 'chase');
 
@@ -286,6 +314,8 @@ function loop(now) {
     cur.built.root.quaternion.copy(q);
     poseRig(cur.built, cur.joints);
     updateCamera(dt, pos, q, speed);
+    marker.visible = cam.mode === 'rts';
+    marker.position.set(pos.x, ground(pos.x, pos.z) + 0.25, pos.z);
     sun.position.copy(pos).add(SUN_OFFSET);
     sun.target.position.copy(pos);
     sound.update({ rpm: last.f.engine_rpm, throttle: lastCmd.throttle, speed });
@@ -315,7 +345,7 @@ async function boot() {
 }
 window.__live = { // for the browser test only
   frame: () => (last ? last.f : null), vehicle: () => (cur ? cur.id : null), camera: () => cam.mode, input: () => lastCmd,
-  thumbs: () => thumbs, sound: () => sound.state, picking: () => document.body.classList.contains('picking'), pick: choose, setCamera,
+  thumbs: () => thumbs, fit: () => (cur ? cur.fit : null), sound: () => sound.state, picking: () => document.body.classList.contains('picking'), pick: choose, setCamera,
   vehicles: () => vehicles.map((v) => v.id),
 };
 boot();

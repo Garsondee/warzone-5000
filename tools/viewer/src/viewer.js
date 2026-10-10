@@ -20,15 +20,17 @@ export function buildRig(rig) {
   const paint = rig.material_slots.map((s, i) => (s.kind === 'Paint' ? mats[i] : null)).filter(Boolean);
   let tris = 0;
   const meshes = [];
+  // Meshes come as JSON (lists of [x, y, z]) or as flat typed arrays (a packed skin); both are accepted.
+  const flat = (a) => (ArrayBuffer.isView(a) ? a : a.flat());
   for (const m of rig.meshes) {
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(m.positions.flat(), 3));
-    geo.setAttribute('normal', new THREE.Float32BufferAttribute(m.normals.flat(), 3));
-    const n = m.positions.length;
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(flat(m.positions), 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(flat(m.normals), 3));
+    const n = ArrayBuffer.isView(m.positions) ? m.positions.length / 3 : m.positions.length;
     // LOOK's per-vertex flags (contract: edge sharpness and cavity, 0..1); absent flags mean 0.
-    geo.setAttribute('aEdge', new THREE.Float32BufferAttribute(m.edge.length ? m.edge : new Array(n).fill(0), 1));
-    geo.setAttribute('aCavity', new THREE.Float32BufferAttribute(m.cavity.length ? m.cavity : new Array(n).fill(0), 1));
-    geo.setIndex(m.indices);
+    geo.setAttribute('aEdge', new THREE.Float32BufferAttribute(m.edge.length ? m.edge : new Float32Array(n), 1));
+    geo.setAttribute('aCavity', new THREE.Float32BufferAttribute(m.cavity.length ? m.cavity : new Float32Array(n), 1));
+    geo.setIndex(ArrayBuffer.isView(m.indices) ? new THREE.BufferAttribute(m.indices, 1) : m.indices);
     const mesh = new THREE.Mesh(geo, mats[m.material_slot]);
     nodes[m.node].g.add(mesh);
     meshes.push(mesh);

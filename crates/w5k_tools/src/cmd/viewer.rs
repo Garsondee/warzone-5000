@@ -19,6 +19,7 @@ const USAGE: &str = "usage:
   w5k viewer render <replay.json|replay.w5kr> --out clip.mp4 [--rig rig.json] [--rig a.json,b.json] [--skin utility_4x4[,..]] [--strip standard] [--terrain terrain.json] [--camera rts|quarter|front|chase|orbit] [--plots inset|full|off] [--seconds N] [--start S] [--fps N]
   w5k viewer page   <replay.json|replay.w5kr> --out page.html [--rig rig.json]   (a self-contained page to open in a browser)
   w5k viewer fake-fleet <replay> --out fleet.w5kr [--n 3] [--offset S]   (test data: the first vehicle repeated n times, each S seconds behind the last)
+  w5k viewer pack-skin <utility_4x4|rig.json> --out tools/viewer/dist/skins/utility_4x4.skin   (the compact skin file the test-drive page fetches)
   w5k viewer plot   <data.csv> --out chart.png [--title T] [--xlabel X] [--ylabel Y] [--width W] [--height H]
   w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.w5kr, replay.json and rig.json)";
 
@@ -30,6 +31,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some("page") => render(&args[1..], false),
         Some("plot") => plot(&args[1..]),
         Some("fake-fleet") => fake_fleet(&args[1..]),
+        Some("pack-skin") => pack_skin(&args[1..]),
         _ => Err(USAGE.to_string()),
     }
 }
@@ -210,6 +212,20 @@ fn dump_canned(args: &[String]) -> Result<(), String> {
     w5k_replay::write_json(&out.join("replay.json"), &replay)?;
     let rig_json = serde_json::to_string(&rig).map_err(|e| format!("cannot serialise the rig: {e}"))?;
     std::fs::write(out.join("rig.json"), rig_json).map_err(|e| format!("cannot write rig.json: {e}"))?;
+    Ok(())
+}
+
+/// Packs a detailed rig (GEOMETRY's truck, or a serialised `RenderRig`) into the compact skin file the live page loads.
+fn pack_skin(args: &[String]) -> Result<(), String> {
+    let name = args.first().ok_or(USAGE)?;
+    let out = opt(args, "--out").ok_or("--out is required")?;
+    let rig = skin_rig(name)?;
+    let bytes = w5k_replay::skinpack::pack(&rig);
+    if let Some(dir) = Path::new(out).parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    }
+    std::fs::write(out, &bytes).map_err(|e| format!("cannot write {out}: {e}"))?;
+    println!("{out}: {} bytes, {} triangles, {} meshes", bytes.len(), rig.triangle_count(), rig.meshes.len());
     Ok(())
 }
 
