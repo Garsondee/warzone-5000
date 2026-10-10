@@ -47,6 +47,47 @@ pub struct BarricadeDef {
     pub block_depth_m: Param,
 }
 
+/// A stone-riddled field: a disc of half-buried rocks with a guaranteed minimum gap between them (the lane a vehicle must find),
+/// sizes skewed to many small and few large. The ground under it becomes `surface` (gravel).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RockFieldDef {
+    pub x_m: f64,
+    pub z_m: f64,
+    pub radius_m: Param,
+    /// Closest two rock centres may be, m (Poisson-disc radius). The free gap between the biggest rocks is `min_spacing - 2 r_max`.
+    pub min_spacing_m: Param,
+    /// Acceptance probability of a candidate, 0 to 1.
+    pub density: Param,
+    pub rock_radius_min_m: Param,
+    pub rock_radius_max_m: Param,
+    pub road_clearance_m: Param,
+    pub surface: String,
+}
+
+/// Cells within `r_m` of any cell flagged in `mask` (a disc dilation).
+pub fn dilate(mask: &[bool], n: usize, r_m: f64) -> Vec<bool> {
+    let r = (r_m / CELL_M).ceil() as i64;
+    let mut out = vec![false; n * n];
+    for c in (0..n * n).filter(|&c| mask[c]) {
+        let (i, j) = ((c % n) as i64, (c / n) as i64);
+        for dj in -r..=r {
+            for di in -r..=r {
+                let (ni, nj) = (i + di, j + dj);
+                if ni >= 0
+                    && nj >= 0
+                    && ni < n as i64
+                    && nj < n as i64
+                    && scalar::hypot(di as f64, dj as f64) * CELL_M <= r_m
+                {
+                    out[nj as usize * n + ni as usize] = true;
+                }
+            }
+        }
+    }
+    out
+}
+
 /// D8 flow accumulation: for every cell, the number of cells (itself included) whose water reaches it, each cell draining to its
 /// steepest lower neighbour. Cells are processed from high to low (ties by index), so the result is order-independent and exact.
 pub fn drainage_area(h: &[f64], n: usize) -> Vec<u32> {
@@ -119,15 +160,26 @@ pub fn mud_mask(h: &[f64], n: usize, def: &MudDef) -> Vec<bool> {
 
 /// Bridson's Poisson-disc sampling over `[-half, half]^2`: `accept(x, z)` is the probability that a candidate may join (0 rejects it).
 pub fn poisson_disc(rng: &mut Pcg32, half: f64, r: f64, accept: &dyn Fn(f64, f64) -> f64) -> Vec<(f64, f64)> {
+    poisson_disc_in(rng, (0.0, 0.0), half, r, accept)
+}
+
+/// As [`poisson_disc`] over the square of half side `half` centred on `centre`.
+pub fn poisson_disc_in(
+    rng: &mut Pcg32,
+    centre: (f64, f64),
+    half: f64,
+    r: f64,
+    accept: &dyn Fn(f64, f64) -> f64,
+) -> Vec<(f64, f64)> {
     let k = 30; // const-ok: Bridson's candidates per active point
     let cell = r / std::f64::consts::SQRT_2;
     let side = (2.0 * half / cell).ceil() as usize + 1;
     let mut grid = vec![u32::MAX; side * side];
     let mut pts: Vec<(f64, f64)> = Vec::new();
     let mut active: Vec<usize> = Vec::new();
-    let gi = |p: (f64, f64)| (((p.0 + half) / cell) as usize, ((p.1 + half) / cell) as usize);
+    let gi = |p: (f64, f64)| (((p.0 - centre.0 + half) / cell) as usize, ((p.1 - centre.1 + half) / cell) as usize);
     let ok = |pts: &Vec<(f64, f64)>, grid: &Vec<u32>, p: (f64, f64)| -> bool {
-        if p.0.abs() > half || p.1.abs() > half {
+        if (p.0 - centre.0).abs() > half || (p.1 - centre.1).abs() > half {
             return false;
         }
         let (ci, cj) = gi(p);
@@ -147,7 +199,7 @@ pub fn poisson_disc(rng: &mut Pcg32, half: f64, r: f64, accept: &dyn Fn(f64, f64
     // Seed points: a fixed number of random tries, so a course with little valid ground still ends.
     for _ in 0..200 {
         // const-ok: seeding attempts
-        let p = (rng.range_f64(-half, half), rng.range_f64(-half, half));
+        let p = (centre.0 + rng.range_f64(-half, half), centre.1 + rng.range_f64(-half, half));
         if rng.next_f64() < accept(p.0, p.1) && ok(&pts, &grid, p) {
             let (ci, cj) = gi(p);
             grid[cj * side + ci] = pts.len() as u32;
