@@ -2,28 +2,29 @@
 
 *Update with every PR. Keep it under 40 lines. ARCH reads this file at every check-in instead of your whole session.*
 
-**Last updated:** 2026-10-08 UTC | **Branch:** lane/chassis/rehearsal | **Contract pinned:** contract-v0.1.0 (draft) | **Phase:** settling (rehearsal only; settling round not started)
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/chassis/settling | **Contract pinned:** f8f5e5d (0.1.1) | **Phase:** settling round, awaiting review
 
 ## Done
-- Launch rehearsal: this status file only (PR: "CHASSIS: launch rehearsal (status file only)").
+- Spike S1 (`spikes/chassis/s1`, `docs/lanes/chassis/spike-s1.md`): stable above ~50 Hz for the 12 Hz hop mode; frequency error under 0.1%, damping under 1%, drift under 0.04%/min; rule `ceil(20 f_max/60)` confirmed; relaxation-length friction holds a 10% grade, Coulomb sign(v) creeps.
+- Design note `docs/lanes/chassis/design-note.md` with the glue API and three CCRs (text only).
 
 ## In progress
-- Rehearsal only; settling round not started.
+- Nothing; stopped for review as the brief says.
 
 ## Blocked
 - Nothing.
 
 ## Next
-- Await owner/ARCH go-ahead, then start the settling round (spike S1, design note, CCRs).
+- After review: build step 1 (`quarter_car` bench and its four tests), then suspension.
 
 ## Cards needed / PROVISIONAL decisions in force
 - None.
 
 ## Evidence
-- `cargo test -p w5k_math`: test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+- `python3 -I spikes/chassis/s1/s1.py` output in `spikes/chassis/s1/output.txt`. No Rust changed.
 
 ## Owner instructions received
 - none
 
 ## Handoff note (fill in when you stop)
-- Changed: status file only | Unfinished: everything in the brief (rehearsal) | Surprised me: n/a | I would do next: settling round on go-ahead.
+- (fill in at M1)
