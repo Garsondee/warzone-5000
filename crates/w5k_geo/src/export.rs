@@ -4,10 +4,11 @@
 use crate::flags::{bake, FlagParams, Flags};
 use crate::mesh::Mesh;
 use crate::part::{Part, Side};
+use std::collections::BTreeSet;
 use w5k_contract::render::{
     JointAxisKind, JointBinding, MaterialSlot, MeshPart, NodeRole, RenderNode, RenderRig, SlotKind,
 };
-use w5k_math::{scalar, Transform, Vec3};
+use w5k_math::{scalar, Quat, Transform, Vec3};
 
 const PALETTE: &str = include_str!("../shapes/preview_palette.ron");
 const SLOTS: [(SlotKind, &str); 7] = [
@@ -64,22 +65,61 @@ fn split_normals(m: &Mesh, smooth_rad: f64) -> (Vec<Vec3>, Vec<Vec3>, Vec<u32>, 
     (pos, nrm, src, idx)
 }
 
-fn node_of(station: u8, side: Side) -> usize {
-    // fl, fr, rl, rr in the order of the stand-in rig
-    usize::from(station) * 2 + usize::from(side == Side::Right)
+/// The first axle is `f`, the last `r`, the ones between `m` (`m1`, `m2` when there are several): `fl`, `fr`, `rl`, `rr` on a 4x4.
+fn axle_name(axle: usize, axles: usize) -> String {
+    match axle {
+        0 => "f".into(),
+        a if a + 1 == axles => "r".into(),
+        _ if axles == 3 => "m".into(), // const-ok: one axle between the first and the last
+        a => format!("m{a}"),
+    }
 }
 
-/// Build the rig for a 2-axle, 4-station vehicle whose front axle steers. Flags are baked here, on the assembled parts.
+/// The articulation chain of a mount, in the order each joint hangs from the one before: node name, role, joint kind and axis (the stand-in
+/// layout of `testing::box_tank()`: turret yaw about +Y, gun pitch about +X, recoil along +Z).
+const CHAIN: [(NodeRole, &str, JointAxisKind, Vec3); 3] = [
+    (NodeRole::Turret, "turret_yaw", JointAxisKind::Revolute, Vec3::Y),
+    (NodeRole::GunPitch, "gun_pitch", JointAxisKind::Revolute, Vec3::X),
+    (NodeRole::Recoil, "gun_recoil", JointAxisKind::Prismatic, Vec3::Z),
+];
+
+/// A point in the frame of a node whose frame in the hull is `node` (a rotation-free node subtracts its position exactly).
+fn to_local(node: &Transform, p: Vec3) -> Vec3 {
+    if node.rot == Quat::IDENTITY {
+        p - node.pos
+    } else {
+        node.rot.inverse_rotate(p - node.pos)
+    }
+}
+
+/// Build the rig for a wheeled vehicle of any number of axles, with any number of weapon mounts. Nodes: the hull; per station travel > steer
+/// (stations with a steering knuckle) > wheel; per mount turret yaw > gun pitch > recoil, hung from the node that carries the socket the
+/// module sits on. Joint coordinates in the layout of the contract: spin, then steer, then travel, then the articulation chains. Flags are
+/// baked here, on the assembled parts.
 pub fn render_rig(id: &str, parts: &[Part], p: &FlagParams) -> RenderRig {
     let hulls: Vec<Mesh> = parts.iter().map(Part::in_hull_frame).collect();
     let baked = bake(&hulls.iter().collect::<Vec<_>>(), p);
+    // stations: (axle, right?) sorted axle first, left before right: fl, fr, rl, rr
+    let mut stations: Vec<(u8, bool)> = parts
+        .iter()
+        .filter(|q| q.role == NodeRole::Wheel)
+        .filter_map(|q| q.station.map(|a| (a, q.side == Side::Right)))
+        .collect();
+    stations.sort_unstable();
+    stations.dedup();
+    let index_of =
+        |part: &Part| stations.iter().position(|&(a, r)| Some(a) == part.station && r == (part.side == Side::Right));
+    let steered: Vec<usize> = parts
+        .iter()
+        .filter(|q| q.role == NodeRole::SteerKnuckle)
+        .filter_map(index_of)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let (n, axles) = (stations.len(), stations.iter().map(|s| usize::from(s.0)).max().map_or(0, |a| a + 1));
     let hub = |i: usize| {
-        parts
-            .iter()
-            .find(|q| q.role == NodeRole::Wheel && node_of(q.station.unwrap_or(0), q.side) == i)
-            .map_or(Vec3::ZERO, |q| q.pose.pos)
+        parts.iter().find(|q| q.role == NodeRole::Wheel && index_of(q) == Some(i)).map_or(Vec3::ZERO, |q| q.pose.pos)
     };
-    let names = ["fl", "fr", "rl", "rr"];
     let mut rig = RenderRig {
         id: id.into(),
         nodes: vec![RenderNode {
@@ -91,29 +131,29 @@ pub fn render_rig(id: &str, parts: &[Part], p: &FlagParams) -> RenderRig {
         }],
         meshes: vec![],
         material_slots: SLOTS.iter().map(|&(kind, name)| MaterialSlot { name: name.into(), kind }).collect(),
-        joint_count: 10, // const-ok: 4 spins, 2 steers, 4 travels, as the stand-in rig
+        joint_count: 0,
     };
-    let mut wheel_node = [0usize; 4];
-    let mut steer_node = [None; 4];
-    for (i, name) in names.iter().enumerate() {
+    let joint = |kind, axis, index| Some(JointBinding { kind, axis, index });
+    let (mut wheel_node, mut steer_node) = (vec![0usize; n], vec![None; n]);
+    for (i, &(axle, right)) in stations.iter().enumerate() {
+        let name = format!("{}{}", axle_name(usize::from(axle), axles), if right { "r" } else { "l" });
         let travel = rig.nodes.len();
-        let joint = |kind, axis, index| Some(JointBinding { kind, axis, index });
         rig.nodes.push(RenderNode {
             name: format!("{name}.travel"),
             parent: Some(0),
             role: NodeRole::SuspensionArm,
             rest: Transform::from_pos(hub(i)),
-            joint: joint(JointAxisKind::Prismatic, Vec3::Y, 6 + i), // const-ok: joint layout of the stand-in rig
+            joint: joint(JointAxisKind::Prismatic, Vec3::Y, n + steered.len() + i),
         });
         let mut parent = travel;
-        if i < 2 {
+        if let Some(k) = steered.iter().position(|&s| s == i) {
             steer_node[i] = Some(rig.nodes.len());
             rig.nodes.push(RenderNode {
                 name: format!("{name}.steer"),
                 parent: Some(travel),
                 role: NodeRole::SteerKnuckle,
                 rest: Transform::IDENTITY,
-                joint: joint(JointAxisKind::Revolute, Vec3::Y, 4 + i), // const-ok: joint layout of the stand-in rig
+                joint: joint(JointAxisKind::Revolute, Vec3::Y, n + k),
             });
             parent = rig.nodes.len() - 1;
         }
@@ -126,29 +166,66 @@ pub fn render_rig(id: &str, parts: &[Part], p: &FlagParams) -> RenderRig {
             joint: joint(JointAxisKind::Revolute, -Vec3::X, i),
         });
     }
+    // articulation chains: one node per (placement, role), the placement's own chain first, each hung from the node that carries its socket
+    let mut chain_nodes: Vec<(String, NodeRole, usize, Transform)> = Vec::new();
+    let mut labels: Vec<&str> = Vec::new();
+    for q in parts {
+        let Some(pl) = &q.placement else { continue };
+        if CHAIN.iter().any(|c| c.0 == q.role) && !labels.contains(&pl.label.as_str()) {
+            labels.push(&pl.label);
+        }
+    }
+    let mut next_joint = 2 * n + steered.len();
+    for label in labels {
+        for (k, &(role, base, kind, axis)) in CHAIN.iter().enumerate() {
+            let Some(q) =
+                parts.iter().find(|q| q.role == role && q.placement.as_ref().is_some_and(|pl| pl.label == label))
+            else {
+                continue;
+            };
+            let carrier = q.placement.as_ref().and_then(|pl| pl.carrier.as_ref());
+            let own = chain_nodes.iter().rev().find(|c| c.0 == label && CHAIN[..k].iter().any(|e| e.0 == c.1));
+            let host = own.or_else(|| carrier.and_then(|(l, r)| chain_nodes.iter().find(|c| &c.0 == l && c.1 == *r)));
+            let (parent, parent_pose) = host.map_or((0, Transform::IDENTITY), |c| (c.2, c.3));
+            let same_role = chain_nodes.iter().filter(|c| c.1 == role).count();
+            let name = if same_role == 0 { base.to_string() } else { format!("{base}.{same_role}") };
+            chain_nodes.push((label.to_string(), role, rig.nodes.len(), q.pose));
+            rig.nodes.push(RenderNode {
+                name,
+                parent: Some(parent),
+                role,
+                rest: parent_pose.inverse().compose(&q.pose),
+                joint: joint(kind, axis, next_joint),
+            });
+            next_joint += 1;
+        }
+    }
+    rig.joint_count = next_joint;
     let smooth = p.smooth_angle_deg * std::f64::consts::PI / 180.0; // const-ok: degrees to radians at the authoring edge
     for (part, (mesh, flags)) in parts.iter().zip(&baked) {
-        let (node, offset) = match part.role {
-            NodeRole::Wheel => (wheel_node[node_of(part.station.unwrap_or(0), part.side)], part.pose.pos),
-            NodeRole::SteerKnuckle => {
-                (steer_node[node_of(part.station.unwrap_or(0), part.side)].unwrap_or(0), part.pose.pos)
-            }
-            _ => (0, Vec3::ZERO),
+        let chain =
+            part.placement.as_ref().and_then(|pl| chain_nodes.iter().find(|c| c.0 == pl.label && c.1 == part.role));
+        let (node, frame) = match (part.role, chain) {
+            (NodeRole::Wheel, _) => (index_of(part).map_or(0, |i| wheel_node[i]), part.pose),
+            (NodeRole::SteerKnuckle, _) => (index_of(part).and_then(|i| steer_node[i]).unwrap_or(0), part.pose),
+            (_, Some(c)) => (c.2, c.3),
+            _ => (0, Transform::IDENTITY),
         };
-        rig.meshes.push(mesh_part(part, node, mesh, flags, offset, smooth));
+        rig.meshes.push(mesh_part(part, node, mesh, flags, &frame, smooth));
     }
     rig
 }
 
-fn mesh_part(part: &Part, node: usize, mesh: &Mesh, flags: &Flags, offset: Vec3, smooth_rad: f64) -> MeshPart {
+fn mesh_part(part: &Part, node: usize, mesh: &Mesh, flags: &Flags, frame: &Transform, smooth_rad: f64) -> MeshPart {
     let (pos, nrm, src, indices) = split_normals(mesh, smooth_rad);
     let f3 = |v: Vec3| [v.x as f32, v.y as f32, v.z as f32];
+    let dir = |n: Vec3| if frame.rot == Quat::IDENTITY { n } else { frame.rot.inverse_rotate(n) };
     MeshPart {
         name: part.name.clone(),
         node,
         material_slot: SLOTS.iter().position(|s| s.0 == part.slot).unwrap_or(0),
-        positions: pos.iter().map(|&p| f3(p - offset)).collect(),
-        normals: nrm.iter().map(|&n| f3(n)).collect(),
+        positions: pos.iter().map(|&p| f3(to_local(frame, p))).collect(),
+        normals: nrm.iter().map(|&n| f3(dir(n))).collect(),
         edge: src.iter().map(|&i| flags.edge[i as usize] as f32).collect(),
         cavity: src.iter().map(|&i| flags.cavity[i as usize] as f32).collect(),
         indices,

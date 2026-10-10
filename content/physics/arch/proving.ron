@@ -1,0 +1,18 @@
+#![enable(implicit_some)]
+// ARCH proving-ground runner (`w5k scenario proving`): the scripted driver and stop rules of the tests in docs/validation/proving-ground.md.
+// Every number here belongs to the test script or to a stop rule, not to the truck: the truck's own numbers are read from its PhysRig and
+// echoed into the result JSON as `inputs`, so VALIDATION's oracle judges the simulation by its own numbers.
+Proving(
+    chassis_tuning: "content/physics/chassis/tuning.ron",
+    frame_every_ticks: 2,
+    settle_s: Param(v: 1.5, lo: 1.0, hi: 3.0, prov: Estimate, src: "parked and level before any test starts: several damped periods of the sprung mass (about 1.5 Hz, zeta 0.3) so the static tyre loads are steady"),
+    stopped_below_m_s: Param(v: 0.05, prov: Spec, src: "scenario end: the truck counts as stopped below 5 cm/s (same rule as the mule-course scenario)"),
+    speed_gain_per_m_s: Param(v: 0.5, lo: 0.2, hi: 1.0, prov: Tuned, src: "driver: throttle per m/s of speed error (same value as the CHASSIS strip scenario and mule-course)"),
+    speed_integral_per_m: Param(v: 0.3, lo: 0.1, hi: 1.0, prov: Tuned, src: "driver: throttle per metre of accumulated speed error, removes the steady-state error of the proportional term (about 0.2 throttle holds 50 km/h, which a gain of 0.5 alone misses by 0.4 m/s)"),
+    braking_speed_kmh: Param(v: 50.0, prov: Spec, src: "docs/validation/proving-ground.md section 3b: full brake from a steady 50 km/h"),
+    braking_approach_max_s: Param(v: 90.0, prov: Spec, src: "stop rule: a truck that has not reached and held 50 km/h within 90 s of leaving rest is reported as ended early (a 12 t truck needs about 15 s)"),
+    braking_hold_s: Param(v: 3.0, lo: 2.0, hi: 10.0, prov: Estimate, src: "time within the tolerance before the brake pedal goes down, long enough for the automatic box and the suspension to settle at 50 km/h"),
+    braking_hold_tol_m_s: Param(v: 0.3, lo: 0.1, hi: 0.5, prov: Estimate, src: "the entry speed must be steady to about 1 km/h; the speed actually reached is echoed as the oracle's input"),
+    braking_max_s: Param(v: 30.0, prov: Spec, src: "stop rule: a truck that has not stopped in 30 s from 50 km/h is reported as ended early"),
+    decel_window_s: Param(v: 0.25, lo: 0.1, hi: 0.5, prov: Estimate, src: "peak deceleration is averaged over this window so one tick of pitch ringing does not read as a friction spike"),
+)

@@ -55,6 +55,7 @@ pub fn ring_mount(d: &RingMountDims, detail: u8) -> Module {
         fitting: role == NodeRole::Hull,
         mesh: mesh.finished(),
         pose,
+        placement: None,
     };
     // the collar: a stepped ring, a chamfer on its top outer edge
     let collar = revolve_y(&[(r - cw, 0.0), (r, 0.0), (r, ch - e), (r - e, ch), (r - cw, ch)], n);
@@ -102,6 +103,8 @@ pub fn ring_mount(d: &RingMountDims, detail: u8) -> Module {
         pose: frame(Vec3::ZERO, -Vec3::Y, -Vec3::Z),
         size_m: d.ring_m,
         station: None,
+        carrier: NodeRole::Hull,
+        owner: None,
         hints: Vec::new(),
     };
     let trunnion = Socket {
@@ -111,6 +114,8 @@ pub fn ring_mount(d: &RingMountDims, detail: u8) -> Module {
         pose: frame(Vec3::new(0.0, ch + pivot.y, pivot.z), -Vec3::Z, Vec3::Y),
         size_m: d.cradle_width_m,
         station: None,
+        carrier: NodeRole::Turret, // the trunnion rides on the turntable
+        owner: None,
         hints: vec![("cradle_w_m".into(), d.cradle_width_m)],
     };
     Module {
