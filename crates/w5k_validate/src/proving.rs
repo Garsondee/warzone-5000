@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn a_missing_key_is_an_error_that_names_it() {
-        let text = BRAKING.replace("\"mu\":0.8,", "");
+        let text = BRAKING.replace(",\"mu\":0.8", "");
         let e = ProvingResult::from_json(&text).expect("parse").check().expect_err("missing mu");
         assert!(e.contains("`mu`"), "{e}");
     }
