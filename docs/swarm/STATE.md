@@ -16,6 +16,11 @@ statistics against published ranges). Who does what: VIEWER (RTS camera, multi-v
 same 10-joint layout), WORLD (offroad sections, `w5k world stats`), VALIDATION (the proving-ground spec and scorer), CHASSIS (ledger, skidpad and
 side-slope benches, stability for the three), ARCH (`w5k scenario course-compare`, then `w5k scenario proving`). The owner also said "tidy up and stop
 at this milestone" and then replaced it with this direction in the same message; the later instruction is the one in force.
+**Ideal ending point (owner, 14:55 UTC): the owner's five-year-old son can give a vehicle a test drive.** Route (card C-015, default taken): `w5k drive`,
+a native real-time server (ARCH, `arch/drive-live`, protocol in `docs/swarm/requests/arch-drive-protocol.md`) plus a live web page (VIEWER) with kid
+assists on by default; CI packages a Windows zip (`w5k.exe`, `content/`, the page, `START.bat`) as an Actions artifact that the owner drops into the
+local folder `C:\Users\Hivemind\Documents\Warzone 5000` (cloud sessions cannot write to the owner's machine). The owner also praised GEOMETRY's parametric,
+modular vehicles; GEOMETRY continues with scout/hauler skins, then modules.
 
 ## Owner instruction in force (2026-10-10 02:30 UTC): run without checking in
 The owner is asleep and has authorised ARCH to run the swarm without asking them, aiming for a fun, visible slice: **a truck-class 4x4 with real

@@ -96,6 +96,14 @@ Cost of being wrong: (b) one stray direct push to `integration` has to be found 
 Default: (b).
 Answer: Done
 
+### C-015  How does the owner's five-year-old son test-drive a vehicle?
+Asked by: ARCH | Date: 2026-10-10 | Status: OPEN, default taken (owner's goal: "Ideal ending point would also include the ability for my five year old son to give this vehicle a test drive"; a local folder `C:\Users\Hivemind\Documents\Warzone 5000` exists on the owner's Windows PC for builds)
+Options: (a) a native `w5k drive` program (Windows exe built by CI) that runs the real simulation in real time and serves a browser page; the child drives with arrow keys, a gamepad or big on-screen buttons; kid assists on by default (speed cap, steering smoothing, auto-brake, auto-recover onto the road); (b) the Godot front end (C-005, C-010: M2), a proper game window with the same `Command`; (c) the simulation compiled to WebAssembly so the page needs no install.
+Recommendation: (a) now, (b) as the long-term front end. (a) needs no new dependency and no Godot work, reuses the three.js viewer and the real physics, and can be built and tested in the cloud; the owner downloads one zip from GitHub Actions into the local folder and double-clicks. (c) needs a wasm toolchain and likely a new dependency (a card).
+Cost of being wrong: (a) is thrown away when Godot lands, but the protocol, the assists and the kid-mode design carry over; low.
+Default: (a).
+Answer: (pending; the owner asked for the capability but did not choose the route)
+
 ## Answered cards
 *(the owner's four scoping answers are recorded as ADR-0001 to ADR-0004; the cards below were answered in the Control Room on 2026-10-08.)*
 
