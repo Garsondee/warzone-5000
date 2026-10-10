@@ -223,10 +223,9 @@ mod tests {
         out
     }
 
-    /// A tracked rig turns by running its tracks at different speeds: at full steer demand it must turn at a useful rate and keep rolling.
-    /// Known red (the carrier turns at about 0.03 rad/s and stalls): `docs/swarm/requests/arch-carrier-steering.md`. Run with `--ignored`.
+    /// A tracked rig turns by running its tracks at different speeds: at full steer demand it must turn at a useful rate and keep rolling
+    /// (was red until DRIVE made the controlled differential a regenerative servo; `docs/swarm/requests/arch-carrier-steering.md`).
     #[test]
-    #[ignore = "carrier steering authority is open: docs/swarm/requests/arch-carrier-steering.md"]
     fn a_full_steer_demand_turns_the_carrier_at_a_useful_rate_and_keeps_it_rolling() {
         let o = turn(1.0, 0.4, 6.0, 8.0);
         let (w, v) =

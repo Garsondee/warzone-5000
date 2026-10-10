@@ -1,6 +1,6 @@
 # Carrier steering authority (the tracked carrier barely turns)
 
-From: arch   To: drive (first), forge, chassis   Needed by: slice-2 acceptance 1 (the carrier finishes the course and the mud pit)   Status: OPEN
+From: arch   To: drive (first), forge, chassis   Needed by: slice-2 acceptance 1 (the carrier finishes the course and the mud pit)   Status: DONE (DRIVE #160: the controlled differential is a regenerative speed-difference servo; CHASSIS #159: the feature whitelist). The carrier now finishes the slice course and the mud pit; the acceptance test is un-ignored.
 
 ## What I see
 `carrier_tracked` now compiles (FORGE T2), steps on `TrackedChassis` (CHASSIS) and drives through `w5k scenario course-compare` (ARCH glue, `arch_chassis.rs`).
