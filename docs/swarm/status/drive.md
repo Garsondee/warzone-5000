@@ -16,6 +16,7 @@
 - Tripwire noted: PR #37 is over 400 non-test lines (steps 3-6 accumulated while earlier PRs awaited merge, and ARCH asked for DrivePort today); commits are separable, history not rewritten. Future steps go in smaller PRs.
 
 ## Next
+- For ARCH (PR #49): the Mule-class gear set settles in 4th (about 1000 rpm) at a 40 km/h cruise, not 3rd; say if you want 3rd and I will raise the light-throttle downshift scale. `Gearbox::update` now takes output shaft speed (rad/s), not engine rpm; Powertrain already passes it.
 - After review: engine tests and `w5k_drive` engine/coupling code (build order 1-2); lumped bench to test the lock with a speed-dependent load.
 
 ## Cards needed / PROVISIONAL decisions in force
