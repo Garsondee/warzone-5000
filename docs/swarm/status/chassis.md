@@ -8,7 +8,6 @@
 - Spike S1 (`spikes/chassis/s1`, `docs/lanes/chassis/spike-s1.md`): stable above ~50 Hz for the 12 Hz hop mode; frequency error under 0.1%, damping under 1%, drift under 0.04%/min; rule `ceil(20 f_max/60)` confirmed; relaxation-length friction holds a 10% grade, Coulomb sign(v) creeps.
 - Design note `docs/lanes/chassis/design-note.md` with the glue API and three CCRs (text only).
 
-- Settling PR #7 merged. ARCH go + owner instruction (STATE.md, 2026-10-10 02:30) verified in repo; building without waiting for review.
 - Build step 1: `quarter_car` bench with its four oracle tests (this PR).
 
 - Build step 2: `suspension` (all spring kinds, damper, dry friction, bump stop, hard limit) + `tuning.ron` Params (this PR).
