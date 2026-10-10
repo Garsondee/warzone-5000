@@ -33,6 +33,7 @@ const GROUND_RGB: [f64; 3] = [95.0, 135.0, 78.0]; // const-ok: display colour
 const HEIGHT_TINT_PER_M: f64 = 5.0; // const-ok: display colour ramp
 const LIGHT_DIR: [f64; 3] = [-0.5, 0.8, -0.4]; // const-ok: display light direction
 const SHADE_GAIN: f64 = 0.7; // const-ok: hill-shade contrast
+const SHADE_BANDS: f64 = 20.0; // const-ok: number of flat-shading bands in the preview
 const SHADE_AMBIENT: f64 = 0.3; // const-ok: hill-shade ambient
 const MM_PER_M: f64 = 1000.0; // const-ok: unit conversion for the export's rounding
 const CHANNEL_MAX: f64 = 255.0; // const-ok: 8-bit channel
@@ -150,7 +151,9 @@ fn preview(args: &[String]) -> Result<(), String> {
     for r in 0..side {
         for c in 0..side {
             let (x, z) = (lo.x + c as f64 / px as f64, lo.z + r as f64 / px as f64);
-            let shade = (w.normal(x, z).dot(light) * SHADE_GAIN + SHADE_AMBIENT).clamp(0.0, 1.0);
+            // Shade in a limited number of bands: it reads as flat-shaded (the house style) and the small ground detail no longer makes the
+            // picture incompressible.
+            let shade = ((w.normal(x, z).dot(light) * SHADE_GAIN + SHADE_AMBIENT).clamp(0.0, 1.0) * SHADE_BANDS).round() / SHADE_BANDS;
             let name = &w.material_at(x, z).name;
             let water = w.water_surface_m(x, z).map(|s| ((s - w.height_m(x, z)) / WATER_DEPTH_FULL_M).clamp(0.0, 1.0));
             let base = if let Some(depth) = water {
@@ -204,6 +207,8 @@ fn preview(args: &[String]) -> Result<(), String> {
     let path = out.join("topdown.png");
     let file = std::fs::File::create(&path).map_err(|e| e.to_string())?;
     let mut enc = png::Encoder::new(std::io::BufWriter::new(file), side as u32, side as u32);
+    enc.set_compression(png::Compression::High);
+    enc.set_filter(png::Filter::Adaptive);
     enc.set_color(png::ColorType::Rgb);
     enc.set_depth(png::BitDepth::Eight);
     let mut wr = enc.write_header().map_err(|e| e.to_string())?;
