@@ -102,22 +102,14 @@ pub fn render_rig(id: &str, parts: &[Part], p: &FlagParams) -> RenderRig {
     render_rig_with(id, parts, p, &Overrides::default())
 }
 
-<<<<<<< HEAD
 /// What a physics rig knows and the parts do not: the axis each station's suspension travel moves along (`bump_dir`; vertical when absent),
 /// how many joint coordinates its frames carry (an unarmed skin of an armed rig leaves the articulation coordinates unbound), and the sides
 /// whose belt is ONE link that a viewer repeats along the path (the `Track` part of such a side is that link; it becomes a `track_runs` entry).
-=======
-/// What a physics rig knows and the parts do not: the axis each station's suspension travel moves along (`bump_dir`; vertical when absent)
-/// and how many joint coordinates its frames carry (an unarmed skin of an armed rig leaves the articulation coordinates unbound).
->>>>>>> origin/integration
 #[derive(Clone, Debug, Default)]
 pub struct Overrides {
     pub travel_axes: Vec<Vec3>,
     pub joint_count: Option<usize>,
-<<<<<<< HEAD
     pub runs: Vec<Run>,
-=======
->>>>>>> origin/integration
 }
 
 /// The wheel roles of a tracked vehicle: they make stations the way `Wheel` does, with one global index per station (`Part::station`, in the
@@ -241,12 +233,8 @@ pub fn render_rig_with(id: &str, parts: &[Part], p: &FlagParams, over: &Override
     for q in parts.iter().filter(|q| q.role == NodeRole::Track) {
         let name = format!("track_{}", if q.side == Side::Right { "r" } else { "l" });
         belt_node.insert(q.name.clone(), rig.nodes.len());
-<<<<<<< HEAD
         let rest = if repeated(q) { Transform::IDENTITY } else { q.pose };
         rig.nodes.push(RenderNode { name, parent: Some(0), role: NodeRole::Track, rest, joint: None });
-=======
-        rig.nodes.push(RenderNode { name, parent: Some(0), role: NodeRole::Track, rest: q.pose, joint: None });
->>>>>>> origin/integration
     }
     // articulation chains: one node per (placement, role), the placement's own chain first, each hung from the node that carries its socket
     let mut chain_nodes: Vec<(String, NodeRole, usize, Transform)> = Vec::new();
@@ -289,14 +277,10 @@ pub fn render_rig_with(id: &str, parts: &[Part], p: &FlagParams, over: &Override
             part.placement.as_ref().and_then(|pl| chain_nodes.iter().find(|c| c.0 == pl.label && c.1 == part.role));
         let (node, frame) = match (part.role, chain) {
             (role, _) if is_wheel(role) => (index_of(part).map_or(0, |i| wheel_node[i]), part.pose),
-<<<<<<< HEAD
             (NodeRole::Track, _) => (
                 belt_node.get(&part.name).copied().unwrap_or(0),
                 if repeated(part) { Transform::IDENTITY } else { part.pose },
             ),
-=======
-            (NodeRole::Track, _) => (belt_node.get(&part.name).copied().unwrap_or(0), part.pose),
->>>>>>> origin/integration
             (NodeRole::SteerKnuckle, _) => (index_of(part).and_then(|i| steer_node[i]).unwrap_or(0), part.pose),
             (_, Some(c)) => (c.2, c.3),
             _ => (0, Transform::IDENTITY),
