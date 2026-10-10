@@ -14,7 +14,7 @@ use w5k_geo::wheel::{segments_for, wheel, WheelDims};
 use w5k_math::Vec3;
 
 const USAGE: &str =
-    "usage: w5k geometry sheet <wheel|truck|scout|hull|truck6|truck-ring|truck-mg|truck-ac25>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close,gun] [--size WxH]";
+    "usage: w5k geometry sheet <wheel|truck|scout|hauler|hull|truck6|truck-ring|truck-mg|truck-ac25>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close,gun] [--size WxH]";
 
 /// Entry point for `w5k geometry <args>`.
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -119,6 +119,7 @@ fn skin_id(subject: &str) -> Option<&'static str> {
     match subject {
         "truck" => Some("utility_4x4"),
         "scout" => Some("scout_4x4"),
+        "hauler" => Some("hauler_4x4"),
         _ => None,
     }
 }
@@ -136,8 +137,8 @@ fn subject(what: &str, detail: u8) -> Result<Vec<(Mesh, [f64; 3], bool)>, String
                 (w.nuts, [0.7, 0.7, 0.7], true),    // const-ok: picture colours and camera framing
             ])
         }
-        "scout" => {
-            let skin = Skin::for_id("scout_4x4").ok_or("no scout skin")?;
+        "scout" | "hauler" => {
+            let skin = skin_id(what).and_then(Skin::for_id).ok_or("no such skin")?;
             Ok(skin
                 .parts(detail)
                 .iter()
