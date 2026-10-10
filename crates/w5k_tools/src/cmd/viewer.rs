@@ -9,10 +9,10 @@ use w5k_replay::ReplayFile;
 pub fn run(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
         Some("dump-canned") => dump_canned(&args[1..]),
-        _ => {
-            Err("usage: w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.json and rig.json)"
-                .to_string())
-        }
+        _ => Err(
+            "usage: w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.w5kr, replay.json and rig.json)"
+                .to_string(),
+        ),
     }
 }
 
@@ -29,7 +29,9 @@ fn dump_canned(args: &[String]) -> Result<(), String> {
         "tank" => tank_slew_and_pitch(),
         other => return Err(format!("unknown canned replay {other}")),
     };
-    w5k_replay::write_json(&out.join("replay.json"), &ReplayFile { header, frames })?;
+    let replay = ReplayFile { header, frames };
+    w5k_replay::write_bin(&out.join("replay.w5kr"), &replay)?;
+    w5k_replay::write_json(&out.join("replay.json"), &replay)?;
     let rig_json = serde_json::to_string(&rig).map_err(|e| format!("cannot serialise the rig: {e}"))?;
     std::fs::write(out.join("rig.json"), rig_json).map_err(|e| format!("cannot write rig.json: {e}"))?;
     Ok(())
