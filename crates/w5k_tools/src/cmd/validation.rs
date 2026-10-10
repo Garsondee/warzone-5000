@@ -106,6 +106,9 @@ const IMPACT_VEHICLES: &str =
 /// The lever is perturbed by this factor (+10%).
 const IMPACT_FACTOR: f64 = 1.1; // const-ok: the impact matrix perturbation (IMPACT-MATRIX.md)
 
+/// Torque-bias ratio of the limited-slip centre differential the matrix swaps in. PROVISIONAL(DRIVE to confirm the value).
+const LIMITED_SLIP_BIAS: f64 = 2.0; // const-ok: provisional choice of the matrix's limited-slip lever
+
 /// Run the proving ground on one vehicle file (its `.extras.ron` sidecar next to it) and return `test -> measured`.
 fn proving_results(vehicle: &Path, out: &Path) -> Result<BTreeMap<String, ProvingResult>, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
@@ -146,18 +149,22 @@ fn impact(args: &[String]) -> Result<(), String> {
         let path = root().join(path);
         let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         let def = w5k_forge::compile::parse_def(&text)?;
-        let extras = std::fs::read_to_string(path.with_extension("extras.ron"))
+        let extras_text = std::fs::read_to_string(path.with_extension("extras.ron"))
             .map_err(|e| format!("extras of {}: {e}", def.id))?;
-        let variant =
-            |name: &str, d: &w5k_contract::def::VehicleDef| -> Result<BTreeMap<String, ProvingResult>, String> {
-                let dir = out.join("runs").join(&def.id).join(name);
-                std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-                let file = dir.join(format!("{}.ron", def.id));
-                std::fs::write(&file, ron::to_string(d).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-                std::fs::write(file.with_extension("extras.ron"), &extras).map_err(|e| e.to_string())?;
-                proving_results(&file, &dir.join("results"))
-            };
-        let base = variant("baseline", &def)?;
+        let extras = w5k_forge::compile::parse_extras(&extras_text)?;
+        let variant = |name: &str,
+                       d: &w5k_contract::def::VehicleDef,
+                       x: &w5k_forge::extras::Extras|
+         -> Result<BTreeMap<String, ProvingResult>, String> {
+            let dir = out.join("runs").join(&def.id).join(name);
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            let file = dir.join(format!("{}.ron", def.id));
+            std::fs::write(&file, ron::to_string(d).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+            std::fs::write(file.with_extension("extras.ron"), ron::to_string(x).map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+            proving_results(&file, &dir.join("results"))
+        };
+        let base = variant("baseline", &def, &extras)?;
         if let Some(b) = base.get("braking_50kmh") {
             if let (Some(a), Some(mu)) = (b.measured.get("peak_decel_g"), b.inputs.get("mu")) {
                 obs.regimes.insert(def.id.clone(), impact::braking_regime(*a, *mu));
@@ -169,9 +176,26 @@ fn impact(args: &[String]) -> Result<(), String> {
             }
         }
         for lever in &levers {
-            let mut d = def.clone();
-            (lever.apply)(&mut d, IMPACT_FACTOR);
-            let pert = variant(lever.id, &d)?;
+            // a lever the vehicle cannot take (no authored brake torque, no limited-slip differential) is skipped with a note
+            let applied = if lever.forge == "centre_diff_limited_slip" {
+                w5k_forge::levers::set_diff(
+                    &extras,
+                    w5k_forge::levers::DiffRole::Centre,
+                    w5k_contract::rig::DiffKind::LimitedSlip,
+                    Some(LIMITED_SLIP_BIAS),
+                )
+                .map(|x| (def.clone(), x))
+            } else {
+                w5k_forge::levers::apply_both(&def, &extras, lever.forge, IMPACT_FACTOR)
+            };
+            let (d, x) = match applied {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("{}: lever {} skipped: {e}", def.id, lever.id);
+                    continue;
+                }
+            };
+            let pert = variant(lever.id, &d, &x)?;
             for bench in impact::BENCHES {
                 let value = |m: &BTreeMap<String, ProvingResult>| {
                     m.get(bench.test)

@@ -47,6 +47,7 @@ Sign: `-` the benchmark decreases, `+` it increases, `~0` essentially no change.
 ### Mass, geometry and aerodynamics
 | Lever | Benchmark | Sign | Why |
 |---|---|---|---|
+| Centre differential (open to limited slip, bias 2: a discrete change, not +10%) | B6 | `+` or `~0` | an open centre differential caps the thrust at twice what the lightly loaded axle can carry; a limited slip passes more: `+` when the grade is limited by that split, `~0` when it is torque-limited |
 | Vehicle mass (armour added) | B1 | `+` | `t ~ m`: about +10% when power-limited |
 | Vehicle mass | B4 | `~0` or `+` | `d = v^2 / (2 mu g)` is independent of mass when tyre-limited; `+` if brake-limited |
 | Vehicle mass | B8 | `-` | higher ground pressure, deeper sinkage, earlier bogging |
