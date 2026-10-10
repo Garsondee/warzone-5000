@@ -39,4 +39,11 @@
         rolling_coeff: Param(v: 0.06, lo: 0.03, hi: 0.1, prov: Estimate, src: "UNVALIDATED stand-in; loose surfaces cost more than firm dirt"),
         roughness_rms_m: Param(v: 0.06, lo: 0.03, hi: 0.12, prov: Estimate, src: "UNVALIDATED stand-in; stones the 1 m grid does not resolve"),
     ),
+    MaterialDef(
+        name: "riverbed",
+        mu_peak: Param(v: 0.5, lo: 0.3, hi: 0.7, prov: Estimate, src: "UNVALIDATED stand-in; submerged gravel and silt"),
+        mu_slide: Param(v: 0.4, lo: 0.25, hi: 0.6, prov: Estimate, src: "UNVALIDATED stand-in"),
+        rolling_coeff: Param(v: 0.08, lo: 0.04, hi: 0.15, prov: Estimate, src: "UNVALIDATED stand-in; the water's own drag is the water model's job, not this number"),
+        roughness_rms_m: Param(v: 0.05, lo: 0.02, hi: 0.1, prov: Estimate, src: "UNVALIDATED stand-in"),
+    ),
 ]
