@@ -1,21 +1,22 @@
 # Status: WORLD
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/world/settling | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** settling
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/world/course | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
 
 ## Done
-- Spike S-W (`docs/lanes/world/spike-w.md`, code `crates/w5k_world/src/spike_w.rs`): height 24 ns, sample 61 ns, raycast 12 us, generator hash is a constant, 9 tests green.
-- Design note `docs/lanes/world/design-note.md`; CCR text `docs/swarm/requests/world-ccr-materials-props.md`.
+- PR 17 settling (merged): spike S-W, design note, CCR text. PR 21 data-driven bump strip (merged).
 
 ## In progress
-- PR 17 (settling) merged. Branch `lane/world/build`: data-driven bump strip (`strip.rs`, `content/world/strips/standard.ron`, `content/world/materials.ron`), matches the stand-in to 1e-12 (`data_strip_matches_the_stand_in_strip_everywhere`). Materials are UNVALIDATED stand-ins until the cited soil table (next).
+- Branch `lane/world/course`, PR open: `GridWorld` (size-generic spike world, same golden hash), `CourseDef` RON + generator (hills with an exact max-grade clamp, one named hill, road by slope-cost A* then graded and stamped), `w5k world preview` (top-down PNG: `docs/lanes/world/media/slice/topdown.png`), `content/world/courses/slice.ron` (400 m square).
+- Tests: course_ron_round_trips_and_every_param_checks, course_generator_is_deterministic_for_a_seed, terrain_never_exceeds_the_stated_maximum_grade, roads_never_exceed_the_stated_maximum_grade, road_cells_are_road_material_and_start_and_finish_are_where_the_waypoints_say.
+- Known blemish: the Manhattan-metric grade clamp leaves faint axis-aligned streaks on steep flanks (cosmetic; a smoother clamp is a later polish).
 
 ## Blocked
 - Nothing.
 
 ## Next
-1. Branch `lane/world/build`: real heightfield module + the data-driven bump strip (CHASSIS needs it first).
-2. `MaterialTable` from RON with cited soil numbers (Wong tables; anything unciteable tagged UNVALIDATED).
-3. Generator (hills with grade clamp, roads, mud, trees, barricades, village), then `w5k world export|preview`.
+1. Mud by drainage area, trees (Poisson disc), a barricade across the road; then `WorldQuery` props show in the preview.
+2. `MaterialTable` with cited soil numbers (Wong tables; anything unciteable stays UNVALIDATED and goes to VALIDATION).
+3. Export for the viewers, the theory note, the village.
 
 ## Cards needed / PROVISIONAL decisions in force
 - None. C-004 default (parametric world) applies.
