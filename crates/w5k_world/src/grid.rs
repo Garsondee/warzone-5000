@@ -71,6 +71,7 @@ pub struct GridWorld {
     n: usize,
     half_m: f64,
     prop_n: usize,
+    y_range: (f64, f64),
     heights: Vec<f32>,
     splat: Vec<u8>,
     materials: MaterialTable,
@@ -89,10 +90,14 @@ impl GridWorld {
         assert!(n >= 2 && heights.len() == n * n && splat.len() == n * n, "grid arrays must be n x n");
         let half_m = (n - 1) as f64 * CELL_M * 0.5;
         let prop_n = prop_n_for(half_m);
+        let y_range = heights
+            .iter()
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &v| (lo.min(v as f64), hi.max(v as f64)));
         GridWorld {
             n,
             half_m,
             prop_n,
+            y_range,
             heights,
             splat,
             materials,
@@ -208,6 +213,9 @@ impl GridWorld {
 
     /// CSR build: count, prefix-sum, fill. A prop sits in every grid cell its AABB overlaps.
     fn rebuild_grid(&mut self) {
+        for p in &self.props {
+            self.y_range.1 = self.y_range.1.max(prop_aabb(p).1.y);
+        }
         let props = &self.props;
         let mut counts = vec![0u32; self.prop_n * self.prop_n + 1];
         for p in props {
@@ -578,8 +586,8 @@ impl WorldQuery for GridWorld {
     }
 
     fn bounds(&self) -> (Vec3, Vec3) {
-        (Vec3::new(-self.half_m, -100.0, -self.half_m), Vec3::new(self.half_m, 100.0, self.half_m))
-        // const-ok: spike vertical extent
+        // The y range is the lowest terrain to the highest terrain or prop top (CCR W-4 asks to write this into the contract).
+        (Vec3::new(-self.half_m, self.y_range.0, -self.half_m), Vec3::new(self.half_m, self.y_range.1, self.half_m))
     }
 }
 
