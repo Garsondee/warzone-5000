@@ -21,7 +21,7 @@ const USAGE: &str = "usage:
   w5k viewer fake-fleet <replay> --out fleet.w5kr [--n 3] [--offset S]   (test data: the first vehicle repeated n times, each S seconds behind the last)
   w5k viewer pack-skin <utility_4x4|scout_4x4|rig.json> --out tools/viewer/dist/skins/<id>.skin   (the compact skin file the test-drive page fetches)
   w5k viewer plot   <data.csv> --out chart.png [--title T] [--xlabel X] [--ylabel Y] [--width W] [--height H]
-  w5k viewer tornado <impact.json> --out tornado.png [--theme light|dark] [--cols N] [--rows N]   (design impact: a panel per benchmark, a bar pair per lever; shape in docs/lanes/viewer/charts.md)
+  w5k viewer tornado <impact.json> --out tornado.png [--theme light|dark] [--cols N] [--rows N]   (the impact.json of `w5k validation impact`: a panel per benchmark, a bar per vehicle for each lever; docs/lanes/viewer/charts.md)
   w5k viewer ladder  <ladder.json> --out ladder.png [--theme light|dark]   (sinkage up a ladder of load or track width, beside the soil theory)
   w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.w5kr, replay.json and rig.json)";
 
@@ -352,32 +352,67 @@ mod tests {
         serde_json::from_str(&text).unwrap_or_else(|e| panic!("{name} is not JSON: {e}"))
     }
 
-    fn ids(list: &serde_json::Value) -> Vec<&str> {
-        list.as_array().expect("a list").iter().map(|v| v["id"].as_str().expect("an id")).collect()
+    /// The tornado reads the `impact.json` of `w5k validation impact` as it is written; the sample is a copy of one real run (its
+    /// numbers date from that run, the shape is what this guards): every entry carries what the chart reads, and the runner's counts
+    /// are the counts of its entries.
+    #[test]
+    fn the_impact_sample_is_a_report_whose_counts_agree_with_its_entries() {
+        let report = sample("impact.json");
+        let entries = report["entries"].as_array().expect("entries");
+        assert!(!entries.is_empty());
+        let word = |e: &serde_json::Value, k: &str| {
+            e[k].as_str().unwrap_or_else(|| panic!("entry {e} has no `{k}`")).to_string()
+        };
+        for e in entries {
+            let (base, perturbed, delta) =
+                (e["base"].as_f64().unwrap(), e["perturbed"].as_f64().unwrap(), e["delta"].as_f64().unwrap());
+            if base != 0.0 {
+                assert!(
+                    (delta - (perturbed - base) / base.abs()).abs() < 1e-9,
+                    "delta of {e} is not (perturbed - base) / |base|"
+                );
+            }
+            assert!(["Minus", "Zero", "Plus"].contains(&word(e, "observed").as_str()), "unknown sign in {e}");
+            assert!(
+                ["Right", "Wrong", "Unlisted", "Quiet"].contains(&word(e, "verdict").as_str()),
+                "unknown verdict in {e}"
+            );
+            word(e, "vehicle");
+            word(e, "lever");
+            word(e, "bench");
+        }
+        let count = |v: &str| entries.iter().filter(|e| e["verdict"] == v).count() as u64;
+        assert_eq!(report["right"].as_u64(), Some(count("Right")));
+        assert_eq!(report["scored"].as_u64(), Some(count("Right") + count("Wrong")));
+        assert!(report["dead_levers"].is_array() && report["orphan_benchmarks"].is_array());
     }
 
-    /// The shape VALIDATION will write is the shape the tornado draws: every cell names a lever and a benchmark that are listed, once,
-    /// and carries the two measured values (docs/lanes/viewer/charts.md).
+    /// The same shape from the producer itself: if VALIDATION renames a field or a word the chart matches on, this fails here instead of
+    /// the tornado silently drawing nothing.
     #[test]
-    fn every_cell_of_the_impact_sample_names_a_listed_lever_and_benchmark_once_with_both_values() {
-        let impact = sample("impact-stub.json");
-        assert_eq!(impact["schema"], "w5k-impact-1");
-        let (levers, benches) = (ids(&impact["levers"]), ids(&impact["benchmarks"]));
-        let mut seen = std::collections::BTreeSet::new();
-        for cell in impact["cells"].as_array().expect("cells") {
-            let (l, b) = (cell["lever"].as_str().expect("lever"), cell["benchmark"].as_str().expect("benchmark"));
-            assert!(levers.contains(&l) && benches.contains(&b), "cell {l}/{b} names an unlisted lever or benchmark");
-            assert!(seen.insert((l, b)), "cell {l}/{b} appears twice");
-            assert!(
-                cell["minus"].is_number() && cell["plus"].is_number(),
-                "cell {l}/{b} needs numbers `minus` and `plus`"
-            );
+    fn the_impact_runners_report_has_the_fields_and_words_the_tornado_reads() {
+        use w5k_validate::impact;
+        let levers = impact::levers();
+        let lever = levers.first().expect("the runner has levers").id.to_string();
+        let mut obs =
+            impact::Observations { pairs: Default::default(), regimes: Default::default(), labels: Default::default() };
+        obs.pairs.insert(("mule_4x4".into(), lever.clone(), "B1".into()), (10.0, 11.0));
+        obs.pairs.insert(("mule_4x4".into(), lever, "B4".into()), (10.0, 10.0));
+        let report = serde_json::to_value(impact::evaluate(&[], &levers, &obs)).expect("the report serialises");
+        let entries = report["entries"].as_array().expect("entries");
+        assert_eq!(entries.len(), 2);
+        for key in ["vehicle", "lever", "bench", "observed", "verdict"] {
+            assert!(entries.iter().all(|e| e[key].is_string()), "entries lost their string `{key}`");
         }
-        assert_eq!(
-            seen.len(),
-            levers.len() * benches.len(),
-            "the sample should cover every lever against every benchmark"
-        );
+        for key in ["base", "perturbed", "delta"] {
+            assert!(entries.iter().all(|e| e[key].is_number()), "entries lost their number `{key}`");
+        }
+        let moved = entries.iter().find(|e| e["bench"] == "B1").expect("B1");
+        assert_eq!((moved["observed"].as_str(), moved["verdict"].as_str()), (Some("Plus"), Some("Unlisted")));
+        let still = entries.iter().find(|e| e["bench"] == "B4").expect("B4");
+        assert_eq!((still["observed"].as_str(), still["verdict"].as_str()), (Some("Zero"), Some("Quiet")));
+        assert!(report["right"].is_u64() && report["scored"].is_u64());
+        assert!(report["dead_levers"].is_array() && report["orphan_benchmarks"].is_array());
     }
 
     #[test]

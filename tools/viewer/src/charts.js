@@ -12,15 +12,14 @@ export const THEMES = {
 };
 export const STATUS = { good: '#0ca30c', warning: '#fab219', serious: '#ec835a', critical: '#d03b3b' };
 
-const MINUS = '−';
-const ABS_EPS = 1e-12; // a baseline this small has no percentage; the panel shows the change in the benchmark's own unit
-const DEFAULT_DEADBAND_PCT = 0.5; // a change smaller than this counts as "does not move"
-const LEVER_COLOURS = [0, 1]; // theme.series slots for "lever -10%" and "lever +10%"
+const MINUS = '\u2212';
+const BASE_EPS = 1e-12; // a baseline this small has no percentage; such a bar is not drawn (and is counted)
+const DEFAULT_PERTURB_PCT = 10; // `w5k validation impact` raises each lever by 10% (IMPACT_FACTOR); the file may say so as `perturb_pct`
+const DEFAULT_DEADBAND_PCT = 0.5; // validate::impact::EPS: a change under this is "no change"; the file may say so as `deadband_pct`
+const DEFAULT_ACCEPTANCE_PCT = 80; // SLICE-2.md acceptance 3: at least 80% of the expected signs right; the file may say so as `acceptance_pct`
 
-const sign = (v, dead) => (Math.abs(v) < dead ? '0' : v > 0 ? '+' : '-');
 const signed = (v, d) => (v > 0 ? '+' : v < 0 ? MINUS : '') + Math.abs(v).toFixed(d);
-const fmtPct = (v) => signed(v, Math.abs(v) >= 10 ? 0 : 1) + '%';
-const fmtNum = (v) => (Math.abs(v) >= 100 ? v.toFixed(0) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toPrecision(3));
+const fmtPct = (v) => signed(v, Math.abs(v) >= 10 ? 0 : Math.abs(v) >= 0.1 || v === 0 ? 1 : 2) + '%';
 const STEPS = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
 /** Smallest "round" number (1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8 times a power of ten) that is at least v. */
 export function niceCeil(v) {
@@ -38,43 +37,61 @@ export function ticks(lo, hi, n) {
 
 // ------------------------------------------------------------------------------------------------------------------ tornado model
 
-/** Did the +10% lever change move the benchmark the way the table expected? ok | wrong_sign | missing | spurious | unchecked. */
-export function verdictOf(expected, observed) {
-  if (!expected) return 'unchecked';
-  if (expected.includes(observed)) return 'ok';
-  if (observed === '0') return 'missing';
-  return expected.every((e) => e === '0') ? 'spurious' : 'wrong_sign';
-}
+// Names for the ids in the impact file, until the file carries `benchmarks: [{id, name}]` and `levers: [{id, name}]` itself (request
+// docs/swarm/requests/viewer-validation-impact-shape.md). B1 to B16 are the benchmarks of docs/validation/IMPACT-MATRIX.md.
+const BENCH_NAMES = {
+  B1: '0-48 km/h time', B2: 'top speed', B3: 'fuel range at 50 km/h', B4: 'braking distance from 50 km/h', B5: 'repeated-stop distance, 5th stop',
+  B6: 'maximum gradient', B7: 'side-slope limit', B8: 'soft-ground mobility', B9: 'washboard ride roughness', B10: 'hump settling time',
+  B11: 'obstacle: step height', B12: 'cornering limit', B13: 'minimum radius at 20 km/h', B14: 'ground pressure and sinkage', B15: 'turret traverse time', B16: 'gun-laying error',
+};
+const LEVER_NAMES = {
+  brake_capacity: 'Brake capacity', com_height: 'Centre-of-mass height', engine_power: 'Engine peak power', final_drive: 'Final-drive ratio', first_gear: 'First-gear ratio',
+  ground_clearance: 'Ground clearance', mass: 'Vehicle mass', ride_frequency: 'Ride frequency', track_gauge: 'Track gauge', tyre_mu: 'Tyre peak friction',
+};
+const idNumber = (id) => +String(id).replace(/\D/g, '') || 0;
+const human = (id) => { const t = String(id).replace(/_/g, ' '); return t[0].toUpperCase() + t.slice(1); };
+const vehicleName = (id) => human(String(id).replace(/_4x4$/, ''));
 
-export function tornadoModel(spec, { maxRows = 8 } = {}) {
-  if (spec.schema !== 'w5k-impact-1') throw new Error(`tornado: expected schema w5k-impact-1, got ${spec.schema}`);
-  const dead = spec.deadband_pct ?? DEFAULT_DEADBAND_PCT;
-  const levers = new Map(spec.levers.map((l, order) => [l.id, { ...l, order }]));
-  const benches = new Map(spec.benchmarks.map((b) => [b.id, b]));
-  for (const c of spec.cells) {
-    if (!levers.has(c.lever) || !benches.has(c.benchmark)) throw new Error(`tornado: cell ${c.lever}/${c.benchmark} names an unknown lever or benchmark`);
-  }
-  const flagged = (r) => r.verdict !== 'ok' && r.verdict !== 'unchecked';
-  const every = [];
-  const panels = spec.benchmarks.map((bench) => {
-    // a zero baseline has no percentage: that panel is in the benchmark's own unit and its dead band (`deadband`) is in that unit too
-    const abs = Math.abs(bench.baseline) < ABS_EPS, band = abs ? bench.deadband ?? ABS_EPS : dead;
-    const change = (v) => (abs ? v - bench.baseline : (100 * (v - bench.baseline)) / Math.abs(bench.baseline));
-    const all = spec.cells.filter((c) => c.benchmark === bench.id).map((c) => {
-      const l = levers.get(c.lever), dm = change(c.minus), dp = change(c.plus), swing = Math.max(Math.abs(dm), Math.abs(dp)), observed = sign(dp, band);
-      return { lever: c.lever, name: l.name, order: l.order, dm, dp, swing, moves: swing >= band, observed, expected: c.expected ?? null, verdict: c.verdict ?? verdictOf(c.expected, observed) };
-    });
+/**
+ * The model of the tornado from the `impact.json` that `w5k validation impact` writes: `entries` (vehicle, lever, bench, base,
+ * perturbed, delta, observed, allowed, verdict), `right`, `scored`, `dead_levers`, `orphan_benchmarks`. One panel per benchmark, one row
+ * per lever (the biggest effects first), one bar per vehicle. The verdicts are the runner's own (it knows the regimes); this only draws them.
+ */
+export function tornadoModel(report, { maxRows = 8 } = {}) {
+  if (!Array.isArray(report.entries) || !report.entries.length) throw new Error('tornado: expected the impact.json of `w5k validation impact`: an object with a non-empty `entries` list');
+  const uniq = (key) => [...new Set(report.entries.map((e) => e[key]))];
+  const series = uniq('vehicle').map((id) => ({ id, name: vehicleName(id) }));
+  if (series.length > THEMES.light.series.length) throw new Error(`tornado: ${series.length} vehicles, the palette has ${THEMES.light.series.length} validated colours`);
+  const levers = uniq('lever').map((id, order) => ({ id, order, name: report.levers?.find((l) => l.id === id)?.name ?? LEVER_NAMES[id] ?? human(id) }));
+  const nameOf = (id) => report.benchmarks?.find((b) => b.id === id)?.name ?? BENCH_NAMES[id] ?? id;
+  const at = new Map(report.entries.map((e) => [`${e.vehicle}|${e.lever}|${e.bench}`, e]));
+  const orphanIds = report.orphan_benchmarks ?? null;
+  let undefinedPct = 0;
+  const panels = uniq('bench').sort((a, b) => idNumber(a) - idNumber(b)).map((id) => {
+    const all = levers.map((l) => {
+      const bars = series.map((v) => {
+        const e = at.get(`${v.id}|${l.id}|${id}`);
+        if (!e) return null;
+        const defined = Number.isFinite(e.delta) && Math.abs(e.base) >= BASE_EPS;
+        if (!defined) undefinedPct++;
+        return { pct: defined ? 100 * e.delta : null, moved: e.observed !== 'Zero', verdict: e.verdict };
+      });
+      const swing = Math.max(0, ...bars.map((b) => (b && b.pct !== null ? Math.abs(b.pct) : 0)));
+      return { lever: l.id, name: l.name, order: l.order, bars, swing, moves: bars.some((b) => b?.moved), flagged: bars.some((b) => b?.verdict === 'Wrong') };
+    }).filter((r) => r.bars.some(Boolean));
     all.sort((a, b) => b.swing - a.swing || a.order - b.order);
-    every.push(...all);
-    const rows = all.filter((r, i) => (i < maxRows && r.moves) || flagged(r)), small = all.filter((r) => !r.moves && !flagged(r)).length;
-    return { bench, abs, band, rows, hiddenSmall: small, hiddenBig: all.length - rows.length - small, moved: all.some((r) => r.moves), measured: all.length > 0 };
+    const rows = all.filter((r, i) => (i < maxRows && r.moves) || r.flagged), small = all.filter((r) => !r.moves && !r.flagged).length, moved = all.some((r) => r.moves);
+    return { bench: { id, name: nameOf(id) }, rows, hiddenSmall: small, hiddenBig: all.length - rows.length - small, moved, orphan: orphanIds ? orphanIds.includes(id) : !moved };
   });
-  const movers = new Set(every.filter((r) => r.moves).map((r) => r.lever)), tried = new Set(every.map((r) => r.lever)), checked = every.filter((r) => r.verdict !== 'unchecked');
+  const ran = new Set(panels.map((p) => p.bench.id));
   return {
-    spec, deadband: dead, panels,
-    deadLevers: [...levers.keys()].filter((id) => tried.has(id) && !movers.has(id)).map((id) => levers.get(id).name),
-    orphans: panels.filter((p) => p.measured && !p.moved).map((p) => p.bench),
-    checks: { total: checked.length, right: checked.filter((r) => r.verdict === 'ok').length },
+    spec: report, series, panels, undefinedPct,
+    deadband: report.deadband_pct ?? DEFAULT_DEADBAND_PCT, perturb: report.perturb_pct ?? DEFAULT_PERTURB_PCT, acceptance: report.acceptance_pct ?? DEFAULT_ACCEPTANCE_PCT,
+    deadLevers: (report.dead_levers ?? []).map(([v, l]) => ({ vehicle: vehicleName(v), name: levers.find((x) => x.id === l)?.name ?? human(l) })),
+    orphans: panels.filter((p) => p.orphan).map((p) => p.bench),
+    unrun: Object.keys(BENCH_NAMES).filter((id) => !ran.has(id)).map((id) => ({ id, name: nameOf(id) })),
+    checks: { right: report.right ?? 0, scored: report.scored ?? 0 },
+    unlisted: report.entries.filter((e) => e.verdict === 'Unlisted').length,
   };
 }
 
@@ -133,72 +150,92 @@ function stubBanner(ctx, th, x, y) {
 
 // -------------------------------------------------------------------------------------------------------------------- tornado draw
 
-const T = { pad: 28, gapX: 30, gapY: 24, head: 124, labelW: 150, rowH: 24, barH: 9, pairGap: 2, panelHead: 46, axisH: 28, more: 16, foot: 96, labelRoom: 40, radius: 4 };
-const bandText = (p) => (p.abs ? (p.band > ABS_EPS ? `${+p.band.toPrecision(2)} ${p.bench.unit}` : '0 (any change)') : `${p.band}%`);
+const T = { pad: 28, gapX: 30, gapY: 24, head: 124, labelW: 150, barH: 9, barGap: 2, rowPad: 10, panelHead: 46, axisH: 28, more: 16, footLine: 20, labelRoom: 58, radius: 4 };
 const hasNote = (p) => p.hiddenSmall > 0 || p.hiddenBig > 0;
+const CHAR_PX = 6.4; // average width of a 12 px character, used to wrap the footer before any canvas exists
+function wrap(items, maxChars) { // greedy: items joined by ", " onto lines of at most maxChars
+  const lines = [];
+  items.forEach((it) => { const last = lines.length - 1; if (last >= 0 && lines[last].length + it.length + 2 <= maxChars) lines[last] += ', ' + it; else lines.push(it); });
+  return lines;
+}
+const unrunLines = (m, W) => wrap(m.unrun.map((b) => `${b.id} ${b.name}`), Math.floor((W - 2 * T.pad - 130) / CHAR_PX));
+const rowHeight = (m) => Math.max(24, m.series.length * T.barH + (m.series.length - 1) * T.barGap + T.rowPad);
 export function tornadoLayout(m, o = {}) {
-  const n = m.panels.length, cols = o.cols ?? (n >= 10 ? 4 : n >= 5 ? 3 : Math.max(n, 1)), W = o.width ?? 1500;
+  const n = m.panels.length, cols = o.cols ?? (n >= 10 ? 4 : n >= 4 ? 3 : Math.max(n, 1)), W = o.width ?? 1500;
   const pw = (W - 2 * T.pad - (cols - 1) * T.gapX) / cols, rowsCount = Math.ceil(n / cols), heights = [];
   for (let r = 0; r < rowsCount; r++) {
     const ps = m.panels.slice(r * cols, r * cols + cols);
-    heights.push(T.panelHead + Math.max(1, ...ps.map((p) => p.rows.length)) * T.rowH + (ps.some(hasNote) ? T.more : 0) + T.axisH);
+    heights.push(T.panelHead + Math.max(1, ...ps.map((p) => p.rows.length)) * rowHeight(m) + (ps.some(hasNote) ? T.more : 0) + T.axisH);
   }
-  return { cols, W, pw, heights, H: T.head + heights.reduce((a, b) => a + b + T.gapY, 0) + T.foot };
+  const footLines = 3 + Math.max(unrunLines(m, W).length, 0) + (m.undefinedPct ? 1 : 0);
+  return { cols, W, pw, heights, H: T.head + heights.reduce((a, b) => a + b + T.gapY, 0) + 30 + footLines * T.footLine + 16 };
 }
 export const tornadoSize = (m, o) => { const l = tornadoLayout(m, o); return { w: l.W, h: l.H }; };
 
 export function drawTornado(ctx, m, o = {}) {
-  const th = THEMES[o.theme ?? 'light'], lay = tornadoLayout(m, o), s = m.spec, pct = s.perturb_pct ?? 10, colours = LEVER_COLOURS.map((i) => th.series[i]);
+  const th = THEMES[o.theme ?? 'light'], lay = tornadoLayout(m, o), s = m.spec, rh = rowHeight(m), K = m.series.length, colours = m.series.map((_, i) => th.series[i]);
   ctx.fillStyle = th.surface; ctx.fillRect(0, 0, lay.W, lay.H);
-  text(ctx, `Design impact: how far each benchmark moves when one lever changes by ${MINUS}${pct}% and +${pct}%`, T.pad, 36, { size: 20, weight: 700, color: th.ink });
-  text(ctx, `Baseline vehicle ${s.vehicle ?? ''}. One lever at a time, everything else held. Bars show the change in the benchmark as a percentage of its baseline; levers are sorted by the size of their effect.`, T.pad, 58, { size: 12, color: th.ink2 });
+  text(ctx, `Design impact: how far each benchmark moves when one lever is raised by ${m.perturb}%`, T.pad, 36, { size: 20, weight: 700, color: th.ink });
+  text(ctx, "One lever at a time, everything else held. Each bar is one vehicle: the change in the benchmark as a percentage of that vehicle's own baseline. Levers are sorted by the size of their effect.", T.pad, 58, { size: 12, color: th.ink2 });
   let y = 82;
   if (s.stub) { stubBanner(ctx, th, T.pad, y); y += 24; }
-  let lx = T.pad; // legend: two series, so a legend is always present; the bars are directly labelled as well
-  [`lever ${MINUS}${pct}%`, `lever +${pct}%`].forEach((name, i) => { ctx.fillStyle = colours[i]; ctx.fillRect(lx, y - 8, 14, 9); lx += 20 + text(ctx, name, lx + 20, y, { size: 12, color: th.ink }) + 8; });
-  cross(ctx, lx + 6, y - 4, 4, STATUS.critical, 2.4); lx += 20 + text(ctx, 'differs from the expected table', lx + 20, y, { size: 12, color: th.ink }) + 8;
-  triangle(ctx, lx + 6, y - 4, 6, STATUS.serious); text(ctx, 'dead lever / orphan effect', lx + 20, y, { size: 12, color: th.ink });
+  let lx = T.pad; // legend: one swatch per vehicle (a legend is always present for two or more series; the biggest bars are labelled as well)
+  m.series.forEach((v, i) => { ctx.fillStyle = colours[i]; ctx.fillRect(lx, y - 8, 14, 9); lx += 20 + text(ctx, v.name, lx + 20, y, { size: 12, color: th.ink }) + 12; });
+  cross(ctx, lx + 6, y - 4, 4, STATUS.critical, 2.4); lx += 20 + text(ctx, 'differs from the expected table', lx + 20, y, { size: 12, color: th.ink }) + 12;
+  triangle(ctx, lx + 6, y - 4, 6, STATUS.serious); text(ctx, 'dead lever / orphan benchmark', lx + 20, y, { size: 12, color: th.ink });
 
   m.panels.forEach((p, i) => {
     const r = Math.floor(i / lay.cols), c = i % lay.cols, px = T.pad + c * (lay.pw + T.gapX);
     const py = T.head + lay.heights.slice(0, r).reduce((a, b) => a + b + T.gapY, 0), top = py + T.panelHead;
-    const b = p.bench, unit = p.abs ? b.unit : '%', x0 = px + T.labelW, x1 = px + lay.pw - 8, zero = (x0 + x1) / 2, half = (x1 - x0) / 2;
-    const biggest = Math.max(0, ...p.rows.map((q) => q.swing)), M = niceCeil(Math.max(biggest * half / (half - T.labelRoom), p.band * 2)), X = (v) => zero + (v / M) * half;
+    const b = p.bench, x0 = px + T.labelW, x1 = px + lay.pw - 8, zero = (x0 + x1) / 2, half = (x1 - x0) / 2;
+    const biggest = Math.max(0, ...p.rows.map((q) => q.swing)), M = niceCeil(Math.max(biggest * half / (half - T.labelRoom), m.deadband * 2)), X = (v) => zero + (v / M) * half;
     text(ctx, fit(ctx, b.name, lay.pw, 14), px, py + 16, { size: 14, weight: 700, color: th.ink });
-    text(ctx, `${b.id} · baseline ${fmtNum(b.baseline)} ${b.unit}`, px, py + 34, { size: 11, color: th.ink2 });
-    if (p.measured && !p.moved) { const w = text(ctx, 'orphan effect: no lever moves this', px + lay.pw, py + 34, { size: 11, weight: 600, color: th.ink, align: 'right' }); triangle(ctx, px + lay.pw - w - 10, py + 30, 5, STATUS.serious); }
-    if (!p.measured) text(ctx, 'not measured yet', px + lay.pw, py + 34, { size: 11, color: th.ink2, align: 'right' });
-    const bottom = top + Math.max(1, p.rows.length) * T.rowH;
+    text(ctx, b.id, px, py + 34, { size: 11, color: th.ink2 });
+    if (p.orphan) { const w = text(ctx, 'orphan: no lever moves this', px + lay.pw, py + 34, { size: 11, weight: 600, color: th.ink, align: 'right' }); triangle(ctx, px + lay.pw - w - 10, py + 30, 5, STATUS.serious); }
+    const bottom = top + Math.max(1, p.rows.length) * rh;
     ctx.lineWidth = 1; ctx.strokeStyle = th.grid;
     [-M, -M / 2, M / 2, M].forEach((v) => { ctx.beginPath(); ctx.moveTo(Math.round(X(v)) + 0.5, top - 4); ctx.lineTo(Math.round(X(v)) + 0.5, bottom + 2); ctx.stroke(); });
     ctx.strokeStyle = th.axis; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X(0), top - 4); ctx.lineTo(X(0), bottom + 2); ctx.stroke();
+    if (!p.rows.length) text(ctx, `no lever moves this by more than ${m.deadband}% on any vehicle`, zero, top + rh / 2, { size: 11, color: th.ink2, align: 'center', base: 'middle' });
     p.rows.forEach((q, k) => {
-      const ry = top + k * T.rowH + (T.rowH - 2 * T.barH - T.pairGap) / 2, flagged = q.verdict !== 'ok' && q.verdict !== 'unchecked';
-      bar(ctx, X(0), X(q.dm), ry, T.barH, T.radius, colours[0]);
-      bar(ctx, X(0), X(q.dp), ry + T.barH + T.pairGap, T.barH, T.radius, colours[1]);
-      const nameX = px + T.labelW - 10;
-      text(ctx, fit(ctx, q.name, T.labelW - 26, 11), nameX, top + k * T.rowH + T.rowH / 2, { size: 11, color: th.ink, align: 'right', base: 'middle', weight: flagged ? 700 : 400 });
-      if (flagged) cross(ctx, px + 5, top + k * T.rowH + T.rowH / 2, 4, STATUS.critical, 2.4);
-      if (k < 3 || flagged) { // selective direct labels: the three biggest levers and any failed check
-        [[q.dm, ry], [q.dp, ry + T.barH + T.pairGap]].forEach(([v, by]) => {
-          if (Math.abs(v) < p.band) return;
-          text(ctx, p.abs ? signed(v, 2) : fmtPct(v), v < 0 ? X(v) - 5 : X(v) + 5, by + T.barH / 2, { size: 10, color: th.ink2, align: v < 0 ? 'right' : 'left', base: 'middle' });
-        });
-      }
+      const rowTop = top + k * rh, by0 = rowTop + (rh - (K * T.barH + (K - 1) * T.barGap)) / 2;
+      const drawn = q.bars.map((br, j) => (br && br.pct !== null ? j : -1)).filter((j) => j >= 0);
+      const biggestBar = drawn.reduce((best, j) => (best < 0 || Math.abs(q.bars[j].pct) > Math.abs(q.bars[best].pct) ? j : best), -1);
+      q.bars.forEach((br, j) => {
+        if (!br || br.pct === null) return;
+        const by = by0 + j * (T.barH + T.barGap), wrong = br.verdict === 'Wrong';
+        bar(ctx, X(0), X(br.pct), by, T.barH, T.radius, colours[j]);
+        if ((k < 3 && j === biggestBar && Math.abs(br.pct) >= m.deadband) || wrong) { // selective direct labels: the biggest bar of each of the three biggest levers, and every failed check
+          const left = br.pct < 0, ex = left ? X(br.pct) - 5 : X(br.pct) + 5, w = text(ctx, fmtPct(br.pct), ex, by + T.barH / 2, { size: 10, color: th.ink2, align: left ? 'right' : 'left', base: 'middle' });
+          if (wrong) cross(ctx, left ? ex - w - 8 : ex + w + 8, by + T.barH / 2, 3.5, STATUS.critical, 2);
+        }
+      });
+      text(ctx, fit(ctx, q.name, T.labelW - 26, 11), px + T.labelW - 10, rowTop + rh / 2, { size: 11, color: th.ink, align: 'right', base: 'middle', weight: q.flagged ? 700 : 400 });
+      if (q.flagged) cross(ctx, px + 5, rowTop + rh / 2, 4, STATUS.critical, 2.4);
     });
-    if (!p.rows.length) text(ctx, p.measured ? `no lever moves this by more than ${bandText(p)}` : 'no cells yet', zero, top + T.rowH / 2, { size: 11, color: th.ink2, align: 'center', base: 'middle' });
-    const note = [p.hiddenBig ? `${p.hiddenBig} smaller effects` : '', p.hiddenSmall ? `${p.hiddenSmall} levers under ${bandText(p)}` : ''].filter(Boolean).join(' and ');
+    const note = [p.hiddenBig ? `${p.hiddenBig} smaller effects` : '', p.hiddenSmall ? `${p.hiddenSmall} levers under ${m.deadband}%` : ''].filter(Boolean).join(' and ');
     if (note) text(ctx, 'not drawn: ' + note, px + T.labelW, bottom + 14, { size: 10, color: th.muted });
     const ay = bottom + (hasNote(p) ? T.more : 0) + 16;
-    [-M, 0, M].forEach((v) => text(ctx, v === 0 ? '0' : (v < 0 ? MINUS : '+') + +Math.abs(v).toPrecision(3) + (p.abs ? '' : '%'), X(v), ay, { size: 10, color: th.muted, align: 'center' }));
-    if (p.abs) text(ctx, `change in ${unit}`, x1, ay + 12, { size: 10, color: th.muted, align: 'right' });
+    [-M, 0, M].forEach((v) => text(ctx, v === 0 ? '0' : (v < 0 ? MINUS : '+') + +Math.abs(v).toPrecision(3) + '%', X(v), ay, { size: 10, color: th.muted, align: 'center' }));
   });
 
-  const fy = lay.H - T.foot + 28, dead = m.deadLevers.length ? m.deadLevers.join(', ') : 'none', orph = m.orphans.length ? m.orphans.map((b) => `${b.id} ${b.name}`).join(', ') : 'none';
-  const line = (k, label, body, icon) => { if (icon) triangle(ctx, T.pad + 6, fy + k * 20 - 4, 5, STATUS.serious); const w = text(ctx, label, T.pad + 18, fy + k * 20, { size: 12, weight: 700, color: th.ink }); text(ctx, body, T.pad + 18 + w + 6, fy + k * 20, { size: 12, color: th.ink }); };
-  line(0, 'Dead levers (move no benchmark by more than ' + m.deadband + '%):', dead, m.deadLevers.length > 0);
-  line(1, 'Orphan effects (no lever moves them by more than ' + m.deadband + '%):', orph, m.orphans.length > 0);
-  if (m.checks.total) text(ctx, `Expected signs right: ${m.checks.right} of ${m.checks.total} (${Math.round((100 * m.checks.right) / m.checks.total)}%). The acceptance bar is 80%.`, T.pad + 18, fy + 40, { size: 12, color: th.ink });
+  const nFoot = 3 + unrunLines(m, lay.W).length + (m.undefinedPct ? 1 : 0), fy = lay.H - 16 - (nFoot - 1) * T.footLine - 4, line = (k, icon, label, body, bodyX) => {
+    if (icon === 'warn') triangle(ctx, T.pad + 6, fy + k * T.footLine - 4, 5, STATUS.serious);
+    if (icon === 'fail') cross(ctx, T.pad + 6, fy + k * T.footLine - 4, 4, STATUS.critical, 2.4);
+    if (icon === 'pass') { ctx.strokeStyle = STATUS.good; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(T.pad, fy + k * T.footLine - 4); ctx.lineTo(T.pad + 4, fy + k * T.footLine); ctx.lineTo(T.pad + 11, fy + k * T.footLine - 9); ctx.stroke(); }
+    const w = text(ctx, label, T.pad + 20, fy + k * T.footLine, { size: 12, weight: 700, color: th.ink }), bx = bodyX ?? T.pad + 20 + w + 6;
+    text(ctx, body, bx, fy + k * T.footLine, { size: 12, color: th.ink });
+    return bx;
+  };
+  const byVehicle = m.series.map((v) => [v.name, m.deadLevers.filter((d) => d.vehicle === v.name).map((d) => d.name.toLowerCase())]).filter(([, l]) => l.length);
+  const pctRight = m.checks.scored ? (100 * m.checks.right) / m.checks.scored : 0;
+  line(0, m.checks.scored ? (pctRight >= m.acceptance ? 'pass' : 'fail') : '', `Expected signs right: ${m.checks.right} of ${m.checks.scored} (${Math.round(pctRight)}%).`, `The acceptance bar is ${m.acceptance}%. ${m.unlisted} more effects moved with no row in the table (not scored).`);
+  line(1, byVehicle.length ? 'warn' : '', `Dead levers (moved nothing on that vehicle, ${m.deadband}% or less):`, byVehicle.length ? byVehicle.map(([v, l]) => `${v}: ${l.join(', ')}`).join('; ') : 'none');
+  line(2, m.orphans.length ? 'warn' : '', 'Orphan benchmarks (no lever moved them):', m.orphans.length ? m.orphans.map((b) => `${b.id} ${b.name}`).join(', ') : 'none');
+  const unrun = unrunLines(m, lay.W);
+  let bx;
+  unrun.forEach((t, i) => { bx = line(3 + i, '', i ? '' : 'No runner yet:', t, i ? bx : undefined); });
+  if (m.undefinedPct) line(3 + unrun.length, '', `${m.undefinedPct} entries have a zero baseline and no percentage:`, 'not drawn.');
 }
 
 // ---------------------------------------------------------------------------------------------------------------------- ladder draw
