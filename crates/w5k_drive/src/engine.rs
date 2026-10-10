@@ -12,6 +12,9 @@ use w5k_math::StateHasher;
 /// rad/s per rpm = 2 pi / 60.
 const RPM_TO_RAD_S: f64 = core::f64::consts::PI / 30.0; // const-ok: unit conversion, mathematical
 
+/// 1 g/kWh in kg/J: 1e-3 kg per 3.6e6 J.
+const GRAM_PER_KWH_TO_KG_PER_J: f64 = 1.0e-3 / 3.6e6; // const-ok: unit conversion
+
 /// Controller settings shared by all engines (`content/physics/drive/engine_tuning.ron`).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -19,13 +22,23 @@ pub struct EngineTuning {
     pub idle_kp_per_rad_s: Param,
     pub idle_ki_per_rad: Param,
     pub rev_fade_fraction: Param,
+    /// Fuel map: the best-efficiency point sits at this fraction of full-load torque ...
+    pub bsfc_best_load_fraction: Param,
+    /// ... and at this fraction of the idle-to-redline speed range; consumption rises quadratically away from it.
+    pub bsfc_best_speed_fraction: Param,
+    pub bsfc_load_penalty: Param,
+    pub bsfc_speed_penalty: Param,
 }
 
 impl EngineTuning {
     pub fn check(&self) -> Result<(), String> {
         self.idle_kp_per_rad_s.check("idle_kp_per_rad_s")?;
         self.idle_ki_per_rad.check("idle_ki_per_rad")?;
-        self.rev_fade_fraction.check("rev_fade_fraction")
+        self.rev_fade_fraction.check("rev_fade_fraction")?;
+        self.bsfc_best_load_fraction.check("bsfc_best_load_fraction")?;
+        self.bsfc_best_speed_fraction.check("bsfc_best_speed_fraction")?;
+        self.bsfc_load_penalty.check("bsfc_load_penalty")?;
+        self.bsfc_speed_penalty.check("bsfc_speed_penalty")
     }
 }
 
@@ -50,6 +63,10 @@ pub struct Engine {
     kp: f64,
     ki: f64,
     fade_w: f64,
+    bsfc_best: f64,
+    idle_fuel: f64,
+    fuel_map: [f64; 4],
+    fuel_rate: f64,
     omega: f64,
     demand: f64,
     idle_i: f64,
@@ -90,6 +107,15 @@ impl Engine {
             kp: tuning.idle_kp_per_rad_s.v,
             ki: tuning.idle_ki_per_rad.v,
             fade_w: tuning.rev_fade_fraction.v * redline_w,
+            bsfc_best: def.bsfc_best_g_kwh,
+            idle_fuel: def.idle_fuel_kg_s,
+            fuel_map: [
+                tuning.bsfc_best_load_fraction.v,
+                tuning.bsfc_best_speed_fraction.v,
+                tuning.bsfc_load_penalty.v,
+                tuning.bsfc_speed_penalty.v,
+            ],
+            fuel_rate: 0.0,
             omega: if def.free_output { 0.0 } else { idle_w },
             demand: 0.0,
             idle_i: 0.0,
@@ -108,6 +134,19 @@ impl Engine {
         self.inertia
     }
     /// Torque the engine produced in the last step, N m (positive drives).
+    /// Fuel burnt per second in the last step, kg/s.
+    pub fn fuel_rate_kg_s(&self) -> f64 {
+        self.fuel_rate
+    }
+
+    /// Brake-specific fuel consumption at speed `w` and load fraction `x` (gross torque / full-load torque), g/kWh:
+    /// the best value at the map's sweet spot, rising quadratically away from it.
+    pub fn bsfc_g_kwh(&self, w: f64, x: f64) -> f64 {
+        let [x0, s0, a, b] = self.fuel_map;
+        let xs = (w - self.idle_w) / (self.redline_w - self.idle_w);
+        self.bsfc_best * (1.0 + a * (x - x0) * (x - x0) + b * (xs - s0) * (xs - s0))
+    }
+
     pub fn torque_nm(&self) -> f64 {
         self.torque_nm
     }
@@ -197,6 +236,11 @@ impl Engine {
     pub fn advance(&mut self, dt_s: f64, prep: &EnginePrep, load_nm: f64, load_slope_nm_s_rad: f64) {
         let stiffness = prep.drag_slope_nm_s_rad + load_slope_nm_s_rad;
         let dw = dt_s * (prep.torque_nm - load_nm) / self.inertia / (1.0 + dt_s * stiffness / self.inertia);
+        // fuel follows the gross (indicated) torque, so an idling engine burns what its own friction costs and an overrun burns nothing
+        let x = self.demand * self.limiter(self.omega);
+        let power = x * self.full_load_nm(self.omega) * self.omega;
+        let rate = power * self.bsfc_g_kwh(self.omega, x) * GRAM_PER_KWH_TO_KG_PER_J;
+        self.fuel_rate = if self.running { rate.max(self.idle_fuel) } else { 0.0 };
         self.omega = (self.omega + dw).max(0.0);
         self.torque_nm = prep.torque_nm;
     }
@@ -312,6 +356,30 @@ mod tests {
         // and the shaft decelerates by T/J
         let decel = (w - e.omega_rad_s()) / 1.0e-3;
         assert!((decel - (-stated) / 0.4).abs() < 0.01 * (-stated) / 0.4);
+    }
+
+    #[test]
+    fn fuel_burned_equals_bsfc_times_work_on_the_map() {
+        // hold the engine at the map's sweet spot (75% load, middle of the speed range): the specific consumption is the stated best value
+        let mut e = diesel();
+        let (w_idle, w_red) = (700.0 * RPM_TO_RAD_S, 4000.0 * RPM_TO_RAD_S);
+        let w = 0.5 * (w_idle + w_red);
+        let (dt, secs) = (1.0 / 240.0, 10.0);
+        let (mut fuel_kg, mut work_j) = (0.0, 0.0);
+        for _ in 0..(secs / dt) as usize {
+            e.set_omega_rad_s(w);
+            e.step(dt, 0.75, 0.0);
+            fuel_kg += e.fuel_rate_kg_s() * dt;
+            work_j += 0.75 * e.full_load_nm(w) * w * dt;
+        }
+        let kwh = work_j / 3.6e6;
+        assert!((fuel_kg * 1000.0 / kwh - 220.0).abs() < 0.01 * 220.0, "{} g/kWh", fuel_kg * 1000.0 / kwh);
+        // away from the sweet spot it burns more per unit work
+        assert!(e.bsfc_g_kwh(w_idle, 0.2) > 1.2 * 220.0);
+        // closed throttle above idle: fuel cut
+        e.set_omega_rad_s(3000.0 * RPM_TO_RAD_S);
+        e.step(dt, 0.0, 0.0);
+        assert!(e.fuel_rate_kg_s() < 1e-9);
     }
 
     #[test]

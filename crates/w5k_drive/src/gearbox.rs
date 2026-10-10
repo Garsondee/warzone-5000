@@ -13,6 +13,9 @@ use w5k_math::StateHasher;
 
 use crate::coupling::Downstream;
 
+/// rad/s per rpm.
+const RPM_TO_RAD_S: f64 = core::f64::consts::PI / 30.0; // const-ok: unit conversion, mathematical
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ShiftTuning {
@@ -136,13 +139,14 @@ impl Gearbox {
         }
     }
 
-    /// Decide gear changes and report the torque interruption. `engine_rpm` and `throttle` feed the automatic map.
+    /// Decide gear changes and report the torque interruption. The automatic map runs on the gearbox *input* speed in each candidate gear
+    /// (output speed x ratio), not on engine rpm: that is exact for the gear we would land in, and does not wobble with converter slip.
     pub fn update(
         &mut self,
         dt: f64,
         request: GearRequest,
         throttle: f64,
-        engine_rpm: f64,
+        output_omega_rad_s: f64,
         road_speed_m_s: f64,
     ) -> ShiftOut {
         self.dwell_s += dt;
@@ -155,7 +159,7 @@ impl Gearbox {
                     self.dwell_s = 0.0;
                 }
             }
-        } else if let Some(target) = self.choose(request, throttle, engine_rpm, road_speed_m_s) {
+        } else if let Some(target) = self.choose(request, throttle, output_omega_rad_s, road_speed_m_s) {
             if target != self.gear {
                 self.pending = Some(target);
                 self.shift_left_s = self.shift_time_s;
@@ -174,7 +178,7 @@ impl Gearbox {
         }
     }
 
-    fn choose(&self, request: GearRequest, throttle: f64, rpm: f64, speed: f64) -> Option<i8> {
+    fn choose(&self, request: GearRequest, throttle: f64, w_out: f64, speed: f64) -> Option<i8> {
         let top = i8::try_from(self.forward.len()).unwrap_or(i8::MAX);
         let slow = speed.abs() < self.reverse_max_speed;
         match request {
@@ -195,14 +199,15 @@ impl Gearbox {
                 }
                 let scale = lerp(self.light_scale, 1.0, throttle.clamp(0.0, 1.0));
                 let (up, down) = (self.up_rpm * scale, self.down_rpm * scale);
-                let (here, g) = (self.ratio_of(self.gear), self.gear);
-                if g < top && rpm > up && rpm * self.ratio_of(g + 1) / here > down + self.margin_rpm {
+                let g = self.gear;
+                let input_rpm = |gear: i8| w_out.abs() / RPM_TO_RAD_S * self.ratio_of(gear);
+                let here = input_rpm(g);
+                if g < top && here > up && input_rpm(g + 1) >= down + self.margin_rpm {
                     Some(g + 1)
-                } else if g > 1
-                    && self.ratio_of(g - 1) / here * rpm < (if rpm < down { up } else { self.up_rpm }) - self.margin_rpm
-                    && (rpm < down || throttle > self.kickdown)
+                } else if g > 1 && input_rpm(g - 1) <= up - self.margin_rpm && (here < down || throttle > self.kickdown)
                 {
-                    // a downshift: below the downshift point, or a kick-down on the pedal; either way it must not land near the upshift point
+                    // below the downshift point, or a kick-down on the pedal; either way it must land clear of the upshift point at this
+                    // pedal, which is what stops a kick-down being undone by the next upshift
                     Some(g - 1)
                 } else {
                     None
@@ -274,40 +279,40 @@ mod tests {
         assert!((g.output_torque(100.0) - 100.0 * 2.48 * 0.95).abs() < 1e-9);
     }
 
+    const RPM: f64 = core::f64::consts::PI / 30.0;
+
     #[test]
     fn automatic_upshifts_at_the_stated_rpm_and_downshifts_with_hysteresis() {
         let dt = 1.0 / 120.0;
         let (mut g, ratios) = (gb(), [2.48, 1.48, 1.0, 0.73]);
+        let scale = 0.45 + (1.0 - 0.45) * 0.8; // pedal 0.8 is below kick-down: the points scale with the pedal
+        let (up, down) = (3200.0 * scale, 1500.0 * scale);
         let mut shifts: Vec<(f64, i8)> = Vec::new();
         let mut last = g.gear();
-        // the road (output) speed in rpm rises to 1300 over 10 s and falls back; the engine follows through the current ratio.
-        // 80% pedal is below kick-down, so the shift points scale to 0.7 + 0.3 * 0.8 = 0.94 of their full-throttle values.
+        // the road (output) speed in rpm rises to 1300 over 10 s and falls back; the gearbox input follows through the current ratio
         for k in 0..2400 {
             let t = f64::from(k) * dt;
             let out_rpm = if t < 10.0 { 130.0 * t } else { 1300.0 - 130.0 * (t - 10.0) };
-            let rpm = out_rpm * ratios[usize::from(g.gear().unsigned_abs()) - 1];
-            let o = g.update(dt, GearRequest::Auto, 0.8, rpm, 5.0);
+            let o = g.update(dt, GearRequest::Auto, 0.8, out_rpm * RPM, 5.0);
             if o.gear != last {
                 shifts.push((out_rpm, o.gear));
                 last = o.gear;
             }
         }
+        let _ = ratios;
         assert_eq!(shifts.len(), 2, "{shifts:?}");
-        // 1 -> 2 when the engine passes 3200 * 0.94 = 3008 rpm (taking effect one 0.3 s interruption later)
+        // 1 -> 2 when the input passes the upshift point (taking effect one 0.3 s interruption later)
         assert_eq!(shifts[0].1, 2);
-        let up_engine_rpm = shifts[0].0 * 2.48;
-        assert!(
-            up_engine_rpm > 3008.0 && up_engine_rpm < 3008.0 + 130.0 * 2.48 * 0.3 + 5.0,
-            "upshift at {up_engine_rpm} rpm"
-        );
-        // 2 -> 1 when the engine falls below 1500 * 0.94 = 1410 rpm: at a lower road speed than the upshift (the hysteresis)
+        let up_rpm = shifts[0].0 * 2.48;
+        assert!(up_rpm > up && up_rpm < up + 130.0 * 2.48 * 0.3 + 5.0, "upshift at {up_rpm} rpm, stated {up}");
+        // 2 -> 1 below the downshift point: at a lower road speed than the upshift (the hysteresis)
         assert_eq!(shifts[1].1, 1);
-        let down_engine_rpm = shifts[1].0 * 1.48;
+        let down_rpm = shifts[1].0 * 1.48;
         assert!(
-            down_engine_rpm < 1410.0 && down_engine_rpm > 1410.0 - 130.0 * 1.48 * 0.3 - 5.0,
-            "downshift at {down_engine_rpm} rpm"
+            down_rpm < down && down_rpm > down - 130.0 * 1.48 * 0.3 - 5.0,
+            "downshift at {down_rpm} rpm, stated {down}"
         );
-        assert!(shifts[1].0 < shifts[0].0, "the downshift speed must be below the upshift speed");
+        assert!(shifts[1].0 < shifts[0].0);
     }
 
     #[test]
@@ -316,10 +321,10 @@ mod tests {
         let mut g = gb();
         let mut off = 0.0;
         for _ in 0..200 {
-            g.update(dt, GearRequest::Auto, 1.0, 1000.0, 5.0);
+            g.update(dt, GearRequest::Auto, 1.0, 100.0 * RPM, 5.0);
         }
         for _ in 0..900 {
-            let o = g.update(dt, GearRequest::Auto, 1.0, 3500.0, 5.0);
+            let o = g.update(dt, GearRequest::Auto, 1.0, 1400.0 * RPM, 5.0); // first-gear input 3472 rpm, above the 3200 upshift point
             if o.capacity_scale == 0.0 {
                 off += dt;
             }
@@ -355,7 +360,7 @@ mod tests {
         let mut shifts = 0;
         let mut last = 2;
         for _ in 0..6000 {
-            let o = g.update(0.01, GearRequest::Auto, 0.5, 2300.0, 10.0);
+            let o = g.update(0.01, GearRequest::Auto, 0.5, 2300.0 / 1.48 * RPM, 10.0);
             if o.gear != last {
                 shifts += 1;
                 last = o.gear;
