@@ -153,7 +153,9 @@ fn preview(args: &[String]) -> Result<(), String> {
             let (x, z) = (lo.x + c as f64 / px as f64, lo.z + r as f64 / px as f64);
             // Shade in a limited number of bands: it reads as flat-shaded (the house style) and the small ground detail no longer makes the
             // picture incompressible.
-            let shade = ((w.normal(x, z).dot(light) * SHADE_GAIN + SHADE_AMBIENT).clamp(0.0, 1.0) * SHADE_BANDS).round() / SHADE_BANDS;
+            let shade = ((w.normal(x, z).dot(light) * SHADE_GAIN + SHADE_AMBIENT).clamp(0.0, 1.0) * SHADE_BANDS)
+                .round()
+                / SHADE_BANDS;
             let name = &w.material_at(x, z).name;
             let water = w.water_surface_m(x, z).map(|s| ((s - w.height_m(x, z)) / WATER_DEPTH_FULL_M).clamp(0.0, 1.0));
             let base = if let Some(depth) = water {
