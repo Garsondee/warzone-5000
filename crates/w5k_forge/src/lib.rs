@@ -4,3 +4,5 @@
 //!
 //! Status: SKELETON, created by the Launch Kit. Read your lane brief first:
 //! `docs/swarm/lanes/forge.md`. Only lane FORGE edits this crate (`docs/swarm/ownership.toml`).
+
+pub mod s5;
