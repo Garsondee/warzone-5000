@@ -29,6 +29,8 @@ pub enum SocketKind {
     Ring,
     /// The pivot of a weapon on a mount; the size is the width of the cradle that holds it.
     Trunnion,
+    /// The track run of one side, on the track centre line: the belt goes here; the size is the belt width.
+    Run,
 }
 
 /// An attachment point: a frame in the owning module's frame, a kind and a size, plus named numbers the child may read (the room along

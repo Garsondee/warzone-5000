@@ -1,6 +1,6 @@
 # Status: VIEWER
 
-**Last updated:** 2026-10-10 11:30 UTC | **Branch:** lane/viewer/skin-guard | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** M1 deliverables done, awaiting CI/merge
+**Last updated:** 2026-10-10 18:03 UTC | **Branch:** lane/viewer/pin-v03 | **Contract pinned:** contract-v0.3 (commit 0982843) | **Phase:** slice 2 stage A (charts, Workshop note) done; idle until stage B
 
 ## Done
 - Spike S-V passes (WebGL 2 under SwiftShader, 46 ms/frame, 10 s clip = 72 KB): `docs/lanes/viewer/spike-v.md`.
@@ -35,19 +35,24 @@
 
 - Skin guard (PR on `lane/viewer/skin-guard`): tests that fail when a committed `.skin` differs from what `pack-skin` generates now, or when `index.html` lists other skins than `dist/skins` holds; all three skins packed after GEOMETRY #99 (hauler 44,410 triangles, 682 KB); the speed bar widens to 0-100 km/h when the kid cap is off (`--no-speed-limit`).
 
+- Slice 2 stage A (PR on `lane/viewer/charts`): the **tornado** and the **ladder** as PNG charts (`w5k viewer tornado DIR/impact.json --out t.png`, `w5k viewer ladder ladder.json --out l.png`; `tools/viewer/chart.mjs`, drawing in `src/charts.js`; light and dark themes; 23 checks in `node tools/viewer/test-charts.mjs`; Rust tests keep the sample files honest and check VALIDATION's own `impact::evaluate` output for the fields and words the chart reads). **The tornado reads VALIDATION's real `impact.json`** (their runner landed while I built it, so I dropped my stub shape): one panel per benchmark, one bar per vehicle for each lever, their verdicts drawn as they are, failed checks always shown, "no runner yet" benchmarks named. Real picture `docs/lanes/viewer/media/tornado-impact.png` (31 of 54 signs right, 57%, on `integration` after TRACKS and CHASSIS merged; the findings are theirs). The **ladder** still reads a stub shape of mine (`w5k-ladder-1`, `docs/lanes/viewer/charts.md`) with invented numbers (the picture says STUB DATA) until TRACKS's ladder bench exists: request `docs/swarm/requests/viewer-validation-impact-shape.md` (optional names and thresholds in `impact.json`; TRACKS to give me its CSV columns or write the JSON). Palette checked with the dataviz validator, both modes. `chart.mjs` re-saves a picture over 300 KB with a 64-colour palette (media lint).
+- Workshop design note (text only, same PR): `docs/lanes/viewer/workshop-design-note.md`: three layers of answer (instant re-fit in the browser, proxy skin about 0.5 s, final skin about 5 s), the endpoints `w5k drive` needs, the budget against "under 10 s", the test that will enforce it, five open questions with defaults.
+
 ## In progress
-- Nothing: PRs #15, #22, #26, #28, #33 (stacked, merge in that order) await ARCH. Idle.
+- Nothing. Waiting for ARCH's stage B (track animation, sinkage and ground-pressure overlay) and for the real impact and ladder files; the charts then read them instead of the stubs.
 
 ## Blocked
-- Cannot reply to ARCH: `send_message` is blocked for lanes by the guard. The owner asked (in my session) for two-way lane/ARCH conversation and told me to tell ARCH: `docs/swarm/requests/viewer-lane-messaging.md`. Needs ARCH to change the guard.
+- Nothing. (Lane to ARCH messaging was enabled by ARCH; the old request `viewer-lane-messaging.md` is answered.)
 
 ## Next
-1. Page with cameras, scrub, pixel-difference smoke test. 3. Debug draw, HUD, plots. 4. `w5k viewer render` / `plot`. 5. first-light replay.
+1. Stage B when TRACKS lands track contact: track animation in the replay page (links along the belt, from the contract's `RenderRig.track_runs`, new in 0.3.0 and carried through `skinpack` by ARCH's migration edit), a sinkage and ground-pressure overlay under each vehicle. 2. Swap the stub samples for VALIDATION's and TRACKS's real output the day they land. 3. Stage C (Workshop) only after ARCH launches it; the note lists the requests I will file first.
 
 ## Cards needed / PROVISIONAL decisions in force
 - None. Compression (flate2) deferred: would need a dependency card.
 
 ## Findings for other lanes
+- GEOMETRY (and LOOK): a skin's cost is the **flag bake**, not the shape. Timed on a release build, hauler detail 0: `Skin::parts` under 10 ms, `render_rig` (edge and cavity bake) 4.9 s at `cavity_rays: 256`, 1.4 s at 64, 0.4 s at 16; the detail level barely matters (5.2 s at detail 0, 7.2 s at detail 2). Anything that reshapes a body live (the Workshop) needs `cavity_rays` as a per-call argument, so a proxy bake takes 0.4 s and the final one runs after the slider stops. The repository's dev profile is about three times slower than release (15 s per skin).
+- VALIDATION: the whole proving battery for the Mule runs in 0.47 s on a release build (`w5k scenario proving --test all`), so a live scoreboard is affordable.
 - ARCH/contract: `Frame` has no centre-of-mass offset (the marker shows the hull datum) and the ledger summary is magnitude-only (no direction or application point), so force *arrows* per term are drawn as a magnitude panel, not in 3D; the stand-ins write an empty ledger. CCR candidates: `VehicleHeader::com_m`, ledger vectors.
 - GEOMETRY/FORGE: the box rigs' gun barrel is a plain tube, so 5 cm of recoil changes only ~8 pixels; a muzzle brake or ring makes recoil legible. Wheels have one small lug each (the only thing that shows spin).
 

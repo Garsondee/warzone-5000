@@ -21,6 +21,8 @@ const USAGE: &str = "usage:
   w5k viewer fake-fleet <replay> --out fleet.w5kr [--n 3] [--offset S]   (test data: the first vehicle repeated n times, each S seconds behind the last)
   w5k viewer pack-skin <utility_4x4|scout_4x4|rig.json> --out tools/viewer/dist/skins/<id>.skin   (the compact skin file the test-drive page fetches)
   w5k viewer plot   <data.csv> --out chart.png [--title T] [--xlabel X] [--ylabel Y] [--width W] [--height H]
+  w5k viewer tornado <impact.json> --out tornado.png [--theme light|dark] [--cols N] [--rows N]   (the impact.json of `w5k validation impact`: a panel per benchmark, a bar per vehicle for each lever; docs/lanes/viewer/charts.md)
+  w5k viewer ladder  <ladder.json> --out ladder.png [--theme light|dark]   (sinkage up a ladder of load or track width, beside the soil theory)
   w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.w5kr, replay.json and rig.json)";
 
 /// Entry point for `w5k viewer <args>`.
@@ -30,6 +32,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some("render") => render(&args[1..], true),
         Some("page") => render(&args[1..], false),
         Some("plot") => plot(&args[1..]),
+        Some(kind @ ("tornado" | "ladder")) => chart(kind, &args[1..]),
         Some("fake-fleet") => fake_fleet(&args[1..]),
         Some("pack-skin") => pack_skin(&args[1..]),
         _ => Err(USAGE.to_string()),
@@ -194,6 +197,14 @@ fn plot(args: &[String]) -> Result<(), String> {
     node("plot.mjs", args)
 }
 
+/// The evidence charts (`tornado`, `ladder`): `chart.mjs` validates the JSON, draws it in headless Chromium and writes a PNG.
+fn chart(kind: &str, args: &[String]) -> Result<(), String> {
+    args.first().ok_or(USAGE)?;
+    let mut all = vec![kind.to_string()];
+    all.extend_from_slice(args);
+    node("chart.mjs", &all)
+}
+
 fn dump_canned(args: &[String]) -> Result<(), String> {
     let which = args.first().ok_or("dump-canned needs truck or tank")?;
     let out = opt(args, "--out").map(PathBuf::from).ok_or("dump-canned needs --out <dir>")?;
@@ -333,5 +344,91 @@ mod tests {
             skin_files(),
             "dist/index.html lists other skins than dist/skins holds: run `node tools/viewer/build.mjs --live`"
         );
+    }
+
+    fn sample(name: &str) -> serde_json::Value {
+        let path = viewer_dir().join("samples").join(name);
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{} is missing ({e})", path.display()));
+        serde_json::from_str(&text).unwrap_or_else(|e| panic!("{name} is not JSON: {e}"))
+    }
+
+    /// The tornado reads the `impact.json` of `w5k validation impact` as it is written; the sample is a copy of one real run (its
+    /// numbers date from that run, the shape is what this guards): every entry carries what the chart reads, and the runner's counts
+    /// are the counts of its entries.
+    #[test]
+    fn the_impact_sample_is_a_report_whose_counts_agree_with_its_entries() {
+        let report = sample("impact.json");
+        let entries = report["entries"].as_array().expect("entries");
+        assert!(!entries.is_empty());
+        let word = |e: &serde_json::Value, k: &str| {
+            e[k].as_str().unwrap_or_else(|| panic!("entry {e} has no `{k}`")).to_string()
+        };
+        for e in entries {
+            let (base, perturbed, delta) =
+                (e["base"].as_f64().unwrap(), e["perturbed"].as_f64().unwrap(), e["delta"].as_f64().unwrap());
+            if base != 0.0 {
+                assert!(
+                    (delta - (perturbed - base) / base.abs()).abs() < 1e-9,
+                    "delta of {e} is not (perturbed - base) / |base|"
+                );
+            }
+            assert!(["Minus", "Zero", "Plus"].contains(&word(e, "observed").as_str()), "unknown sign in {e}");
+            assert!(
+                ["Right", "Wrong", "Unlisted", "Quiet"].contains(&word(e, "verdict").as_str()),
+                "unknown verdict in {e}"
+            );
+            word(e, "vehicle");
+            word(e, "lever");
+            word(e, "bench");
+        }
+        let count = |v: &str| entries.iter().filter(|e| e["verdict"] == v).count() as u64;
+        assert_eq!(report["right"].as_u64(), Some(count("Right")));
+        assert_eq!(report["scored"].as_u64(), Some(count("Right") + count("Wrong")));
+        assert!(report["dead_levers"].is_array() && report["orphan_benchmarks"].is_array());
+    }
+
+    /// The same shape from the producer itself: if VALIDATION renames a field or a word the chart matches on, this fails here instead of
+    /// the tornado silently drawing nothing.
+    #[test]
+    fn the_impact_runners_report_has_the_fields_and_words_the_tornado_reads() {
+        use w5k_validate::impact;
+        let levers = impact::levers();
+        let lever = levers.first().expect("the runner has levers").id.to_string();
+        let mut obs =
+            impact::Observations { pairs: Default::default(), regimes: Default::default(), labels: Default::default() };
+        obs.pairs.insert(("mule_4x4".into(), lever.clone(), "B1".into()), (10.0, 11.0));
+        obs.pairs.insert(("mule_4x4".into(), lever, "B4".into()), (10.0, 10.0));
+        let report = serde_json::to_value(impact::evaluate(&[], &levers, &obs)).expect("the report serialises");
+        let entries = report["entries"].as_array().expect("entries");
+        assert_eq!(entries.len(), 2);
+        for key in ["vehicle", "lever", "bench", "observed", "verdict"] {
+            assert!(entries.iter().all(|e| e[key].is_string()), "entries lost their string `{key}`");
+        }
+        for key in ["base", "perturbed", "delta"] {
+            assert!(entries.iter().all(|e| e[key].is_number()), "entries lost their number `{key}`");
+        }
+        let moved = entries.iter().find(|e| e["bench"] == "B1").expect("B1");
+        assert_eq!((moved["observed"].as_str(), moved["verdict"].as_str()), (Some("Plus"), Some("Unlisted")));
+        let still = entries.iter().find(|e| e["bench"] == "B4").expect("B4");
+        assert_eq!((still["observed"].as_str(), still["verdict"].as_str()), (Some("Zero"), Some("Quiet")));
+        assert!(report["right"].is_u64() && report["scored"].is_u64());
+        assert!(report["dead_levers"].is_array() && report["orphan_benchmarks"].is_array());
+    }
+
+    #[test]
+    fn the_ladder_sample_gives_every_rung_a_load_a_simulated_and_a_predicted_sinkage() {
+        let ladder = sample("ladder-stub.json");
+        assert_eq!(ladder["schema"], "w5k-ladder-1");
+        for v in ladder["vehicles"].as_array().expect("vehicles") {
+            let rungs = v["rungs"].as_array().expect("rungs");
+            assert!(rungs.len() >= 2, "{} needs a ladder of at least two rungs", v["id"]);
+            for r in rungs {
+                assert!(
+                    r["x"].is_number() && r["sim"].is_number() && r["theory"].is_number(),
+                    "{} has a rung without x, sim and theory",
+                    v["id"]
+                );
+            }
+        }
     }
 }
