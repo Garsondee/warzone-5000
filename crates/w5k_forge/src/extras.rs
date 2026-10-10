@@ -49,9 +49,14 @@ pub struct DiffSpec {
     pub bias: Param,
 }
 
+// const-ok: the band of an unused placeholder bias (an open differential has none)
+const UNUSED_BIAS_HI: f64 = 8.0;
+
 fn open_diff() -> DiffSpec {
-    DiffSpec { kind: DiffKind::Open, bias: Param::estimate(1.0, 1.0, 8.0, "an open differential: the bias is unused") }
-    // const-ok: band of an unused placeholder bias (an open differential has none)
+    DiffSpec {
+        kind: DiffKind::Open,
+        bias: Param::estimate(1.0, 1.0, UNUSED_BIAS_HI, "an open differential: the bias is unused"),
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
