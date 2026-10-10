@@ -207,9 +207,12 @@ function showBanner(text) {
   clearTimeout(bannerTimer);
   bannerTimer = setTimeout(() => b.classList.remove('on'), 2700);
 }
-let shownSpeed = 0, speedMax = 30;
+let shownSpeed = 0, uncapped = false;
 function showSpeed(kmh, assistOn) {
-  speedMax = assistOn ? 30 : 120; // the kid cap is 25 km/h; without assists the bar covers road speeds
+  // The kid cap is 25 km/h and the bar ends at 30; a faster vehicle means the cap is off (`--no-speed-limit`, `--no-assist`), and then the
+  // bar covers road speeds, so it is not stuck at full.
+  if (kmh > 27) uncapped = true;
+  const speedMax = uncapped || !assistOn ? 100 : 30;
   shownSpeed += (kmh - shownSpeed) * 0.35;
   const v = Math.max(0, shownSpeed);
   $('speedfill').style.clipPath = `inset(0 ${(100 - Math.min(100, (v / speedMax) * 100)).toFixed(1)}% 0 0 round 999px)`;

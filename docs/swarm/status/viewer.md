@@ -33,7 +33,7 @@
 
 - Start screen (PR on `lane/viewer/start`, stacked on the skins PR): the page opens on three big vehicle pictures and a huge DRIVE button with no stream open and no moving truck (the camera floats over the road start); tap = choose, DRIVE = go, keys 1 2 3 / arrows / Enter; no pedals are sent while it is open.
 
-- Skin guard (branch `lane/viewer/skin-guard`, PR after ARCH's ping that GEOMETRY #99 merged): tests that fail when a committed `.skin` differs from what `pack-skin` generates now, or when `index.html` lists other skins than `dist/skins` holds; hauler skin packed (provisional until #99 lands).
+- Skin guard (PR on `lane/viewer/skin-guard`): tests that fail when a committed `.skin` differs from what `pack-skin` generates now, or when `index.html` lists other skins than `dist/skins` holds; all three skins packed after GEOMETRY #99 (hauler 44,410 triangles, 682 KB); the speed bar widens to 0-100 km/h when the kid cap is off (`--no-speed-limit`).
 
 ## In progress
 - Nothing: PRs #15, #22, #26, #28, #33 (stacked, merge in that order) await ARCH. Idle.
