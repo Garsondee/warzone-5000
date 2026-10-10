@@ -21,7 +21,7 @@ pub fn rect_ring(w_m: f64, h_m: f64, y_m: f64) -> Vec<[f64; 2]> {
 /// (the loop distance shrinks to a third of the side on a short side), so rings of different sizes loft together.
 pub fn bevel_ring(w_m: f64, h_m: f64, y_m: f64, corner_m: f64, band_m: f64) -> Vec<[f64; 2]> {
     let (x, h) = (w_m / 2.0, h_m / 2.0);
-    let k = corner_m.min(x).min(h);
+    let k = corner_m.min(0.45 * x).min(0.45 * h); // const-ok: a chamfer never takes more than 45% of a half side, so no side collapses to a point
                                                   // corner points, in the order of `rect_ring`: -x -y, -x +y, +x +y, +x -y, each cut into two
     let sides = [
         ([-x, y_m - h + k], [-x, y_m + h - k]),
