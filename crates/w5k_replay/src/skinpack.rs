@@ -5,7 +5,7 @@
 //! (0..1), indices as u16 (u32 above 65535 vertices). Each section starts on a 4-byte boundary so a browser can view it in place.
 
 use serde::{Deserialize, Serialize};
-use w5k_contract::render::{MaterialSlot, MeshPart, RenderNode, RenderRig};
+use w5k_contract::render::{MaterialSlot, MeshPart, RenderNode, RenderRig, TrackRun};
 
 const MAGIC: &[u8; 4] = b"W5KS";
 const VERSION: u32 = 1;
@@ -21,6 +21,9 @@ struct Header {
     material_slots: Vec<MaterialSlot>,
     joint_count: usize,
     meshes: Vec<Entry>,
+    /// Contract 0.3: the belts a viewer draws as instanced links. Absent for a wheeled skin, so those files are byte for byte what they were.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    track_runs: Vec<TrackRun>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -117,6 +120,7 @@ pub fn pack(rig: &RenderRig) -> Vec<u8> {
         material_slots: rig.material_slots.clone(),
         joint_count: rig.joint_count,
         meshes,
+        track_runs: rig.track_runs.clone(),
     };
     let json = serde_json::to_vec(&header).expect("a rig header serialises");
     let mut out = MAGIC.to_vec();
@@ -194,7 +198,7 @@ pub fn unpack(bytes: &[u8]) -> Result<RenderRig, String> {
         meshes,
         material_slots: header.material_slots,
         joint_count: header.joint_count,
-        track_runs: Vec::new(),
+        track_runs: header.track_runs,
     })
 }
 
@@ -256,5 +260,41 @@ mod tests {
         assert!(unpack(b"nope").is_err());
         let bytes = pack(&rig());
         assert!(unpack(&bytes[..bytes.len() / 2]).is_err());
+    }
+
+    /// A tracked skin's belts are `track_runs` (the link mesh, the wheels it wraps, the sprocket joint): they must come out of the pack as they
+    /// went in, or the page cannot move the belt. A wheeled skin has none, and its file must not change by a byte.
+    #[test]
+    fn a_packed_skin_keeps_its_track_runs_and_a_wheeled_one_is_unchanged() {
+        let (_, mut tank) = w5k_contract::testing::box_tank();
+        let node = |role| tank.nodes.iter().position(|n| n.role == role).expect("the tank has the node");
+        let run = TrackRun {
+            node: node(w5k_contract::render::NodeRole::Track),
+            wheels: [0, 1, 2]
+                .into_iter()
+                .map(|k| w5k_contract::render::TrackWheel {
+                    node: node(w5k_contract::render::NodeRole::RoadWheel) + k,
+                    radius_m: 0.3125,
+                })
+                .collect(),
+            link_mesh: 0,
+            links: 87,
+            sprocket: 2,
+            sprocket_joint: 3,
+            direction: -1,
+        };
+        tank.track_runs = vec![run];
+        let back = unpack(&pack(&tank)).unwrap();
+        assert_eq!(back.track_runs, tank.track_runs, "the belts survive the pack, exactly");
+        assert_eq!(back.meshes.len(), tank.meshes.len(), "the link mesh is still in the list the run indexes");
+        let wheeled = rig();
+        let header = |bytes: &[u8]| {
+            String::from_utf8_lossy(
+                &bytes[12..12 + u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]) as usize],
+            )
+            .into_owned()
+        };
+        assert!(!header(&pack(&wheeled)).contains("track_runs"), "an empty list is left out of the header");
+        assert!(unpack(&pack(&wheeled)).unwrap().track_runs.is_empty());
     }
 }
