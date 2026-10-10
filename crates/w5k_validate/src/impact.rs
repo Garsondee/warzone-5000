@@ -147,6 +147,8 @@ pub struct Entry {
     pub observed: Sign,
     pub allowed: Vec<Sign>,
     pub verdict: Verdict,
+    /// A transient response (see `Observations::transient`): shown, not counted.
+    pub transient: bool,
 }
 
 /// A measured pair per (vehicle, lever id, benchmark id): baseline and +10% values. `regimes` are per vehicle, for B4.
@@ -155,6 +157,9 @@ pub struct Observations {
     pub regimes: BTreeMap<String, Regime>,
     /// The baseline run's deciding label per (vehicle, benchmark): side slope `mode` (roll or slide), skidpad `limited_by`.
     pub labels: BTreeMap<(String, String), String>,
+    /// (vehicle, benchmark) cells whose response is a transient, not a smooth one (the Hauler's gradeability is a launch-transient limit,
+    /// DRIVE): reported with a `transient` tag and left out of the sign count.
+    pub transient: std::collections::BTreeSet<(String, String)>,
 }
 
 /// Where the table's sign depends on the regime, what the lever must do **in that regime** (IMPACT-MATRIX.md, "Regimes"):
@@ -276,10 +281,12 @@ pub fn evaluate_full(table: &[Expected], levers: &[Lever], obs: &Observations, a
             observed,
             allowed,
             verdict,
+            transient: obs.transient.contains(&(vehicle.clone(), bench.clone())),
         });
     }
-    let scored = entries.iter().filter(|e| matches!(e.verdict, Verdict::Right | Verdict::Wrong)).count();
-    let right = entries.iter().filter(|e| e.verdict == Verdict::Right).count();
+    let scored =
+        entries.iter().filter(|e| !e.transient && matches!(e.verdict, Verdict::Right | Verdict::Wrong)).count();
+    let right = entries.iter().filter(|e| !e.transient && e.verdict == Verdict::Right).count();
     let mut dead_levers = Vec::new();
     for ((vehicle, lever), _) in
         obs.pairs.keys().map(|(v, l, _)| ((v.clone(), l.clone()), ())).collect::<BTreeMap<_, _>>()
@@ -299,7 +306,7 @@ pub fn evaluate_full(table: &[Expected], levers: &[Lever], obs: &Observations, a
         .collect();
     let right_at_1pct = entries
         .iter()
-        .filter(|e| !e.allowed.is_empty() && e.allowed.contains(&classify_with(2.0 * EPS, e.delta)))
+        .filter(|e| !e.transient && !e.allowed.is_empty() && e.allowed.contains(&classify_with(2.0 * EPS, e.delta)))
         .count();
     let mut untested_rows = Vec::new();
     for e in table {
@@ -373,6 +380,7 @@ pub fn render_markdown(r: &Report) -> String {
                             Verdict::Unlisted => "unlisted",
                             Verdict::Quiet => "",
                         };
+                        let mark = if e.transient { "transient" } else { mark };
                         let want = if e.verdict == Verdict::Wrong {
                             format!(
                                 " (table: {})",
@@ -438,6 +446,7 @@ mod tests {
                 .collect(),
             regimes: BTreeMap::new(),
             labels: BTreeMap::new(),
+            transient: Default::default(),
         }
     }
 
@@ -572,5 +581,15 @@ mod tests {
         assert_eq!((ok.right, ok.scored), (2, 2));
         let bad = evaluate(&table(), &levers(), &obs(&[("engine_power", "B11", -0.3)]));
         assert_eq!((bad.right, bad.scored), (0, 1));
+    }
+
+    #[test]
+    fn a_transient_cell_is_shown_with_its_tag_and_left_out_of_the_count() {
+        let mut o = obs(&[("engine_power", "B6", -0.11), ("engine_power", "B1", -0.08)]);
+        o.transient.insert(("t".into(), "B6".into()));
+        let r = evaluate(&table(), &levers(), &o);
+        assert_eq!((r.right, r.scored), (1, 1), "only the smooth B1 cell counts");
+        assert!(r.entries.iter().any(|e| e.bench == "B6" && e.transient && e.verdict == Verdict::Wrong));
+        assert!(render_markdown(&r).contains("transient"));
     }
 }

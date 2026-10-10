@@ -103,7 +103,9 @@ fn terrain(args: &[String]) -> Result<(), String> {
 
 const IMPACT_VEHICLES: &str =
     "content/vehicles/game/scout_4x4.ron,content/vehicles/game/mule_4x4.ron,content/vehicles/game/hauler_4x4.ron";
-/// The lever is perturbed by this factor (+10%).
+/// Cells whose response is a launch transient, not a smooth one: shown tagged, not counted (DRIVE, via ARCH 2026-10-10).
+const IMPACT_TRANSIENT: &[(&str, &str)] = &[("hauler_4x4", "B6")];
+/// The lever is perturbed by this factor (+10%) unless `--factor` says otherwise.
 const IMPACT_FACTOR: f64 = 1.1; // const-ok: the impact matrix perturbation (IMPACT-MATRIX.md)
 
 /// Torque-bias ratio of the limited-slip centre differential the matrix swaps in. PROVISIONAL(DRIVE to confirm the value).
@@ -143,8 +145,17 @@ fn impact(args: &[String]) -> Result<(), String> {
     let matrix = std::fs::read_to_string(root().join("docs/validation/IMPACT-MATRIX.md")).map_err(|e| e.to_string())?;
     let table = impact::parse_table(&matrix);
     let all_benchmarks = impact::parse_benchmarks(&matrix);
+    // `--factor X` perturbs by X instead of +10% (a sweep); `--only a,b` runs just those levers (lever ids of `impact::levers`)
+    let factor =
+        flag(args, "--factor").map_or(Ok(IMPACT_FACTOR), |f| f.parse::<f64>().map_err(|e| format!("--factor: {e}")))?;
+    let only: Option<Vec<&str>> = flag(args, "--only").map(|o| o.split(',').collect());
     let levers = impact::levers();
-    let mut obs = impact::Observations { pairs: BTreeMap::new(), regimes: BTreeMap::new(), labels: BTreeMap::new() };
+    let mut obs = impact::Observations {
+        pairs: BTreeMap::new(),
+        regimes: BTreeMap::new(),
+        labels: BTreeMap::new(),
+        transient: IMPACT_TRANSIENT.iter().map(|(v, b)| (v.to_string(), b.to_string())).collect(),
+    };
     for path in list.split(',').filter(|v| !v.is_empty()) {
         let path = root().join(path);
         let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -175,7 +186,7 @@ fn impact(args: &[String]) -> Result<(), String> {
                 obs.labels.insert((def.id.clone(), bench.to_string()), l.clone());
             }
         }
-        for lever in &levers {
+        for lever in levers.iter().filter(|l| only.as_ref().is_none_or(|o| o.contains(&l.id))) {
             // a lever the vehicle cannot take (no authored brake torque, no limited-slip differential) is skipped with a note
             let applied = if lever.forge == "centre_diff_limited_slip" {
                 w5k_forge::levers::set_diff(
@@ -186,7 +197,7 @@ fn impact(args: &[String]) -> Result<(), String> {
                 )
                 .map(|x| (def.clone(), x))
             } else {
-                w5k_forge::levers::apply_both(&def, &extras, lever.forge, IMPACT_FACTOR)
+                w5k_forge::levers::apply_both(&def, &extras, lever.forge, factor)
             };
             let (d, x) = match applied {
                 Ok(v) => v,
