@@ -162,6 +162,9 @@ fn tyre() -> TyreDef {
         aligning_trail_frac: 0.0,
         kappa_peak: 0.0,
         alpha_peak_rad: 0.0,
+        mu_load_sensitivity: 0.0,
+        stiffness_load_sensitivity: 0.0,
+        nominal_load_n: 0.0,
     }
 }
 
@@ -463,6 +466,7 @@ pub fn box_truck() -> (PhysRig, RenderRig) {
             MaterialSlot { name: "rim".into(), kind: SlotKind::Metal },
         ],
         joint_count: 0,
+        track_runs: Vec::new(),
     };
     rr.meshes.push(box_mesh("hull", 0, 0, Vec3::ZERO, Vec3::new(half_x, half_y, half_z)));
     rr.meshes.push(box_mesh("cabin", 0, 0, Vec3::new(0.0, 0.9, -0.6), Vec3::new(0.95, 0.4, 1.0)));
@@ -573,6 +577,8 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
             resist_c1_s_m: 0.0,
             sprocket_teeth: 11,
             wheel_contact: WheelContact { vertical_stiffness_n_m: 4_000_000.0, vertical_damping_ns_m: 20_000.0 },
+            grouser_height_m: 0.0,
+            belt_stiffness_n_m: 0.0,
         })
         .collect();
     let drivetrain = DrivetrainDef {
@@ -745,6 +751,7 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
             MaterialSlot { name: "track".into(), kind: SlotKind::Track },
         ],
         joint_count: 0,
+        track_runs: Vec::new(),
     };
     rr.meshes.push(box_mesh("hull", 0, 0, Vec3::ZERO, Vec3::new(1.5, 0.6, 3.5)));
     for i in 0..rig.stations.len() {
@@ -986,7 +993,15 @@ mod tests {
     fn a_contract_0_1_tyre_def_loads_and_a_default_tyre_serialises_unchanged() {
         let t = tyre();
         let json = serde_json::to_string(&t).expect("serialise");
-        for k in ["speed_floor_m_s", "aligning_trail_frac", "kappa_peak", "alpha_peak_rad"] {
+        for k in [
+            "speed_floor_m_s",
+            "aligning_trail_frac",
+            "kappa_peak",
+            "alpha_peak_rad",
+            "mu_load_sensitivity",
+            "stiffness_load_sensitivity",
+            "nominal_load_n",
+        ] {
             assert!(!json.contains(k), "{k} is 0 and must not change rig_hash");
         }
         let back: TyreDef = serde_json::from_str(&json).expect("parse");
@@ -1261,5 +1276,154 @@ mod validation_tests {
         let m = tank.composite_mass(&[0.0, 0.0, 0.0]);
         assert!((m.mass_kg - (28_000.0 + 10.0 * 320.0 + 16_000.0)).abs() < 1e-9);
         assert!((tank.sprung_mass_kg() - 44_000.0).abs() < 1e-9);
+    }
+}
+
+/// Contract 0.3 additions: load sensitivity, grouser and belt stiffness, belt runs, and the articulation port that returns the hull's state.
+#[cfg(test)]
+mod v0_3_tests {
+    use super::*;
+    use crate::command::Command;
+    use crate::ports::{ArticulationLoads, ArticulationPort, ArticulationWrench, HullMotion, Shot};
+    use crate::render::{TrackRun, TrackWheel};
+    use w5k_math::{Quat, StateHasher, Vec3};
+
+    fn first_tyre(rig: &mut PhysRig) -> &mut TyreDef {
+        rig.stations.iter_mut().find_map(|s| s.wheel.tyre.as_mut()).expect("a tyre station")
+    }
+
+    #[test]
+    fn load_sensitivity_outside_zero_to_one_or_a_negative_nominal_load_is_rejected_and_in_range_values_pass() {
+        let (truck, _) = box_truck();
+        for (what, mutate) in [
+            (
+                "mu sensitivity above 1",
+                Box::new(|t: &mut TyreDef| t.mu_load_sensitivity = 1.5) as Box<dyn Fn(&mut TyreDef)>,
+            ),
+            ("stiffness sensitivity below 0", Box::new(|t: &mut TyreDef| t.stiffness_load_sensitivity = -0.1)),
+            ("negative nominal load", Box::new(|t: &mut TyreDef| t.nominal_load_n = -1.0)),
+        ] {
+            let mut rig = truck.clone();
+            mutate(first_tyre(&mut rig));
+            let e = rig.validate().expect_err(what);
+            assert!(e.iter().any(|m| m.contains("load sensitivities")), "{what}: {e:?}");
+        }
+        let mut ok = truck;
+        let t = first_tyre(&mut ok);
+        (t.mu_load_sensitivity, t.stiffness_load_sensitivity, t.nominal_load_n) = (0.15, 0.3, 9_000.0);
+        assert!(ok.validate().is_ok());
+    }
+
+    #[test]
+    fn a_negative_grouser_height_or_belt_stiffness_is_rejected() {
+        let (tank, _) = box_tank();
+        let mut bad = tank.clone();
+        bad.tracks[0].grouser_height_m = -0.01;
+        assert!(bad.validate().expect_err("grouser").iter().any(|m| m.contains("grouser height")));
+        let mut bad = tank.clone();
+        bad.tracks[0].belt_stiffness_n_m = f64::NAN;
+        assert!(bad.validate().expect_err("stiffness").iter().any(|m| m.contains("belt stiffness")));
+        let mut ok = tank;
+        (ok.tracks[0].grouser_height_m, ok.tracks[0].belt_stiffness_n_m) = (0.03, 2.0e6);
+        assert!(ok.validate().is_ok());
+    }
+
+    #[test]
+    fn a_0_2_rig_without_the_new_fields_loads_and_keeps_its_hash() {
+        let (tank, _) = box_tank();
+        let json = serde_json::to_string(&tank).expect("serialise");
+        for k in ["grouser_height_m", "belt_stiffness_n_m", "mu_load_sensitivity", "nominal_load_n"] {
+            assert!(!json.contains(k), "{k} is 0 and must not appear (it would change rig_hash)");
+        }
+        let back: PhysRig = serde_json::from_str(&json).expect("parse");
+        assert_eq!(back.rig_hash(), tank.rig_hash());
+        let mut set = tank.clone();
+        set.tracks[0].grouser_height_m = 0.03;
+        assert_ne!(set.rig_hash(), tank.rig_hash(), "a non-default value must be hashed");
+    }
+
+    fn belt_run(rr: &RenderRig) -> TrackRun {
+        TrackRun {
+            node: 0,
+            wheels: (0..4)
+                .map(|i| TrackWheel { node: i.min(rr.nodes.len() - 1), radius_m: 0.3 + 0.01 * i as f64 })
+                .collect(),
+            link_mesh: 0,
+            links: 80,
+            sprocket: 0,
+            sprocket_joint: 0,
+            direction: -1,
+        }
+    }
+
+    #[test]
+    fn a_track_run_is_validated_and_a_rig_without_runs_serialises_without_the_key() {
+        let (_, rr) = box_tank();
+        let plain = serde_json::to_string(&rr).expect("serialise");
+        assert!(!plain.contains("track_runs"), "an empty list stays out of the serialised render rig");
+        assert!(serde_json::from_str::<RenderRig>(&plain).is_ok(), "a 0.2 render rig still parses");
+        let mut with = rr.clone();
+        with.track_runs = vec![belt_run(&rr)];
+        assert!(with.validate().is_ok());
+        let back: RenderRig = serde_json::from_str(&serde_json::to_string(&with).expect("serialise")).expect("parse");
+        assert_eq!(back, with);
+        for (what, mutate) in [
+            ("two wheels only", Box::new(|r: &mut TrackRun| r.wheels.truncate(2)) as Box<dyn Fn(&mut TrackRun)>),
+            ("direction zero", Box::new(|r: &mut TrackRun| r.direction = 0)),
+            ("sprocket not a wheel", Box::new(|r: &mut TrackRun| r.sprocket = 9)),
+            ("joint out of range", Box::new(|r: &mut TrackRun| r.sprocket_joint = 10_000)),
+            ("link mesh out of range", Box::new(|r: &mut TrackRun| r.link_mesh = 10_000)),
+            ("too few links", Box::new(|r: &mut TrackRun| r.links = 2)),
+        ] {
+            let mut bad = with.clone();
+            mutate(&mut bad.track_runs[0]);
+            assert!(bad.validate().is_err(), "{what} must be rejected");
+        }
+    }
+
+    /// A port that only checks the 0.3 shape: it takes the other loads, advances the hull it is given, and reports the reaction for the ledger.
+    struct Free {
+        joints: Vec<f64>,
+    }
+
+    impl ArticulationPort for Free {
+        fn step(
+            &mut self,
+            dt_s: f64,
+            loads: &ArticulationLoads,
+            hull: &mut HullMotion,
+            _cmd: &Command,
+            wrench: &mut ArticulationWrench,
+        ) {
+            let m = 1000.0; // const-ok: a stand-in mass for the shape test
+            hull.acc_m_s2 = loads.force_n / m;
+            hull.vel_m_s += hull.acc_m_s2 * dt_s;
+            hull.pos_m += hull.vel_m_s * dt_s;
+            *wrench = ArticulationWrench::default();
+        }
+        fn joint_positions(&self) -> &[f64] {
+            &self.joints
+        }
+        fn drain_shots(&mut self, _out: &mut Vec<Shot>) {}
+        fn hash_state(&self, _h: &mut StateHasher) {}
+    }
+
+    #[test]
+    fn the_articulation_port_takes_the_other_loads_and_hands_back_the_hull_state() {
+        let mut port = Free { joints: vec![0.0] };
+        let mut hull = HullMotion {
+            rot: Quat::IDENTITY,
+            pos_m: Vec3::ZERO,
+            vel_m_s: Vec3::ZERO,
+            acc_m_s2: Vec3::ZERO,
+            omega_rad_s: Vec3::ZERO,
+            alpha_rad_s2: Vec3::ZERO,
+        };
+        let loads = ArticulationLoads { force_n: Vec3::new(1000.0, 0.0, 0.0), torque_about_hull_com_nm: Vec3::ZERO };
+        let mut wrench = ArticulationWrench::default();
+        port.step(0.01, &loads, &mut hull, &Command::default(), &mut wrench);
+        assert!((hull.vel_m_s.x - 0.01).abs() < 1e-12, "the hull state advanced inside the port: {:?}", hull.vel_m_s);
+        assert_eq!(wrench, ArticulationWrench::default());
+        assert_eq!(port.joint_positions().len(), 1);
     }
 }

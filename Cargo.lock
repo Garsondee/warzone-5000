@@ -235,6 +235,8 @@ dependencies = [
 name = "w5k_combat"
 version = "0.1.0"
 dependencies = [
+ "ron",
+ "serde",
  "w5k_contract",
  "w5k_math",
 ]
@@ -327,6 +329,8 @@ dependencies = [
 name = "w5k_terramech"
 version = "0.1.0"
 dependencies = [
+ "ron",
+ "serde",
  "w5k_contract",
  "w5k_math",
 ]

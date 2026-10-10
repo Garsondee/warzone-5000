@@ -1,18 +1,18 @@
 {
  "subtitle": "warzone-5000: a realistic ground-vehicle simulator, built by thirteen domain agents working in parallel. This page is the coordinator's view.",
- "updated": "2026-10-10 16:40 UTC",
+ "updated": "2026-10-10 18:15 UTC",
  "strip": [
   {
    "k": "Phase",
-   "v": "Slice 1 delivered; slice 2 proposed",
-   "s": "three wheeled vehicles drive the whole course; browser viewer; kid test-drive mode in a Windows zip. Slice 2 ('The Design Loop') waits for your word (card C-016)",
+   "v": "Slice 2 under way",
+   "s": "The Design Loop: tracked carrier, mud that decides who passes, the Impact Matrix running, a Workshop page. Slice 1 (three trucks, kid test drive) delivered and packaged",
    "state": "run"
   },
   {
    "k": "Contract",
-   "v": "0.2.0",
-   "s": "pinned at 80adac2; tracks (S3, S4) and turret recoil (S6) are untested against any code, so it stays unfrozen for those parts",
-   "state": "wait"
+   "v": "0.3.0",
+   "s": "merged at 0982843: tyre load sensitivity, track definition and runs, articulation loads; S3, S4 and S6 all passed. FORGE's differential and brake-torque fields wait for the next bump",
+   "state": "run"
   },
   {
    "k": "First light",
@@ -22,14 +22,14 @@
   },
   {
    "k": "Sessions",
-   "v": "9 of 13",
-   "s": "ARCH plus eight lanes; TRACKS, GODOT, COMBAT and AI not launched (slice 2 would launch TRACKS, and COMBAT for one spike)",
+   "v": "11 of 13",
+   "s": "ARCH plus 10 lanes; COMBAT, LOOK, VALIDATION idle; GODOT and AI parked",
    "state": "run"
   },
   {
    "k": "Usage",
-   "v": "lanes about $80",
-   "s": "by my last tally, over about 14 hours (GEOMETRY and CHASSIS the largest); slice 2 is estimated at about two five-hour windows",
+   "v": "lanes about $177",
+   "s": "from list_sessions: GEOMETRY 45.5, CHASSIS 39.3, VIEWER 22.8, DRIVE 19.5, WORLD 16.4, FORGE 13.4, VALIDATION 7.0, TRACKS 6.6; the five-hour window is in its warning band (resets 20:30 UTC), so DRIVE, GEOMETRY, VIEWER idle and WORLD stops after one step",
    "state": "wait"
   }
  ],
@@ -62,15 +62,15 @@
    "rank": 1,
    "state": "building",
    "mission": "A wheeled vehicle that rides, grips and handles: hull, suspension, tyres, steering.",
-   "last": "wheeled assembly, Ackermann, ledger, skidpad and tilt-table benches merged; known gaps: no tyre load sensitivity, linear tyre curve"
+   "last": "wheeled assembly, ledger, benches; sinking tyre (rigid-wheel Bekker) and tyre load sensitivity now read from the contract; the trucks stay linear until FORGE fills the fields"
   },
   {
    "name": "DRIVE",
    "squad": "dynamics",
    "rank": 1,
-   "state": "building",
+   "state": "idle",
    "mission": "Engine map, converter, gearbox, differentials, brakes with heat, fuel.",
-   "last": "gearbox, brakes, locked and limited-slip diffs, engine braking and fade, tracked steering units merged; hauler gearbox bug fixed"
+   "last": "clutch launch and hill hold, authored brake torque, open/limited-slip/locked demonstration (Mule +13% grade from limited slip; Hauler is a launch-transient limit); steering-unit note for TRACKS; idle"
   },
   {
    "name": "WORLD",
@@ -78,7 +78,7 @@
    "rank": 1,
    "state": "building",
    "mission": "The obstacle course: hills, roads, mud, trees, barricades, buildings.",
-   "last": "rock fields, switchback cliff, river and ford, bridges, soft-ground patches, washboard and whoops, `w5k world stats`; terrain spectra were red against ISO 8608"
+   "last": "rock fields, river, cliffs, bridges, mobility map (go/slow/no-go per vehicle) merged; mud pit and proving fixtures await a merge of integration; visual target V0 in progress"
   },
   {
    "name": "FORGE",
@@ -86,31 +86,31 @@
    "rank": 1,
    "state": "building",
    "mission": "Designer choices to solver parameters; the reference garage starts with the HMMWV.",
-   "last": "Mule, Scout and Hauler compile to rigs; substeps from the stiffest mode; Scout damping retuned"
+   "last": "levers for differentials and brake torque merged; tracked-compile design note merged, T1 (stations, tracks, sprocket) in review"
   },
   {
    "name": "VIEWER",
    "squad": "visuals",
    "rank": 1,
-   "state": "building",
+   "state": "idle",
    "mission": "Replay format, the browser viewer with forces drawn on, MP4 and chart tools.",
-   "last": "RTS camera, multi-vehicle replays, live test-drive page with a start screen and three skinned trucks; packing the hauler skin next"
+   "last": "tornado and ladder charts and the Workshop design note merged; idle until the tracked contact is real"
   },
   {
    "name": "VALIDATION",
    "squad": "truth",
    "rank": 1,
-   "state": "building",
+   "state": "idle",
    "mission": "Real-vehicle dossiers, the harness, the dashboard and the Design Impact Matrix.",
-   "last": "proving-ground spec, scorers for braking, rollover, step and terrain; the Impact Matrix runner and real dossiers still to come"
+   "last": "Impact Matrix v0 run (31 of 54 signs), capability export for the mobility map merged; idle"
   },
   {
    "name": "GEOMETRY",
    "squad": "design",
    "rank": 2,
-   "state": "building",
+   "state": "idle",
    "mission": "Realistic hulls, turrets, wheels and tracks from lofted sections.",
-   "last": "modular vehicles: hull, wheel and weapon modules on sockets, N axles, scout and hauler skins, 50k triangle budget; hauler detail PR in merge"
+   "last": "the tracked carrier (belt module, skin from the compiled rig) merged; cavity-ray count to be exposed; idle"
   },
   {
    "name": "LOOK",
@@ -124,9 +124,9 @@
    "name": "TRACKS",
    "squad": "dynamics",
    "rank": 2,
-   "state": "not launched",
+   "state": "building",
    "mission": "Tracked running gear and soft ground: floats where tyres bog, turns by skidding.",
-   "last": "not launched; slice 2 proposal would launch it (card C-016)"
+   "last": "S3 pivot torque within 4.6% of mu W L/4, S4 thrust within 0.4% of Wong; contact kernel, skid model, belly drag and ladder bench merged; wrapper and glue note next"
   },
   {
    "name": "GODOT",
@@ -140,9 +140,9 @@
    "name": "COMBAT",
    "squad": "behaviour",
    "rank": 2,
-   "state": "not launched",
+   "state": "idle",
    "mission": "Ballistics, penetration, damage, targets, turret and gun servos, recoil.",
-   "last": "not launched; slice 2 proposal would launch it (card C-016)"
+   "last": "spike S6 passed (momentum conserved to 1e-6); ballistics kernel; stopped to save budget"
   },
   {
    "name": "AI",
@@ -164,7 +164,7 @@
    "id": "S",
    "name": "Settling round",
    "state": "done",
-   "criteria": "Done: contract 0.2.0 applied from CHASSIS, DRIVE and FORGE requests. Spikes S3 (tracks), S4 (soil) and S6 (turret) never ran because TRACKS and COMBAT were not launched."
+   "criteria": "Done: contract 0.2.0 from CHASSIS, DRIVE and FORGE requests; spikes S3, S4 and S6 have since run and passed, and contract 0.3.0 carries their findings."
   },
   {
    "id": "M1",
@@ -175,7 +175,7 @@
   {
    "id": "S2",
    "name": "Slice 2: The Design Loop",
-   "state": "proposed (waits for your go)",
+   "state": "under way",
    "criteria": "A tracked carrier, mud that decides who passes, the Impact Matrix running, a Workshop page where a design change moves measured numbers and can be driven. See docs/swarm/SLICE-2.md and card C-016."
   },
   {
@@ -253,6 +253,16 @@
    "lane": "GEOMETRY",
    "caption": "the parametric utility truck (fictional, HMMWV-like archetype): panel lines, tread, mirrors, canvas",
    "file": "docs/lanes/geometry/media/truck-look.png"
+  },
+  {
+   "lane": "VIEWER",
+   "caption": "the Impact Matrix tornado: which design levers move which measurements (31 of 54 signs right so far)",
+   "file": "docs/lanes/viewer/media/tornado-impact.png"
+  },
+  {
+   "lane": "TRACKS",
+   "caption": "drawbar pull vs slip on soft soil: the model against Wong's closed form",
+   "file": "docs/lanes/tracks/media/thrust_slip.png"
   }
  ],
  "log": [
@@ -295,6 +305,16 @@
    "t": "2026-10-10 16:35",
    "sessions": "9 of 13",
    "note": "You ran the Windows package and liked it. START.bat now has no speed limiter; START-KID.bat keeps the 25 km/h cap. Slice 2 proposed (The Design Loop); three new cards: C-016 (slice 2), C-017 (where real published figures come from), C-018 (oracle tolerance class). Nothing new launches without your go."
+  },
+  {
+   "t": "2026-10-10 17:15",
+   "sessions": "11 of 13",
+   "note": "You said go: slice 2 is on. TRACKS and COMBAT launched; the other lanes have their stage A jobs (tyre load sensitivity, terrain spectrum fix, lever API, Impact Matrix runner, charts, tracked carrier). Slice 1 package unchanged: run 38069793130."
+  },
+  {
+   "t": "2026-10-10 18:15",
+   "sessions": "11 of 13",
+   "note": "Contract 0.3.0 merged; seven lane PRs landed this hour (DRIVE launch and hill hold, FORGE levers, TRACKS contact, skid and ladder, GEOMETRY carrier, VIEWER charts, CHASSIS sinking tyre, WORLD mobility map). Spikes S3 and S4 passed, so the tracked path is safe to build. Usage window in its warning band: lanes about $177, non-critical lanes idled until 20:30 UTC."
   }
  ],
  "footer": "Defaults apply to every open card until you answer it."

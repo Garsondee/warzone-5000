@@ -2,6 +2,7 @@
 
 use w5k_contract::render::NodeRole;
 use w5k_geo::budget::wheeled_triangles;
+use w5k_geo::carrier::{placeholder_dims as carrier_dims, tracked_assembly};
 use w5k_geo::export::{glb, render_rig, slot_colour};
 use w5k_geo::flags::{bake, FlagParams};
 use w5k_geo::mesh::Mesh;
@@ -10,12 +11,13 @@ use w5k_geo::mount::{ring_mount, RingMountDims};
 use w5k_geo::part::Part;
 use w5k_geo::raster::{render, Camera, Item, Mode};
 use w5k_geo::skin::Skin;
+use w5k_geo::track::{run_parts, LinkSpec, RunSpec};
 use w5k_geo::truck::{truck_assembly as skin_assembly, utility_assembly, utility_hull, TruckKind, UtilityDims};
 use w5k_geo::weapon::{gun_module, GunDims};
 use w5k_geo::wheel::{segments_for, wheel, WheelDims};
 use w5k_math::{Transform, Vec3};
 
-const USAGE: &str = "usage: w5k geometry sheet <subject>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close,gun] [--size WxH] [--grid N: tiles per row] [--back F: pull the camera back by this factor]\n       w5k geometry export <subject> --out DIR [--detail 0|1|2]\nsubject: wheel, or hull | truck (4x4) | scout (the light recon 4x4) | hauler (the heavy cargo 4x4) | truck6 (front steer, rear tandem), then +ring (the roof mount), +mg or +ac25 (a gun on it), +x (pulled apart): truck6+ac25+x";
+const USAGE: &str = "usage: w5k geometry sheet <subject>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close,gun] [--size WxH] [--grid N: tiles per row] [--back F: pull the camera back by this factor]\n       w5k geometry export <subject> --out DIR [--detail 0|1|2]\nsubject: wheel | run (one side of the tracked carrier's running gear) | carrier (the tracked carrier), or hull | truck (4x4) | scout (the light recon 4x4) | hauler (the heavy cargo 4x4) | truck6 (front steer, rear tandem), then +ring (the roof mount), +mg or +ac25 (a gun on it), +x (pulled apart): truck6+ac25+x";
 
 /// Entry point for `w5k geometry <args>`.
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -158,6 +160,11 @@ fn subject(what: &str, detail: u8) -> Result<Vec<(Mesh, [f64; 3], bool)>, String
                 (w.nuts, [0.7, 0.7, 0.7], true),    // const-ok: picture colours and camera framing
             ])
         }
+        "run" => {
+            // one side's tracked running gear of the carrier: the wheels and the belt
+            let parts = run_parts(&RunSpec::placeholder(), &LinkSpec::standard(), detail)?;
+            Ok(parts.iter().map(|p| (p.in_hull_frame(), slot_colour(p.slot), true)).collect())
+        }
         _ => {
             let (asm, exploded) = truck_assembly(what, detail)?;
             let parts = if exploded { explode(&asm, 0.9) } else { asm.parts }; // const-ok: how far the modules are pulled apart, metres
@@ -180,6 +187,7 @@ fn truck_assembly(what: &str, detail: u8) -> Result<(Assembly, bool), String> {
             utility_assembly(&long, &long.axles_z(d.overhang_m(), Some(1.2)), &[true, false, false], detail)
             // const-ok: tandem spacing
         }
+        "carrier" => tracked_assembly(&carrier_dims(), &RunSpec::placeholder(), &LinkSpec::standard(), detail)?,
         // a skin of the game garage (`truck` is the utility truck) on the axles of its stand-in definition
         _ => match skin_id(base).and_then(Skin::for_id) {
             Some(skin) => skin_assembly(skin.kind, &skin.dims, &skin.axles_z, &skin.steered, detail),

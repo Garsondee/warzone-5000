@@ -107,3 +107,29 @@ almost neutral, and halving the front tyres' stiffness gives K = 0.0127 rad per 
 a centre at wheel-centre height and its centre of mass moves outward by `(h_s - h_wheel) phi`. With that term the test agrees to 0.4%.
 **A bug the tilt table found.** A tyre's sideways force acts at the ground, but the chassis applied it at the wheel centre without the moment `dist * F_y` that moving it up needs, so the truck rolled
 too little in a turn and tilted to 59 degrees, past the rigid limit. Physics cannot beat the rigid limit, so the bench caught it.
+
+## Tyre load sensitivity: why load transfer costs grip
+Rubber does not grip in proportion to the weight on it: press a tyre twice as hard and it grips less than twice as hard (the contact patch grows, the pressure
+in it is less even, and the rubber cannot hold the higher shear). We model it with one factor per tyre, `s = 1 / (1 + k (Fz / Fz0 - 1))`, where `Fz0` is the
+tyre's static load: `s = 1` when the tyre carries its own share, and less when it carries more, so the force `s * Fz` keeps rising with load but ever more slowly.
+**Why it matters.** In a turn, weight moves from the inner to the outer wheel. With linear tyres the outer one gains exactly what the inner one loses, and the
+axle grips as before. With load-sensitive tyres the outer tyre gains *less* than the inner one loses, so **an axle that carries more of the load transfer
+has less total grip**. That is the lever behind every anti-roll-bar setting: a stiffer front bar sends more of the transfer to the front axle, the front grips less,
+and the truck understeers. The bench shows it: making the front bar 4 times stiffer adds 5.2 mrad of steer at 0.6 g with load-sensitive tyres, and only
+0.5 mrad with linear ones. It also lowers the skidpad limit from 0.85 g to 0.81 g on the box truck. Graphics analogy: a soft, saturating tone curve instead of a linear
+one; the brightest inputs gain the least.
+**A measuring lesson from the proving ground.** With load sensitivity switched on, the Scout's skidpad limit first read 0.53 g, a 32% drop that the model cannot
+produce (the friction term alone can cost an axle at most `1 / (1 + k)`, 13%). The cause was the measurement: as the speed crept up, DRIVE's automatic gearbox
+shifted, the truck lurched, and the lateral acceleration wobbled for about a second; the bench's slide-out rule compared single samples with the best single sample and
+took the wobble for a slide. The bench now judges the limit and the slide-out on a moving average over 1.5 s (a `Param`), and the Scout reads 0.77 g (0.80 g with linear
+tyres: the expected few percent). A test that measures a peak must not be fooled by a transient; the same idea as filtering a noisy sensor before thresholding it.
+
+## A tyre that sinks: mud as a spring that does not spring back
+On firm ground the tyre is the only spring between the wheel and the earth. In mud the ground gives too: Bekker measured that a plate pressed into soil meets a pressure
+`p = (kc / b + kphi) z^n` that grows with depth `z`, and less for a wider plate (the `kc / b` term: a wide footprint spreads its load). Add that pressure up around the
+arc of a sunken wheel and you get how much load the soil carries at each sinkage; the tyre spring and the soil spring then sit **in series**, like two springs stacked:
+the penetration splits between them so that both push with the same force. Unlike the tyre, the soil does not push back as the wheel leaves: the rut stays. The energy
+that went into pressing it is lost, and per metre travelled it *is* the extra rolling resistance, the **compaction resistance** `R_c = b (kc / b + kphi) z^(n+1) / (n+1)`.
+On the bump strip's mud the box truck sinks about 10 cm and coasts down at 0.26 g instead of 0.02 g. Grip changes too: mud holds the tyre with its own strength,
+cohesion over the footprint plus friction under the load (`A c + W tan(phi)`, Mohr-Coulomb), not with rubber friction. A wider tyre sinks less and rolls easier, the
+lever that makes tracks (a very wide, very long "tyre") float where a truck bogs. `UNVALIDATED`: the formulas are textbook, the mud numbers are stand-ins.

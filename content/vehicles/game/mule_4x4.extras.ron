@@ -51,6 +51,26 @@
             prov: Estimate,
             src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
         ),
+        centre_diff: (
+            kind: Open,
+            bias: (
+                v: 1.0,
+                lo: Some(1.0),
+                hi: Some(8.0),
+                prov: Estimate,
+                src: "an open differential: the bias is unused",
+            ),
+        ),
+        axle_diff: (
+            kind: Open,
+            bias: (
+                v: 1.0,
+                lo: Some(1.0),
+                hi: Some(8.0),
+                prov: Estimate,
+                src: "an open differential: the bias is unused",
+            ),
+        ),
     ),
     brake: (
         cooling_w_k: (
@@ -88,6 +108,22 @@
             prov: Estimate,
             src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
         ),
+        axle_torque_nm: [
+            (
+                v: 5480.0,
+                lo: Some(3835.9999999999995),
+                hi: Some(7671.999999999999),
+                prov: Estimate,
+                src: "derived once from the design deceleration of 0.8 g on the total mass and the front share, now the authored spec (rounded to 10 N m); archetype estimate, replaced by the dossier\'s brake figures",
+            ),
+            (
+                v: 2950.0,
+                lo: Some(2065.0),
+                hi: Some(4130.0),
+                prov: Estimate,
+                src: "derived once from the design deceleration of 0.8 g on the total mass and the front share, now the authored spec (rounded to 10 N m); archetype estimate, replaced by the dossier\'s brake figures",
+            ),
+        ],
     ),
     aero_cop_height_m: (
         v: 0.25,

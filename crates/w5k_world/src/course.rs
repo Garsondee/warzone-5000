@@ -15,6 +15,7 @@ use w5k_math::{scalar, Pcg32, Transform, Vec3};
 use crate::bridge::{place, rails, BridgeDef, BridgeKind, PlacedBridge};
 use crate::cliff::{switchback_path, CliffDef, SwitchbackDef};
 use crate::corrugation::{Corrugation, Ripple};
+use crate::detail::{gd_from_rms, unit_layer};
 use crate::features::{
     barricade_blocks, cell_slope, dilate, mud_mask, poisson_disc, poisson_disc_in, BarricadeDef, MudDef, RockFieldDef,
     SoftPatchDef, TreesDef,
@@ -43,6 +44,10 @@ pub struct HillsDef {
     pub max_grade: Param,
     #[serde(default)]
     pub feature: Option<HillFeature>,
+    /// ISO 8608 level `G(n0)` (m^3, at n0 = 0.1 cycles/m) of the ground's small-scale detail, which follows `n^-2` over 2.5 to 20 m
+    /// (`detail.rs`). `None` leaves the hills alone (their own spectrum falls as `n^-3`).
+    #[serde(default)]
+    pub detail_gd_n0_m3: Option<Param>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -56,6 +61,10 @@ pub struct RoadDef {
     pub max_grade: Param,
     /// Name of a material in `content/world/materials.ron`.
     pub surface: String,
+    /// ISO 8608 level `G(n0)` (m^3) of the road's surface detail: the road's *condition* (class B good, C average, D poor). When absent
+    /// the level follows from the surface material's `roughness_rms_m`. Only used when the course has ground detail (`hills.detail_gd_n0_m3`).
+    #[serde(default)]
+    pub roughness_gd_n0_m3: Option<Param>,
     /// Stretches where the road itself is mud (a ford, a washed-out section the vehicle must cross).
     #[serde(default)]
     pub mud_crossings: Vec<MudCrossing>,
@@ -151,7 +160,7 @@ const STAND_NOISE_EDGES: (f64, f64) = (-0.15, 0.35); // const-ok: shape of the c
 const STANDS_SALT: u64 = 0x7EEE; // const-ok: noise stream label
 
 /// A rock's centre sits this fraction of its radius above the ground, so it is partly buried and presents a rounded face.
-const BURIAL: f64 = 0.4; // const-ok: how deep rocks sit in the ground
+pub const BURIAL: f64 = 0.4; // const-ok: how deep rocks sit in the ground
 
 /// Headroom on a cliff zone's axis limit over the face grade plus the hills' own slope.
 const CLIFF_LIMIT_SLACK: f64 = 1.1; // const-ok: margin so the clamp never shaves the face it is told to allow
@@ -313,6 +322,59 @@ fn astar(
     }
     None
 }
+
+/// Steepest plan gradient any bilinear cell of a node field can reach, per unit amplitude: the largest edge differences of each cell
+/// combined (the gradient of a bilinear patch is largest at a corner, where it is made of two of those edge differences).
+fn steepest_gradient(v: &[f64], n: usize) -> f64 {
+    let mut best = 0.0f64;
+    for j in 0..n - 1 {
+        for i in 0..n - 1 {
+            let (v00, v10, v01, v11) = (v[j * n + i], v[j * n + i + 1], v[(j + 1) * n + i], v[(j + 1) * n + i + 1]);
+            let gx = (v10 - v00).abs().max((v11 - v01).abs()) / CELL_M;
+            let gz = (v01 - v00).abs().max((v11 - v10).abs()) / CELL_M;
+            best = best.max(scalar::hypot(gx, gz));
+        }
+    }
+    best
+}
+
+/// The grade limiter alone, without the smoothing `grade_profile` does first.
+fn grade_profile_keep(y: &mut [f64], ds: &[f64], g: f64) {
+    for _ in 0..PROFILE_PASSES {
+        let mut changed = false;
+        for k in 1..y.len() {
+            let lim = g * ds[k - 1];
+            let c = y[k].clamp(y[k - 1] - lim, y[k - 1] + lim);
+            changed |= (c - y[k]).abs() > PROFILE_TOL_M;
+            y[k] = c;
+        }
+        for k in (0..y.len() - 1).rev() {
+            let lim = g * ds[k];
+            let c = y[k].clamp(y[k + 1] - lim, y[k + 1] + lim);
+            changed |= (c - y[k]).abs() > PROFILE_TOL_M;
+            y[k] = c;
+        }
+        if !changed {
+            break;
+        }
+    }
+}
+
+/// Iteration cap and tolerance of the grade limiter.
+const PROFILE_PASSES: usize = 200; // const-ok: iteration cap; it converges in a handful of rounds
+const PROFILE_TOL_M: f64 = 1e-12; // const-ok: convergence tolerance, m
+
+/// Moving average of a profile over `half` samples each side (shrinking symmetrically at the ends so they stay put).
+fn smooth_profile(y: &mut [f64], half: usize) {
+    let src = y.to_vec();
+    for k in 0..y.len() {
+        let w = half.min(k).min(y.len() - 1 - k);
+        y[k] = src[k - w..=k + w].iter().sum::<f64>() / (2 * w + 1) as f64;
+    }
+}
+
+/// Half width of the rounding of the graded profile, in path samples (about a metre each).
+const PROFILE_ROUNDING_SAMPLES: usize = 16; // const-ok: engineered roads are smooth over about 30 m
 
 /// Smooth a profile and then limit its slope to `g` (alternating forward and backward projection until stable).
 fn grade_profile(y: &mut [f64], ds: &[f64], g: f64) {
@@ -482,14 +544,22 @@ fn plan_road(
     let ds: Vec<f64> = pts.windows(2).map(|w| scalar::hypot(w[1].0 - w[0].0, w[1].1 - w[0].1) * CELL_M).collect();
     // Grade a little under the stated limit: the stamped cells are sampled bilinearly, which can add a sliver of slope.
     grade_profile(&mut y, &ds, rd.max_grade.v * PROFILE_MARGIN);
+    // The rate limiter leaves corners where the slope jumps, and a corner is an `n^-4` feature in the road's spectrum (ISO 8608 roads fall
+    // as `n^-2`). A moving average rounds them.
+    smooth_profile(&mut y, PROFILE_ROUNDING_SAMPLES);
+    // Where path samples are not evenly spaced (an A* leg meeting an authored one) an average can exceed the grade a little: clamp again.
+    grade_profile_keep(&mut y, &ds, rd.max_grade.v * PROFILE_MARGIN);
 
     let (w2, shoulder) = (rd.width_m.v * 0.5, rd.shoulder_m.v);
     let reach = w2 + shoulder;
+    // The distance and arc fields are kept a little beyond the shoulder (weight 0 there): a washboard's phase must be defined on a ring of
+    // nodes around it, or interpolating the phase against an undefined neighbour makes spikes at the section's edge.
+    let search = reach.max(w2 + ROUGH_EDGE_M + 2.0 * CELL_M);
     let mut weight = vec![0.0f64; n * n];
     let mut target = vec![0.0f64; n * n];
     let mut best_d = vec![f64::INFINITY; n * n];
     let mut arc = vec![0.0f64; n * n];
-    let r_cells = (reach / CELL_M).ceil() as i64;
+    let r_cells = (search / CELL_M).ceil() as i64;
     // Distance to the centreline polyline, with the profile height interpolated at the projection (so neighbouring cells get
     // nearly equal targets even at a bend); the nearest segment wins and ties keep the earlier one.
     for k in 0..nodes.len() - 1 {
@@ -506,11 +576,14 @@ fn plan_road(
                 let t = (((i as f64 - ax) * (bx - ax) + (j as f64 - az) * (bz - az)) / len2).clamp(0.0, 1.0);
                 let d = scalar::hypot(i as f64 - (ax + t * (bx - ax)), j as f64 - (az + t * (bz - az))) * CELL_M;
                 let c = j as usize * n + i as usize;
-                if d < reach && d < best_d[c] {
+                if d < search && d < best_d[c] {
                     best_d[c] = d;
                     arc[c] = seg_start + t * ds[k];
                     target[c] = y[k] + t * (y[k + 1] - y[k]);
-                    weight[c] = 1.0 - scalar::smoothstep(w2, reach, d);
+                    weight[c] = 1.0 - scalar::smoothstep(w2, reach, d).min(1.0);
+                    if d >= reach {
+                        weight[c] = 0.0;
+                    }
                 }
             }
         }
@@ -535,6 +608,9 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
         p.check(&format!("{}.{l}", def.name))?;
     }
     for (k, rd) in std::iter::once(&def.road).chain(&def.extra_roads).enumerate() {
+        if let Some(g) = &rd.roughness_gd_n0_m3 {
+            g.check(&format!("{}.roads[{k}].roughness_gd_n0_m3", def.name))?;
+        }
         for (l, p) in [("width_m", &rd.width_m), ("shoulder_m", &rd.shoulder_m), ("max_grade", &rd.max_grade)] {
             p.check(&format!("{}.roads[{k}].{l}", def.name))?;
         }
@@ -562,6 +638,17 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
             h[j * n + i] = v;
         }
     }
+    // Small-scale detail with a stated spectrum (see `detail.rs`): built here, added after the roads are planned and stamped, so a road
+    // follows the relief and not the ground's bumps (it carries its own, from its material).
+    let detail: Option<(Vec<f64>, f64)> = match &hd.detail_gd_n0_m3 {
+        Some(g) => {
+            g.check(&format!("{}.hills.detail_gd_n0_m3", def.name))?;
+            let layer = unit_layer(def.seed, n);
+            let steepest = steepest_gradient(&layer, n);
+            Some((layer, steepest))
+        }
+        None => None,
+    };
     // Axis limit g / sqrt(2): the bilinear gradient magnitude is at most sqrt(2) x the largest axis difference.
     let axis_terrain = hd.max_grade.v * CELL_M * std::f64::consts::FRAC_1_SQRT_2;
     limit_grades(&mut h, n, &vec![axis_terrain; n * n], &vec![false; n * n]);
@@ -612,6 +699,8 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
     let mud_id = materials.id_of("mud").ok_or("material table has no `mud`")?;
     let mut splat = vec![ground.0 as u8; n * n];
     let mut frozen = vec![false; n * n];
+    // The ISO level of the detail each road cell carries (from its road's stated condition, or its material).
+    let mut cell_gd = vec![0.0f64; n * n];
     for (rd, lr) in road_defs.iter().zip(&laid) {
         let surface = materials.id_of(&rd.surface).ok_or_else(|| format!("unknown road surface `{}`", rd.surface))?;
         let mut crossings = Vec::new();
@@ -628,6 +717,10 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
                 let wet = crossings.iter().any(|&(a, b)| lr.arc[c] >= a && lr.arc[c] <= b);
                 splat[c] = if wet { mud_id.0 } else { surface.0 } as u8;
                 frozen[c] = true;
+                cell_gd[c] = match (&rd.roughness_gd_n0_m3, wet) {
+                    (Some(g), false) => g.v,
+                    _ => gd_from_rms(materials.get(MaterialId(u16::from(splat[c]))).roughness_rms_m),
+                };
             }
             if lr.weight[c] > 0.0 {
                 h[c] += (lr.target[c] - h[c]) * lr.weight[c];
@@ -636,6 +729,16 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
     }
     // The centreline cells are exactly the profile (they have weight 1); keep the shoulders inside the terrain grade limit.
     limit_grades(&mut h, n, &axis_limit, &frozen);
+    // Detail: the ground carries the course's stated level, a road its own material's (an ISO class from `roughness_rms_m`). Added after
+    // the clamp, so each cell's grade limit grows by the layer's steepest slope at its amplitude.
+    if let Some((layer, steepest)) = &detail {
+        let ground_amp = scalar::sqrt(hd.detail_gd_n0_m3.as_ref().map_or(0.0, |g| g.v));
+        for c in 0..n * n {
+            let amp = if frozen[c] { scalar::sqrt(cell_gd[c]) } else { ground_amp };
+            h[c] += amp * layer[c];
+            grade_limit[c] += amp * steepest;
+        }
+    }
     // Water: wherever the final ground is below the river's surface. The bed is its own material.
     let wet_final: Vec<bool> =
         (0..n * n).map(|c| !river_surface[c].is_nan() && h[c] < river_surface[c] - WATER_EPS_M).collect();
@@ -727,13 +830,13 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
                     }
                 }
                 for c in 0..n * n {
-                    if best_d[c] >= w2 + ROUGH_EDGE_M || arc[c] < a || arc[c] > b {
+                    if best_d[c] >= w2 + ROUGH_EDGE_M + 2.0 * CELL_M || arc[c] < a || arc[c] > b {
                         continue;
                     }
                     let wgt = lateral(best_d[c])
                         * scalar::smoothstep(a, a + fade, arc[c])
                         * (1.0 - scalar::smoothstep(b - fade, b, arc[c]));
-                    if wgt <= 0.0 {
+                    if wgt <= 0.0 && kind == "whoops" {
                         continue;
                     }
                     if kind == "whoops" {
@@ -968,10 +1071,10 @@ mod tests {
         CourseDef::from_ron(include_str!("../../../content/world/courses/slice.ron")).expect("slice.ron parses")
     }
 
-    const GOLDEN_CROSSING_HASH: u64 = 0x2f47_a346_14ba_26ea;
-    const GOLDEN_RIVER_HASH: u64 = 0x33d8_29c2_7af5_f0f9;
-    const GOLDEN_RIDGE_HASH: u64 = 0xb275_51a9_3685_9f48;
-    const GOLDEN_SLICE_HASH: u64 = 0x530e_27f4_3147_527a;
+    const GOLDEN_CROSSING_HASH: u64 = 0x8cd3_c254_aaeb_8122;
+    const GOLDEN_RIVER_HASH: u64 = 0x1b2f_cee4_6477_75c7;
+    const GOLDEN_RIDGE_HASH: u64 = 0x1b71_3bff_9dbe_e466;
+    const GOLDEN_SLICE_HASH: u64 = 0xd3b3_7972_eafb_b094;
 
     fn hash(c: &Course) -> u64 {
         let mut s = StateHasher::new();
@@ -1028,7 +1131,12 @@ mod tests {
                 .iter()
                 .map(|&(a, b)| c.grade_limit[b * n + a])
                 .fold(0.0, f64::max);
-            assert!(grade <= lim * 1.02, "grade {grade} over its limit {lim} at ({x}, {z})");
+            assert!(
+                grade <= lim * 1.02,
+                "grade {grade} over its limit {lim} at ({x}, {z}) material {} road dist {}",
+                c.world.material_at(x, z).name,
+                c.road.iter().map(|r| scalar::hypot(r.0 - x, r.1 - z)).fold(f64::INFINITY, f64::min)
+            );
         }
     }
 
@@ -1054,7 +1162,13 @@ mod tests {
                 m == c.road_material || c.world.material_at(x, z).soil.is_some(),
                 "centreline is road or a stated mud crossing"
             );
-            assert!((c.world.height_m(x, z) - y).abs() < 0.05, "centreline sits on the graded profile");
+            // A road carries the roughness of its own material on top of the graded profile (a mud crossing is rougher than asphalt).
+            let tol = 0.05 + 4.0 * c.world.material_at(x, z).roughness_rms_m;
+            assert!(
+                (c.world.height_m(x, z) - y).abs() < tol,
+                "centreline sits on the graded profile ({} vs {y} at ({x}, {z}))",
+                c.world.height_m(x, z)
+            );
             // bilinear sampling between stamped nodes
         }
         let (first, last) = (c.road[0], c.road[c.road.len() - 1]);
@@ -1581,7 +1695,8 @@ mod tests {
         let c = generate(&d).expect("river");
         let (p, _, _) = river_frame(&d, 100.0);
         let depth = c.world.water_surface_m(p.0, p.1).expect("water") - c.world.height_m(p.0, p.1);
-        assert!((depth - d.rivers[0].depth_m.v).abs() < 0.1, "depth {depth} vs stated {}", d.rivers[0].depth_m.v);
+        // The ground detail (a few centimetres RMS) rides on the carved bed.
+        assert!((depth - d.rivers[0].depth_m.v).abs() < 0.25, "depth {depth} vs stated {}", d.rivers[0].depth_m.v);
     }
 
     #[test]

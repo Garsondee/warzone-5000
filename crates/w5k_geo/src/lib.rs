@@ -9,6 +9,7 @@
 
 pub mod budget;
 pub mod bvh;
+pub mod carrier;
 pub mod cavity;
 pub mod edge;
 pub mod export;
@@ -23,6 +24,7 @@ pub mod mount;
 pub mod part;
 pub mod raster;
 pub mod skin;
+pub mod track;
 pub mod truck;
 pub mod weapon;
 pub mod wheel;

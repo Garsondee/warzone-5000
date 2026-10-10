@@ -9,4 +9,6 @@ ChassisTuning(
         src: "speed over which rolling resistance fades to zero at standstill (tanh scale), so a parked truck is not pushed backwards; PROVISIONAL(CCR-chassis-1)"),
     slip_damping_time_s: Param(v: 0.005, lo: 0.001, hi: 0.02, prov: Estimate,
         src: "damping on the rate of tyre patch stretch, as a fraction of the stretch stiffness; 5 ms gives a stopped 2.5 t truck a damping ratio of about 0.05 on its tyres"),
+    skidpad_window_s: Param(v: 1.5, lo: 0.5, hi: 3.0, prov: Estimate,
+        src: "skidpad bench: moving-average window of the lateral acceleration for the limit and the slide-out test; longer than a gear shift's lurch (about 1 s with DRIVE's automatic), short against the speed ramp"),
 )

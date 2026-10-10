@@ -245,3 +245,71 @@ fn steady_turn_lateral_load_transfer_matches_m_ay_h_over_track() {
     println!("worst relative error of the lateral load transfer {worst:.4}");
     assert!(worst < 0.03);
 }
+
+/// The rig with every tyre's load sensitivity set (contract 0.3 `TyreDef` fields); 0.15 and 0.3 are typical truck tyres (Pacejka ch. 4).
+fn with_load_sensitivity(r: &PhysRig, mu_k: f64, stiff_k: f64) -> PhysRig {
+    let mut r = r.clone();
+    for s in r.stations.iter_mut() {
+        if let Some(t) = s.wheel.tyre.as_mut() {
+            t.mu_load_sensitivity = mu_k;
+            t.stiffness_load_sensitivity = stiff_k;
+        }
+    }
+    r
+}
+
+/// The understeer angle `delta - L / R` (rad) averaged over the skidpad samples with `a_y` in `[lo, hi]` m/s^2.
+fn understeer_angle_rad(r: &PhysRig, t: &ChassisTuning, lo: f64, hi: f64) -> f64 {
+    let res = skidpad(r, t, &FlatPlane::new(), &mut drive(r), &PAD).unwrap();
+    let pts: Vec<f64> = res
+        .points
+        .iter()
+        .filter(|p| p.lateral_acc_m_s2 >= lo && p.lateral_acc_m_s2 <= hi)
+        .map(|p| p.steer_angle_rad - res.wheelbase_m * p.yaw_rate_rad_s / p.speed_m_s)
+        .collect();
+    pts.iter().sum::<f64>() / pts.len() as f64
+}
+
+#[test]
+fn a_stiffer_front_anti_roll_bar_adds_understeer_only_because_tyres_are_load_sensitive() {
+    // A stiffer front bar moves more of the lateral load transfer onto the front axle. With load-sensitive tyres the more unequal
+    // front pair makes less total cornering force, so the front needs more slip angle: understeer. With linear tyres the axle's total
+    // force does not depend on how its load is split, so nothing changes. The effect grows with the square of the load transfer, so
+    // it is measured high on the skidpad (a_y 5.5 to 6.5 m/s^2), as the extra steer the truck needs there.
+    let base = box_truck().0;
+    let mut stiff_front = base.clone();
+    let zf = stiff_front.stations.iter().map(|s| s.rest_pos_m.z).fold(f64::MAX, f64::min);
+    for a in stiff_front.anti_roll.iter_mut() {
+        if (stiff_front.stations[a.left_station].rest_pos_m.z - zf).abs() < 1e-9 {
+            a.rate_n_m *= 4.0;
+        }
+    }
+    let t = tuning();
+    let extra = |k_mu: f64, k_c: f64| {
+        understeer_angle_rad(&with_load_sensitivity(&stiff_front, k_mu, k_c), &t, 5.5, 6.5)
+            - understeer_angle_rad(&with_load_sensitivity(&base, k_mu, k_c), &t, 5.5, 6.5)
+    };
+    let (d_lin, d_sens) = (extra(0.0, 0.0), extra(0.15, 0.3));
+    println!(
+        "front bar x4 adds {:.3} mrad of steer at 0.6 g with linear tyres, {:.3} mrad with load-sensitive tyres",
+        d_lin * 1e3,
+        d_sens * 1e3
+    );
+    assert!(d_sens > 0.0, "the stiffer front bar must add understeer");
+    assert!(d_lin.abs() < 0.3 * d_sens);
+}
+
+#[test]
+fn load_transfer_costs_grip_on_the_skidpad() {
+    let r = box_truck().0;
+    let w = FlatPlane::new();
+    let t = tuning();
+    let lim = |r: &PhysRig| skidpad(r, &t, &w, &mut drive(r), &PAD).unwrap().max_lateral_acc_m_s2;
+    let (a_lin, a_sens) = (lim(&r), lim(&with_load_sensitivity(&r, 0.15, 0.3)));
+    println!(
+        "skidpad limit {:.3} g with linear tyres, {:.3} g with load-sensitive tyres",
+        a_lin / scalar::G,
+        a_sens / scalar::G
+    );
+    assert!(a_sens < a_lin);
+}

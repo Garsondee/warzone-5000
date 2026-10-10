@@ -13,6 +13,7 @@ pub struct ChassisTuning {
     pub min_gas_volume_frac: Param,
     pub rolling_fade_speed_m_s: Param,
     pub slip_damping_time_s: Param,
+    pub skidpad_window_s: Param,
 }
 
 impl ChassisTuning {
