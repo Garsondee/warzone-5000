@@ -16,8 +16,10 @@
 - Contract-v0.2 merged into the build branch; tyre uses `speed_floor_m_s` and `aligning_trail_frac` from `TyreDef`.
 - Build step 3: `tyre` (`ContactElement`: patch-stretch relaxation, friction circle, rolling resistance, aligning moment) + `slip_damping_time_s` Param.
 
+- Build step 4: `hull` (6-DoF body, wrench accumulation, angular-momentum state carrying the gyroscopic term).
+
 ## In progress
-- Next PR: `hull` (6-DoF body).
+- Next PR: `wheeled` assembly (four stations on the bump strip).
 - Not yet used: `TyreDef.kappa_peak` / `alpha_peak_rad` (curve is linear to the circle cap). Watch: spin <-> patch-stretch coupling is a ~25 Hz oscillator at ~4 substeps (stable, w dt ~0.7); recheck in the assembly.
 
 ## Blocked
@@ -33,6 +35,7 @@
 - `python3 -I spikes/chassis/s1/s1.py` output in `spikes/chassis/s1/output.txt`. No Rust changed.
 
 ## Owner instructions received
+- 2026-10-10 (owner, in chat): "go ahead with the hull".
 - ARCH (2026-10-10): CCR-1..3 accepted in principle; keep tyre extras local, loaded from RON, tagged PROVISIONAL(CCR-chassis-1..3); rolling-resistance fade speed must be a `Param`.
 
 ## Handoff note (fill in when you stop)

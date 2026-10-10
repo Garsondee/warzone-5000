@@ -48,3 +48,15 @@ a 10% grade). A stretched patch is a spring: at rest it keeps its stretch, suppl
 spring-based "grab" constraint instead of teleporting a held object. The tyre holds a small residual stretch (25 mm for a 0.2 m relaxation length on 10%): that is the visible price.
 **Aligning moment.** The force acts a little behind the middle of the patch (the pneumatic trail), so a sideways-sliding tyre also tries to straighten itself; the trail shrinks to zero as the patch saturates, which is why steering goes "light" at the limit.
 **Rolling resistance.** `Crr x Fz`, opposing motion, fading to zero at standstill over a small speed so a parked truck is not shoved backwards.
+
+## The hull: a rigid body with six degrees of freedom
+**Wrench.** Every force on the hull (a strut, a tyre reaction, gravity, drag) is added to one running total during a substep, together with its turning effect about the centre of mass,
+`r x F` (the lever arm crossed with the force). A push up at the nose gives a torque about +X, which raises the nose: that is how a braking truck dives. The pair (total force, total torque) is the *wrench*.
+**Why we integrate angular momentum, not angular velocity.** A spinning body's inertia tensor turns with it. In the world frame `I_world = R I_body R^T` changes every step, so `omega` can change
+with no torque at all (the gyroscopic effect; it is why a thrown phone tumbles when spun about its middle axis). The quantity that does *not* change without torque is the angular momentum
+`L = I omega`. So the state is `L`: `L += torque dt` (exact), then `omega = I_world^-1 L`, then the orientation advances by `omega dt` (the exact exponential map on the quaternion). With no torque
+`L` stays constant to rounding error (the test checks 1e-12 over 20 s of tumbling about the unstable intermediate axis). Graphics analogy: storing `L` is like storing a world-space quantity and
+deriving the local one each frame, instead of accumulating error in a value that the frame change keeps invalidating.
+**How the tests know it is right.** Free fall: semi-implicit Euler drops exactly `g dt^2 n(n+1)/2`, which is `g t^2 / 2` plus a small `g t dt / 2` lag (0.2% after 1 s at 240 Hz). Energy: a hull
+on four undamped corner springs, heaving, pitching and rolling, keeps its oscillation energy to 0.1% over a minute. As a check that the test has teeth, swapping to plain (explicit) Euler makes the
+same test fail by a factor of about 3e8.
