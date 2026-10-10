@@ -261,3 +261,68 @@ fn designs_the_tracks_cannot_honour_are_rejected_with_a_reason() {
     d.powertrain.steering_unit = None;
     assert!(reason(&d, &x0).contains("steering_unit"));
 }
+
+mod render {
+    use super::*;
+    use w5k_contract::render::NodeRole;
+    use w5k_forge::render::render_rig;
+
+    #[test]
+    fn the_tracked_render_rig_validates_and_its_joint_layout_matches_the_rig() {
+        let (_, _, c) = built();
+        let rr = render_rig(&c.rig, c.hull_size_m);
+        rr.validate().unwrap();
+        let names = c.rig.joint_names();
+        assert_eq!(rr.joint_count, names.len());
+        for n in &rr.nodes {
+            if let Some(j) = n.joint {
+                let (station, kind) = n.name.rsplit_once('.').unwrap();
+                let want = if kind == "wheel" { format!("{station}.spin") } else { format!("{station}.{kind}") };
+                assert_eq!(names[j.index], want, "node {}", n.name);
+            }
+        }
+    }
+
+    #[test]
+    fn track_runs_follow_the_loop_order_and_the_belt_numbers() {
+        let (_, x, c) = built();
+        let th = x.tracked.as_ref().unwrap().belt_thickness_m.v;
+        let rig = &c.rig;
+        let rr = render_rig(rig, c.hull_size_m);
+        assert_eq!(rr.track_runs.len(), 2);
+        let names = rig.joint_names();
+        for (run, t) in rr.track_runs.iter().zip(&rig.tracks) {
+            assert_eq!(run.wheels.len(), t.stations.len(), "every wheel of the loop, in loop order");
+            assert_eq!(run.sprocket, 0);
+            assert_eq!(names[run.sprocket_joint], format!("{}.spin", rig.stations[t.sprocket].name));
+            assert!(
+                (f64::from(run.links) * t.pitch_m - t.belt_length_m).abs() <= 0.5 * t.pitch_m,
+                "links close the loop to within one pitch"
+            );
+            assert_eq!(run.direction, -1, "a front sprocket: the top run runs against the loop order");
+            for (w, &i) in run.wheels.iter().zip(&t.stations) {
+                let s = &rig.stations[i];
+                let want =
+                    if s.wheel.kind == WheelKind::Sprocket { s.wheel.radius_m } else { s.wheel.radius_m + 0.5 * th };
+                assert!((w.radius_m - want).abs() < 1e-12, "{}", s.name);
+                assert_eq!(rr.nodes[w.node].name, format!("{}.wheel", s.name));
+            }
+            assert_eq!(rr.nodes[run.node].role, NodeRole::Track);
+        }
+    }
+
+    #[test]
+    fn wheel_meshes_agree_with_the_rig_radii_and_the_contacts_include_one_entry_per_belt_sample() {
+        let (_, _, c) = built();
+        let rig = &c.rig;
+        let rr = render_rig(rig, c.hull_size_m);
+        for s in &rig.stations {
+            let m = rr.meshes.iter().find(|m| m.name == format!("{}.rim", s.name)).unwrap();
+            let r = m.positions.iter().map(|p| scalar::hypot(f64::from(p[1]), f64::from(p[2]))).fold(0.0, f64::max);
+            assert!((r - s.wheel.radius_m).abs() < 1e-3, "{}", s.name);
+        }
+        let samples: usize = rig.tracks.iter().map(|t| usize::from(t.samples)).sum();
+        assert_eq!(rig.contact_names().len(), samples);
+        assert!(rig.contact_names().iter().all(|n| n.starts_with("track_")));
+    }
+}
