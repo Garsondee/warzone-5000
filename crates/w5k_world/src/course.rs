@@ -13,6 +13,7 @@ use w5k_contract::world::{MaterialId, PropId, PropKind, PropRef, PropShape, Worl
 use w5k_math::{scalar, Pcg32, Transform, Vec3};
 
 use crate::cliff::{switchback_path, CliffDef, SwitchbackDef};
+use crate::corrugation::{Corrugation, Ripple};
 use crate::features::{
     barricade_blocks, cell_slope, dilate, mud_mask, poisson_disc, poisson_disc_in, BarricadeDef, MudDef, RockFieldDef,
     TreesDef,
@@ -59,6 +60,24 @@ pub struct RoadDef {
     /// Zig-zag climbs up cliffs, spliced into the waypoint list.
     #[serde(default)]
     pub switchbacks: Vec<SwitchbackDef>,
+    /// Corrugation (wavelength 0.2 to 2 m, a few cm deep).
+    #[serde(default)]
+    pub washboards: Vec<RoughSectionDef>,
+    /// Whoops (wavelength 4 m or more, tenths of a metre deep).
+    #[serde(default)]
+    pub whoops: Vec<RoughSectionDef>,
+}
+
+/// A rough stretch of the road: washboard (ripples shorter than 2 m, finer than the grid, done as a query-time formula) or whoops
+/// (long swells baked into the heightfield). `amplitude_m` is peak to peak.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoughSectionDef {
+    /// Centre of the section along the road, 0 = start, 1 = finish.
+    pub at_fraction: Param,
+    pub length_m: Param,
+    pub wavelength_m: Param,
+    pub amplitude_m: Param,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -119,6 +138,16 @@ const CLIFF_LIMIT_SLACK: f64 = 1.1; // const-ok: margin so the clamp never shave
 
 /// Run-in and run-out of a switchback beyond the foot and the lip of the face, m.
 const SWITCHBACK_APPROACH_M: f64 = 8.0; // const-ok: where the zig-zag meets the ordinary road
+
+/// Shortest whoop wavelength the 1 m grid can hold (four cells), m.
+const MIN_WHOOP_WAVELENGTH_M: f64 = 4.0; // const-ok: four cells per wave is the least a bilinear grid draws as a wave
+/// Washboard wavelengths handled as a formula, m.
+const MIN_WASHBOARD_WAVELENGTH_M: f64 = 0.2; // const-ok: below this a wheel does not follow the ripples
+const MAX_WASHBOARD_WAVELENGTH_M: f64 = 2.0; // const-ok: the grid's Nyquist limit
+/// Width over which rough sections fade out beyond the road edge, m.
+const ROUGH_EDGE_M: f64 = 1.5; // const-ok: shoulder of a rough section
+/// Shortest fade at the ends of a rough section, m.
+const ROUGH_MIN_FADE_M: f64 = 2.0; // const-ok: ends of a rough section
 
 /// The profile is graded to this fraction of the stated road grade; sampled bilinearly the road can add a sliver of slope.
 const PROFILE_MARGIN: f64 = 0.9; // const-ok: safety factor on the stated grade
@@ -465,6 +494,62 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
     }
     // The centreline cells are exactly the profile (they have weight 1); keep the shoulders inside the terrain grade limit.
     limit_grades(&mut h, n, &axis_limit, &frozen);
+    // Rough sections. Whoops are long enough for the grid and are added to the heights (after the clamp: they are roughness on top of
+    // the graded road, not part of its stated grade, so the cells' limits grow by their slope). Washboard is finer than the grid and
+    // becomes a phase and weight layer evaluated per query (see `corrugation.rs`).
+    let lateral = |d: f64| 1.0 - scalar::smoothstep(w2, w2 + ROUGH_EDGE_M, d);
+    let mut corr: Option<Corrugation> = None;
+    for (kind, list) in [("whoops", &def.road.whoops), ("washboards", &def.road.washboards)] {
+        for (k, r) in list.iter().enumerate() {
+            let tag = format!("{}.road.{kind}[{k}]", def.name);
+            for (l, p) in [
+                ("at_fraction", &r.at_fraction),
+                ("length_m", &r.length_m),
+                ("wavelength_m", &r.wavelength_m),
+                ("amplitude_m", &r.amplitude_m),
+            ] {
+                p.check(&format!("{tag}.{l}"))?;
+            }
+            let lam = r.wavelength_m.v;
+            if kind == "whoops" && lam < MIN_WHOOP_WAVELENGTH_M {
+                return Err(format!("{tag}: wavelength {lam} m is below {MIN_WHOOP_WAVELENGTH_M} m, too short for the 1 m grid: use a washboard"));
+            }
+            if kind == "washboards" && !(MIN_WASHBOARD_WAVELENGTH_M..=MAX_WASHBOARD_WAVELENGTH_M).contains(&lam) {
+                return Err(format!("{tag}: wavelength {lam} m is outside {MIN_WASHBOARD_WAVELENGTH_M} to {MAX_WASHBOARD_WAVELENGTH_M} m: use whoops for longer swells"));
+            }
+            let (a, b) =
+                (r.at_fraction.v * total_arc - r.length_m.v * 0.5, r.at_fraction.v * total_arc + r.length_m.v * 0.5);
+            let fade = lam.max(ROUGH_MIN_FADE_M); // ripples fade in and out over a wavelength
+            if kind == "washboards" && corr.is_none() {
+                corr = Some(Corrugation::new(n, Vec::new()));
+            }
+            let region = corr.as_ref().map_or(0, |c| c.ripples.len()) as u8;
+            if kind == "washboards" {
+                if let Some(c) = corr.as_mut() {
+                    c.ripples.push(Ripple { wavelength_m: lam, amplitude_m: r.amplitude_m.v });
+                }
+            }
+            for c in 0..n * n {
+                if best_d[c] >= w2 + ROUGH_EDGE_M || arc[c] < a || arc[c] > b {
+                    continue;
+                }
+                let wgt = lateral(best_d[c])
+                    * scalar::smoothstep(a, a + fade, arc[c])
+                    * (1.0 - scalar::smoothstep(b - fade, b, arc[c]));
+                if wgt <= 0.0 {
+                    continue;
+                }
+                if kind == "whoops" {
+                    h[c] += wgt * r.amplitude_m.v * 0.5 * (1.0 - scalar::cos(scalar::TAU * (arc[c] - a) / lam));
+                    grade_limit[c] += r.amplitude_m.v * scalar::PI / lam;
+                } else if let Some(cc) = corr.as_mut() {
+                    cc.set(c, region, arc[c] - a, wgt);
+                    // The phase is interpolated between nodes whose road distances may differ by up to a diagonal step.
+                    grade_limit[c] += r.amplitude_m.v * scalar::PI / lam * std::f64::consts::SQRT_2;
+                }
+            }
+        }
+    }
     let road: Vec<(f64, f64, f64)> =
         pts.iter().zip(&y).map(|(&(i, j), &yy)| (i * CELL_M - half, j * CELL_M - half, yy)).collect();
 
@@ -519,6 +604,9 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
     }
     let heights: Vec<f32> = h.iter().map(|&v| v as f32).collect();
     let mut world = GridWorld::from_arrays(n, heights, splat.clone(), materials);
+    if let Some(c) = corr {
+        world.set_corrugation(c);
+    }
 
     // 3. Props.
     let mut props: Vec<PropRef> = Vec::new();
@@ -623,8 +711,8 @@ mod tests {
         CourseDef::from_ron(include_str!("../../../content/world/courses/slice.ron")).expect("slice.ron parses")
     }
 
-    const GOLDEN_RIDGE_HASH: u64 = 0xd12f_8246_c76a_0341;
-    const GOLDEN_SLICE_HASH: u64 = 0xf30c_bc94_ccbc_4e71;
+    const GOLDEN_RIDGE_HASH: u64 = 0xb275_51a9_3685_9f48;
+    const GOLDEN_SLICE_HASH: u64 = 0xcf18_752c_43dd_a432;
 
     fn hash(c: &Course) -> u64 {
         let mut s = StateHasher::new();
@@ -635,6 +723,7 @@ mod tests {
                 s.write_u8(w.splat_at_node(i, j));
             }
         }
+        s.write_u64(w.corrugation_hash());
         for p in w.props() {
             s.write_u32(p.id.0);
             s.write_vec3(p.transform.pos);
@@ -699,7 +788,7 @@ mod tests {
     #[test]
     fn road_cells_are_road_material_and_start_and_finish_are_where_the_waypoints_say() {
         let d = def();
-        let c = generate(&d).expect("course");
+        let c = smooth_slice(); // the profile is the graded road; rough sections ride on top of it
         for &(x, z, y) in &c.road {
             let m = c.world.material_id_at(x, z);
             assert!(
@@ -1049,5 +1138,139 @@ mod tests {
         let (a, b) = (generate(&d).expect("a"), generate(&d).expect("b"));
         assert_eq!(hash(&a), hash(&b));
         assert_eq!(hash(&a), GOLDEN_RIDGE_HASH, "ridge hash was {:#018x}", hash(&a));
+    }
+
+    /// The slice course without its rough sections: the same ground, no ripples.
+    fn smooth_slice() -> Course {
+        let mut d = def();
+        d.road.whoops.clear();
+        d.road.washboards.clear();
+        generate(&d).expect("smooth slice")
+    }
+
+    /// Centreline sample of the slice road at road distance `s_m`, with the unit direction of travel.
+    fn road_at(c: &Course, s_m: f64) -> ((f64, f64), (f64, f64)) {
+        let mut acc = 0.0;
+        for w in c.road.windows(2) {
+            let len = scalar::hypot(w[1].0 - w[0].0, w[1].1 - w[0].1);
+            if acc + len >= s_m {
+                let f = (s_m - acc) / len;
+                return (
+                    (w[0].0 + (w[1].0 - w[0].0) * f, w[0].1 + (w[1].1 - w[0].1) * f),
+                    ((w[1].0 - w[0].0) / len, (w[1].1 - w[0].1) / len),
+                );
+            }
+            acc += len;
+        }
+        panic!("beyond the end of the road");
+    }
+
+    fn road_length(c: &Course) -> f64 {
+        c.road.windows(2).map(|w| scalar::hypot(w[1].0 - w[0].0, w[1].1 - w[0].1)).sum()
+    }
+
+    #[test]
+    fn whoops_have_the_stated_wavelength_and_peak_to_peak_amplitude() {
+        let d = def();
+        let (with, without) = (generate(&d).expect("slice"), smooth_slice());
+        let r = &d.road.whoops[0];
+        let start = r.at_fraction.v * road_length(&with) - r.length_m.v * 0.5;
+        let (lam, amp) = (r.wavelength_m.v, r.amplitude_m.v);
+        let diff = |s: f64| {
+            let (p, _) = road_at(&with, s);
+            with.world.height_m(p.0, p.1) - without.world.height_m(p.0, p.1)
+        };
+        // Mid-section (full weight): crest half a wavelength after a trough, spaced one wavelength apart.
+        let s0 = start + 3.0 * lam;
+        for k in 0..3 {
+            let t = s0 + k as f64 * lam;
+            assert!(diff(t).abs() < 0.15 * amp, "trough at {t}: {}", diff(t));
+            assert!(
+                (diff(t + lam * 0.5) - amp).abs() < 0.15 * amp,
+                "crest at {}: {}",
+                t + lam * 0.5,
+                diff(t + lam * 0.5)
+            );
+        }
+    }
+
+    #[test]
+    fn washboard_ripples_have_the_stated_wavelength_and_amplitude() {
+        let d = def();
+        let c = generate(&d).expect("slice");
+        let r = &d.road.washboards[0];
+        let mid = r.at_fraction.v * road_length(&c);
+        let ((x, z), dir) = road_at(&c, mid);
+        let lam = r.wavelength_m.v;
+        let steps = 4000;
+        let hs: Vec<f64> = (0..steps)
+            .map(|k| {
+                let s = k as f64 * lam * 5.0 / steps as f64;
+                c.world.height_m(x + dir.0 * s, z + dir.1 * s)
+            })
+            .collect();
+        // Remove the slow trend of the road under the ripples with a one-wavelength running mean.
+        let win = (steps as f64 / 5.0) as usize;
+        let ripple: Vec<f64> =
+            (win..steps - win).map(|k| hs[k] - hs[k - win / 2..k + win / 2].iter().sum::<f64>() / win as f64).collect();
+        let (lo, hi) = ripple.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(l, h), &v| (l.min(v), h.max(v)));
+        assert!(
+            (hi - lo - r.amplitude_m.v).abs() < 0.3 * r.amplitude_m.v,
+            "peak to peak {} vs stated {}",
+            hi - lo,
+            r.amplitude_m.v
+        );
+        let crossings = ripple.windows(2).filter(|w| w[0] < 0.0 && w[1] >= 0.0).count() as f64;
+        let span = (ripple.len() as f64) * lam * 5.0 / steps as f64;
+        assert!((span / crossings - lam).abs() < 0.15 * lam, "wavelength {} vs stated {lam}", span / crossings);
+    }
+
+    #[test]
+    fn washboard_normal_is_the_gradient_of_its_height() {
+        let d = def();
+        let c = generate(&d).expect("slice");
+        let r = &d.road.washboards[0];
+        let eps = 1e-5;
+        for k in 0..200 {
+            let ((x, z), dir) = road_at(&c, r.at_fraction.v * road_length(&c) + (k as f64 - 100.0) * 0.137);
+            let (x, z) = (x + 0.3 * dir.1, z - 0.3 * dir.0 + 1e-3 * k as f64);
+            let gx = (c.world.height_m(x + eps, z) - c.world.height_m(x - eps, z)) / (2.0 * eps);
+            let gz = (c.world.height_m(x, z + eps) - c.world.height_m(x, z - eps)) / (2.0 * eps);
+            let n = Vec3::new(-gx, 1.0, -gz).normalized_or_zero();
+            assert!(
+                (c.world.normal(x, z) - n).length() < 1e-4,
+                "normal disagrees with the height gradient at ({x}, {z})"
+            );
+        }
+    }
+
+    #[test]
+    fn rough_sections_leave_ground_away_from_the_road_untouched() {
+        let d = def();
+        let (with, without) = (generate(&d).expect("slice"), smooth_slice());
+        let mut rng = Pcg32::new(21, 21);
+        let mut checked = 0;
+        for _ in 0..4000 {
+            let (x, z) = (rng.range_f64(-190.0, 190.0), rng.range_f64(-190.0, 190.0));
+            let near = with.road.iter().map(|p| scalar::hypot(p.0 - x, p.1 - z)).fold(f64::INFINITY, f64::min);
+            if near > d.road.width_m.v * 0.5 + 3.0 {
+                assert!(
+                    (with.world.height_m(x, z) - without.world.height_m(x, z)).abs() < 1e-9,
+                    "ground changed at ({x}, {z})"
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 3000);
+    }
+
+    #[test]
+    fn a_whoop_too_short_for_the_grid_or_a_washboard_too_long_is_refused() {
+        let mut d = def();
+        d.road.whoops[0].wavelength_m = Param::spec(2.0, "test");
+        assert!(generate(&d).err().expect("refused").contains("use a washboard"));
+        let mut d = def();
+        d.road.washboards[0].wavelength_m = Param::spec(5.0, "test");
+        assert!(generate(&d).err().expect("refused").contains("use whoops"));
     }
 }
