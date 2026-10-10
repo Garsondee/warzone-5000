@@ -35,11 +35,26 @@ pub struct TrackSample {
     inflow_x_m: f64,
     inflow_y_m: f64,
     sinkage_m: f64,
+    /// Slow average of the slip velocity (the damping acts on the part that changes quickly), and whether it has been started.
+    u_lp_x: f64,
+    u_lp_y: f64,
+    primed: bool,
 }
 
 impl TrackSample {
     pub fn new(geom: SampleGeom, tuning: Tuning) -> TrackSample {
-        TrackSample { geom, tuning, jx_m: 0.0, jy_m: 0.0, inflow_x_m: 0.0, inflow_y_m: 0.0, sinkage_m: 0.0 }
+        TrackSample {
+            geom,
+            tuning,
+            jx_m: 0.0,
+            jy_m: 0.0,
+            inflow_x_m: 0.0,
+            inflow_y_m: 0.0,
+            sinkage_m: 0.0,
+            u_lp_x: 0.0,
+            u_lp_y: 0.0,
+            primed: false,
+        }
     }
 
     /// The shear displacement of the neighbouring sample the shoe is arriving from (zero at the ends of the footprint).
@@ -143,20 +158,25 @@ impl ContactElement for TrackSample {
         self.jy_m = scalar::flush_tiny(jy);
         // The state is the displacement at the sample's exit face; the stress belongs to the cell centre, half a cell upstream. With a belt
         // moving (advection dominates) take the mean of entry and exit faces, with a stopped belt the sample's own value.
-        let theta = input.surface_speed_m_s.abs() / (input.surface_speed_m_s.abs() + t.damping_speed_m_s);
+        let theta = input.surface_speed_m_s.abs() / (input.surface_speed_m_s.abs() + t.advection_speed_m_s);
         let jcx = self.jx_m - 0.5 * theta * (self.jx_m - self.inflow_x_m); // const-ok: cell-centre mean
         let jcy = self.jy_m - 0.5 * theta * (self.jy_m - self.inflow_y_m); // const-ok: cell-centre mean
         let s = scalar::hypot(jcx, jcy) / k;
         let spring = tau_max * soil::saturation_over_s(s) / k;
         let (mut tx, mut ty) = (spring * jcx, spring * jcy);
-        // Creep damping: a viscous stress sized from the shear stiffness so that a parked tank is critically damped, fading out above u_c.
-        let un = scalar::hypot(ux, uy);
+        // Damping of the shear spring: a viscous stress sized so a parked tank is critically damped, acting only on the part of the slip velocity
+        // that changes faster than `damping_time_s`. A steady slip (a thrust-slip curve, a steady turn) is untouched; ringing at 5 Hz is not.
+        if !self.primed {
+            (self.u_lp_x, self.u_lp_y, self.primed) = (ux, uy, true);
+        }
+        let w = -scalar::exp_m1(-input.dt_s / t.damping_time_s);
+        self.u_lp_x += (ux - self.u_lp_x) * w;
+        self.u_lp_y += (uy - self.u_lp_y) * w;
         if p > 0.0 && tau_max > 0.0 {
             let mu_eff = tau_max / p;
             let kappa = 2.0 * t.damping_ratio * scalar::sqrt(mu_eff / (t.gravity_m_s2 * k)); // const-ok: critical damping 2 zeta sqrt(k m)
-            let fade = 1.0 / (1.0 + (un / t.damping_speed_m_s) * (un / t.damping_speed_m_s));
-            tx += p * kappa * ux * fade;
-            ty += p * kappa * uy * fade;
+            tx += p * kappa * (ux - self.u_lp_x);
+            ty += p * kappa * (uy - self.u_lp_y);
         }
         let tn = scalar::hypot(tx, ty);
         if tn > tau_max {
@@ -188,5 +208,6 @@ impl ContactElement for TrackSample {
         self.inflow_x_m = 0.0;
         self.inflow_y_m = 0.0;
         self.sinkage_m = 0.0;
+        self.primed = false;
     }
 }

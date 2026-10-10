@@ -4,6 +4,7 @@
 //! `docs/theory/tracks.md`. Only lane TRACKS edits this crate (`docs/swarm/ownership.toml`).
 
 pub mod gear;
+pub mod plan;
 pub mod reference;
 pub mod sample;
 pub mod soil;
