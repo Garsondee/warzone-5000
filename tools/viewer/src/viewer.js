@@ -1,8 +1,11 @@
 // Reference viewer core: a pure function of (rig, replay, t). No physics, no network.
 import * as THREE from 'three';
+import { linkFrames, linkMatrix } from './tracks.js';
 
 const V = (o) => new THREE.Vector3(o.x, o.y, o.z);
 const Q = (o) => new THREE.Quaternion(o.x, o.y, o.z, o.w);
+
+const LIGHT_LINK = new THREE.Color(1, 1, 1), DARK_LINK = new THREE.Color(0.8, 0.8, 0.8); // multipliers of the track material's colour
 
 export function buildRig(rig) {
   const nodes = rig.nodes.map((n) => {
@@ -19,10 +22,11 @@ export function buildRig(rig) {
   const mats = rig.material_slots.map((s) => new THREE.MeshStandardMaterial({ color: KIND_COLOUR[s.kind] ?? 0x808080, roughness: 0.8, metalness: 0.1 }));
   const paint = rig.material_slots.map((s, i) => (s.kind === 'Paint' ? mats[i] : null)).filter(Boolean);
   let tris = 0;
-  const meshes = [];
+  const meshes = [], belts = [];
+  const runs = rig.track_runs ?? []; // a track belt's link mesh is ONE link at the origin: drawn as instances along the belt's path (poseBelts)
   // Meshes come as JSON (lists of [x, y, z]) or as flat typed arrays (a packed skin); both are accepted.
   const flat = (a) => (ArrayBuffer.isView(a) ? a : a.flat());
-  for (const m of rig.meshes) {
+  rig.meshes.forEach((m, mi) => {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(flat(m.positions), 3));
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(flat(m.normals), 3));
@@ -31,11 +35,17 @@ export function buildRig(rig) {
     geo.setAttribute('aEdge', new THREE.Float32BufferAttribute(m.edge.length ? m.edge : new Float32Array(n), 1));
     geo.setAttribute('aCavity', new THREE.Float32BufferAttribute(m.cavity.length ? m.cavity : new Float32Array(n), 1));
     geo.setIndex(ArrayBuffer.isView(m.indices) ? new THREE.BufferAttribute(m.indices, 1) : m.indices);
-    const mesh = new THREE.Mesh(geo, mats[m.material_slot]);
+    const run = runs.find((r) => r.link_mesh === mi);
+    const mesh = run ? new THREE.InstancedMesh(geo, mats[m.material_slot], run.links) : new THREE.Mesh(geo, mats[m.material_slot]);
+    if (run) { // the instances move, the geometry's own bounds do not
+      mesh.frustumCulled = false;
+      for (let k = 0; k < run.links; k++) mesh.setColorAt(k, k % 2 ? DARK_LINK : LIGHT_LINK); // worn and clean pads alternate: the pattern is what shows the belt turning
+      belts.push({ run, mesh });
+    }
     nodes[m.node].g.add(mesh);
     meshes.push(mesh);
-    tris += m.indices.length / 3;
-  }
+    tris += m.indices.length / 3; // as authored: a belt's link counts once, however many instances are drawn
+  });
   // Height above the ground in the design pose (every joint at zero): the splash term of the weathering reads it.
   nodes.forEach((n) => { n.g.position.copy(n.restPos); n.g.quaternion.copy(n.restQuat); });
   root.updateMatrixWorld(true);
@@ -44,7 +54,9 @@ export function buildRig(rig) {
   const ground = Math.min(...ys.map((y) => y.reduce((a, b) => Math.min(a, b), Infinity)));
   meshes.forEach((mesh, k) => mesh.geometry.setAttribute('aHeight', new THREE.Float32BufferAttribute(ys[k].map((y) => y - ground), 1)));
   const box = new THREE.Box3().setFromObject(root);
-  return { root, nodes, triangles: tris, paint, radius: box.getBoundingSphere(new THREE.Sphere()).radius };
+  const built = { root, nodes, triangles: tris, paint, belts, radius: box.getBoundingSphere(new THREE.Sphere()).radius };
+  if (belts.length) poseBelts(built, []); // the links at rest
+  return built;
 }
 
 // Forward kinematics: rest pose, then the joint coordinate (rotation or translation along the axis in the parent frame).
@@ -59,6 +71,24 @@ export function poseRig(built, joints) {
     const axis = V(j.axis);
     if (j.kind === 'Revolute') n.g.quaternion.premultiply(q.setFromAxisAngle(axis, x));
     else n.g.position.addScaledVector(axis, x);
+  }
+  if (built.belts.length) poseBelts(built, joints);
+}
+
+// Each belt's links ride the taut band round its wheels as they stand now (the suspension moves them), advanced by the sprocket's spin.
+const _inv = new THREE.Matrix4(), _v = new THREE.Vector3();
+function poseBelts(built, joints) {
+  built.root.updateMatrixWorld(true);
+  for (const b of built.belts) {
+    const { run, mesh } = b;
+    _inv.copy(built.nodes[run.node].g.matrixWorld).invert();
+    const centres = run.wheels.map((w) => _v.setFromMatrixPosition(built.nodes[w.node].g.matrixWorld).applyMatrix4(_inv).toArray()); // [x, y, z] in the Track node's frame
+    const x = centres.reduce((a, c) => a + c[0], 0) / centres.length; // the belt's centre line
+    const out = linkFrames(run, centres.map(([, y, z]) => ({ z, y })), joints[run.sprocket_joint] ?? 0);
+    if (out.error) continue; // a belt that cannot be built keeps its last shape
+    for (let k = 0; k < run.links; k++) linkMatrix(mesh.instanceMatrix.array, 16 * k, out.frames, k, x, out.mirrored);
+    mesh.instanceMatrix.needsUpdate = true;
+    Object.assign(b, { length_m: out.length, skipped: out.skipped });
   }
 }
 
