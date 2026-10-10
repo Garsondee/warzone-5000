@@ -51,6 +51,26 @@
             prov: Estimate,
             src: "archetype: light reconnaissance 4x4 of the 1940s-60s jeep and Land-Rover class; design-sheet estimate, replaced by dossier numbers when VALIDATION delivers them",
         ),
+        centre_diff: (
+            kind: Open,
+            bias: (
+                v: 1.0,
+                lo: Some(1.0),
+                hi: Some(8.0),
+                prov: Estimate,
+                src: "an open differential: the bias is unused",
+            ),
+        ),
+        axle_diff: (
+            kind: Open,
+            bias: (
+                v: 1.0,
+                lo: Some(1.0),
+                hi: Some(8.0),
+                prov: Estimate,
+                src: "an open differential: the bias is unused",
+            ),
+        ),
     ),
     brake: (
         cooling_w_k: (
@@ -88,6 +108,22 @@
             prov: Estimate,
             src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
         ),
+        axle_torque_nm: [
+            (
+                v: 1780.0,
+                lo: Some(1246.0),
+                hi: Some(2492.0),
+                prov: Estimate,
+                src: "derived once from the design deceleration of 0.65 g on the total mass and the front share, now the authored spec (rounded to 10 N m); archetype estimate, replaced by the dossier\'s brake figures",
+            ),
+            (
+                v: 1190.0,
+                lo: Some(833.0),
+                hi: Some(1666.0),
+                prov: Estimate,
+                src: "derived once from the design deceleration of 0.65 g on the total mass and the front share, now the authored spec (rounded to 10 N m); archetype estimate, replaced by the dossier\'s brake figures",
+            ),
+        ],
     ),
     aero_cop_height_m: (
         v: 0.2,
