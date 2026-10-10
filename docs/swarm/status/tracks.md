@@ -1,13 +1,15 @@
 # Status: TRACKS
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/tracks/settling | **Contract pinned:** contract-v0.2 (0.2.0) | **Phase:** settling (PR 1 of 4), then building
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/tracks/contact | **Contract pinned:** contract-v0.2 (0.2.0) | **Phase:** building (PR 2 of 4)
 
 ## Done
 - Spikes S3 and S4 written up and passing their kill criteria without tuning: `docs/lanes/tracks/spike-s3.md` (pivot +5.0% of `mu W L / 4`), `spike-s4.md` (drawbar thrust within 1.4% of the closed form, three soils with n != 1, 218 ns per sample).
 - PR 1 (settling): soil laws (`soil.rs`), tuning and reference soils as RON (`content/physics/tracks/`), `w5k tracks bench plate`, design note with CCRs (`docs/lanes/tracks/design-note.md`), theory note (`docs/theory/tracks.md`).
 
+- PR 2 (`lane/tracks/contact`, stacked on PR 116): `TrackSample: ContactElement` and `TrackedRunningGear` with seven oracle tests (`tests/contact.rs`).
+
 ## In progress
-- PR 2 `lane/tracks/contact`: `TrackSample: ContactElement` + `TrackedRunningGear`. PR 3: plan-view skid model + the S3/S4 tests + `w5k tracks bench thrust|pivot`. PR 4: belly drag, the ladder bench, track-vs-tyre float test. (Split because the kernel is over 400 non-test lines; the working code exists and is being cut into reviewable pieces.)
+- PR 3: plan-view skid model + the S3/S4 tests + `w5k tracks bench thrust|pivot`. PR 4: belly drag, the ladder bench, track-vs-tyre float test. (Split because the kernel is over 400 non-test lines; the working code exists and is being cut into reviewable pieces.)
 
 ## Blocked
 - Nothing. Published-number checks (Wong's examples) wait on card C-017.
