@@ -46,6 +46,9 @@ Design note: `docs/lanes/forge/tracked-design-note.md` (stations and loop order,
 ## Tracked T3 (render rig)
 `render.rs` now builds the tracked render rig too (`tracked_render_rig`, dispatched by `render_rig` when the rig has tracks): `hull > travel > wheel` for every station in `PhysRig::joint_names()` order, a `Track` node per side, and a contract-0.3 `TrackRun` per side (wheels in loop order with path radii, links = belt length / pitch, sprocket joint, direction -1 for the front sprocket). `contact_names()` has one entry per belt sample. Placeholder meshes (GEOMETRY's skin replaces them); the link mesh is ONE link at the origin of the Track node, to be instanced. **GEOMETRY / VIEWER can consume it:** `w5k_forge::compile::compile` then `w5k_forge::render::render_rig(&c.rig, c.hull_size_m)` on `carrier_tracked`. Picture: `docs/lanes/forge/media/carrier-side-view.png`, report `carrier-compile-report.txt`.
 
+## Mass as a consequence (card C-020)
+Design note: `docs/lanes/forge/mass-budget-note.md` (D2a component mass budget, D2b design audit, PR plan). Next: D2a-1.
+
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).
 
