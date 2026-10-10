@@ -8,7 +8,7 @@ use w5k_contract::testing::rigs::box_truck;
 use w5k_geo::mesh::Mesh;
 use w5k_geo::part::Part;
 use w5k_geo::truck::{utility_4x4, UtilityDims};
-use w5k_math::{Pcg32, StateHasher, Vec3};
+use w5k_math::{scalar, Pcg32, StateHasher, Vec3};
 
 fn dims_in_range(r: &mut Pcg32) -> UtilityDims {
     let mut d = UtilityDims::placeholder();
@@ -142,6 +142,7 @@ fn node_tags_cover_the_render_rig_joint_layout() {
     d.track_m = 2.0 * xs[0];
     d.wheelbase_m = 2.0 * zs[0];
     d.ground_clearance_m = phys.ride_height_m - d.height_m / 2.0;
+    d.wheel.outer_radius_m = phys.stations[0].wheel.radius_m;
     let parts = utility_4x4(&d, 1);
     let have: BTreeSet<(String, Option<u8>, String)> =
         parts.iter().map(|p| (format!("{:?}", p.role), p.station, format!("{:?}", p.side))).collect();
@@ -329,4 +330,116 @@ fn wheels_clear_the_shell_and_the_arches_open_over_every_tyre() {
         }
     }
     assert!(checked > 500);
+}
+
+// ---- the glazing lines up
+
+/// Convex hull of 2D points (Andrew's monotone chain), counter-clockwise.
+fn hull(mut p: Vec<[f64; 2]>) -> Vec<[f64; 2]> {
+    p.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
+    p.dedup();
+    let cross = |o: [f64; 2], a: [f64; 2], b: [f64; 2]| (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    let mut h: Vec<[f64; 2]> = Vec::new();
+    for pass in 0..2 {
+        let start = h.len();
+        for &q in p.iter() {
+            while h.len() >= start + 2 && cross(h[h.len() - 2], h[h.len() - 1], q) <= 0.0 {
+                h.pop();
+            }
+            h.push(q);
+        }
+        h.pop();
+        if pass == 0 {
+            p.reverse();
+        }
+    }
+    h
+}
+
+#[test]
+fn the_front_side_window_leans_at_the_same_angle_as_the_windscreen() {
+    let parts = utility_4x4(&UtilityDims::placeholder(), 1);
+    let side_view = |name: &str| -> Vec<[f64; 2]> {
+        parts.iter().find(|p| p.name == name).unwrap().in_hull_frame().v.iter().map(|v| [v.z, v.y]).collect()
+    };
+    // the windscreen is a thin tilted slab: its principal axis in the side view is the slope of the roof-line ramp
+    let ws = side_view("windscreen");
+    let n = ws.len() as f64;
+    let (mz, my) = (ws.iter().map(|p| p[0]).sum::<f64>() / n, ws.iter().map(|p| p[1]).sum::<f64>() / n);
+    let (mut sxx, mut sxy, mut syy) = (0.0, 0.0, 0.0);
+    for p in &ws {
+        let (a, b) = (p[0] - mz, p[1] - my);
+        sxx += a * a;
+        sxy += a * b;
+        syy += b * b;
+    }
+    let ramp_deg = (0.5 * scalar::atan2(2.0 * sxy, sxx - syy)).to_degrees();
+    // the window's slanted edge: the longest hull edge that is neither horizontal nor vertical
+    let fold = |d: f64| (d.rem_euclid(180.0)).min(180.0 - d.rem_euclid(180.0)); // an edge's angle from horizontal, 0 to 90
+    let hl = hull(side_view("window_front.r"));
+    let edge_deg = (0..hl.len())
+        .map(|i| (hl[i], hl[(i + 1) % hl.len()]))
+        .map(|(a, b)| {
+            (scalar::hypot(b[0] - a[0], b[1] - a[1]), fold(scalar::atan2(b[1] - a[1], b[0] - a[0]).to_degrees()))
+        })
+        .filter(|&(len, deg)| len > 0.1 && deg > 20.0 && deg < 80.0)
+        .max_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, deg)| deg)
+        .unwrap();
+    println!("windscreen ramp {:.2} degrees from horizontal, front window edge {:.2}", fold(ramp_deg), edge_deg);
+    assert!((fold(ramp_deg) - edge_deg).abs() < 0.75, "ramp {ramp_deg}, window edge {edge_deg}");
+    // and the ramp is a plausible windscreen: between 45 and 70 degrees from horizontal
+    assert!(fold(ramp_deg) > 45.0 && fold(ramp_deg) < 70.0);
+}
+
+// ---- A10: the dimensions against the dossier
+
+/// (v, lo, hi) of a dossier quantity, read from the RON text: the row `Quantity(id: "<id>", ... param: Param(v: X, lo: Some(a), hi: Some(b), ...`.
+fn dossier(id: &str) -> (f64, Option<f64>, Option<f64>) {
+    let text = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../content/dossier/m998.ron"))
+        .expect("content/dossier/m998.ron");
+    let at = text.find(&format!("id: \"{id}\"")).unwrap_or_else(|| panic!("no dossier quantity {id}"));
+    let chunk = &text[at..at + text[at..].find("notes:").expect("a quantity ends with notes")];
+    let param = &chunk[chunk.find("Param(").expect("a quantity has a Param")..];
+    let number_after = |key: &str| -> Option<f64> {
+        let start = param.find(key)? + key.len();
+        let tail = &param[start..];
+        let end = tail.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-')).unwrap_or(tail.len());
+        tail[..end].parse().ok()
+    };
+    (number_after("v: ").expect("a Param has a value"), number_after("lo: Some("), number_after("hi: Some("))
+}
+
+#[test]
+fn utility_4x4_dimensions_match_the_m998_dossier_within_3_percent() {
+    let d = UtilityDims::placeholder();
+    let parts = utility_4x4(&d, 1);
+    let (lo, hi) = parts
+        .iter()
+        .filter(|p| p.role == NodeRole::Hull && !p.fitting)
+        .map(|p| p.in_hull_frame().bounds())
+        .fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(a, b), (l, u)| (a.min(l), b.max(u)));
+    let hubs: Vec<Vec3> =
+        parts.iter().filter(|p| p.role == NodeRole::Wheel && p.name.starts_with("rim")).map(|p| p.pose.pos).collect();
+    let wheelbase =
+        hubs.iter().map(|h| h.z).fold(f64::MIN, f64::max) - hubs.iter().map(|h| h.z).fold(f64::MAX, f64::min);
+    // definitions: length and width over the hull parts without fittings (bumpers and arch lips included, mirrors excluded); height from the
+    // ground to the roof (the hull box's top: antenna and hatch excluded); wheelbase hub to hub; clearance from the ground to the underside
+    let measured = [
+        ("static.length_m", hi.z - lo.z),
+        ("static.width_m", hi.x - lo.x),
+        ("static.height_m", d.ride_height_m() + hi.y),
+        ("static.wheelbase_m", wheelbase),
+        ("static.ground_clearance_m", d.ride_height_m() + lo.y),
+    ];
+    for (id, got) in measured {
+        let (v, band_lo, band_hi) = dossier(id);
+        let within_3 = (got / v - 1.0).abs() <= 0.03;
+        let in_band = matches!((band_lo, band_hi), (Some(a), Some(b)) if got >= a && got <= b);
+        println!(
+            "{id}: generated {got:.4} m, dossier {v:.4} m ({:+.2}%), band {band_lo:?}..{band_hi:?}",
+            (got / v - 1.0) * 100.0
+        );
+        assert!(within_3 || in_band, "{id}: generated {got}, dossier {v}");
+    }
 }

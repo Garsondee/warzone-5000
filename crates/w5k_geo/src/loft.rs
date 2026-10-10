@@ -21,8 +21,8 @@ pub fn rect_ring(w_m: f64, h_m: f64, y_m: f64) -> Vec<[f64; 2]> {
 /// (the loop distance shrinks to a third of the side on a short side), so rings of different sizes loft together.
 pub fn bevel_ring(w_m: f64, h_m: f64, y_m: f64, corner_m: f64, band_m: f64) -> Vec<[f64; 2]> {
     let (x, h) = (w_m / 2.0, h_m / 2.0);
-    let k = corner_m.min(x).min(h);
-    // corner points, in the order of `rect_ring`: -x -y, -x +y, +x +y, +x -y, each cut into two
+    let k = corner_m.min(0.45 * x).min(0.45 * h); // const-ok: a chamfer never takes more than 45% of a half side, so no side collapses to a point
+                                                  // corner points, in the order of `rect_ring`: -x -y, -x +y, +x +y, +x -y, each cut into two
     let sides = [
         ([-x, y_m - h + k], [-x, y_m + h - k]),
         ([-x + k, y_m + h], [x - k, y_m + h]),
@@ -308,4 +308,52 @@ pub fn loft_beveled(sections: &[Section], bevel_m: f64, band_m: f64, crease_z: &
         out.push(Section { z_m: b.z_m, ring: inset_ring(&b.ring, inner) });
     }
     loft(&out, max_step_m)
+}
+
+/// The corner polygon with each corner cut by `chamfer_m` (limited to 0.45 of either edge): the plain outline of a rounded-corner shape.
+pub fn chamfer_polygon(poly: &[[f64; 2]], chamfer_m: f64) -> Vec<[f64; 2]> {
+    let n = poly.len();
+    let dist = |a: [f64; 2], b: [f64; 2]| w5k_math::scalar::hypot(b[0] - a[0], b[1] - a[1]);
+    let mut out = Vec::new();
+    for i in 0..n {
+        let (p, q, r) = (poly[(i + n - 1) % n], poly[i], poly[(i + 1) % n]);
+        let c = chamfer_m.min(0.45 * dist(p, q)).min(0.45 * dist(q, r)); // const-ok: the two cuts of an edge never overlap
+        let (lp, lr) = (dist(q, p), dist(q, r));
+        out.push([q[0] + (p[0] - q[0]) / lp * c, q[1] + (p[1] - q[1]) / lp * c]);
+        out.push([q[0] + (r[0] - q[0]) / lr * c, q[1] + (r[1] - q[1]) / lr * c]);
+    }
+    out
+}
+
+/// Sweep a small profile around a closed, planar, convex outline (a window frame, a gasket): `profile` points are (s, t), s outward in the
+/// plane of the outline from the outline itself, t along `normal`. At each corner the profile is mitered, so the frame has the same width
+/// on every side. The result is a closed ring of material with no end caps.
+pub fn sweep_loop(outline: &[Vec3], normal: Vec3, profile: &[[f64; 2]]) -> Mesh {
+    let n = normal.normalized_or_zero();
+    let count = outline.len();
+    // wind the outline counter-clockwise about the normal so that `edge x normal` points outward
+    let turn: f64 = (0..count).map(|i| n.dot(outline[i].cross(outline[(i + 1) % count]))).sum();
+    let pts: Vec<Vec3> = if turn >= 0.0 { outline.to_vec() } else { outline.iter().rev().copied().collect() };
+    let m = profile.len() as u32;
+    let mut mesh = Mesh::default();
+    for i in 0..count {
+        let (p, q, r) = (pts[(i + count - 1) % count], pts[i], pts[(i + 1) % count]);
+        let (o1, o2) = ((q - p).normalized_or_zero().cross(n), (r - q).normalized_or_zero().cross(n));
+        let b = (o1 + o2).normalized_or_zero();
+        let miter = 1.0 / b.dot(o1).max(0.3); // const-ok: caps the miter length at a corner sharper than about 70 degrees
+        for &[s, t] in profile {
+            mesh.v.push(q + b * (s * miter) + n * t);
+        }
+    }
+    let c = count as u32;
+    for i in 0..c {
+        for k in 0..m {
+            let (a, b) = (i * m + k, i * m + (k + 1) % m);
+            let (a2, b2) = (((i + 1) % c) * m + k, ((i + 1) % c) * m + (k + 1) % m);
+            mesh.t.push([a, b, b2]);
+            mesh.t.push([a, b2, a2]);
+        }
+    }
+    mesh.orient_outward();
+    mesh
 }

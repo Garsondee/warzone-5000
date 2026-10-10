@@ -1,6 +1,6 @@
 # Status: GEOMETRY
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/geometry/hull (from integration; settling #25, build #32, truck #34 and export #35 are merged) | **Contract pinned:** `contract-v0.1` = commit `f8f5e5d` | **Phase:** settling round, continuing into the build (owner instruction in force: do not wait for review)
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/geometry/silhouette (from integration; settling #25, build #32, truck #34, export #35, hull #44-#46 are merged) | **Contract pinned:** `contract-v0.1` = commit `f8f5e5d` | **Phase:** settling round, continuing into the build (owner instruction in force: do not wait for review)
 
 ## Done
 - Settling PR: spike S-G (kernel in `crates/w5k_geo/src/{mesh,edge,bvh,cavity}.rs`, tests `tests/spike_g.rs`, report `docs/lanes/geometry/spike-g.md`, image `media/s-g.png`), design note, CCR text (`docs/swarm/requests/geometry-ccr-shapes-and-tracks.md`), theory starter.
@@ -13,6 +13,8 @@
 - Export PR (this branch): `export.rs` (RenderRig in the stand-in layout, normals smoothed within 40 degrees and split beyond, f32 once; binary glTF with `COLOR_0` = edge, cavity, 0), `w5k geometry export truck`, dimension table, tests (rig validates, flags in 0..1, 28.9k triangles of 40k, wheel meshes centred on their hubs, GLB chunks). Subdivision edge 0.3 m and 48-gon wheels at detail 1 (0.2 m gave 46k triangles); golden re-blessed for that.
 
 - Hull PR (this branch), owner feedback "windows, mirrors and bumper float; mud guards are slabs": the hull is ONE lofted shell with the wheel arches cut into the section and a swept lip around each arch; every fitting is anchored to a surface of the shell and overlaps it (new tests: `every_fitting_is_embedded_in_the_hull_or_in_a_fitting_that_is`, `plates_and_glass_hug_the_shell_within_3_cm`, `wheels_clear_the_shell_and_the_arches_open_over_every_tyre`); `loft_beveled` (chamfered ends, vertex rows beside hard edges), `polygon_ring`, `sweep_arc`, `triangulate_ring` (non-convex caps); trapezoid side panes that follow the A-pillar; grille slats, bezels, sill steps, roof hatch, antenna, pintle. 34.1k triangles of 40k. Pictures `media/truck-*-look.png`; `--view` and `--size` options on `sheet`. Golden re-blessed (new hull).
+
+- Silhouette PR (this branch), owner feedback "improve the silhouette; the windows need to conform better; the front side window and the front top must line up": glass as panel + raised mitered frame on the leaning (tumblehome) walls; the front window's slanted edge is the windscreen ramp offset into the cab (test: both 57.8 degrees); steeper windscreen; approach and departure ramps (`yo`), sloped hood nose, tucked sill, sloped cover; lips end at the local underside; M998-class dimensions from the dossier and A10 for the HMMWV (`utility_4x4_dimensions_match_the_m998_dossier_within_3_percent`); `sweep_loop` and `chamfer_polygon` kernel functions; perspective-correct depth in the rasteriser (a picture-tool bug that made the shell speckle through glass). About 36k triangles of 40k. Pictures `media/truck-*-look.png`.
 
 ## In progress
 - Nothing blocking: M113 next (sloped hull, road wheels, sprocket, idler, track run and link: A10 A11), after FORGE/ARCH answer on the CCRs.
