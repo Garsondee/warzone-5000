@@ -1,0 +1,26 @@
+// Stand-in running gear of the tracked carrier (one side, the right; the left is its mirror), for pictures and tests: PROVISIONAL(C-002) until
+// FORGE's compiled rig supplies the stations. An original design in the class of a light armoured personnel carrier of about 11 t, ESTIMATE
+// for every number, bands +-15%, reason: not a copy of any vehicle. Hull frame: origin at the hull box centre, the ground 1.355 m below it
+// (ground clearance 0.43 m, hull box 1.85 m high), -Z forward; the belt is 0.03 m thick, so the road wheels' bottoms are 0.03 m above the
+// ground. The wheels are listed in loop order: the sprocket (rear), the top run towards the front through the return rollers, the idler, then
+// the ground run back through the road wheels. Radii are tip radii, except the sprocket's, which is its pitch radius pitch / (2 sin(pi / teeth))
+// (0.152 / (2 sin(pi / 11)) = 0.26976). Each return roller's top lies on the straight top run (a test checks that every wheel touches the belt).
+RunSpec(
+    track_x_m: 1.15,         // the track centre line, half the gauge
+    belt_width_m: 0.381,
+    belt_thickness_m: 0.03,
+    pitch_m: 0.152,
+    sprocket_teeth: 11,
+    wheels: [
+        (kind: Sprocket,     z_m:  2.20,   y_m: -0.755,   radius_m: 0.26976, width_m: 0.25),
+        (kind: ReturnRoller, z_m:  1.175,  y_m: -0.61588, radius_m: 0.095,   width_m: 0.12),
+        (kind: ReturnRoller, z_m:  0.425,  y_m: -0.63101, radius_m: 0.095,   width_m: 0.12),
+        (kind: ReturnRoller, z_m: -1.075,  y_m: -0.66126, radius_m: 0.095,   width_m: 0.12),
+        (kind: Idler,        z_m: -2.25,   y_m: -0.895,   radius_m: 0.305,   width_m: 0.25),
+        (kind: RoadWheel,    z_m: -1.45,   y_m: -1.02,    radius_m: 0.305,   width_m: 0.25),
+        (kind: RoadWheel,    z_m: -0.70,   y_m: -1.02,    radius_m: 0.305,   width_m: 0.25),
+        (kind: RoadWheel,    z_m:  0.05,   y_m: -1.02,    radius_m: 0.305,   width_m: 0.25),
+        (kind: RoadWheel,    z_m:  0.80,   y_m: -1.02,    radius_m: 0.305,   width_m: 0.25),
+        (kind: RoadWheel,    z_m:  1.55,   y_m: -1.02,    radius_m: 0.305,   width_m: 0.25),
+    ],
+)

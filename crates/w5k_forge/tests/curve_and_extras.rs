@@ -49,3 +49,22 @@ fn the_trucks_def_parses_and_checks_clean() {
         ron::from_str(&ron::ser::to_string_pretty(&d, ron::ser::PrettyConfig::default()).unwrap()).unwrap();
     assert_eq!(again, d);
 }
+
+#[test]
+fn a_power_peak_that_torque_cannot_reach_is_rejected_as_inconsistent() {
+    // 135 N m at 3000 rpm falling to 93 N m at 4800 rpm needs the power to peak earlier than 4800 rpm (curve exponent below 1).
+    let e = torque_curve_through_peaks(135.0, 3000.0, 46_800.0, 4800.0, 800.0, 5600.0, 0.6).unwrap_err();
+    assert!(e.contains("inconsistent") && e.contains("exponent"), "{e}");
+}
+
+#[test]
+fn the_fitted_curve_has_one_power_maximum_and_falls_after_the_torque_peak() {
+    let curve = torque_curve_through_peaks(135.0, 3000.0, 52_000.0, 4800.0, 800.0, 5600.0, 0.6).unwrap();
+    let power = |&(n, t): &(f64, f64)| t * rpm_to_rad_s(n);
+    let (_, p_max_at) =
+        curve.iter().enumerate().fold((0.0, 0), |a, (i, p)| if power(p) > a.0 { (power(p), i) } else { a });
+    assert!(curve[..=p_max_at].windows(2).all(|w| power(&w[1]) >= power(&w[0]) - 1e-9), "power rises up to its peak");
+    assert!(curve[p_max_at..].windows(2).all(|w| power(&w[1]) <= power(&w[0]) + 1e-9), "and falls after it");
+    let torque_peak_at = curve.iter().position(|p| (p.0 - 3000.0).abs() < 1e-6).unwrap();
+    assert!(curve[torque_peak_at..].windows(2).all(|w| w[1].1 <= w[0].1 + 1e-9), "torque falls after its peak");
+}

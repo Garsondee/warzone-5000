@@ -10,7 +10,7 @@ use w5k_contract::rig::*;
 use w5k_math::{scalar, Mat3, Transform, Vec3};
 
 use crate::curve::torque_curve_through_peaks;
-use crate::extras::Extras;
+use crate::extras::{DiffSpec, Extras};
 
 /// The design tripwire: a rig that needs more substeps than this is a numerically unstable design.
 const MAX_SUBSTEPS: u32 = 8; // const-ok: lane tripwire from the CHASSIS and DRIVE briefs
@@ -34,6 +34,15 @@ fn need(p: &Option<Param>, field: &str) -> Result<f64, String> {
     p.as_ref()
         .map(|p| p.v)
         .ok_or_else(|| format!("{field} is missing: the compile derives nothing for it, state it in the def"))
+}
+
+/// The contract's `bias`: the torque-bias ratio of a limited slip, 0 for the other kinds (as the stand-in rigs write them).
+fn diff_bias(d: &DiffSpec) -> f64 {
+    if d.kind == DiffKind::LimitedSlip {
+        d.bias.v
+    } else {
+        0.0
+    }
 }
 
 fn rej(field: &str, reason: impl Into<String>) -> Vec<Rejection> {
@@ -100,6 +109,20 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
     report.push(format!(
         "datum: hull box centre; ride height {ride_height:.3} m; COM {:.3} m above the ground, {:.3} m from the front",
         h.com_height_m.v, h.com_from_front_m.v
+    ));
+
+    // ---- geometry of obstacles: what ground clearance changes (the hull proxy's underside is exactly `ground_clearance_m` above the ground)
+    let (a_first, a_last) = (w.axles[0].from_front_m.v, w.axles[w.axles.len() - 1].from_front_m.v);
+    let tyre_r = 0.5 * w.tyre.outer_diameter_m.v;
+    let clear = h.ground_clearance_m.v;
+    let to_deg = 180.0 / scalar::PI; // const-ok: radians to degrees for display
+    let angle = |overhang: f64| if overhang <= 0.0 { 90.0 } else { scalar::atan2(clear, overhang) * to_deg }; // const-ok: tyre-limited
+    let wheelbase = a_last - a_first;
+    report.push(format!(
+        "obstacle geometry from the {clear:.2} m clearance: approach {:.0} deg, departure {:.0} deg (90 = the tyre limits), ramp breakover {:.0} deg",
+        angle(a_first - tyre_r),
+        angle(h.length_m.v - a_last - tyre_r),
+        2.0 * scalar::atan2(2.0 * clear, wheelbase) * to_deg
     ));
 
     // ---- stations, tyres, springs
@@ -306,9 +329,9 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
         }
         let _ = axle;
         axle_diffs.push(DriveNode::Diff {
-            kind: DiffKind::Open,
+            kind: dx.axle_diff.kind,
             ratio: pt.final_drive_ratio.v,
-            bias: 0.0,
+            bias: diff_bias(&dx.axle_diff),
             split: vec![],
             efficiency: 1.0,
             children: vec![DriveNode::Output(first), DriveNode::Output(first + 1)],
@@ -318,36 +341,51 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
         0 => return Err("no axle is driven".into()),
         1 => axle_diffs.remove(0),
         _ => DriveNode::Diff {
-            kind: DiffKind::Open,
+            kind: dx.centre_diff.kind,
             ratio: pt.transfer_case_ratio.as_ref().map_or(1.0, |p| p.v),
-            bias: 0.0,
+            bias: diff_bias(&dx.centre_diff),
             split: vec![],
             efficiency: 1.0,
             children: axle_diffs,
         },
     };
 
-    // ---- brakes: total force m a, split by axle, torque at the free radius; the tyre must be able to deliver it
+    // ---- brakes: authored axle torque when the extras carry it (the deceleration is then derived), else sized from the design deceleration
     let br = &def.brakes;
-    if br.service_decel_g.v > ty.mu_peak_ref.v {
-        return Err(format!(
-            "service deceleration {} g exceeds the tyre's peak friction {}: the tyre cannot deliver it",
-            br.service_decel_g.v, ty.mu_peak_ref.v
+    let b = &ex.brake;
+    let axle_torque: Vec<f64> = if b.axle_torque_nm.is_empty() {
+        if br.service_decel_g.v > ty.mu_peak_ref.v {
+            return Err(format!(
+                "service deceleration {} g exceeds the tyre's peak friction {}: the tyre cannot deliver it",
+                br.service_decel_g.v, ty.mu_peak_ref.v
+            ));
+        }
+        let force = total_mass * br.service_decel_g.v * g;
+        let share: Vec<f64> = if w.axles.len() == 2 {
+            vec![br.front_share.v, 1.0 - br.front_share.v]
+        } else {
+            loads.iter().map(|l| l / (h.mass_kg.v * g)).collect()
+        };
+        share.iter().map(|sh| sh * force * r).collect()
+    } else if b.axle_torque_nm.len() == w.axles.len() {
+        b.axle_torque_nm.iter().map(|p| p.v).collect()
+    } else {
+        return Err(format!("brake.axle_torque_nm has {} entries for {} axles", b.axle_torque_nm.len(), w.axles.len()));
+    };
+    let derived_decel_g = axle_torque.iter().sum::<f64>() / r / total_mass / g;
+    if derived_decel_g > ty.mu_peak_ref.v {
+        report.push(format!(
+            "WARNING: the brake torque would give {derived_decel_g:.2} g, above the tyre's peak friction {}: the tyre limits the stop",
+            ty.mu_peak_ref.v
         ));
     }
-    let force = total_mass * br.service_decel_g.v * g;
-    let share: Vec<f64> = if w.axles.len() == 2 {
-        vec![br.front_share.v, 1.0 - br.front_share.v]
-    } else {
-        loads.iter().map(|l| l / (h.mass_kg.v * g)).collect()
-    };
-    let b = &ex.brake;
+    let share0 = axle_torque[0] / axle_torque.iter().sum::<f64>();
     let brakes: Vec<BrakeDef> = (0..stations.len())
         .map(|s| {
             let ai = s / 2;
             BrakeDef {
                 station: s,
-                max_torque_nm: share[ai] * force * r / 2.0,
+                max_torque_nm: axle_torque[ai] / 2.0,
                 thermal_mass_j_k: br.thermal_mass_kj_k.v * J_PER_KJ, // const-ok: kJ to J
                 cooling_w_k: b.cooling_w_k.v,
                 cooling_per_ms_w_k: b.cooling_per_ms_w_k.v,
@@ -367,8 +405,9 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
         })
         .collect();
     report.push(format!(
-        "brakes: {} g on {:.0} kg -> {:.0} N total, front share {:.2}; peak {:.0} N m at the front wheels",
-        br.service_decel_g.v, total_mass, force, share[0], brakes[0].max_torque_nm
+        "brakes: axle torque {:.0} N m front, {:.0} N m rear -> {derived_decel_g:.2} g on {total_mass:.0} kg (front share {share0:.2})",
+        axle_torque[0],
+        axle_torque[axle_torque.len() - 1]
     ));
     report.push(format!(
         "engine: curve through {} N m at {} rpm and {} kW at {} rpm; {} forward gears",
