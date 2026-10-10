@@ -5,6 +5,9 @@
 
 use w5k_contract::def::{RunningGearDef, VehicleDef};
 use w5k_contract::param::Param;
+use w5k_contract::rig::DiffKind;
+
+use crate::extras::Extras;
 
 /// One lever: its name, what it scales, and the compiled quantity that moves with it (what the tests check).
 pub struct LeverInfo {
@@ -128,4 +131,76 @@ pub fn apply(def: &VehicleDef, lever: &str, factor: f64) -> Result<VehicleDef, S
         }
     }
     Ok(d)
+}
+
+/// Levers that live in the PROVISIONAL extras (until the CCR moves them into `def.rs`): the brake torque spec and the differential bias.
+pub const EXTRAS_LEVERS: &[LeverInfo] = &[
+    LeverInfo {
+        name: "brake_axle_torque",
+        scales: "brake.axle_torque_nm (every axle)",
+        compiled_effect: "total brake torque capacity, x factor; the derived deceleration falls with mass",
+    },
+    LeverInfo {
+        name: "centre_diff_bias",
+        scales: "drive.centre_diff.bias (limited slip)",
+        compiled_effect:
+            "the root differential's torque-bias ratio, x factor (no effect on an open or locked differential)",
+    },
+    LeverInfo {
+        name: "axle_diff_bias",
+        scales: "drive.axle_diff.bias (limited slip)",
+        compiled_effect: "every axle differential's torque-bias ratio, x factor",
+    },
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DiffRole {
+    Centre,
+    Axle,
+}
+
+/// Choose a differential's kind (and, for a limited slip, its bias, >= 1): the lever that moves gradeability when an open centre
+/// differential caps the thrust at twice what the lightly loaded axle can carry.
+pub fn set_diff(ex: &Extras, role: DiffRole, kind: DiffKind, bias: Option<f64>) -> Result<Extras, String> {
+    let mut x = ex.clone();
+    let spec = match role {
+        DiffRole::Centre => &mut x.drive.centre_diff,
+        DiffRole::Axle => &mut x.drive.axle_diff,
+    };
+    spec.kind = kind;
+    if let Some(b) = bias {
+        if !(b.is_finite() && b >= 1.0) {
+            return Err(format!("a limited-slip bias ratio must be at least 1, got {b}"));
+        }
+        spec.bias.v = b;
+        spec.bias.lo = spec.bias.lo.map(|l| l.min(b));
+        spec.bias.hi = spec.bias.hi.map(|h| h.max(b));
+    }
+    Ok(x)
+}
+
+/// `apply` for the levers of both the def and the extras. `brake_torque` scales the authored axle torque when the extras carry it
+/// (the def's deceleration is then unused), else the deceleration; `mass` needs no brake compensation when the torque is authored.
+pub fn apply_both(def: &VehicleDef, ex: &Extras, lever: &str, factor: f64) -> Result<(VehicleDef, Extras), String> {
+    if !(factor.is_finite() && factor > 0.0) {
+        return Err(format!("lever factor {factor} must be finite and positive"));
+    }
+    let mut x = ex.clone();
+    let scale_bias = |p: &mut Param| scale(p, factor);
+    match lever {
+        "brake_axle_torque" | "brake_torque" if !x.brake.axle_torque_nm.is_empty() => {
+            x.brake.axle_torque_nm.iter_mut().for_each(|p| scale(p, factor))
+        }
+        "brake_axle_torque" => {
+            return Err(
+                "this vehicle has no authored axle brake torque (brake.axle_torque_nm is empty): use brake_torque"
+                    .into(),
+            )
+        }
+        "centre_diff_bias" => scale_bias(&mut x.drive.centre_diff.bias),
+        "axle_diff_bias" => scale_bias(&mut x.drive.axle_diff.bias),
+        _ => return Ok((apply(def, lever, factor)?, x)),
+    }
+    // The def is untouched by an extras lever; `brake_torque` with authored torque must not also move the def's deceleration.
+    Ok((def.clone(), x))
 }

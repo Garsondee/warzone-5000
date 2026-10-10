@@ -4,7 +4,7 @@
 use w5k_contract::rig::*;
 use w5k_forge::compile::{compile, parse_def, parse_extras, Compiled};
 use w5k_forge::extras::Extras;
-use w5k_forge::levers::{apply, LEVERS};
+use w5k_forge::levers::{apply, apply_both, set_diff, DiffRole, EXTRAS_LEVERS, LEVERS};
 use w5k_math::scalar::{self, G};
 
 const IDS: [&str; 3] = ["scout_4x4", "mule_4x4", "hauler_4x4"];
@@ -19,7 +19,7 @@ fn load(id: &str) -> (w5k_contract::def::VehicleDef, Extras) {
 
 fn compiled(id: &str, lever: &str, f: f64) -> Result<Compiled, String> {
     let (d, x) = load(id);
-    let d = apply(&d, lever, f)?;
+    let (d, x) = apply_both(&d, &x, lever, f)?;
     compile(&d, &x).map_err(|e| e.iter().map(|r| r.to_string()).collect::<Vec<_>>().join("; "))
 }
 
@@ -182,4 +182,79 @@ fn the_mass_lever_holds_the_brake_torque_so_a_heavier_vehicle_brakes_less_hard()
         let decel = |c: &Compiled| total(c) / 0.5 / c.rig.stations[0].wheel.radius_m / c.rig.total_mass_kg() / G;
         assert!(decel(&heavy) < decel(&base) * 0.85, "{id}: the achievable deceleration falls with mass");
     }
+}
+
+fn root_diff(c: &Compiled) -> (DiffKind, f64) {
+    let DriveNode::Diff { kind, bias, .. } = &c.rig.drivetrain.driveline else { panic!("a Diff at the root") };
+    (*kind, *bias)
+}
+
+#[test]
+fn the_differential_kind_and_bias_reach_the_driveline_tree() {
+    for id in IDS {
+        let (d, x) = load(id);
+        let base = compile(&d, &x).unwrap();
+        assert_eq!(root_diff(&base).0, DiffKind::Open, "{id}: the authored trucks keep their open differentials");
+        for (kind, bias) in [(DiffKind::Locked, None), (DiffKind::LimitedSlip, Some(2.5))] {
+            let x2 = set_diff(&x, DiffRole::Centre, kind, bias).unwrap();
+            let c = compile(&d, &x2).unwrap();
+            c.rig.validate().unwrap();
+            let (k, b) = root_diff(&c);
+            assert_eq!(k, kind, "{id}");
+            if kind == DiffKind::LimitedSlip {
+                assert!((b - 2.5).abs() < 1e-12);
+            }
+            // The axle differentials are untouched by the centre one.
+            let DriveNode::Diff { children, .. } = &c.rig.drivetrain.driveline else { panic!() };
+            assert!(children.iter().all(|n| matches!(n, DriveNode::Diff { kind: DiffKind::Open, .. })));
+        }
+        let x3 = set_diff(&x, DiffRole::Axle, DiffKind::Locked, None).unwrap();
+        let c = compile(&d, &x3).unwrap();
+        let DriveNode::Diff { children, .. } = &c.rig.drivetrain.driveline else { panic!() };
+        assert!(children.iter().all(|n| matches!(n, DriveNode::Diff { kind: DiffKind::Locked, .. })));
+    }
+    let (_, x) = load("mule_4x4");
+    assert!(set_diff(&x, DiffRole::Centre, DiffKind::LimitedSlip, Some(0.5)).unwrap_err().contains("at least 1"));
+}
+
+#[test]
+fn the_bias_levers_scale_the_limited_slip_bias() {
+    let (d, x) = load("mule_4x4");
+    let x = set_diff(&x, DiffRole::Centre, DiffKind::LimitedSlip, Some(2.0)).unwrap();
+    let (d2, x2) = apply_both(&d, &x, "centre_diff_bias", 1.5).unwrap();
+    assert!((root_diff(&compile(&d2, &x2).unwrap()).1 - 3.0).abs() < 1e-12);
+    for l in EXTRAS_LEVERS {
+        assert!(apply_both(&d, &x, l.name, 1.1).is_ok(), "{}", l.name);
+    }
+}
+
+#[test]
+fn authored_axle_brake_torque_is_the_spec_and_the_deceleration_falls_with_mass() {
+    for id in IDS {
+        let (d, x) = load(id);
+        let base = compile(&d, &x).unwrap();
+        let total = |c: &Compiled| -> f64 { c.rig.drivetrain.brakes.iter().map(|b| b.max_torque_nm).sum() };
+        let authored: f64 = x.brake.axle_torque_nm.iter().map(|p| p.v).sum();
+        assert!(
+            (total(&base) - authored).abs() < 1e-9 * authored,
+            "{id}: the compile takes the authored torque as given"
+        );
+        // The brake lever scales the authored torque (the def's deceleration is ignored while torque is authored).
+        let (d2, x2) = apply_both(&d, &x, "brake_torque", 1.2).unwrap();
+        assert!((total(&compile(&d2, &x2).unwrap()) / authored - 1.2).abs() < 1e-9, "{id}");
+        // Mass changes only the derived deceleration: the same torque on more mass.
+        let (dh, xh) = apply_both(&d, &x, "mass", 1.4).unwrap();
+        let heavy = compile(&dh, &xh).unwrap();
+        assert!((total(&heavy) - authored).abs() < 1e-9 * authored, "{id}: mass must not change the torque");
+        let decel = |c: &Compiled| total(c) / c.rig.stations[0].wheel.radius_m / c.rig.total_mass_kg() / G;
+        assert!(decel(&heavy) < decel(&base) * 0.8, "{id}");
+    }
+}
+
+#[test]
+fn a_brake_spec_with_the_wrong_axle_count_is_rejected() {
+    let (d, mut x) = load("mule_4x4");
+    x.brake.axle_torque_nm.pop();
+    let e = compile(&d, &x).err().expect("rejected");
+    assert!(e.iter().any(|r| r.reason.contains("axle_torque_nm has 1 entries for 2 axles")), "{e:?}");
 }
