@@ -5,7 +5,7 @@ The zip holds the `w5k` program, the content folder (vehicles, course, tuning), 
 START script and a plain-language README. The program needs nothing else at run time: no Node, no Rust, no internet.
 
     python3 -I tools/ci/package_testdrive.py --exe target/release/w5k.exe --content content \
-        --page tools/viewer/dist/index.html --out out/Warzone5000-TestDrive-windows.zip --os windows
+        --page tools/viewer/dist/index.html --skins tools/viewer/dist/skins --out out/Warzone5000-TestDrive-windows.zip --os windows
 
 Only the standard library is used. The zip layout is checked by tools/ci/tests/test_package_testdrive.py.
 """
@@ -59,7 +59,7 @@ Everything runs on this computer; nothing is sent anywhere. This is an early tes
 """
 
 
-def build(exe: Path, content: Path, page: Path, out: Path, target_os: str) -> list[str]:
+def build(exe: Path, content: Path, page: Path, out: Path, target_os: str, skins: Path | None = None) -> list[str]:
     """Write the zip and return the names of the files in it (relative to the package folder)."""
     for what, path in (("the program", exe), ("the content folder", content), ("the page", page)):
         if not path.exists():
@@ -81,6 +81,10 @@ def build(exe: Path, content: Path, page: Path, out: Path, target_os: str) -> li
         for p in files:
             add(z, p, "content/" + p.relative_to(content).as_posix())
         add(z, page, "viewer/index.html")
+        # The truck bodies the page loads (tools/viewer/dist/skins/*.skin). Optional: without them the page draws plain boxes.
+        if skins is not None and skins.is_dir():
+            for p in sorted(skins.glob("*.skin")):
+                add(z, p, f"viewer/skins/{p.name}")
         if windows:
             add(z, None, "START.bat", START_BAT)
         else:
@@ -96,8 +100,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--page", required=True, type=Path)
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--os", choices=["windows", "linux"], default="windows")
+    ap.add_argument("--skins", type=Path, default=None, help="folder of *.skin files the page loads (optional)")
     args = ap.parse_args(argv)
-    names = build(args.exe, args.content, args.page, args.out, args.os)
+    names = build(args.exe, args.content, args.page, args.out, args.os, args.skins)
     size_mb = args.out.stat().st_size / 1_000_000  # const-ok: bytes to megabytes for the log line
     print(f"package_testdrive: wrote {args.out} ({len(names)} files, {size_mb:.1f} MB)")
     return 0
