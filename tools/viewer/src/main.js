@@ -38,11 +38,39 @@ const look = new THREE.Vector3(), eye = new THREE.Vector3(), back = new THREE.Ve
 const FOLLOW_S = 0.8, SMOOTH_S = 0.5;
 const posAt = (tt) => { const s = sample(replay, Math.min(Math.max(tt, 0), duration)); return new THREE.Vector3(s.f0.vehicles[0].pos_m.x, s.f0.vehicles[0].pos_m.y, s.f0.vehicles[0].pos_m.z).lerp(new THREE.Vector3(s.f1.vehicles[0].pos_m.x, s.f1.vehicles[0].pos_m.y, s.f1.vehicles[0].pos_m.z), s.a); };
 let clockT = 0;
+
+// RTS camera: high-angle strategy view, heading-up. It follows the centroid of every vehicle in the replay (positions averaged
+// over +-0.5 s) and turns with the direction the centroid travels over the last 2.5 s (a long window so the picture does not swing in
+// bends); it aims 25 m ahead of the centroid and backs off until the vehicles and about 60 m of road ahead fit. All of it is a
+// function of the replay time only, so scrubbing and recording agree.
+const RTS_PITCH = 0.96, RTS_HEADING_S = 2.5, RTS_AHEAD_M = 60;
+const centroidAt = (tt) => {
+  const s = sample(replay, Math.min(Math.max(tt, 0), duration)), c = new THREE.Vector3();
+  for (const v of s.f0.vehicles) c.add(new THREE.Vector3(v.pos_m.x, v.pos_m.y, v.pos_m.z));
+  return c.multiplyScalar(1 / s.f0.vehicles.length);
+};
+const spreadAt = (tt, c) => {
+  const s = sample(replay, Math.min(Math.max(tt, 0), duration));
+  return Math.max(0, ...s.f0.vehicles.map((v) => Math.hypot(v.pos_m.x - c.x, v.pos_m.z - c.z)));
+};
+function placeRts() {
+  const c = centroidAt(clockT - 0.5).add(centroidAt(clockT)).add(centroidAt(clockT + 0.5)).multiplyScalar(1 / 3);
+  let d = centroidAt(clockT).sub(centroidAt(clockT - RTS_HEADING_S));
+  if (d.x * d.x + d.z * d.z < 0.04) d = centroidAt(clockT + RTS_HEADING_S).sub(centroidAt(clockT)); // standing still: look where it goes next
+  const h = new THREE.Vector3(d.x, 0, d.z);
+  if (h.lengthSq() < 0.04) h.set(0, 0, -1); else h.normalize();
+  const dist = Math.min(220, Math.max(45, 0.9 * (RTS_AHEAD_M + 10 + 2 * spreadAt(clockT, c))));
+  look.copy(c).addScaledVector(h, 25);
+  eye.copy(look).addScaledVector(h, -dist * Math.cos(RTS_PITCH)).add({ x: 0, y: dist * Math.sin(RTS_PITCH), z: 0 });
+  camera.position.copy(eye);
+  camera.lookAt(look);
+}
 function placeCamera() {
   const p = built.root.position;
   if (cam.focus) built.nodes.find((n) => n.def.name === cam.focus).g.getWorldPosition(look);
   else look.copy(p).add({ x: 0, y: 1, z: 0 });
   let yaw = cam.yaw;
+  if (cam.mode === 'rts') return placeRts();
   if (cam.mode === 'chase' || cam.mode === 'quarter' || cam.mode === 'front') {
     const d = posAt(clockT).sub(posAt(clockT - FOLLOW_S));
     if (d.x * d.x + d.z * d.z > 0.01) back.set(-d.x, 0, -d.z).normalize(); // behind the direction of travel

@@ -103,6 +103,6 @@ export function makeScene(canvas, W, H, terrain = null) {
     scene.add(ground);
     scene.add(new THREE.GridHelper(400, 200, 0x445533, 0x667755));
   }
-  const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 1000);
+  const camera = new THREE.PerspectiveCamera(45, W / H, 0.3, 3000);
   return { renderer, scene, camera };
 }

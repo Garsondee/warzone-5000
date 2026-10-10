@@ -5,6 +5,7 @@
 //! Status: building. `grid` is the spike S-W heightfield world (docs/lanes/world/spike-w.md) made size-generic; M1 splits it into
 //! `heightfield`, `props`, `noise` and `generator` modules.
 
+pub mod cliff;
 pub mod course;
 pub mod features;
 pub mod grid;
