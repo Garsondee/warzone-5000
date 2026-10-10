@@ -4,11 +4,14 @@
 //! prepare their inputs (a binary replay and a rig) and call them. Packages are installed by `npm ci` in `tools/viewer`.
 
 use std::collections::BTreeMap;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use w5k_contract::def::VehicleDef;
+use w5k_contract::def::{RunningGearDef, VehicleDef};
 use w5k_contract::render::RenderRig;
 use w5k_contract::testing::{box_tank, box_truck, tank_slew_and_pitch, truck_over_bumps};
 use w5k_contract::world::WorldQuery;
@@ -30,6 +33,7 @@ const USAGE: &str = "usage:
   w5k viewer tornado <impact.json> --out tornado.png [--theme light|dark] [--cols N] [--rows N]   (the impact.json of `w5k validation impact`: a panel per benchmark, a bar per vehicle for each lever; docs/lanes/viewer/charts.md)
   w5k viewer ladder  <ladder.json> --out ladder.png [--theme light|dark]   (sinkage up a ladder of load or track width, beside the soil theory)
   w5k viewer design <scout_4x4|mule_4x4|hauler_4x4|base.ron> --out DIR [--lever wheelbase=1.1,mass=0.9] [--skin preview|final|off] [--score off]   (the Workshop's step: levers in; the compiled design, its skin and the proving scoreboard out)
+  w5k viewer workshop [--port 8789] [--web DIR]   (the Workshop's design endpoints and page on 127.0.0.1; run it from the folder that holds content/)
   w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.w5kr, replay.json and rig.json)";
 
 /// Entry point for `w5k viewer <args>`.
@@ -43,6 +47,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some("fake-fleet") => fake_fleet(&args[1..]),
         Some("pack-skin") => pack_skin(&args[1..]),
         Some("design") => design(&args[1..]),
+        Some("workshop") => workshop(&args[1..]),
         _ => Err(USAGE.to_string()),
     }
 }
@@ -398,6 +403,254 @@ fn design(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------------------------------------- the Workshop server
+
+/// The Workshop's sliders, in order: FORGE's lever, its label, the unit its base value is shown in, and the range of the slider as factors on the
+/// base (a UI choice: FORGE accepts almost any factor, and refuses only what the physics cannot honour).
+const SLIDERS: [(&str, &str, &str, f64, f64); 6] = [
+    ("wheelbase", "Wheelbase", "m", 0.7, 1.4), // const-ok: slider range of the Workshop page
+    ("tyre_width", "Tyre width", "mm", 0.7, 1.5), // const-ok: slider range of the Workshop page
+    ("spring_rate", "Spring rate", "", 0.5, 2.0), // const-ok: slider range of the Workshop page
+    ("engine_peak_power", "Engine power", "kW", 0.5, 2.0), // const-ok: slider range of the Workshop page
+    ("mass", "Mass", "kg", 0.6, 1.6),          // const-ok: slider range of the Workshop page
+    ("track_gauge", "Track width", "m", 0.8, 1.2), // const-ok: slider range of the Workshop page
+];
+const MAX_BODY: usize = 1 << 16; // const-ok: a request body this big is not a design
+const MM_PER_M: f64 = 1000.0; // const-ok: unit conversion for the display
+const KW_PER_W: f64 = 1e-3; // const-ok: unit conversion for the display
+
+/// The number a slider's factor multiplies, in the display unit (`None` where there is no single number: the spring rate shows its factor).
+fn base_value(def: &VehicleDef, lever: &str) -> Option<f64> {
+    let RunningGearDef::Wheeled(g) = &def.running_gear else { return None };
+    Some(match lever {
+        "wheelbase" => g.axles.last()?.from_front_m.v - g.axles.first()?.from_front_m.v,
+        "tyre_width" => g.tyre.section_width_m.v * MM_PER_M,
+        "engine_peak_power" => def.powertrain.engine.peak_power_w.v * KW_PER_W,
+        "mass" => def.hull.mass_kg.v,
+        "track_gauge" => g.axles.first()?.track_width_m.v,
+        _ => return None,
+    })
+}
+
+type Reply = (u16, &'static str, Vec<u8>);
+
+fn json_reply(status: u16, v: &serde_json::Value) -> Reply {
+    (status, "application/json", v.to_string().into_bytes())
+}
+
+/// A design the server has built, by id (`d1`, `d2`, ...); the same base, levers and quality are built once.
+struct Built {
+    id: String,
+    design: Design,
+    seconds: f64,
+}
+
+#[derive(Default)]
+struct Cache {
+    by_key: BTreeMap<String, Arc<Built>>,
+    by_id: BTreeMap<String, Arc<Built>>,
+}
+
+struct Shop {
+    /// The folder that holds `content/`.
+    root: PathBuf,
+    /// The folder of static files (`workshop.html`).
+    web: PathBuf,
+    cache: Mutex<Cache>,
+}
+
+impl Shop {
+    fn base_file(&self, id: &str) -> Result<PathBuf, String> {
+        let ok = !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+        let file = self.root.join("content/vehicles/game").join(format!("{id}.ron"));
+        (ok && file.exists()).then_some(file).ok_or_else(|| format!("{id} is not a vehicle of the garage"))
+    }
+
+    /// The wheeled vehicles of the garage: `content/vehicles/game/<id>.ron` with an `.extras.ron` beside it.
+    fn bases(&self) -> Vec<(String, VehicleDef)> {
+        let mut found: Vec<(String, VehicleDef)> = std::fs::read_dir(self.root.join("content/vehicles/game"))
+            .into_iter()
+            .flatten()
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|x| x == "ron") && !p.to_string_lossy().ends_with(".extras.ron"))
+            .filter_map(|p| {
+                let def = w5k_forge::compile::parse_def(&std::fs::read_to_string(&p).ok()?).ok()?;
+                let stem = p.file_stem()?.to_string_lossy().into_owned();
+                (p.with_extension("extras.ron").exists() && matches!(def.running_gear, RunningGearDef::Wheeled(_)))
+                    .then_some((stem, def))
+            })
+            .collect();
+        found.sort_by(|a, b| a.0.cmp(&b.0));
+        found
+    }
+
+    /// Build (or remember) the design of `base` with `levers` at `quality`; the lock is not held while it is built.
+    #[allow(clippy::disallowed_methods)] // `Instant::now` only reports how long a build took; nothing simulated reads it
+    fn design(&self, base: &str, levers: &[(String, f64)], quality: &str) -> Result<Arc<Built>, String> {
+        let key = format!(
+            "{base}|{}|{quality}",
+            levers.iter().map(|(n, f)| format!("{n}={f}")).collect::<Vec<_>>().join(",")
+        );
+        if let Some(b) = self.cache.lock().map_err(|e| e.to_string())?.by_key.get(&key) {
+            return Ok(Arc::clone(b));
+        }
+        let t0 = Instant::now();
+        let design = build_design(&self.base_file(base)?, levers, quality)?;
+        let mut c = self.cache.lock().map_err(|e| e.to_string())?;
+        let built =
+            Arc::new(Built { id: format!("d{}", c.by_id.len() + 1), design, seconds: t0.elapsed().as_secs_f64() });
+        c.by_key.insert(key, Arc::clone(&built));
+        c.by_id.insert(built.id.clone(), Arc::clone(&built));
+        Ok(built)
+    }
+
+    fn handle(&self, method: &str, path: &str, body: &[u8]) -> Reply {
+        let fail = |status: u16, e: &str| json_reply(status, &serde_json::json!({ "error": e }));
+        match (method, path) {
+            ("GET", "/api/bases") => json_reply(
+                200,
+                &serde_json::Value::Array(
+                    self.bases().iter().map(|(id, d)| serde_json::json!({"id": id, "name": d.name})).collect(),
+                ),
+            ),
+            ("GET", p) if p.starts_with("/api/base/") => {
+                let id = &p["/api/base/".len()..];
+                let Some((_, def)) = self.bases().into_iter().find(|(b, _)| b == id) else {
+                    return fail(404, &format!("{id} is not a vehicle of the garage"));
+                };
+                let levers: Vec<_> = SLIDERS.iter().map(|&(l, label, unit, lo, hi)| serde_json::json!({"id": l, "label": label, "unit": unit, "base": base_value(&def, l), "min": lo, "max": hi})).collect();
+                match self.design(id, &[], "preview") {
+                    Ok(b) => json_reply(
+                        200,
+                        &serde_json::json!({"id": id, "name": def.name, "levers": levers, "design": design_json(&b)}),
+                    ),
+                    Err(e) => fail(500, &e),
+                }
+            }
+            ("POST", "/api/design") => {
+                let Ok(v) = serde_json::from_slice::<serde_json::Value>(body) else {
+                    return fail(400, "the body is not JSON");
+                };
+                let Some(base) = v["base"].as_str() else { return fail(400, "`base` is the id of a vehicle") };
+                let mut levers = Vec::new();
+                for (name, f) in v["levers"].as_object().into_iter().flatten() {
+                    match f.as_f64() {
+                        Some(x) if x.is_finite() && x > 0.0 => {
+                            if (x - 1.0).abs() > f64::EPSILON {
+                                levers.push((name.clone(), x)); // the base is the design with no levers: a factor of one is no lever
+                            }
+                        }
+                        _ => return fail(400, &format!("lever {name}: the factor must be a positive number")),
+                    }
+                }
+                match self.design(base, &levers, v["quality"].as_str().unwrap_or("preview")) {
+                    Ok(b) => json_reply(200, &design_json(&b)),
+                    Err(e) => fail(422, &e),
+                }
+            }
+            ("GET", p) if p.starts_with("/api/skin/") => {
+                let found = self.cache.lock().ok().and_then(|c| c.by_id.get(&p["/api/skin/".len()..]).cloned());
+                match found.as_deref().and_then(|b| b.design.skin.as_ref()) {
+                    Some((bytes, _, _)) => (200, "application/octet-stream", bytes.clone()),
+                    None => fail(404, "no such skin"),
+                }
+            }
+            ("GET", p) if !p.starts_with("/api/") => static_file(&self.web, p),
+            _ => fail(404, &format!("no such endpoint: {method} {path}")),
+        }
+    }
+}
+
+/// What the page needs of a built design: the physics rig (to fit the skin to), FORGE's report, and where the skin is.
+fn design_json(b: &Built) -> serde_json::Value {
+    let skin = b.design.skin.as_ref().map(|(bytes, tris, _)| serde_json::json!({"url": format!("/api/skin/{}", b.id), "bytes": bytes.len(), "triangles": tris}));
+    serde_json::json!({"id": b.id, "name": b.design.def.name, "rig": b.design.rig, "report": b.design.report, "skin": skin, "seconds": b.seconds})
+}
+
+/// A file of the page's folder; nothing outside it (no `..`, no backslash).
+fn static_file(web: &Path, path: &str) -> Reply {
+    let name = if path == "/" { "workshop.html" } else { path.trim_start_matches('/') };
+    if name.is_empty() || name.contains("..") || name.contains('\\') {
+        return json_reply(404, &serde_json::json!({"error": "no such file"}));
+    }
+    let kind = match name.rsplit('.').next() {
+        Some("html") => "text/html; charset=utf-8",
+        Some("js") => "text/javascript",
+        Some("json") => "application/json",
+        Some("png") => "image/png",
+        _ => "application/octet-stream",
+    };
+    match std::fs::read(web.join(name)) {
+        Ok(bytes) => (200, kind, bytes),
+        Err(_) => json_reply(404, &serde_json::json!({"error": format!("no such file: {name}")})),
+    }
+}
+
+/// One request: method, path (no query) and body; `None` for anything that is not a well-formed request.
+fn read_request(stream: &TcpStream) -> Option<(String, String, Vec<u8>)> {
+    let mut r = BufReader::new(stream);
+    let mut line = String::new();
+    r.read_line(&mut line).ok()?;
+    let mut words = line.split_whitespace();
+    let (method, target) = (words.next()?.to_string(), words.next()?.to_string());
+    let mut len = 0usize;
+    loop {
+        let mut h = String::new();
+        r.read_line(&mut h).ok()?;
+        if h.trim().is_empty() {
+            break;
+        }
+        if let Some((k, v)) = h.split_once(':') {
+            if k.eq_ignore_ascii_case("content-length") {
+                len = v.trim().parse().ok()?;
+            }
+        }
+    }
+    let mut body = vec![0; len.min(MAX_BODY)];
+    r.read_exact(&mut body).ok()?;
+    Some((method, target.split('?').next()?.to_string(), body))
+}
+
+fn respond(mut stream: &TcpStream, (status, kind, body): Reply) {
+    let word = match status {
+        200 => "OK",
+        400 => "Bad Request",
+        404 => "Not Found",
+        422 => "Unprocessable Entity",
+        _ => "Error",
+    };
+    let head = format!("HTTP/1.1 {status} {word}\r\ncontent-type: {kind}\r\ncontent-length: {}\r\ncache-control: no-store\r\nconnection: close\r\n\r\n", body.len());
+    let _ = stream.write_all(head.as_bytes()).and_then(|()| stream.write_all(&body));
+}
+
+/// Answer connections forever, one thread each (a design takes seconds to build and must not hold up the page).
+fn serve_forever(listener: TcpListener, shop: Arc<Shop>) {
+    for stream in listener.incoming().flatten() {
+        let shop = Arc::clone(&shop);
+        std::thread::spawn(move || {
+            if let Some((method, path, body)) = read_request(&stream) {
+                respond(&stream, shop.handle(&method, &path, &body));
+            }
+        });
+    }
+}
+
+/// `w5k viewer workshop [--port 8789] [--web DIR]`: the Workshop page and its design endpoints, on 127.0.0.1 only. Run it from the folder
+/// that holds `content/`.
+fn workshop(args: &[String]) -> Result<(), String> {
+    let port: u16 = opt(args, "--port").map_or(Ok(8789), str::parse).map_err(|_| "--port is a number")?; // const-ok: the default port
+    let web = opt(args, "--web").map(PathBuf::from).unwrap_or_else(|| {
+        let beside = std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.join("viewer")));
+        beside.filter(|d| d.exists()).unwrap_or_else(|| viewer_dir().join("dist"))
+    });
+    let listener =
+        TcpListener::bind(("127.0.0.1", port)).map_err(|e| format!("cannot listen on 127.0.0.1:{port}: {e}"))?;
+    println!("The Workshop: http://127.0.0.1:{port}/  (pages from {}; Ctrl-C stops it)", web.display());
+    serve_forever(listener, Arc::new(Shop { root: PathBuf::from("."), web, cache: Mutex::default() }));
+    Ok(())
+}
+
 fn dump_canned(args: &[String]) -> Result<(), String> {
     let which = args.first().ok_or("dump-canned needs truck or tank")?;
     let out = opt(args, "--out").map(PathBuf::from).ok_or("dump-canned needs --out <dir>")?;
@@ -691,5 +944,98 @@ mod tests {
         let file = viewer_dir().join("dist/skins/scout_4x4.skin");
         let rig = skin_rig(file.to_str().unwrap()).unwrap();
         assert!(rig.triangle_count() > 0 && rig.id == skin_rig("scout_4x4").unwrap().id);
+    }
+
+    fn start() -> u16 {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let shop = Arc::new(Shop {
+            root: Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            web: viewer_dir().join("dist"),
+            cache: Mutex::default(),
+        });
+        std::thread::spawn(move || serve_forever(listener, shop));
+        port
+    }
+
+    fn http(port: u16, method: &str, path: &str, body: &str) -> (u16, Vec<u8>) {
+        let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        write!(s, "{method} {path} HTTP/1.1\r\nhost: x\r\ncontent-length: {}\r\n\r\n{body}", body.len()).unwrap();
+        let mut raw = Vec::new();
+        s.read_to_end(&mut raw).unwrap();
+        let split = raw.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
+        let status = std::str::from_utf8(&raw[..split]).unwrap().split_whitespace().nth(1).unwrap().parse().unwrap();
+        (status, raw[split + 4..].to_vec())
+    }
+
+    fn get_json(port: u16, method: &str, path: &str, body: &str) -> (u16, serde_json::Value) {
+        let (status, bytes) = http(port, method, path, body);
+        (status, serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null))
+    }
+
+    #[test]
+    fn the_workshop_lists_the_garage_and_a_base_with_its_six_sliders_and_their_numbers() {
+        let port = start();
+        let (_, bases) = get_json(port, "GET", "/api/bases", "");
+        let ids: Vec<&str> = bases.as_array().unwrap().iter().map(|b| b["id"].as_str().unwrap()).collect();
+        assert!(["scout_4x4", "mule_4x4", "hauler_4x4"].iter().all(|id| ids.contains(id)), "{ids:?}");
+        let (status, info) = get_json(port, "GET", "/api/base/hauler_4x4", "");
+        assert_eq!(status, 200);
+        let sliders: Vec<&str> = info["levers"].as_array().unwrap().iter().map(|l| l["id"].as_str().unwrap()).collect();
+        assert_eq!(sliders, SLIDERS.map(|s| s.0));
+        let def = w5k_forge::compile::parse_def(&std::fs::read_to_string(base("hauler_4x4")).unwrap()).unwrap();
+        let RunningGearDef::Wheeled(g) = &def.running_gear else { panic!("the Hauler is wheeled") };
+        let span = g.axles.last().unwrap().from_front_m.v - g.axles.first().unwrap().from_front_m.v;
+        assert!(
+            (info["levers"][0]["base"].as_f64().unwrap() - span).abs() < 1e-9,
+            "the wheelbase slider shows the axle span"
+        );
+        assert!(
+            info["design"]["rig"]["joint_count"].as_u64().unwrap() > 0 && info["design"]["skin"]["url"].is_string()
+        );
+        assert_eq!(get_json(port, "GET", "/api/base/nope", "").0, 404);
+    }
+
+    /// The same base, levers and quality are built once; a factor of one is no lever; the skin comes back as bytes that unpack.
+    #[test]
+    fn a_design_is_built_once_a_factor_of_one_is_the_base_and_its_skin_unpacks() {
+        let port = start();
+        let ask = |levers: &str| {
+            get_json(port, "POST", "/api/design", &format!("{{\"base\":\"scout_4x4\",\"levers\":{levers}}}"))
+        };
+        let (_, base_design) = ask("{}");
+        let (_, same) = ask("{\"wheelbase\":1.0}");
+        assert_eq!(base_design["id"], same["id"], "a factor of one is the base design, not a new one");
+        let (status, a) = ask("{\"wheelbase\":1.2}");
+        assert_eq!(status, 200);
+        assert_ne!(a["id"], base_design["id"]);
+        assert_eq!(ask("{\"wheelbase\":1.2}").1["id"], a["id"], "the same design is not built twice");
+        let (status, bytes) = http(port, "GET", a["skin"]["url"].as_str().unwrap(), "");
+        assert_eq!(status, 200);
+        assert!(w5k_replay::skinpack::unpack(&bytes).unwrap().triangle_count() > 0);
+    }
+
+    #[test]
+    fn a_refused_lever_is_a_422_with_the_reason_and_a_bad_request_is_a_400() {
+        let port = start();
+        let (status, body) =
+            get_json(port, "POST", "/api/design", "{\"base\":\"scout_4x4\",\"levers\":{\"ride_frequency\":30}}");
+        assert_eq!(status, 422);
+        assert!(body["error"].as_str().unwrap().contains("ride rate"), "{body}");
+        assert_eq!(get_json(port, "POST", "/api/design", "not json").0, 400);
+        assert_eq!(get_json(port, "POST", "/api/design", "{\"base\":\"scout_4x4\",\"levers\":{\"mass\":-1}}").0, 400);
+        assert_eq!(get_json(port, "POST", "/api/design", "{\"base\":\"../etc\",\"levers\":{}}").0, 422);
+    }
+
+    #[test]
+    fn the_workshop_serves_files_from_its_folder_and_nothing_outside_it() {
+        let port = start();
+        let (status, page) = http(port, "GET", "/index.html", "");
+        assert_eq!(status, 200);
+        assert!(String::from_utf8_lossy(&page).contains("<title>"));
+        for path in ["/../Cargo.toml", "/..%2f..%2fCargo.toml", "/skins/../../../Cargo.toml", "/nope.html", "/api/nope"]
+        {
+            assert_eq!(http(port, "GET", path, "").0, 404, "{path}");
+        }
     }
 }
