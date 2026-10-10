@@ -7,28 +7,28 @@
 Dossier(
     id: "example",
     name: "Example vehicle (template)",
-    role: "calibration",            // "calibration" or "held_out" (ADR-0007)
+    role: Calibration,               // Calibration or HeldOut (ADR-0007)
     era: "template",
     quantities: [
         Quantity(
             id: "static.mass_kg",
             category: Static,
             unit: "kg",
-            param: Param(v: 0.0, lo: 0.0, hi: 0.0, prov: Spec, src: "Operator manual TM x-xxxx, p. N: combat weight"),
+            param: Param(v: 0.0, lo: Some(0.0), hi: Some(0.0), prov: Spec, src: "Operator manual TM x-xxxx, p. N: combat weight"),
             notes: "Say which loading (curb, combat, max). Variants differ by hundreds of kg.",
         ),
         Quantity(
             id: "powertrain.top_speed_governed_m_s",
             category: Powertrain,
             unit: "m/s",
-            param: Param(v: 0.0, lo: 0.0, hi: 0.0, prov: Measured, src: "Test report, Table N"),
+            param: Param(v: 0.0, lo: Some(0.0), hi: Some(0.0), prov: Measured, src: "Test report, Table N"),
             notes: "",
         ),
         Quantity(
             id: "static.com_height_m",
             category: Static,
             unit: "m",
-            param: Param(v: 0.0, lo: 0.0, hi: 0.0, prov: Estimate, src: "Estimated from silhouette and component layout; band covers +-0.15 m"),
+            param: Param(v: 0.0, lo: Some(0.0), hi: Some(0.0), prov: Estimate, src: "Estimated from silhouette and component layout; band covers +-0.15 m"),
             notes: "Usually unpublished.",
         ),
     ],
