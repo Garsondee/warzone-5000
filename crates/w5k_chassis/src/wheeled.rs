@@ -128,7 +128,12 @@ impl WheeledChassis {
                 // the tyre's static load: the spring's preload (the sprung share) plus the wheel's own weight
                 tyre: Tyre::new(tyre_def, s.wheel.radius_m, tuning.tyre())
                     .with_width(s.wheel.width_m)
-                    .with_nominal_load(s.suspension.preload_n + s.unsprung_mass_kg * scalar::G),
+                    // the reference of the load sensitivity: the rig's nominal load, or the tyre's static load (spring preload + wheel weight)
+                    .with_nominal_load(if tyre_def.nominal_load_n > 0.0 {
+                        tyre_def.nominal_load_n
+                    } else {
+                        s.suspension.preload_n + s.unsprung_mass_kg * scalar::G
+                    }),
                 rest_body_m: s.rest_pos_m - com,
                 bump_dir: s.bump_dir.normalized_or_zero(),
                 droop_travel_m: s.droop_travel_m,
