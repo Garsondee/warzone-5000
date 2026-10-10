@@ -1,6 +1,6 @@
 # Status: WORLD
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/world/river | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/world/soft | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
 
 ## Done
 - PR 17 settling (merged): spike S-W, design note, CCR text. PR 21 data-driven bump strip (merged).
@@ -24,6 +24,10 @@
 - (2) washboard + whoops [PR open, `lane/world/rough`, stacked on #62]: whoops (>= 4 m wavelength) baked into the heightfield, washboard (0.2 to 2 m) as a per-query formula (`corrugation.rs`: phase, weight and section per node, bilinear; normal is the exact gradient). Slice course now has both (golden hash updated deliberately). `raycast` ignores ripples (centimetres); not yet benchmarked with a washboard layer present.
 
 - (3a) river + ford + water surface [`lane/world/river`, stacked on #65]: meandering channel in a levelled valley, trapezoid bed with a stated bank grade, flat water surface falling downstream, fords, `riverbed` material, `GridWorld::water_surface_m` (WORLD-only until CCR W-6), `terrain.json` gains `water_m`. Course `content/world/courses/river.ron`. (3b, next) bridges (wooden, road) and multi-road support (the long road bridge as a detour, a track to the wooden bridge). Amphibious crossing = swim the channel anywhere; the survey (later) will list depth and exit bank grade.
+
+- (3b) bridges + multi-road [`lane/world/bridges`, stacked on the river PR]: `plan_road` extracted (per-road width, grade, surface, mud crossings, rough sections; slice/ridge/river golden hashes unchanged by the refactor), `extra_roads`, `BridgeDef` (Wooden / Road, width, load rating as data, rails as `Wall` props), decks laid after the clamp, `Course.bridges`/`extra_roads`, `terrain.json` gains `bridges` and `extra_roads_m`. Course `content/world/courses/crossing.ron`: road bridge (west, long), wooden bridge on a track (mid, short, light-rated), ford (east), swim anywhere else. Next: (4) soft-ground patch, (5) `w5k world stats`, then the route survey.
+
+- (4) soft ground [`lane/world/soft`, stacked on #71]: `sand` material with Bekker-Wong soil parameters (dry-sand class, every number UNVALIDATED with bands; VALIDATION to verify the table and page), `SoftPatchDef` (a disc laid in any soft material, refused if the material has no soil), a sand patch on the slice course, and the brief's material tests (`material_ron_round_trips_and_every_param_checks`, `soil_params_are_inside_their_published_bands`).
 
 ## Blocked
 - Nothing.

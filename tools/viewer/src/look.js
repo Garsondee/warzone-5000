@@ -13,9 +13,9 @@ export function makeLook(data, paintMaterials) {
     uCol: { value: [0, 0, 0, 0].map(() => new THREE.Vector3()) }, uCov: { value: [0, 0, 0, 0] }, uScale: { value: 1 },
     uWC: { value: [weathering.bare_linear, weathering.dirt_linear, weathering.splash_linear, weathering.dust_linear].map(V3) },
     uW: { value: W_KEYS.map((k) => weathering[k]) },
-    uWearOn: { value: 1 }, uView: { value: 0 },
+    uWearOn: { value: 1 }, uView: { value: 0 }, uTint: { value: new THREE.Vector3() }, uTintMix: { value: 0 },
   };
-  const state = { on: true, scheme: Object.keys(schemes)[0], seed: 1 };
+  const state = { on: true, tint: null, tintMix: 0, scheme: Object.keys(schemes)[0], seed: 1 };
   function set(next = {}) {
     Object.assign(state, next);
     const sc = schemes[state.scheme];
@@ -25,14 +25,16 @@ export function makeLook(data, paintMaterials) {
     sc.colours.forEach((c, i) => { u.uCol.value[i].set(...c.linear); u.uCov.value[i] = c.coverage; });
     u.uScale.value = sc.scale_m;
     u.uView.value = state.on ? 0 : 1; // 1 = plain material colour (camo off)
+    if (state.tint) u.uTint.value.set(...state.tint); // a vehicle's accent, mixed into its paint to tell trucks apart at a distance
+    u.uTintMix.value = state.tintMix ?? 0;
   }
   for (const mat of paintMaterials) {
     mat.onBeforeCompile = (s) => {
       Object.assign(s.uniforms, u);
       s.vertexShader = 'attribute float aEdge; attribute float aCavity; attribute float aHeight;\nvarying vec3 vLP; varying float vE; varying float vC; varying float vH; varying float vUp;\n' +
         s.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvLP = position; vE = aEdge; vC = aCavity; vH = aHeight; vUp = normalize(mat3(modelMatrix) * normal).y;');
-      s.fragmentShader = 'varying vec3 vLP; varying float vE; varying float vC; varying float vH; varying float vUp;\nuniform int uView;\n' + glsl + '\n' +
-        s.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\nif (uView == 0) diffuseColor.rgb = w5k_albedo(vLP, vE, vC, vH, vUp, length(fwidth(vLP)));');
+      s.fragmentShader = 'varying vec3 vLP; varying float vE; varying float vC; varying float vH; varying float vUp;\nuniform int uView; uniform vec3 uTint; uniform float uTintMix;\n' + glsl + '\n' +
+        s.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\nif (uView == 0) { diffuseColor.rgb = w5k_albedo(vLP, vE, vC, vH, vUp, length(fwidth(vLP))); diffuseColor.rgb = mix(diffuseColor.rgb, uTint, uTintMix); }');
     };
     mat.customProgramCacheKey = () => 'w5k-camo';
   }

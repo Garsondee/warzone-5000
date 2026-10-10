@@ -1,6 +1,6 @@
 // Build one self-contained HTML page: three.js and the viewer modules inlined (as blob modules), the replay, the rig, and LOOK's
 // shader chunk and baked schemes embedded. No network at run time.
-//   node build.mjs --rig rig.json --replay replay.w5kr --out page.html   (the replay is embedded as base64 of the binary file)
+//   node build.mjs --rig rig.json[,rig2.json,...] (one rig per vehicle, the last repeats) --replay replay.w5kr --out page.html   (the replay is embedded as base64 of the binary file)
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +24,7 @@ const look = {
   cdf: JSON.parse(read(path.join(camoDir, 'cdf.json')))['o3_l2_g0.5'],
 };
 const terrain = process.argv.includes('--terrain') ? JSON.parse(read(arg('terrain'))) : null; // heightfield from `w5k viewer render --strip`
-const data = { terrain, rig: JSON.parse(read(arg('rig'))), replay: fs.readFileSync(arg('replay')).toString('base64'), look };
+const data = { terrain, rigs: arg('rig').split(',').map((f) => JSON.parse(read(f))), replay: fs.readFileSync(arg('replay')).toString('base64'), look };
 
 const boot = `
 const blob = (s) => URL.createObjectURL(new Blob([s], { type: 'text/javascript' }));

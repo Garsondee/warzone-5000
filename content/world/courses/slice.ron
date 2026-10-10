@@ -71,4 +71,9 @@ CourseDef(
         road_clearance_m: Param(v: 5.0, prov: Spec, src: "course design: keep the road itself clear"),
         surface: "gravel",
     )],
+    soft_patches: [SoftPatchDef(
+        x_m: 95.0, z_m: 95.0,
+        radius_m: Param(v: 30.0, prov: Spec, src: "course design: a bed of dry sand off the road, the soft-ground shortcut"),
+        surface: "sand",
+    )],
 )
