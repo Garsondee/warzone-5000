@@ -118,3 +118,8 @@ has less total grip**. That is the lever behind every anti-roll-bar setting: a s
 and the truck understeers. The bench shows it: making the front bar 4 times stiffer adds 5.2 mrad of steer at 0.6 g with load-sensitive tyres, and only
 0.5 mrad with linear ones. It also lowers the skidpad limit from 0.85 g to 0.81 g on the box truck. Graphics analogy: a soft, saturating tone curve instead of a linear
 one; the brightest inputs gain the least.
+**A measuring lesson from the proving ground.** With load sensitivity switched on, the Scout's skidpad limit first read 0.53 g, a 32% drop that the model cannot
+produce (the friction term alone can cost an axle at most `1 / (1 + k)`, 13%). The cause was the measurement: as the speed crept up, DRIVE's automatic gearbox
+shifted, the truck lurched, and the lateral acceleration wobbled for about a second; the bench's slide-out rule compared single samples with the best single sample and
+took the wobble for a slide. The bench now judges the limit and the slide-out on a moving average over 1.5 s (a `Param`), and the Scout reads 0.77 g (0.80 g with linear
+tyres: the expected few percent). A test that measures a peak must not be fooled by a transient; the same idea as filtering a noisy sensor before thresholding it.

@@ -15,6 +15,7 @@ pub struct ChassisTuning {
     pub slip_damping_time_s: Param,
     pub tyre_mu_load_sensitivity: Param,
     pub tyre_stiffness_load_sensitivity: Param,
+    pub skidpad_window_s: Param,
 }
 
 impl ChassisTuning {
