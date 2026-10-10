@@ -11,7 +11,7 @@ const page = await browser.newPage({ viewport: { width: W, height: H } });
 const errors = [];
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 page.on('pageerror', (e) => errors.push(String(e)));
-await page.goto('file://' + path.resolve(argv[0]));
+await page.goto('file://' + path.resolve(argv[0]) + '?static');
 await page.waitForFunction('window.__ready === true', null, { timeout: 60000 });
 console.log('GL:', await page.evaluate(() => window.__v.renderer), 'triangles', await page.evaluate(() => `${window.__v.triangles}/${window.__v.expectedTriangles}`));
 const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(fps), '-c:v', 'mjpeg', '-i', '-', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '22', '-movflags', '+faststart', opt('out', 'clip.mp4')], { stdio: ['pipe', 'inherit', 'inherit'] });

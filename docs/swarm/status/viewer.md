@@ -1,6 +1,6 @@
 # Status: VIEWER
 
-**Last updated:** 2026-10-10 11:30 UTC | **Branch:** lane/viewer/build | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
+**Last updated:** 2026-10-10 11:30 UTC | **Branch:** lane/viewer/page | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
 
 ## Done
 - Spike S-V passes (WebGL 2 under SwiftShader, 46 ms/frame, 10 s clip = 72 KB): `docs/lanes/viewer/spike-v.md`.
@@ -9,8 +9,10 @@
 
 - Settling PR #15 (open). Build step 1: `w5k_replay::binary` encode/decode, 7 tests (truck 23 B, tank 36 B per vehicle-frame).
 
+- Step 2 (PR on `lane/viewer/page`): JS decoder (`tools/viewer/src/replay.js`, checked against the Rust codec by `test-decoder.mjs`), the page (orbit/chase, scrub, speed), `smoke.mjs` (triangle count, each joint alone moves pixels, no console errors).
+
 ## In progress
-- Step 2: JS decoder + the page with cameras, scrub and the pixel-difference smoke test.
+- Step 3: debug draw, HUD, scope plots.
 
 ## Blocked
 - Nothing.
@@ -21,7 +23,11 @@
 ## Cards needed / PROVISIONAL decisions in force
 - None. Compression (flate2) deferred: would need a dependency card.
 
+## Findings for other lanes
+- GEOMETRY/FORGE: the box rigs' gun barrel is a plain tube, so 5 cm of recoil changes only ~8 pixels; a muzzle brake or ring makes recoil legible. Wheels have one small lug each (the only thing that shows spin).
+
 ## Evidence
+- `smoke.mjs` PASS on both canned rigs: turret_yaw, gun_pitch, gun_recoil, wheels, steer each move pixels alone. Pictures `docs/lanes/viewer/media/page-*.png`.
 - `docs/lanes/viewer/media/spike-v-tank.png`.
 
 ## Owner instructions received
