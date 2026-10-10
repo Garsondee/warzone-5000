@@ -11,8 +11,10 @@
 - Settling PR #7 merged. ARCH go + owner instruction (STATE.md, 2026-10-10 02:30) verified in repo; building without waiting for review.
 - Build step 1: `quarter_car` bench with its four oracle tests (this PR).
 
+- Build step 2: `suspension` (all spring kinds, damper, dry friction, bump stop, hard limit) + `tuning.ron` Params (this PR).
+
 ## In progress
-- Next PR: `suspension` (all SpringKinds, damper, bump stop).
+- Next PR: `tyre`.
 
 ## Blocked
 - Nothing.
