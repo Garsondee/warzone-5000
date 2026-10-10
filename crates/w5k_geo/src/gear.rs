@@ -31,6 +31,7 @@ pub fn wheel_module(w: &WheelDims, segments: u32, knuckle: Option<Knuckle>) -> M
         fitting: false,
         mesh: mesh.finished(),
         pose: Transform::IDENTITY,
+        placement: None,
     };
     let mut parts = vec![
         part("tyre", NodeRole::Wheel, SlotKind::Rubber, wh.tyre),
@@ -49,6 +50,8 @@ pub fn wheel_module(w: &WheelDims, segments: u32, knuckle: Option<Knuckle>) -> M
         pose: frame(Vec3::ZERO, -Vec3::X, -Vec3::Z),
         size_m: w.outer_radius_m,
         station: None,
+        carrier: NodeRole::Hull,
+        owner: None,
         hints: Vec::new(),
     };
     Module {

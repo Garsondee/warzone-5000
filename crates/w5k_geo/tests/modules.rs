@@ -34,6 +34,7 @@ fn part(name: &str, role: NodeRole, mesh: Mesh, pose: Transform) -> Part {
         fitting: false,
         mesh,
         pose,
+        placement: None,
     }
 }
 
@@ -42,7 +43,17 @@ fn marker(pose: Transform) -> Part {
 }
 
 fn socket(name: &str, kind: SocketKind, side: Side, pose: Transform, size_m: f64) -> Socket {
-    Socket { name: name.to_string(), kind, side, pose, size_m, station: None, hints: Vec::new() }
+    Socket {
+        name: name.to_string(),
+        kind,
+        side,
+        pose,
+        size_m,
+        station: None,
+        carrier: NodeRole::Hull,
+        owner: None,
+        hints: Vec::new(),
+    }
 }
 
 fn hull(sockets: Vec<Socket>) -> Module {
