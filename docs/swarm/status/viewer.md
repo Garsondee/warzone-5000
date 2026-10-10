@@ -1,6 +1,6 @@
 # Status: VIEWER
 
-**Last updated:** 2026-10-10 11:30 UTC | **Branch:** lane/viewer/render | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
+**Last updated:** 2026-10-10 11:30 UTC | **Branch:** lane/viewer/render | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** M1 deliverables done, awaiting CI/merge
 
 ## Done
 - Spike S-V passes (WebGL 2 under SwiftShader, 46 ms/frame, 10 s clip = 72 KB): `docs/lanes/viewer/spike-v.md`.
@@ -16,7 +16,7 @@
 - Steps 5 and 6 (PR on `lane/viewer/render`): `w5k viewer render|page|plot`; the first-light replay plays (clip 14 s, 0.57 MB; frame `docs/lanes/viewer/media/first-light-chase.png`). README `docs/lanes/viewer/README.md`.
 
 ## In progress
-- M1 acceptance review: CI on Windows, a tank screenshot with the gun fired, theory note parts 2-4.
+- Nothing: PRs #15, #22, #26, #28, #33 (stacked, merge in that order) await ARCH. Idle.
 
 ## Blocked
 - Nothing.
@@ -32,6 +32,7 @@
 - GEOMETRY/FORGE: the box rigs' gun barrel is a plain tube, so 5 cm of recoil changes only ~8 pixels; a muzzle brake or ring makes recoil legible. Wheels have one small lug each (the only thing that shows spin).
 
 ## Evidence
+- `docs/lanes/viewer/media/tank-gun-fired.png`.
 - `smoke.mjs` PASS on both canned rigs: turret_yaw, gun_pitch, gun_recoil, wheels, steer each move pixels alone. Pictures `docs/lanes/viewer/media/page-*.png`.
 - `docs/lanes/viewer/media/spike-v-tank.png`.
 
@@ -39,4 +40,7 @@
 - 2026-10-10: run without checking in (STATE.md); continuing straight into build steps.
 
 ## Handoff note (fill in when you stop)
-- Changed: ... | Unfinished: ... | Surprised me: ... | I would do next: ...
+- Changed: replay v2 binary codec + tests; three.js page, debug draw, HUD, ledger panel, scope; smoke/decoder tests; `w5k viewer render|page|plot`; theory note; README.
+- Unfinished: 3D per-term force arrows (needs ledger direction + CoM in the contract, CCR candidates); camo hook (needs LOOK's slots); terrain drawing (needs WORLD's export); Windows run of the Node tests is not in CI (the Rust codec tests are).
+- Surprised me: stand-in replays cost only 23-36 B/vehicle-frame because they are smooth; expect more with real tyre noise. A plain-tube barrel makes recoil nearly invisible.
+- I would do next: point the page at FORGE's real truck rig and re-measure bytes per frame; add smoke.mjs to CI once Chromium is available there.
