@@ -27,6 +27,5 @@ One call is one substep; the gear is explicit over it, like the other ground loa
 ## Contract 0.3 fields
 `track_runs` and `ArticulationLoads` need nothing from me. **`grouser_height_m` and `belt_stiffness_n_m` are in the contract but not consumed yet**: `GearConfig` ignores them (sag still comes from tension and belt weight; grousers still go through `shoe_mu_scale_soft`). I consume them in a later PR once the carrier's numbers exist; until then a rig that sets them gets the 0.2 behaviour, which is what "0 = none" promised only when they are 0.
 
-## Open questions for ARCH
-1. Contact centre and road-wheel order: I assume the glue passes wheels in ascending forward position (as `GearConfig::from_rig` sorts them); confirm or I add a permutation.
-2. The glue owns the hull-level `Belly` call; if you would rather it sit inside a per-vehicle "tracked running gear" object with both tracks and the belly, I can provide that wrapper (about 40 lines) so the glue makes one call per substep.
+## The wrapper (answers to ARCH)
+`vehicle::TrackedVehicleGear::new(&rig, tuning, belly)` holds one gear per `PhysRig::tracks` entry (rig order) and the belly; one `step(&[TrackStepInput], Option<&BellyStepInput>, dt)` per substep. Read back `track(i).outputs()` (per-sample `ContactOutput`), `track(i).wheel_force_n()`, `totals()[i]` (`shear_thrust_n` = ledger row "track shear", `compaction_n` = "soil compaction", `shaft_reaction_nm` to DRIVE) and `belly_output()` ("belly drag"). Wheels are passed in ascending forward position (ARCH asserts it in the glue; no permutation). Tests: `tests/vehicle.rs` on the ladder tank.
