@@ -1,0 +1,46 @@
+// Parametric tracked carrier hull: a fictional light armoured personnel carrier in the class of an M113 (lane GEOMETRY). One shell, everything else
+// anchored to it (see utility_4x4.ron for the conventions: fractions of the hull box, x of W from the centre line, y of H from the underside, z
+// of L from the front; `_m` sizes are metres). Provenance ESTIMATE for every number, bands +-15%, reason: an original design in the class.
+// The section is a narrow lower hull between the tracks (w of the half width) under a full-width upper hull whose sides stand over the tracks
+// (the sponsons); the nose is a sloped glacis of about 45 degrees rising to the front deck, then the roof steps up over the troop compartment, and
+// the rear is a vertical face. There are no wheel arches: the wheels, the belts and the hull's sockets for them are in track.rs and carrier.rs.
+(
+    body: (
+        // (z, lower half-width, belt height, upper half-width, top height, tilt, underside): the lines plan of the shell. The "belt" is the underside
+        // of the sponsons, 10 cm over the top run of the tracks.
+        stations: [
+            (z: 0.000, w: 0.70, yb: 0.30, wu: 0.73, yt: 0.37, tilt: 0.00, yo: 0.13),       // the nose edge, the underside raised (approach)
+            (z: 0.010, w: 0.70, yb: 0.30, wu: 0.80, yt: 0.40, tilt: 0.02, yo: 0.09),
+            (z: 0.040, w: 0.70, yb: 0.30, wu: 0.97, yt: 0.52, tilt: 0.04, yo: 0.03),       // the glacis spreads to the full width as it rises
+            (z: 0.205, w: 0.70, yb: 0.30, wu: 1.00, yt: 0.94, tilt: 0.05, yo: 0.00),       // the top of the glacis, about 43 degrees
+            (z: 0.330, w: 0.70, yb: 0.30, wu: 1.00, yt: 0.94, tilt: 0.05, yo: 0.00),       // the front deck: driver and engine
+            (z: 0.338, w: 0.70, yb: 0.30, wu: 1.00, yt: 1.00, tilt: 0.05, yo: 0.00),       // the roof steps up over the troop compartment
+            (z: 0.985, w: 0.70, yb: 0.30, wu: 1.00, yt: 1.00, tilt: 0.05, yo: 0.00),
+            (z: 0.995, w: 0.70, yb: 0.30, wu: 0.98, yt: 0.99, tilt: 0.05, yo: 0.02),
+            (z: 1.000, w: 0.70, yb: 0.30, wu: 0.98, yt: 0.99, tilt: 0.05, yo: 0.04),       // the rear face, vertical
+        ],
+        // the cuts between the three regions of the shell (front, deck, troop compartment) that `regions_m` of the dimensions sets in metres
+        cab_f: (0.205, 0.338),
+        lip_proud_m: 0.0,
+        lower_chamfer_m: 0.04,
+        sill_chamfer_m: 0.06,
+        upper_chamfer_m: 0.06,
+        arch_gap_m: 0.05,
+        well_gap_m: 0.05,
+        arch_samples: 12,
+        min_wall_m: 0.10,
+        min_notch_m: 0.002,
+    ),
+    parts: [
+        // ---- the roof: the driver's hatch on the front deck, the cargo hatch over the troop compartment (the commander's ring is a socket)
+        (name: "hatch_driver", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.30, -0.16), y: Top(-0.02, 0.07), z: Frac(0.225, 0.305), corner_m: 0.01)),
+        (name: "hatch_cargo", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.19, 0.19), y: Top(-0.02, 0.06), z: Frac(0.72, 0.95), corner_m: 0.012)),
+        // ---- the nose: lamps on the lower plate
+        (name: "headlamp", role: Hull, slot: Optics, fitting: true, mirror: true, shape: Cyl(axis: Z, x: Frac(0.28, 0.335), y: Frac(0.17, 0.26), z: Front(-0.05, 0.03), radius_m: 0.07)),
+        (name: "antenna", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Y, x: Frac(0.36, 0.36), y: Top(-0.03, 0.9), z: Frac(0.97, 0.97), radius_m: 0.01)),
+    ],
+    knuckle_radius_m: 0.0,
+    sockets: [
+        (name: "roof", kind: Ring, size_m: 0.90, x: Frac(0.12, 0.12), y: Top(-0.02, -0.02), z: Frac(0.50, 0.50), normal: (0.0, 1.0, 0.0), reference: (0.0, 0.0, -1.0)),
+    ],
+)
