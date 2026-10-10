@@ -275,6 +275,8 @@ dependencies = [
 name = "w5k_geo"
 version = "0.1.0"
 dependencies = [
+ "ron",
+ "serde",
  "w5k_contract",
  "w5k_math",
 ]
