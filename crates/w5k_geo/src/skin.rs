@@ -4,7 +4,7 @@
 //! export: four spins, two steers, four travels, front axle left then right, rear axle left then right. The tracked carrier is a skin too
 //! (`carrier_tracked`), built from the compiled rig (`Skin::from_rig`): its joint layout is that rig's.
 
-use crate::carrier::{placeholder_dims as carrier_dims, tracked_assembly};
+use crate::carrier::{placeholder_dims as carrier_dims, tracked_assembly, tracked_assembly_with};
 use crate::export::{render_rig_with, Overrides};
 use crate::flags::FlagParams;
 use crate::part::Part;
@@ -151,6 +151,16 @@ impl Skin {
         render_rig_with(self.kind.id(), &self.parts(detail), flags, &over)
     }
 
+    /// The skin as a `RenderRig` whose belts are instanced links (contract 0.3): each side's `Track` mesh is ONE link and a `track_runs` entry
+    /// says how a viewer repeats it along the path as the sprocket turns. A wheeled skin has no belt: the same as `rig`. Not for a glTF, which
+    /// cannot repeat a mesh along a path: `rig` draws the belt as one static mesh.
+    pub fn rig_instanced(&self, detail: u8, flags: &FlagParams) -> Result<RenderRig, String> {
+        let Some(t) = &self.tracks else { return Ok(self.rig(detail, flags)) };
+        let asm = tracked_assembly_with(&self.dims, &t.run, &LinkSpec::standard(), detail, true)?;
+        let runs = [Side::Right, Side::Left].map(|s| t.run.run(s)).into_iter().collect::<Result<Vec<_>, _>>()?;
+        Ok(render_rig_with(self.kind.id(), &asm.parts, flags, &Overrides { runs, ..t.overrides.clone() }))
+    }
+
     /// The skin of a compiled tracked rig: the hull box is the definition's, every wheel (road wheels, sprocket, idler, return rollers) is
     /// exactly where the rig puts it, with its radius and width, the belt is the band round them (thickness, pitch and teeth from the track),
     /// and the joint coordinates follow the rig's `joint_names()`. An error says what in the rig the carrier cannot be drawn from (a wheel the
@@ -274,6 +284,7 @@ impl Skin {
         let overrides = Overrides {
             travel_axes: rig.stations.iter().map(|s| s.bump_dir).collect(),
             joint_count: Some(rig.joint_names().len()),
+            ..Overrides::default()
         };
         Ok(Skin {
             kind: TruckKind::Carrier,

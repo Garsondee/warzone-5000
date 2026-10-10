@@ -1,6 +1,6 @@
 //! `w5k geometry`: the command line of lane GEOMETRY (only that lane edits this file). Pictures of generated parts.
 
-use w5k_contract::render::NodeRole;
+use w5k_contract::render::{MeshPart, NodeRole, RenderRig};
 use w5k_geo::budget::wheeled_triangles;
 use w5k_geo::carrier::{placeholder_dims as carrier_dims, tracked_assembly};
 use w5k_geo::export::{glb, render_rig, slot_colour};
@@ -11,7 +11,7 @@ use w5k_geo::mount::{ring_mount, RingMountDims};
 use w5k_geo::part::Part;
 use w5k_geo::raster::{render, Camera, Item, Mode};
 use w5k_geo::skin::Skin;
-use w5k_geo::track::{run_parts, LinkSpec, RunSpec};
+use w5k_geo::track::{link_frames, place_link, run_parts, Belt, LinkSpec, RunSpec};
 use w5k_geo::truck::{truck_assembly as skin_assembly, utility_assembly, utility_hull, TruckKind, UtilityDims};
 use w5k_geo::weapon::{gun_module, GunDims};
 use w5k_geo::wheel::{segments_for, wheel, WheelDims};
@@ -75,8 +75,17 @@ pub fn run(args: &[String]) -> Result<(), String> {
             let detail: u8 = get("--detail").map_or(Ok(1), |d| d.parse()).map_err(|_| USAGE.to_string())?;
             let (asm, _) = truck_assembly(what, detail)?;
             let skin_id = skin_id(what);
-            let stem = skin_id.map_or_else(|| what.replace('+', "_"), str::to_string);
-            let rig = render_rig(&stem, &asm.parts, &FlagParams::default_params());
+            let links = args.iter().any(|a| a == "--links");
+            let stem =
+                skin_id.map_or_else(|| what.replace('+', "_"), str::to_string) + if links { "_links" } else { "" };
+            let rig = if links {
+                let skin = Skin::for_id("carrier_tracked")
+                    .filter(|_| what == "carrier")
+                    .ok_or("--links is for the carrier")?;
+                skin.rig_instanced(detail, &FlagParams::default_params())?
+            } else {
+                render_rig(&stem, &asm.parts, &FlagParams::default_params())
+            };
             rig.validate().map_err(|e| e.join("; "))?;
             std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
             std::fs::write(
@@ -84,7 +93,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 serde_json::to_string(&rig).map_err(|e| e.to_string())?,
             )
             .map_err(|e| e.to_string())?;
-            std::fs::write(format!("{out}/{stem}.glb"), glb(&rig)).map_err(|e| e.to_string())?;
+            if !links {
+                // a glTF cannot repeat a mesh along a path: the instanced belt is for viewers that read `track_runs`
+                std::fs::write(format!("{out}/{stem}.glb"), glb(&rig)).map_err(|e| e.to_string())?;
+            }
             let joints: Vec<String> =
                 rig.nodes.iter().filter_map(|n| n.joint.map(|j| format!("{} -> {}", j.index, n.name))).collect();
             println!(
@@ -101,8 +113,79 @@ pub fn run(args: &[String]) -> Result<(), String> {
             }
             Ok(())
         }
+        (Some("belt"), _) => {
+            let out = get("--out").ok_or(USAGE)?;
+            let detail: u8 = get("--detail").map_or(Ok(1), |d| d.parse()).map_err(|_| USAGE.to_string())?;
+            std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+            let path = format!("{out}/carrier-belt-frames.png");
+            let (w, h) = (700, 330); // const-ok: picture size in pixels
+            let frames = belt_frames(detail)?;
+            let min_ext = frames.iter().map(|f| extent(f)).fold(0.0, f64::max);
+            let mut pixels = vec![0u8; 2 * w * 2 * h * 3];
+            for (i, parts) in frames.iter().enumerate() {
+                let tile = sheet(parts, Mode::Shaded, &["side"], w, h, min_ext, 0.78)?; // const-ok: camera pull-back, to crop the empty sky
+                for y in 0..h {
+                    let dst = ((i / 2 * h + y) * 2 * w + i % 2 * w) * 3;
+                    pixels[dst..dst + w * 3].copy_from_slice(&tile[y * w * 3..(y + 1) * w * 3]);
+                }
+            }
+            write_png(&path, 2 * w as u32, 2 * h as u32, &pixels)?;
+            println!("wrote {path}");
+            Ok(())
+        }
         _ => Err(USAGE.to_string()),
     }
+}
+
+/// A mesh in the hull frame to draw, its base colour, and whether it counts for the camera framing.
+type Drawn = (Mesh, [f64; 3], bool);
+
+/// The picture of the belt paints this many links, in this colour.
+const PAINTED: usize = 8; // const-ok: how many links are painted in the picture
+const PAINT: [f64; 3] = [0.95, 0.42, 0.08]; // const-ok: picture colour of the painted links
+
+/// The pose of node `i` of a rig in the hull frame at joint coordinates zero.
+fn at_rest(rig: &RenderRig, i: usize) -> Transform {
+    let n = &rig.nodes[i];
+    n.parent.map_or(n.rest, |p| at_rest(rig, p).compose(&n.rest))
+}
+
+fn mesh_of(m: &MeshPart) -> Mesh {
+    let v = |p: &[f32; 3]| Vec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2]));
+    Mesh { v: m.positions.iter().map(v).collect(), t: m.indices.chunks(3).map(|c| [c[0], c[1], c[2]]).collect() }
+}
+
+/// What a viewer does with the instanced carrier, four times: the exported rig drawn at rest, and every link placed along its run from the
+/// wheel centres and the sprocket's spin; the spin takes the first links a quarter of the loop further each frame, and eight of them are painted.
+fn belt_frames(detail: u8) -> Result<Vec<Vec<Drawn>>, String> {
+    let skin = Skin::for_id("carrier_tracked").ok_or("no carrier skin")?;
+    let rig = skin.rig_instanced(detail, &FlagParams { cavity_rays: 1, ..FlagParams::default_params() })?;
+    let spec = &skin.tracks.as_ref().ok_or("the carrier has no running gear")?.run;
+    let loop_m = Belt::round(&spec.circles())?.length_m;
+    let is_link =
+        |m: &MeshPart| rig.track_runs.iter().any(|r| rig.meshes[r.link_mesh].name == m.name && r.node == m.node);
+    let slot = |m: &MeshPart| slot_colour(rig.material_slots[m.material_slot].kind);
+    let fixed: Vec<Drawn> = rig
+        .meshes
+        .iter()
+        .filter(|m| !is_link(m))
+        .map(|m| (mesh_of(m).transformed(&at_rest(&rig, m.node)), slot(m), m.name != "antenna"))
+        .collect();
+    (0..4)
+        .map(|k| {
+            let mut parts = fixed.clone();
+            for run in &rig.track_runs {
+                let hubs: Vec<Vec3> = run.wheels.iter().map(|w| at_rest(&rig, w.node).pos).collect();
+                let centres: Vec<[f64; 2]> = hubs.iter().map(|q| [q.z, q.y]).collect();
+                let spin = f64::from(k) * loop_m / 4.0 / run.wheels[run.sprocket].radius_m; // const-ok: a quarter of the loop a frame
+                let (link, colour) = (mesh_of(&rig.meshes[run.link_mesh]), slot(&rig.meshes[run.link_mesh]));
+                for (i, (p, t)) in link_frames(run, &centres, spin)?.into_iter().enumerate() {
+                    parts.push((place_link(&link, hubs[0].x, p, t), if i < PAINTED { PAINT } else { colour }, true));
+                }
+            }
+            Ok(parts)
+        })
+        .collect()
 }
 
 /// Generated against stated, in percent. PLACEHOLDER until the dossier lands (`PROVISIONAL(C-002)`): "stated" is the number the part list was scaled to.
@@ -278,12 +361,21 @@ fn sheet(
     min_ext: f64,
     zoom_out: f64,
 ) -> Result<Vec<u8>, String> {
-    let flags = bake(&parts.iter().map(|p| &p.0).collect::<Vec<_>>(), &FlagParams::default_params());
-    let items: Vec<Item> = parts
-        .iter()
-        .zip(&flags)
-        .map(|(p, (m, f))| Item { mesh: m, colour: p.1, edge: &f.edge, cavity: &f.cavity })
-        .collect();
+    // plain shading needs no flags: skip the bake, which is most of the time a big subject takes
+    let flags = if matches!(mode, Mode::Shaded) {
+        Vec::new()
+    } else {
+        bake(&parts.iter().map(|p| &p.0).collect::<Vec<_>>(), &FlagParams::default_params())
+    };
+    let items: Vec<Item> = if flags.is_empty() {
+        parts.iter().map(|p| Item { mesh: &p.0, colour: p.1, edge: &[], cavity: &[] }).collect()
+    } else {
+        parts
+            .iter()
+            .zip(&flags)
+            .map(|(p, (m, f))| Item { mesh: m, colour: p.1, edge: &f.edge, cavity: &f.cavity })
+            .collect()
+    };
     let (lo, hi) = parts
         .iter()
         .filter(|p| p.2)

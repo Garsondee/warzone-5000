@@ -11,7 +11,7 @@ use crate::part::{Part, Side};
 use crate::wheel::{revolve, segments_for};
 use serde::Deserialize;
 use std::f64::consts::{PI, TAU};
-use w5k_contract::render::{NodeRole, SlotKind};
+use w5k_contract::render::{NodeRole, SlotKind, TrackRun};
 use w5k_contract::rig::WheelKind;
 use w5k_math::{scalar, Transform, Vec3};
 
@@ -452,17 +452,16 @@ pub fn wheel_module(w: &RunWheel, spec: &RunSpec, detail: u8) -> Module {
     }
 }
 
-/// The belt of one side as a module (the links at phase 0, one `Track` part about the track centre line), for a `Run` socket.
-pub fn belt_module(spec: &RunSpec, link: &LinkSpec) -> Result<Module, String> {
-    let belt = Belt::round(&spec.circles())?;
+/// A module of one `Track` part about the track centre line, for a `Run` socket.
+fn belt_side(name: &str, mesh: Mesh, spec: &RunSpec) -> Module {
     let part = Part {
-        name: "belt".into(),
+        name: name.into(),
         role: NodeRole::Track,
         station: None,
         side: Side::Right,
         slot: SlotKind::Track,
         fitting: false,
-        mesh: belt_mesh(&belt, spec, link, 0.0).finished(),
+        mesh: mesh.finished(),
         pose: Transform::IDENTITY,
         placement: None,
     };
@@ -477,12 +476,77 @@ pub fn belt_module(spec: &RunSpec, link: &LinkSpec) -> Result<Module, String> {
         owner: None,
         hints: Vec::new(),
     };
-    Ok(Module {
-        name: "belt".into(),
+    Module {
+        name: name.into(),
         kind: ModuleKind::Gear,
         parts: vec![part],
         sockets: Vec::new(),
         mount: Some(mount),
         symmetric: false,
-    })
+    }
+}
+
+/// The belt of one side as a module (the links at phase 0, one `Track` part about the track centre line), for a `Run` socket.
+pub fn belt_module(spec: &RunSpec, link: &LinkSpec) -> Result<Module, String> {
+    let belt = Belt::round(&spec.circles())?;
+    Ok(belt_side("belt", belt_mesh(&belt, spec, link, 0.0), spec))
+}
+
+/// The belt of one side as ONE link (the contract's `TrackRun::link_mesh`: x along the travel, y out of the belt, z across it), for a `Run`
+/// socket: a viewer repeats it along the path, so it counts once in the triangle budget. The link is symmetric across the belt.
+pub fn link_module(spec: &RunSpec, link: &LinkSpec) -> Result<Module, String> {
+    let (_, pitch) = tile(Belt::round(&spec.circles())?.length_m, spec.pitch_m);
+    let one = link_mesh(link, pitch, spec.belt_width_m, spec.belt_thickness_m);
+    let turned = Mesh { v: one.v.iter().map(|q| Vec3::new(q.z, q.y, -q.x)).collect(), t: one.t };
+    Ok(belt_side("link", turned, spec))
+}
+
+/// A side drawn as instanced links, as the contract's `TrackRun` wants it: the rig's station of every wheel with its path radius, in loop
+/// order; the sprocket's place in that loop; how many links close the belt.
+#[derive(Clone, Debug)]
+pub struct Run {
+    pub side: Side,
+    pub wheels: Vec<(u8, f64)>,
+    pub sprocket: usize,
+    pub links: u16,
+}
+
+impl RunSpec {
+    /// The `Run` of `side`. An error says the belt cannot be drawn, or that the loop has no sprocket.
+    pub fn run(&self, side: Side) -> Result<Run, String> {
+        let circles = self.circles();
+        let (n, _) = tile(Belt::round(&circles)?.length_m, self.pitch_m);
+        let sprocket =
+            self.wheels.iter().position(|w| w.kind == WheelKind::Sprocket).ok_or("the loop has no sprocket")?;
+        Ok(Run {
+            side,
+            wheels: circles.iter().enumerate().map(|(i, c)| (self.station(side, i), c.r)).collect(),
+            sprocket,
+            links: u16::try_from(n).map_err(|_| format!("{n} links is too many"))?,
+        })
+    }
+}
+
+/// A link of `TrackRun::link_mesh` set on the side plane: its origin at the path point `p` (z, y), x along the tangent `t`, y along the outward
+/// normal, z across the belt (towards +x), the belt's centre line at `x_m`. A rigid motion, so the winding is kept.
+pub fn place_link(one: &Mesh, x_m: f64, p: [f64; 2], t: [f64; 2]) -> Mesh {
+    let at = |q: &Vec3| Vec3::new(x_m + q.z, p[1] + q.x * t[1] - q.y * t[0], p[0] + q.x * t[0] + q.y * t[1]);
+    Mesh { v: one.v.iter().map(at).collect(), t: one.t.clone() }
+}
+
+/// A point of the side plane (z, y) and the unit tangent of the path there.
+pub type Frame = ([f64; 2], [f64; 2]);
+
+/// The viewer's job for one `TrackRun` (counter-clockwise loops, `direction` +1, as GEOMETRY writes them): the point (z, y) and unit tangent
+/// of every link, given the wheels' current centres (z, y) in the hull frame and the sprocket's spin. The band round the circles has length
+/// `L`; link `k` sits at arc length `k L / links + direction * R_sprocket * spin`.
+pub fn link_frames(run: &TrackRun, centres: &[[f64; 2]], spin_rad: f64) -> Result<Vec<Frame>, String> {
+    if centres.len() != run.wheels.len() || run.sprocket >= run.wheels.len() || run.links == 0 {
+        return Err("a track run needs a centre for each of its wheels, a sprocket among them and links".into());
+    }
+    let circles: Vec<Circle> =
+        centres.iter().zip(&run.wheels).map(|(c, w)| Circle { z: c[0], y: c[1], r: w.radius_m }).collect();
+    let belt = Belt::round(&circles)?;
+    let (n, shift) = (f64::from(run.links), f64::from(run.direction) * run.wheels[run.sprocket].radius_m * spin_rad);
+    Ok((0..run.links).map(|k| belt.at(belt.length_m * f64::from(k) / n + shift)).collect())
 }

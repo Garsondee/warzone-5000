@@ -4,9 +4,11 @@
 use crate::flags::{bake, FlagParams, Flags};
 use crate::mesh::Mesh;
 use crate::part::{Part, Side};
+use crate::track::Run;
 use std::collections::BTreeSet;
 use w5k_contract::render::{
-    JointAxisKind, JointBinding, MaterialSlot, MeshPart, NodeRole, RenderNode, RenderRig, SlotKind,
+    JointAxisKind, JointBinding, MaterialSlot, MeshPart, NodeRole, RenderNode, RenderRig, SlotKind, TrackRun,
+    TrackWheel,
 };
 use w5k_math::{scalar, Quat, Transform, Vec3};
 
@@ -100,12 +102,14 @@ pub fn render_rig(id: &str, parts: &[Part], p: &FlagParams) -> RenderRig {
     render_rig_with(id, parts, p, &Overrides::default())
 }
 
-/// What a physics rig knows and the parts do not: the axis each station's suspension travel moves along (`bump_dir`; vertical when absent)
-/// and how many joint coordinates its frames carry (an unarmed skin of an armed rig leaves the articulation coordinates unbound).
+/// What a physics rig knows and the parts do not: the axis each station's suspension travel moves along (`bump_dir`; vertical when absent),
+/// how many joint coordinates its frames carry (an unarmed skin of an armed rig leaves the articulation coordinates unbound), and the sides
+/// whose belt is ONE link that a viewer repeats along the path (the `Track` part of such a side is that link; it becomes a `track_runs` entry).
 #[derive(Clone, Debug, Default)]
 pub struct Overrides {
     pub travel_axes: Vec<Vec3>,
     pub joint_count: Option<usize>,
+    pub runs: Vec<Run>,
 }
 
 /// The wheel roles of a tracked vehicle: they make stations the way `Wheel` does, with one global index per station (`Part::station`, in the
@@ -141,7 +145,12 @@ fn tracked_name(parts: &[Part], station: u8, right: bool) -> String {
 /// `render_rig` with what the physics rig says about the stations (`Overrides`).
 pub fn render_rig_with(id: &str, parts: &[Part], p: &FlagParams, over: &Overrides) -> RenderRig {
     let hulls: Vec<Mesh> = parts.iter().map(Part::in_hull_frame).collect();
-    let baked = bake(&hulls.iter().collect::<Vec<_>>(), p);
+    let mut baked = bake(&hulls.iter().collect::<Vec<_>>(), p);
+    let repeated = |q: &Part| q.role == NodeRole::Track && over.runs.iter().any(|r| r.side == q.side);
+    // a repeated link is baked alone in its own frame: in place it would sit inside the hull and read as dirt all over
+    for (k, q) in parts.iter().enumerate().filter(|(_, q)| repeated(q)) {
+        baked[k] = bake(&[&q.mesh], p).remove(0);
+    }
     // stations: (axle, right?) sorted axle first, left before right: fl, fr, rl, rr
     let mut stations: Vec<(u8, bool)> = parts
         .iter()
@@ -224,7 +233,8 @@ pub fn render_rig_with(id: &str, parts: &[Part], p: &FlagParams, over: &Override
     for q in parts.iter().filter(|q| q.role == NodeRole::Track) {
         let name = format!("track_{}", if q.side == Side::Right { "r" } else { "l" });
         belt_node.insert(q.name.clone(), rig.nodes.len());
-        rig.nodes.push(RenderNode { name, parent: Some(0), role: NodeRole::Track, rest: q.pose, joint: None });
+        let rest = if repeated(q) { Transform::IDENTITY } else { q.pose };
+        rig.nodes.push(RenderNode { name, parent: Some(0), role: NodeRole::Track, rest, joint: None });
     }
     // articulation chains: one node per (placement, role), the placement's own chain first, each hung from the node that carries its socket
     let mut chain_nodes: Vec<(String, NodeRole, usize, Transform)> = Vec::new();
@@ -267,12 +277,40 @@ pub fn render_rig_with(id: &str, parts: &[Part], p: &FlagParams, over: &Override
             part.placement.as_ref().and_then(|pl| chain_nodes.iter().find(|c| c.0 == pl.label && c.1 == part.role));
         let (node, frame) = match (part.role, chain) {
             (role, _) if is_wheel(role) => (index_of(part).map_or(0, |i| wheel_node[i]), part.pose),
-            (NodeRole::Track, _) => (belt_node.get(&part.name).copied().unwrap_or(0), part.pose),
+            (NodeRole::Track, _) => (
+                belt_node.get(&part.name).copied().unwrap_or(0),
+                if repeated(part) { Transform::IDENTITY } else { part.pose },
+            ),
             (NodeRole::SteerKnuckle, _) => (index_of(part).and_then(|i| steer_node[i]).unwrap_or(0), part.pose),
             (_, Some(c)) => (c.2, c.3),
             _ => (0, Transform::IDENTITY),
         };
         rig.meshes.push(mesh_part(part, node, mesh, flags, &frame, smooth));
+    }
+    // the contract's `TrackRun`: the loop (a wheel's spin node and path radius), the link mesh and count; loops are counter-clockwise, so a
+    // positive sprocket spin (rolling forward) moves the links along the loop order, `direction` +1
+    for r in &over.runs {
+        let rank = |a: u8| stations.iter().position(|&(s, right)| s == a && right == (r.side == Side::Right));
+        let wheels: Option<Vec<TrackWheel>> = r
+            .wheels
+            .iter()
+            .map(|&(a, radius_m)| rank(a).map(|i| TrackWheel { node: wheel_node[i], radius_m }))
+            .collect();
+        let link_mesh = parts.iter().position(|q| q.role == NodeRole::Track && q.side == r.side);
+        let sprocket_joint = r.wheels.get(r.sprocket).and_then(|w| rank(w.0));
+        if let (Some(wheels), Some(link_mesh), Some(sprocket_joint)) = (wheels, link_mesh, sprocket_joint) {
+            let node = rig.meshes[link_mesh].node;
+            let run = TrackRun {
+                node,
+                wheels,
+                link_mesh,
+                links: r.links,
+                sprocket: r.sprocket,
+                sprocket_joint,
+                direction: 1,
+            };
+            rig.track_runs.push(run);
+        }
     }
     rig
 }

@@ -1,15 +1,19 @@
 //! The tracked skin built from a compiled rig: every wheel where the rig puts it, the joint layout the rig's `joint_names()` gives, the
-//! belt the rig describes, a reason when the rig cannot be drawn, and the tracked triangle budget.
+//! belt the rig describes, a reason when the rig cannot be drawn, and the tracked triangle budget; and the belt as instanced links: the
+//! `track_runs` of the export carry what a viewer needs to move the links round the wheels.
 
+use std::collections::BTreeSet;
 use w5k_contract::def::{RunningGearDef, TrackedDef, VehicleDef};
 use w5k_contract::param::Param;
-use w5k_contract::render::{JointAxisKind, NodeRole, RenderRig};
-use w5k_contract::rig::{PhysRig, WheelKind};
+use w5k_contract::render::{JointAxisKind, MeshPart, NodeRole, RenderRig, TrackRun};
+use w5k_contract::rig::{PhysRig, Side, WheelKind};
 use w5k_contract::testing::{box_tank, dummy_vehicle_def};
 use w5k_geo::budget::tracked_triangles;
 use w5k_geo::flags::FlagParams;
+use w5k_geo::mesh::Mesh;
 use w5k_geo::skin::Skin;
-use w5k_geo::track::pitch_radius_m;
+use w5k_geo::track::{link_frames, pitch_radius_m, place_link};
+use w5k_math::{scalar, Transform, Vec3};
 
 /// A consistent tracked rig and its definition: the contract's stand-in tank with the sprocket given its pitch radius (the stand-in's 0.4 m is
 /// not that of 11 teeth of 0.15 m), the idler and sprocket raised above the road wheels (the stand-in's hubs are all at one height, so its top
@@ -188,4 +192,181 @@ fn the_stand_in_carrier_skin_stays_inside_the_tracked_triangle_budget() {
     let budget = tracked_triangles();
     println!("carrier_tracked: {} triangles, budget {budget}", r.triangle_count());
     assert!(r.triangle_count() < budget, "{} triangles, budget {budget} for a tracked vehicle", r.triangle_count());
+}
+
+/// The pose of node `i` in the hull frame at joint coordinates zero.
+fn at_rest(r: &RenderRig, i: usize) -> Transform {
+    let n = &r.nodes[i];
+    n.parent.map_or(n.rest, |p| at_rest(r, p).compose(&n.rest))
+}
+
+fn as_mesh(m: &MeshPart) -> Mesh {
+    let v = |p: &[f32; 3]| Vec3::new(f64::from(p[0]), f64::from(p[1]), f64::from(p[2]));
+    Mesh { v: m.positions.iter().map(v).collect(), t: m.indices.chunks(3).map(|c| [c[0], c[1], c[2]]).collect() }
+}
+
+/// A run's wheel centres (z, y) in the hull frame, and its belt's centre line (x), at joint coordinates zero.
+fn centres(r: &RenderRig, run: &TrackRun) -> (Vec<[f64; 2]>, f64) {
+    let p: Vec<Vec3> = run.wheels.iter().map(|w| at_rest(r, w.node).pos).collect();
+    (p.iter().map(|q| [q.z, q.y]).collect(), p[0].x)
+}
+
+/// The flag bake with a single cavity ray: these tests are about positions, and the bake is most of the time a rig takes to export.
+fn quick() -> FlagParams {
+    FlagParams { cavity_rays: 1, ..FlagParams::default_params() }
+}
+
+/// The skin's static export (the belt as one mesh) and its instanced one (the belt as a link and a `track_runs` entry).
+fn both(rig: &PhysRig, def: &VehicleDef) -> (RenderRig, RenderRig) {
+    let skin = Skin::from_rig(rig, def).unwrap_or_else(|e| panic!("{e}"));
+    (skin.rig(0, &quick()), skin.rig_instanced(0, &quick()).unwrap_or_else(|e| panic!("{e}")))
+}
+
+fn run_on<'a>(r: &'a RenderRig, node: &str) -> &'a TrackRun {
+    r.track_runs.iter().find(|t| r.nodes[t.node].name == node).unwrap_or_else(|| panic!("no run on {node}"))
+}
+
+#[test]
+fn the_instanced_export_has_a_valid_track_run_a_side_naming_the_rigs_wheels_and_the_sprockets_spin() {
+    for front in [false, true] {
+        let (mut rig, _, def) = fixture();
+        if front {
+            rig.stations.iter_mut().for_each(|s| s.rest_pos_m.z = -s.rest_pos_m.z);
+        }
+        let (fixed, r) = both(&rig, &def);
+        assert!(fixed.track_runs.is_empty(), "the default export draws the belt as one mesh, for a glTF");
+        r.validate().expect("RenderRig::validate");
+        assert_eq!(r.track_runs.len(), 2, "one run a side");
+        for (node, side) in [("track_r", Side::Right), ("track_l", Side::Left)] {
+            let (run, track) = (run_on(&r, node), rig.tracks.iter().find(|t| t.side == side).unwrap());
+            // the wheels are the track's stations (a station's spin joint is its index), the sprocket's spin is the run's `sprocket_joint`
+            let joints: Vec<usize> =
+                run.wheels.iter().map(|w| r.nodes[w.node].joint.expect("a wheel spins").index).collect();
+            let (mut a, mut b) = (joints.clone(), track.stations.clone());
+            a.sort_unstable();
+            b.sort_unstable();
+            assert_eq!(a, b, "{node} (sprocket at the front: {front}): the wheels are the track's stations");
+            assert_eq!(joints[run.sprocket], run.sprocket_joint);
+            assert_eq!(rig.stations[run.sprocket_joint].wheel.kind, WheelKind::Sprocket);
+            assert_eq!(r.nodes[run.wheels[run.sprocket].node].role, NodeRole::Sprocket);
+            for (w, &j) in run.wheels.iter().zip(&joints) {
+                let s = &rig.stations[j];
+                let tip = if s.wheel.kind == WheelKind::Sprocket { 0.0 } else { track.thickness_m / 2.0 };
+                assert!((w.radius_m - (s.wheel.radius_m + tip)).abs() < 1e-9, "{}: path radius {}", s.name, w.radius_m);
+            }
+            assert_eq!(run.direction, 1, "the loop is written counter-clockwise, so a forward spin runs along it");
+            // the link is one small Track mesh on the run's node, which sits at the hull's origin
+            let link = &r.meshes[run.link_mesh];
+            assert_eq!(link.node, run.node);
+            assert_eq!((r.nodes[run.node].role, r.nodes[run.node].rest), (NodeRole::Track, Transform::IDENTITY));
+            assert!(link.indices.len() / 3 < 1000, "{} triangles in one link", link.indices.len() / 3);
+            // its flags are baked alone: in place, inside the hull, the cavity bake would read as dirt all over it (0.7 against 0.4)
+            let dirt = link.cavity.iter().map(|&c| f64::from(c)).sum::<f64>() / link.cavity.len() as f64;
+            assert!(dirt < 0.55, "{node}: the link's mean cavity is {dirt:.2}");
+        }
+    }
+}
+
+#[test]
+fn the_links_a_viewer_places_from_the_exported_rig_are_the_belt_the_static_export_draws() {
+    let (rig, _, def) = fixture();
+    let (fixed, r) = both(&rig, &def);
+    for (node, side) in [("track_r", 1.0), ("track_l", -1.0)] {
+        let run = run_on(&r, node);
+        let (c, x) = centres(&r, run);
+        assert!(x * side > 0.0, "{node} is on its own side");
+        let one = as_mesh(&r.meshes[run.link_mesh]);
+        let frames = link_frames(run, &c, 0.0).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(frames.len(), usize::from(run.links));
+        let placed: Vec<Vec3> = frames.iter().flat_map(|&(p, t)| place_link(&one, x, p, t).v).collect();
+        let id = fixed.nodes.iter().position(|n| n.name == node).unwrap();
+        let rest = at_rest(&fixed, id);
+        let drawn: Vec<Vec3> = fixed
+            .meshes
+            .iter()
+            .filter(|m| m.node == id)
+            .flat_map(|m| as_mesh(m).v.into_iter().map(|v| rest.apply_point(v)))
+            .collect();
+        let cell = |v: &Vec3| v.as_array().map(|c| (c / 2e-4).round() as i64);
+        let set = |vs: &[Vec3]| vs.iter().map(cell).collect::<BTreeSet<_>>();
+        let near = |s: &BTreeSet<[i64; 3]>, v: &Vec3| {
+            let k = cell(v);
+            (-1..=1).any(|i| (-1..=1).any(|j| (-1..=1).any(|l| s.contains(&[k[0] + i, k[1] + j, k[2] + l]))))
+        };
+        let (a, b) = (set(&placed), set(&drawn));
+        let missing = (drawn.iter().filter(|v| !near(&a, v)).count(), placed.iter().filter(|v| !near(&b, v)).count());
+        assert_eq!(missing, (0, 0), "{node}: vertices of the static belt with no placed link nearby, and the reverse");
+    }
+}
+
+#[test]
+fn a_forward_sprocket_spin_runs_the_ground_run_backwards_and_the_top_run_forwards_by_the_pitch_radius_times_the_angle()
+{
+    let (rig, _, def) = fixture();
+    let (_, r) = both(&rig, &def);
+    let run = run_on(&r, "track_r");
+    let (c, _) = centres(&r, run);
+    let (spin, rolled) = (0.1, run.wheels[run.sprocket].radius_m * 0.1);
+    let (before, after) = (link_frames(run, &c, 0.0).unwrap(), link_frames(run, &c, spin).unwrap());
+    let mid = c.iter().map(|q| q[0]).sum::<f64>() / c.len() as f64;
+    let in_the_middle = |k: &usize| (before[*k].0[0] - mid).abs() < 1.0;
+    let by = |f: &dyn Fn(usize) -> f64| {
+        (0..before.len()).filter(in_the_middle).max_by(|&a, &b| f(a).total_cmp(&f(b))).unwrap()
+    };
+    let (ground, top) = (by(&|k| -before[k].0[1]), by(&|k| before[k].0[1]));
+    for (what, k, sign) in [("ground", ground, 1.0), ("top", top, -1.0)] {
+        let (d, y) = ([after[k].0[0] - before[k].0[0], after[k].0[1] - before[k].0[1]], 0.0);
+        let moved = scalar::hypot(d[0], d[1]);
+        assert!((moved - rolled).abs() < 1e-9, "the {what} run link moved {moved} m, the sprocket rolled {rolled} m");
+        assert!(
+            d[0] * sign > 0.0,
+            "the {what} run moves {} (z = {})",
+            if sign > 0.0 { "backwards" } else { "forwards" },
+            d[0]
+        );
+        let _ = y;
+    }
+}
+
+#[test]
+fn pulling_the_idler_forward_lengthens_the_band_and_no_link_enters_a_wheel() {
+    let (rig, _, def) = fixture();
+    let (_, r) = both(&rig, &def);
+    let run = run_on(&r, "track_r");
+    let (mut c, _) = centres(&r, run);
+    let idler = run.wheels.iter().position(|w| r.nodes[w.node].role == NodeRole::Idler).unwrap();
+    let gap = |f: &[([f64; 2], [f64; 2])]| {
+        // two neighbouring links on the ground run, the lowest ones nearest the middle
+        let mut k: Vec<usize> = (0..f.len())
+            .filter(|&k| (f[k].0[1] - f.iter().map(|q| q.0[1]).fold(f64::MAX, f64::min)).abs() < 1e-9)
+            .collect();
+        k.sort_by(|&a, &b| f[a].0[0].total_cmp(&f[b].0[0]));
+        let m = k.len() / 2;
+        scalar::hypot(f[k[m]].0[0] - f[k[m - 1]].0[0], f[k[m]].0[1] - f[k[m - 1]].0[1])
+    };
+    let at_rest = gap(&link_frames(run, &c, 0.0).unwrap());
+    c[idler][0] -= 0.05; // forward is -z
+    let pulled = link_frames(run, &c, 0.0).unwrap();
+    assert!(gap(&pulled) > at_rest, "the same number of links over a longer band sit further apart");
+    for (p, _) in &pulled {
+        for (w, o) in run.wheels.iter().zip(&c) {
+            assert!(scalar::hypot(p[0] - o[0], p[1] - o[1]) >= w.radius_m - 1e-6, "a link entered a wheel");
+        }
+    }
+}
+
+#[test]
+fn an_instanced_belt_costs_one_link_a_side_in_triangles_and_the_instanced_carrier_is_inside_the_budget() {
+    let skin = Skin::for_id("carrier_tracked").expect("the carrier skin");
+    let (fixed, r) = (skin.rig(1, &quick()), skin.rig_instanced(1, &quick()).expect("instanced rig"));
+    r.validate().expect("RenderRig::validate");
+    assert_eq!(r.track_runs.len(), 2);
+    let link = r.meshes[r.track_runs[0].link_mesh].indices.len() / 3;
+    let links = usize::from(r.track_runs[0].links);
+    assert_eq!(
+        fixed.triangle_count() - r.triangle_count(),
+        2 * (links - 1) * link,
+        "links {links}, link triangles {link}"
+    );
+    assert!(r.triangle_count() < tracked_triangles());
 }
