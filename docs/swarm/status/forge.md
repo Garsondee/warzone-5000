@@ -17,6 +17,12 @@
 ## Merge order for ARCH
 #18 is merged; #20 (base lane/forge/build) then #24 (base lane/forge/compile); retarget each base as the one below lands. API: `w5k_forge::compile::{parse_def, parse_extras, compile}` and `w5k_forge::render::render_rig(&c.rig, c.hull_size_m)`; files `content/vehicles/game/mule_4x4{,.extras}.ron`. (A direct message to ARCH was blocked by the lane tool guard, as it should be; this file is the channel.)
 
+## Garage (2026-10-10, ARCH request for three trucks)
+`scout_4x4` (1.3 t, 52 kW petrol, clutch, soft long-travel coils f 1.1/1.2 Hz, zeta 0.25, 0.70 m tyres) and `hauler_4x4` (6.2 t laden, 135 kW diesel, clutch, 5 gears, leaf springs modelled linear f 1.9/2.2 Hz, zeta 0.35, 1.05 m tyres, COM 1.35 m) beside the Mule; same 10-joint layout; `tests/garage.rs`. Their extras sidecars start from the Mule's (brake fade, cooling and converter numbers are generic and still carry the Mule's source text). The engine-curve template became a quartic (the cubic made power a local minimum at the power peak for the scout's and hauler's peaks). A 6x6 compiles in FORGE today with independent axles (tested); tandem and solid-axle linkages are not compiled yet; whether `WheeledChassis` runs three axles is for CHASSIS to say.
+
+## Substep bake
+The compile bakes `integration.substeps` and `f_max_hz` from the stop-engaged wheel hop (incremental stop rate at full bump travel, as CHASSIS PR 59 reads it) and the hull heave; test `declared_substeps_cover_the_stop_engaged_wheel_hop_of_every_station`.
+
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).
 

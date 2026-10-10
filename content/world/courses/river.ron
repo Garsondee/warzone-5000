@@ -1,0 +1,42 @@
+#![enable(implicit_some)]
+// The river course: a 16 m wide river across the way. The road stops at the near bank. Ways across:
+//   - the ford (a raised bed, 0.6 m deep: any wheeled vehicle that can wade, if it finds it),
+//   - swimming the channel anywhere else (2.5 m deep, banks at the stated grade: an amphibious vehicle only),
+// bridges come in the next step. The water is a flat surface across the channel falling gently downstream.
+CourseDef(
+    name: "river",
+    seed: 31,
+    size_cells: 401,
+    hills: HillsDef(
+        amplitude_m: Param(v: 3.0, prov: Spec, src: "course design: gentle undulation"),
+        wavelength_m: Param(v: 120.0, prov: Spec, src: "course design"),
+        warp_m: Param(v: 30.0, prov: Spec, src: "course design"),
+        octaves: 4,
+        max_grade: Param(v: 0.15, prov: Spec, src: "course design"),
+    ),
+    road: RoadDef(
+        waypoints: [(-120.0, 170.0), (-60.0, 60.0)],
+        width_m: Param(v: 6.0, prov: Spec, src: "course design: two lanes"),
+        shoulder_m: Param(v: 4.0, prov: Spec, src: "course design"),
+        max_grade: Param(v: 0.08, prov: Spec, src: "course design: 8 percent"),
+        surface: "asphalt",
+    ),
+    rivers: [RiverDef(
+        start: (-200.0, -15.0),
+        end: (200.0, 15.0),
+        meander_amplitude_m: Param(v: 22.0, prov: Spec, src: "course design: lateral swing of the meander"),
+        meander_wavelength_m: Param(v: 160.0, prov: Spec, src: "course design"),
+        width_m: Param(v: 16.0, prov: Spec, src: "course design: width of the water; at least 2 x depth / bank grade so the channel reaches its full depth"),
+        depth_m: Param(v: 2.5, prov: Spec, src: "course design: deepest part; deeper than any ford limit"),
+        bank_grade: Param(v: 0.35, prov: Spec, src: "course design: what a vehicle must climb to leave the water (about 19 degrees)"),
+        freeboard_m: Param(v: 1.0, prov: Spec, src: "course design: floodplain above the water"),
+        valley_half_m: Param(v: 25.0, prov: Spec, src: "course design: flat floodplain half width"),
+        valley_blend_m: Param(v: 45.0, prov: Spec, src: "course design: blend into the natural ground"),
+        surface_slope: Param(v: 0.002, prov: Spec, src: "course design: fall of the water per metre of river"),
+        fords: [FordDef(
+            at_fraction: Param(v: 0.62, prov: Spec, src: "course design: PROVISIONAL(route-bridge) position along the river"),
+            length_m: Param(v: 18.0, prov: Spec, src: "course design"),
+            depth_m: Param(v: 0.6, prov: Spec, src: "course design: wadable by a truck (fording depth of a light 4x4 is about 0.5 to 0.8 m)"),
+        )],
+    )],
+)

@@ -7,4 +7,5 @@ ShiftTuning(
     pedal_filter_s: Param(v: 0.8, lo: Some(0.2), hi: Some(2.0), prov: Estimate, src: "low-pass time constant of the pedal as the shift map sees it, so a wobbling pedal neither moves the shift points nor triggers a kick-down"),
     downshift_pedal_influence: Param(v: 0.3, lo: Some(0.0), hi: Some(1.0), prov: Estimate, src: "the downshift curve lies well below the upshift curve at every pedal position, so a pedal swing at one road speed cannot turn an upshift into a downshift (the hunting band of a first-cut map)"),
     reverse_engage_max_speed_m_s: Param(v: 1.0, lo: Some(0.2), hi: Some(3.0), prov: Estimate, src: "reverse (and drive from reverse) engages only below this road speed, as a synchro or lock-out does"),
+    upshift_max_fraction_of_redline: Param(v: 0.92, lo: Some(0.7), hi: Some(0.98), prov: Estimate, src: "an engine on its rev limiter or governor droop never quite reaches the redline; the upshift point is capped below it so a schedule cannot be unreachable"),
 )
