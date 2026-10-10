@@ -171,7 +171,11 @@ pub trait ContactElement {
 
 // ------------------------------------------------------------------------------------------------------ ArticulationPort
 
-/// The motion of the hull the articulation reacts against, world frame, at the start of a substep.
+/// The motion of the hull the articulation reacts against, world frame. **Contract 0.3 (COMBAT CCR-C1):** this is both the input and the output of
+/// [`ArticulationPort::step`]. On entry it is the hull's state at the start of the substep; on return it is the state at the end of it, because the
+/// port integrates the hull's own six degrees of freedom together with the turret, cradle and barrel (a reduced-coordinate solve). That is what
+/// conserves linear and angular momentum to 1e-6 from two substeps (spike S6); returning only a wrench for the glue to apply a substep later
+/// (the 0.2 scheme) leaks about 7% at best. `acc_m_s2` and `alpha_rad_s2` on return are the averages over the substep.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HullMotion {
     pub rot: Quat,
@@ -182,7 +186,17 @@ pub struct HullMotion {
     pub alpha_rad_s2: Vec3,
 }
 
-/// The reaction of the articulated bodies on the hull for this substep: a force at the hull's centre of mass and a torque about it (world frame).
+/// Contract 0.3 (COMBAT CCR-C1). The sum of every other load on the hull for this substep (suspension, tyre and track contact, drag, gravity
+/// excluded as the port adds it), world frame, held constant over the substep: a force through the hull's centre of mass and a torque about it.
+/// The glue's ground and suspension loads stay explicit over a substep, as before.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ArticulationLoads {
+    pub force_n: Vec3,
+    pub torque_about_hull_com_nm: Vec3,
+}
+
+/// The reaction of the articulated bodies on the hull, **averaged over the substep**: a force at the hull's centre of mass and a torque about it
+/// (world frame). The hull's state already includes it (see [`HullMotion`]); the wrench exists for the force ledger (the `Servo` and `Recoil` rows).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ArticulationWrench {
     pub force_n: Vec3,
@@ -200,9 +214,19 @@ pub struct Shot {
 }
 
 /// Turret, gun and recoil mechanisms (COMBAT implements it; the glue `w5k_vehicle` calls it once per substep). Servos follow the aim channels of
-/// the `Command`; the returned wrench is what the moving bodies do to the hull, so momentum is conserved.
+/// the `Command`. **Contract 0.3 (COMBAT CCR-C1):** whenever a port is present the glue substitutes the port's hull state for its own hull
+/// integration: it passes the other loads on the hull in `loads` and the hull's state at the start of the substep in `hull`, and takes the hull's
+/// state at the end of the substep back from `hull`. `wrench` receives the average reaction for the ledger. The servo and recoil laws are pinned
+/// on `ServoDef` and `RecoilDef` in `rig.rs`.
 pub trait ArticulationPort {
-    fn step(&mut self, dt_s: f64, hull: &HullMotion, cmd: &Command, wrench: &mut ArticulationWrench);
+    fn step(
+        &mut self,
+        dt_s: f64,
+        loads: &ArticulationLoads,
+        hull: &mut HullMotion,
+        cmd: &Command,
+        wrench: &mut ArticulationWrench,
+    );
     /// Joint coordinates (rad or m), in `PhysRig::articulation` order.
     fn joint_positions(&self) -> &[f64];
     /// Move the shots fired since the last call into `out`.
