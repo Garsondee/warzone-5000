@@ -4,8 +4,8 @@
   "strip": [
     {
       "k": "Phase",
-      "v": "Wave 1 building",
-      "s": "Eight lanes building the first-light slice; contract v0.2 merged; you are asleep, ARCH runs it",
+      "v": "Slice driving",
+      "s": "The Mule 4x4 drives the 520 m course with the real stack; clip, terrain and gearbox polish in progress",
       "state": "run"
     },
     {
@@ -23,13 +23,13 @@
     {
       "k": "Sessions",
       "v": "9 of 13",
-      "s": "ARCH plus CHASSIS, DRIVE, FORGE, WORLD, VIEWER, VALIDATION, GEOMETRY, LOOK",
+      "s": "ARCH plus CHASSIS, DRIVE, FORGE, WORLD, VIEWER, VALIDATION, GEOMETRY, LOOK; TRACKS, GODOT, COMBAT, AI not launched",
       "state": "run"
     },
     {
       "k": "Usage",
-      "v": "$204+ / 20 h",
-      "s": "meter at the last report; the owner set a floor; weekly reset 10 Oct 02:00 UTC",
+      "v": "lanes about $44",
+      "s": "eight lane sessions this window (CHASSIS 9.4, GEOMETRY 10.1, VIEWER 6.5, WORLD 5.3, FORGE 4.6, DRIVE 3.8, LOOK 2.4, VALIDATION 1.9)",
       "state": "wait"
     }
   ],
