@@ -1,0 +1,19 @@
+// Normalised wheel template (lane GEOMETRY). Every number is a proportion of the real dimensions that arrive as Params from FORGE
+// (outer diameter, section width, rim diameter); none is a physical constant. Provenance ESTIMATE for all: the profile of a generic
+// radial truck tyre and a steel disc wheel; band +-20% on each fraction, reason: no dossier gives it, and the silhouette tolerates it.
+// Tyre profile points are (h, x): h = 0 at the bead (rim radius) to 1 at the tread surface, x as a fraction of the full section width.
+WheelTemplate(
+    tyre_profile: [(0.0, -0.40), (0.0, 0.40), (0.45, 0.50), (0.85, 0.46), (1.0, 0.36), (1.0, -0.36), (0.85, -0.46), (0.45, -0.50)],
+    // Disc wheel profile, (rho as a fraction of the rim radius, x as a fraction of the section width): barrel, lip, dish plate, hub bore.
+    rim_profile: [(0.98, -0.42), (0.98, 0.42), (0.90, 0.42), (0.90, 0.28), (0.14, 0.28), (0.14, 0.16), (0.90, 0.16), (0.90, -0.42)],
+    // Tread lugs: (x centre as a fraction of the section width, phase as a fraction of one lug pitch), length and width fractions.
+    lug_rows: [(-0.20, 0.0), (0.20, 0.5)],
+    lug_length_frac: 0.55,
+    lug_width_frac: 0.30,
+    lug_taper: 0.80,
+    // Wheel nuts: count, pitch circle as a fraction of the rim radius, nut radius as a fraction of the rim radius, height as a fraction of the width.
+    nuts: 8,
+    nut_pitch_frac: 0.46,
+    nut_radius_frac: 0.05,
+    nut_height_frac: 0.05,
+)

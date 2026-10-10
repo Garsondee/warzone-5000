@@ -9,7 +9,8 @@
 
 ## In progress
 - PR A (this branch): `curve.rs` (engine curve through the two peaks, promoted from spike S5), `extras.rs` (PROVISIONAL(CCR-forge) sidecar types), the first truck `content/vehicles/game/mule_4x4.ron` + `.extras.ron` (fictional "Mule 4x4", all ESTIMATE with bands, M998-like archetype, no real figures from memory).
-- PR B (next, stacked on A): `compile.rs` wheeled compile of that truck to `PhysRig` + `RenderRig` for CHASSIS and DRIVE (it is above 400 non-test lines if joined with A, so split; the S5 spike file is removed there).
+- PR B (this branch `lane/forge/compile`, stacked on A): `compile.rs`, the wheeled compile of the truck to `PhysRig` (validated) with the report; 15 physics-sentence tests incl. determinism and a 1000-def fuzz.
+- PR C (next): `render.rs`, the `RenderRig` for the same stations (split to stay under 400 non-test lines); the S5 spike is already removed.
 
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).
