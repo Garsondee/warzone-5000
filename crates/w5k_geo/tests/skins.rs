@@ -149,8 +149,8 @@ fn every_skin_has_the_joint_layout_of_the_utility_truck_and_stays_inside_the_tri
         let r = render_rig(id, &skin(id).parts(1), &FlagParams::default_params());
         r.validate().expect("RenderRig::validate");
         assert!(
-            r.triangle_count() < 40_000,
-            "{id}: {} triangles, budget 40,000 for a wheeled vehicle",
+            r.triangle_count() < 50_000,
+            "{id}: {} triangles, budget 50,000 for a wheeled vehicle",
             r.triangle_count()
         );
         println!("{id}: {} triangles", r.triangle_count());

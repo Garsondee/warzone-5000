@@ -111,7 +111,7 @@ fn dimension_table(d: &UtilityDims, parts: &[Part], triangles: usize) -> String 
         // const-ok: percent
         s += &format!("| {name} | {got:.3} | {want:.3} | {:+.2}% |\n", (got / want - 1.0) * 100.0);
     }
-    s + &format!("\nTriangles in the rig: {triangles} (budget 40,000 for a wheeled vehicle).\n")
+    s + &format!("\nTriangles in the rig: {triangles} (budget 50,000 for a wheeled vehicle).\n")
 }
 
 /// The skin id of a subject name (`truck` is the utility truck), if it is a skin.

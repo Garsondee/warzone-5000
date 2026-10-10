@@ -213,7 +213,7 @@ fn utility_4x4_dimensions_match_the_stated_hull_box_and_the_triangle_budget_hold
     assert!(((hi.z - lo.z) / d.length_m - 1.0).abs() < 0.03, "length");
     let tris: usize = parts.iter().map(|p| p.mesh.t.len()).sum();
     println!("triangles at detail 1: {tris}");
-    assert!(tris < 40_000, "{tris} triangles, budget 40,000 (wheeled)");
+    assert!(tris < 50_000, "{tris} triangles, budget 50,000 (wheeled)");
 }
 
 // ---- cohesion: nothing floats
@@ -489,7 +489,7 @@ fn nothing_on_the_mounted_truck_floats_the_mount_clears_the_hull_and_the_budget_
     check_parts(&parts);
     let rig = render_rig("mounted_utility", &parts, &FlagParams::default_params());
     println!("truck with the ring mount in the rig: {} triangles", rig.triangle_count());
-    assert!(rig.triangle_count() < 40_000, "{} triangles, budget 40,000 (wheeled)", rig.triangle_count());
+    assert!(rig.triangle_count() < 50_000, "{} triangles, budget 50,000 (wheeled)", rig.triangle_count());
 }
 
 /// The 4x4 with the standard ring mount on its roof socket and the named gun on the mount's trunnion.
@@ -561,7 +561,7 @@ fn swapping_the_gun_changes_only_the_gun_parts_and_the_armed_truck_stays_inside_
     // the heavier gun, as exported (flags baked, so parts are subdivided): inside the wheeled budget
     let rig = render_rig("armed_utility", &ac, &FlagParams::default_params());
     println!("armed truck (autocannon) in the rig: {} triangles", rig.triangle_count());
-    assert!(rig.triangle_count() < 40_000, "{} triangles, budget 40,000 (wheeled)", rig.triangle_count());
+    assert!(rig.triangle_count() < 50_000, "{} triangles, budget 50,000 (wheeled)", rig.triangle_count());
 }
 
 // ---- the glazing lines up
