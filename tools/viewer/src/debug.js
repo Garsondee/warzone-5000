@@ -10,11 +10,12 @@ export function makeDebug(scene, built, header) {
   const group = new THREE.Group();
   scene.add(group);
   const names = header.vehicles[0].contact_names;
-  // A contact "<station>" or "<station>.<k>" is drawn at the node "<station>.wheel" (tyre radius below its centre).
+  // A contact "<station>" or "<station>.<k>" is drawn at the wheel whose spin joint is "<station>.spin" (found by joint index, so a
+  // skin with other node names still works), at the tyre radius below its centre.
+  const jointNames = header.vehicles[0].joint_names;
   const wheelNode = names.map((n) => {
-    const base = n.replace(/\.\d+$/, '');
-    const i = built.nodes.findIndex((x) => x.def.name === `${base}.wheel`);
-    return i;
+    const spin = jointNames.indexOf(`${n.replace(/\.\d+$/, '')}.spin`);
+    return built.nodes.findIndex((x) => x.def.joint && x.def.joint.kind === 'Revolute' && x.def.joint.index === spin && spin >= 0);
   });
   const radius = wheelNode.map((i) => {
     if (i < 0) return 0;
@@ -60,9 +61,9 @@ export function makeDebug(scene, built, header) {
       const s = Math.hypot(v.lin_vel_m_s.x, v.lin_vel_m_s.y, v.lin_vel_m_s.z);
       vel.visible = flags.velocity && s > 0.1;
       if (vel.visible) {
-        vel.position.copy(built.root.position).add({ x: 0, y: 1.5, z: 0 });
+        vel.position.copy(built.root.position).add({ x: 0, y: 1.0, z: 0 });
         vel.setDirection(new THREE.Vector3(v.lin_vel_m_s.x, v.lin_vel_m_s.y, v.lin_vel_m_s.z).normalize());
-        vel.setLength(Math.min(6, 0.4 * s) + 0.5, 0.4, 0.25);
+        vel.setLength(Math.min(4, 0.2 * s) + 0.5, 0.35, 0.2);
       }
     },
   };

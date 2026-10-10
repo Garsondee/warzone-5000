@@ -16,9 +16,11 @@ await page.waitForFunction('window.__ready === true', null, { timeout: 60000 });
 console.log('GL:', await page.evaluate(() => window.__v.renderer), 'triangles', await page.evaluate(() => `${window.__v.triangles}/${window.__v.expectedTriangles}`));
 const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(fps), '-c:v', 'mjpeg', '-i', '-', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '22', '-movflags', '+faststart', opt('out', 'clip.mp4')], { stdio: ['pipe', 'inherit', 'inherit'] });
 const done = new Promise((r) => ff.on('close', r));
-await page.evaluate(([m]) => { window.__v.pause(); window.__v.setCamera({ mode: m, dist: m === 'chase' ? 11 : 14 }); }, [opt('camera', 'chase')]);
+await page.evaluate(([m]) => { window.__v.pause(); window.__v.setCamera({ mode: m, dist: m === 'chase' ? 9 : 12, pitch: m === 'chase' ? 0.3 : 0.28 }); }, [opt('camera', 'chase')]);
 const n = Math.round(Math.min(secs, (await page.evaluate(() => window.__v.duration)) - t0) * fps), t = Date.now();
 for (let i = 0; i < n; i++) {
+  // The orbit camera circles slowly (about 17 degrees a second); chase follows the hull.
+  if (opt('camera', 'chase') === 'orbit') await page.evaluate((y) => window.__v.setCamera({ yaw: y }), 0.6 + (i / fps) * 0.3);
   await page.evaluate((tt) => window.__v.renderAt(tt), t0 + i / fps);
   // A page screenshot (not the bare canvas) so the HUD, ledger panel and scope plots are in the clip.
   const shot = await page.screenshot({ type: 'jpeg', quality: 88 });

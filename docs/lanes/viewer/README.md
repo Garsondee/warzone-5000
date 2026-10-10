@@ -7,6 +7,7 @@ Setup (the SessionStart hook does this): `npm ci` in `tools/viewer`. Chromium is
 |---|---|
 | A page you can open (or attach): orbit/chase camera, scrub, speed, HUD, ledger panel, scope plots | `w5k viewer page replay.json --out page.html [--rig rig.json]` |
 | An MP4 with the overlays | `w5k viewer render replay.json --out clip.mp4 [--camera chase\|orbit] [--start S] [--seconds N] [--fps 30]` (about 0.13 s per frame in software GL) |
+| The Mule on the strip with the detailed camouflaged truck and the strip's ground | `w5k viewer render replay.w5kr --rig rig.json --skin utility_4x4 --strip standard --out clip.mp4` (`--skin` draws another rig's meshes over the physics rig's skeleton: same joint indices, wheels placed where the simulation put them; `--strip standard` samples WORLD's bump strip as the ground) |
 | A PNG chart for your evidence | `w5k viewer plot data.csv --out chart.png --title "..." --ylabel "..."` (first column is x, other columns are series; no blanks, no NaN) |
 | The canned replays and rigs | `w5k viewer dump-canned truck\|tank --out dir` |
 
