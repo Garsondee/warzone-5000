@@ -458,8 +458,32 @@ fn shell(f: &Frame, b: &BodySpec, a: &Arches, band: f64) -> Mesh {
     loft_beveled(&sections, b.lower_chamfer_m, band, &creases, 0.5) // const-ok: a vertex at least every half metre along a hard edge (spike S-G)
 }
 
-fn template() -> Template {
-    ron::from_str(include_str!("../shapes/utility_4x4.ron")).expect("utility_4x4.ron parses")
+/// The hull families of the game garage: the utility truck (the Mule's skin), the light scout. Each is a template of the same machinery
+/// (`shapes/<id>.ron`: a lines plan and a part list), so they share the wheel modules, the sockets and the joint layout of the export.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TruckKind {
+    Utility,
+    Scout,
+}
+
+impl TruckKind {
+    pub fn id(self) -> &'static str {
+        match self {
+            TruckKind::Utility => "utility_4x4",
+            TruckKind::Scout => "scout_4x4",
+        }
+    }
+
+    fn source(self) -> &'static str {
+        match self {
+            TruckKind::Utility => include_str!("../shapes/utility_4x4.ron"),
+            TruckKind::Scout => include_str!("../shapes/scout_4x4.ron"),
+        }
+    }
+}
+
+fn template(kind: TruckKind) -> Template {
+    ron::from_str(kind.source()).unwrap_or_else(|e| panic!("{}.ron parses: {e}", kind.id()))
 }
 
 /// The 4x4: the utility hull cut for two axles, a steered front axle and a fixed rear one.
@@ -475,13 +499,18 @@ pub fn utility_truck(d: &UtilityDims, axles_z: &[f64], steered: &[bool], detail:
 
 /// The same, still an assembly: its open sockets (the roof ring) take a mount, the mount's trunnion a weapon.
 pub fn utility_assembly(d: &UtilityDims, axles_z: &[f64], steered: &[bool], detail: u8) -> Assembly {
-    let mut asm = Assembly::new(utility_hull(d, axles_z, detail));
+    truck_assembly(TruckKind::Utility, d, axles_z, steered, detail)
+}
+
+/// Any hull family on any number of axles: the hull module with a wheel module attached to every `Station` socket it published.
+pub fn truck_assembly(kind: TruckKind, d: &UtilityDims, axles_z: &[f64], steered: &[bool], detail: u8) -> Assembly {
+    let mut asm = Assembly::new(truck_hull(kind, d, axles_z, detail));
     let stations: Vec<Socket> = asm.open_sockets(SocketKind::Station).into_iter().cloned().collect();
     for s in &stations {
         let axle = s.station.unwrap_or(0);
         let tag = if s.side == Side::Right { "r" } else { "l" };
         let knuckle = steered.get(usize::from(axle)).copied().unwrap_or(false).then(|| Knuckle {
-            radius_m: template().knuckle_radius_m,
+            radius_m: template(kind).knuckle_radius_m,
             // the stub from the hub to the wheel well's inner wall, which it overlaps by 2 cm
             reach_m: s.pose.pos.x.abs() - s.hint("well_x_m").unwrap_or(0.0) + 0.02, // const-ok: overlap with the well wall
         });
@@ -495,7 +524,12 @@ pub fn utility_assembly(d: &UtilityDims, axles_z: &[f64], steered: &[bool], deta
 /// position (named `station.<axle>.<r|l>`, at the hub, normal outward, sized for the wheel the arch was cut for; hints `well_x_m`, the x of
 /// the wheel well's inner wall, and `max_width_m`, the widest tyre it takes).
 pub fn utility_hull(d: &UtilityDims, axles_z: &[f64], detail: u8) -> Module {
-    let tpl = template();
+    truck_hull(TruckKind::Utility, d, axles_z, detail)
+}
+
+/// The hull module of any family (`utility_hull` is `truck_hull(TruckKind::Utility, ..)`).
+pub fn truck_hull(kind: TruckKind, d: &UtilityDims, axles_z: &[f64], detail: u8) -> Module {
+    let tpl = template(kind);
     let band = FlagParams::default_params().edge_band_m;
     let frame = Frame::new(d, &tpl.body);
     let arches = Arches::new(d, &tpl.body, axles_z);
@@ -747,5 +781,5 @@ pub fn utility_hull(d: &UtilityDims, axles_z: &[f64], detail: u8) -> Module {
             hints: Vec::new(),
         });
     }
-    Module { name: "utility_hull".into(), kind: ModuleKind::Hull, parts, sockets, mount: None, symmetric: true }
+    Module { name: format!("{}_hull", kind.id()), kind: ModuleKind::Hull, parts, sockets, mount: None, symmetric: true }
 }

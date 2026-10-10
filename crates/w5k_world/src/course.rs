@@ -12,11 +12,12 @@ use w5k_contract::param::Param;
 use w5k_contract::world::{MaterialId, PropId, PropKind, PropRef, PropShape, WorldQuery};
 use w5k_math::{scalar, Pcg32, Transform, Vec3};
 
+use crate::bridge::{place, rails, BridgeDef, BridgeKind, PlacedBridge};
 use crate::cliff::{switchback_path, CliffDef, SwitchbackDef};
 use crate::corrugation::{Corrugation, Ripple};
 use crate::features::{
     barricade_blocks, cell_slope, dilate, mud_mask, poisson_disc, poisson_disc_in, BarricadeDef, MudDef, RockFieldDef,
-    TreesDef,
+    SoftPatchDef, TreesDef,
 };
 use crate::grid::{warped_fbm, GridWorld, CELL_M};
 use crate::river::{carve, RiverDef};
@@ -61,6 +62,9 @@ pub struct RoadDef {
     /// Zig-zag climbs up cliffs, spliced into the waypoint list.
     #[serde(default)]
     pub switchbacks: Vec<SwitchbackDef>,
+    /// Bridges over rivers, spliced into the waypoint list.
+    #[serde(default)]
+    pub bridges: Vec<BridgeDef>,
     /// Corrugation (wavelength 0.2 to 2 m, a few cm deep).
     #[serde(default)]
     pub washboards: Vec<RoughSectionDef>,
@@ -98,6 +102,9 @@ pub struct CourseDef {
     pub size_cells: usize,
     pub hills: HillsDef,
     pub road: RoadDef,
+    /// More roads (tracks, detours); each is laid like the main one with its own width, grade, surface and features.
+    #[serde(default)]
+    pub extra_roads: Vec<RoadDef>,
     #[serde(default)]
     pub mud: Option<MudDef>,
     #[serde(default)]
@@ -106,6 +113,8 @@ pub struct CourseDef {
     pub barricade: Option<BarricadeDef>,
     #[serde(default)]
     pub rock_fields: Vec<RockFieldDef>,
+    #[serde(default)]
+    pub soft_patches: Vec<SoftPatchDef>,
     #[serde(default)]
     pub cliffs: Vec<CliffDef>,
     #[serde(default)]
@@ -122,6 +131,10 @@ impl CourseDef {
 pub struct Course {
     pub world: GridWorld,
     pub road: Vec<(f64, f64, f64)>,
+    /// The centrelines of `extra_roads`, in order.
+    pub extra_roads: Vec<Vec<(f64, f64, f64)>>,
+    /// Every bridge laid, on any road.
+    pub bridges: Vec<PlacedBridge>,
     pub ground: MaterialId,
     pub road_material: MaterialId,
     /// The steepest grade (rise over run) each node is allowed: the hills limit, or a cliff's own near a cliff.
@@ -151,6 +164,9 @@ const MAX_WASHBOARD_WAVELENGTH_M: f64 = 2.0; // const-ok: the grid's Nyquist lim
 const ROUGH_EDGE_M: f64 = 1.5; // const-ok: shoulder of a rough section
 /// Shortest fade at the ends of a rough section, m.
 const ROUGH_MIN_FADE_M: f64 = 2.0; // const-ok: ends of a rough section
+
+/// Cells this close beyond a deck's edge are exempt from the grade limits (the drop into the water), m.
+const DECK_LIMIT_MARGIN_M: f64 = 2.0; // const-ok: width of the drop beside a deck
 
 /// The profile is graded to this fraction of the stated road grade; sampled bilinearly the road can add a sliver of slope.
 const PROFILE_MARGIN: f64 = 0.9; // const-ok: safety factor on the stated grade
@@ -318,6 +334,181 @@ fn grade_profile(y: &mut [f64], ds: &[f64], g: f64) {
     }
 }
 
+/// A road planned on the carved ground: its smoothed centreline, graded profile and, for every node within reach, the distance to it,
+/// the arc position along it and the height it asks for.
+struct Laid {
+    pts: Vec<(f64, f64)>,
+    y: Vec<f64>,
+    total_arc: f64,
+    w2: f64,
+    weight: Vec<f64>,
+    target: Vec<f64>,
+    best_d: Vec<f64>,
+    arc: Vec<f64>,
+    /// Per point of `pts`: the bridge it belongs to, if any.
+    bridge: Vec<Option<usize>>,
+    bridges: Vec<PlacedBridge>,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn plan_road(
+    def: &CourseDef,
+    rd: &RoadDef,
+    ri: usize,
+    h: &[f64],
+    n: usize,
+    river_wet: &[bool],
+    river_surface: &[f64],
+) -> Result<Laid, String> {
+    let half = (n - 1) as f64 * 0.5 * CELL_M;
+    let snap = |p: (f64, f64)| -> Result<(usize, usize), String> {
+        let (i, j) = (((p.0 + half) / CELL_M).round(), ((p.1 + half) / CELL_M).round());
+        if i < 0.0 || j < 0.0 || i >= n as f64 || j >= n as f64 {
+            return Err(format!("waypoint ({}, {}) is outside the course", p.0, p.1));
+        }
+        Ok((i as usize, j as usize))
+    };
+    // The road as a list of grid-unit points and a flag per point: `exact` points (a zig-zag climb) are laid as authored; the rest come
+    // from A* between waypoints and are smoothed afterwards.
+    let to_grid = |p: (f64, f64)| ((p.0 + half) / CELL_M, (p.1 + half) / CELL_M);
+    let mut bridges: Vec<PlacedBridge> = Vec::new();
+    let mut path: Vec<((f64, f64), bool, Option<usize>)> = Vec::new();
+    let leg_to = |path: &mut Vec<((f64, f64), bool, Option<usize>)>, target: (f64, f64)| -> Result<(), String> {
+        let b = snap(target)?;
+        match path.last() {
+            None => path.push(((b.0 as f64, b.1 as f64), false, None)),
+            Some(&(last, _, _)) => {
+                let a = (last.0.round() as usize, last.1.round() as usize);
+                let leg = astar(h, n, a, b, rd.max_grade.v, river_wet).ok_or("no road path between waypoints")?;
+                path.extend(leg[1..].iter().map(|&(i, j)| ((i as f64, j as f64), false, None)));
+            }
+        }
+        Ok(())
+    };
+    for (k, &wp) in rd.waypoints.iter().enumerate() {
+        leg_to(&mut path, wp)?;
+        for sb in rd.switchbacks.iter().filter(|sb| sb.after_waypoint == k) {
+            sb.span_m.check(&format!("{}.road.switchbacks.span_m", def.name))?;
+            sb.hairpin_radius_m.check(&format!("{}.road.switchbacks.hairpin_radius_m", def.name))?;
+            let cl = def
+                .cliffs
+                .get(sb.cliff)
+                .ok_or_else(|| format!("switchback refers to cliff {} which does not exist", sb.cliff))?;
+            let dense = switchback_path(cl, sb, rd.width_m.v, rd.shoulder_m.v, rd.max_grade.v, SWITCHBACK_APPROACH_M)?;
+            leg_to(&mut path, dense[0])?;
+            path.extend(dense.iter().skip(1).map(|&p| (to_grid(p), true, None)));
+        }
+        for bd in rd.bridges.iter().filter(|b| b.after_waypoint == k) {
+            bd.check(&format!("{}.roads[{ri}].bridges", def.name))?;
+            let river = def
+                .rivers
+                .get(bd.river)
+                .ok_or_else(|| format!("bridge refers to river {} which does not exist", bd.river))?;
+            let from = path.last().map_or(wp, |p| (p.0 .0 * CELL_M - half, p.0 .1 * CELL_M - half));
+            let seed = def.seed.wrapping_add(bd.river as u64);
+            // The deck is level with the floodplain: the water level at the crossing plus the river's freeboard.
+            let line = river.centreline(seed);
+            let total = line[line.len() - 1].2;
+            let mid = line.iter().find(|p| p.2 >= bd.at_fraction.v * total).unwrap_or(&line[line.len() / 2]);
+            let (mi, mj) = (((mid.0 + half) / CELL_M).round() as usize, ((mid.1 + half) / CELL_M).round() as usize);
+            let surface = river_surface[mj.min(n - 1) * n + mi.min(n - 1)];
+            if surface.is_nan() {
+                return Err(format!(
+                    "{}: the bridge at {} of river {} is outside the river's valley",
+                    def.name, bd.at_fraction.v, bd.river
+                ));
+            }
+            let pb = place(bd, river, seed, from, surface);
+            leg_to(&mut path, pb.a)?;
+            let bi = bridges.len();
+            let len = scalar::hypot(pb.b.0 - pb.a.0, pb.b.1 - pb.a.1);
+            let steps = (len / CELL_M).ceil() as usize;
+            for i in 1..=steps {
+                let f = i as f64 / steps as f64;
+                let p = (pb.a.0 + (pb.b.0 - pb.a.0) * f, pb.a.1 + (pb.b.1 - pb.a.1) * f);
+                path.push((to_grid(p), true, Some(bi)));
+            }
+            bridges.push(pb);
+        }
+    }
+    let nodes: Vec<(f64, f64)> = path.iter().map(|p| p.0).collect();
+    let bridge: Vec<Option<usize>> = path.iter().map(|p| p.2).collect();
+    // The A* staircase has tight kinks that a real road would not: average the path over a window (symmetric, so the ends stay put),
+    // but never across an exact point: averaging a tight authored arc would shrink its radius.
+    let smooth = 16usize; // const-ok: moving-average half width in samples, a smoothing choice (radius of curvature of about 10 m)
+    let mut near_exact = vec![usize::MAX; nodes.len()];
+    for k in 0..nodes.len() {
+        near_exact[k] = if path[k].1 {
+            0
+        } else if k > 0 {
+            near_exact[k - 1].saturating_add(1)
+        } else {
+            usize::MAX
+        };
+    }
+    for k in (0..nodes.len()).rev() {
+        if k + 1 < nodes.len() {
+            near_exact[k] = near_exact[k].min(near_exact[k + 1].saturating_add(1));
+        }
+    }
+    let pts: Vec<(f64, f64)> = (0..nodes.len())
+        .map(|k| {
+            let w = smooth.min(k).min(nodes.len() - 1 - k).min(near_exact[k].saturating_sub(1));
+            let (mut sx, mut sz) = (0.0, 0.0);
+            for &(i, j) in &nodes[k - w..=k + w] {
+                sx += i;
+                sz += j;
+            }
+            let m = (2 * w + 1) as f64;
+            (sx / m, sz / m)
+        })
+        .collect();
+    let mut y: Vec<f64> = nodes.iter().map(|&(i, j)| h[j.round() as usize * n + i.round() as usize]).collect();
+    for (k, b) in bridge.iter().enumerate() {
+        if let Some(bi) = b {
+            y[k] = bridges[*bi].deck_y_m; // over the water the profile follows the deck, not the channel bed
+        }
+    }
+    let ds: Vec<f64> = pts.windows(2).map(|w| scalar::hypot(w[1].0 - w[0].0, w[1].1 - w[0].1) * CELL_M).collect();
+    // Grade a little under the stated limit: the stamped cells are sampled bilinearly, which can add a sliver of slope.
+    grade_profile(&mut y, &ds, rd.max_grade.v * PROFILE_MARGIN);
+
+    let (w2, shoulder) = (rd.width_m.v * 0.5, rd.shoulder_m.v);
+    let reach = w2 + shoulder;
+    let mut weight = vec![0.0f64; n * n];
+    let mut target = vec![0.0f64; n * n];
+    let mut best_d = vec![f64::INFINITY; n * n];
+    let mut arc = vec![0.0f64; n * n];
+    let r_cells = (reach / CELL_M).ceil() as i64;
+    // Distance to the centreline polyline, with the profile height interpolated at the projection (so neighbouring cells get
+    // nearly equal targets even at a bend); the nearest segment wins and ties keep the earlier one.
+    for k in 0..nodes.len() - 1 {
+        if bridge[k].is_some() && bridge[k] == bridge[k + 1] {
+            continue; // the deck is laid after the grade clamp, not stamped into the ground
+        }
+        let seg_start: f64 = ds[..k].iter().sum(); // road arc length at the start of segment k, m
+        let ((ax, az), (bx, bz)) = (pts[k], pts[k + 1]);
+        let len2 = (bx - ax) * (bx - ax) + (bz - az) * (bz - az);
+        for j in (az.min(bz).floor() as i64 - r_cells).max(0)..=(az.max(bz).ceil() as i64 + r_cells).min(n as i64 - 1) {
+            for i in
+                (ax.min(bx).floor() as i64 - r_cells).max(0)..=(ax.max(bx).ceil() as i64 + r_cells).min(n as i64 - 1)
+            {
+                let t = (((i as f64 - ax) * (bx - ax) + (j as f64 - az) * (bz - az)) / len2).clamp(0.0, 1.0);
+                let d = scalar::hypot(i as f64 - (ax + t * (bx - ax)), j as f64 - (az + t * (bz - az))) * CELL_M;
+                let c = j as usize * n + i as usize;
+                if d < reach && d < best_d[c] {
+                    best_d[c] = d;
+                    arc[c] = seg_start + t * ds[k];
+                    target[c] = y[k] + t * (y[k + 1] - y[k]);
+                    weight[c] = 1.0 - scalar::smoothstep(w2, reach, d);
+                }
+            }
+        }
+    }
+    let total_arc: f64 = ds.iter().sum();
+    Ok(Laid { pts, y, total_arc, w2, weight, target, best_d, arc, bridge, bridges })
+}
+
 pub fn generate(def: &CourseDef) -> Result<Course, String> {
     let n = def.size_cells;
     if n < 16 {
@@ -330,14 +521,16 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
         ("hills.wavelength_m", &hd.wavelength_m),
         ("hills.warp_m", &hd.warp_m),
         ("hills.max_grade", &hd.max_grade),
-        ("road.width_m", &def.road.width_m),
-        ("road.shoulder_m", &def.road.shoulder_m),
-        ("road.max_grade", &def.road.max_grade),
     ] {
         p.check(&format!("{}.{l}", def.name))?;
     }
-    if def.road.waypoints.len() < 2 {
-        return Err("road needs at least two waypoints".into());
+    for (k, rd) in std::iter::once(&def.road).chain(&def.extra_roads).enumerate() {
+        for (l, p) in [("width_m", &rd.width_m), ("shoulder_m", &rd.shoulder_m), ("max_grade", &rd.max_grade)] {
+            p.check(&format!("{}.roads[{k}].{l}", def.name))?;
+        }
+        if rd.waypoints.len() < 2 {
+            return Err(format!("{}.roads[{k}] needs at least two waypoints", def.name));
+        }
     }
     let materials = standard_material_table()?;
     let ground = materials.id_of("dirt").ok_or("material table has no `dirt`")?;
@@ -399,136 +592,36 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
     }
     let river_wet: Vec<bool> = (0..n * n).map(|c| !river_surface[c].is_nan() && h[c] < river_surface[c]).collect();
 
-    // 2. Road path, profile, stamp.
-    let snap = |p: (f64, f64)| -> Result<(usize, usize), String> {
-        let (i, j) = (((p.0 + half) / CELL_M).round(), ((p.1 + half) / CELL_M).round());
-        if i < 0.0 || j < 0.0 || i >= n as f64 || j >= n as f64 {
-            return Err(format!("waypoint ({}, {}) is outside the course", p.0, p.1));
-        }
-        Ok((i as usize, j as usize))
-    };
-    // The road as a list of grid-unit points and a flag per point: `exact` points (a zig-zag climb) are laid as authored; the rest come
-    // from A* between waypoints and are smoothed afterwards.
-    let to_grid = |p: (f64, f64)| ((p.0 + half) / CELL_M, (p.1 + half) / CELL_M);
-    let mut path: Vec<((f64, f64), bool)> = Vec::new();
-    let leg_to = |path: &mut Vec<((f64, f64), bool)>, target: (f64, f64)| -> Result<(), String> {
-        let b = snap(target)?;
-        match path.last() {
-            None => path.push(((b.0 as f64, b.1 as f64), false)),
-            Some(&(last, _)) => {
-                let a = (last.0.round() as usize, last.1.round() as usize);
-                let leg =
-                    astar(&h, n, a, b, def.road.max_grade.v, &river_wet).ok_or("no road path between waypoints")?;
-                path.extend(leg[1..].iter().map(|&(i, j)| ((i as f64, j as f64), false)));
-            }
-        }
-        Ok(())
-    };
-    for (k, &wp) in def.road.waypoints.iter().enumerate() {
-        leg_to(&mut path, wp)?;
-        for sb in def.road.switchbacks.iter().filter(|sb| sb.after_waypoint == k) {
-            sb.span_m.check(&format!("{}.road.switchbacks.span_m", def.name))?;
-            sb.hairpin_radius_m.check(&format!("{}.road.switchbacks.hairpin_radius_m", def.name))?;
-            let cl = def
-                .cliffs
-                .get(sb.cliff)
-                .ok_or_else(|| format!("switchback refers to cliff {} which does not exist", sb.cliff))?;
-            let dense = switchback_path(
-                cl,
-                sb,
-                def.road.width_m.v,
-                def.road.shoulder_m.v,
-                def.road.max_grade.v,
-                SWITCHBACK_APPROACH_M,
-            )?;
-            leg_to(&mut path, dense[0])?;
-            path.extend(dense.iter().skip(1).map(|&p| (to_grid(p), true)));
-        }
+    // 2. Roads: each is planned on the carved ground (path, profile, distance and arc fields), then stamped in turn.
+    let mut road_defs: Vec<&RoadDef> = vec![&def.road];
+    road_defs.extend(def.extra_roads.iter());
+    let mut laid: Vec<Laid> = Vec::new();
+    for (ri, rd) in road_defs.iter().enumerate() {
+        laid.push(plan_road(def, rd, ri, &h, n, &river_wet, &river_surface)?);
     }
-    let nodes: Vec<(f64, f64)> = path.iter().map(|p| p.0).collect();
-    // The A* staircase has tight kinks that a real road would not: average the path over a window (symmetric, so the ends stay put),
-    // but never across an exact point: averaging a tight authored arc would shrink its radius.
-    let smooth = 16usize; // const-ok: moving-average half width in samples, a smoothing choice (radius of curvature of about 10 m)
-    let mut near_exact = vec![usize::MAX; nodes.len()];
-    for k in 0..nodes.len() {
-        near_exact[k] = if path[k].1 {
-            0
-        } else if k > 0 {
-            near_exact[k - 1].saturating_add(1)
-        } else {
-            usize::MAX
-        };
-    }
-    for k in (0..nodes.len()).rev() {
-        if k + 1 < nodes.len() {
-            near_exact[k] = near_exact[k].min(near_exact[k + 1].saturating_add(1));
-        }
-    }
-    let pts: Vec<(f64, f64)> = (0..nodes.len())
-        .map(|k| {
-            let w = smooth.min(k).min(nodes.len() - 1 - k).min(near_exact[k].saturating_sub(1));
-            let (mut sx, mut sz) = (0.0, 0.0);
-            for &(i, j) in &nodes[k - w..=k + w] {
-                sx += i;
-                sz += j;
-            }
-            let m = (2 * w + 1) as f64;
-            (sx / m, sz / m)
-        })
-        .collect();
-    let mut y: Vec<f64> = nodes.iter().map(|&(i, j)| h[j.round() as usize * n + i.round() as usize]).collect();
-    let ds: Vec<f64> = pts.windows(2).map(|w| scalar::hypot(w[1].0 - w[0].0, w[1].1 - w[0].1) * CELL_M).collect();
-    // Grade a little under the stated limit: the stamped cells are sampled bilinearly, which can add a sliver of slope.
-    grade_profile(&mut y, &ds, def.road.max_grade.v * PROFILE_MARGIN);
-
-    let (w2, shoulder) = (def.road.width_m.v * 0.5, def.road.shoulder_m.v);
-    let reach = w2 + shoulder;
-    let mut weight = vec![0.0f64; n * n];
-    let mut target = vec![0.0f64; n * n];
-    let mut best_d = vec![f64::INFINITY; n * n];
-    let mut arc = vec![0.0f64; n * n];
-    let r_cells = (reach / CELL_M).ceil() as i64;
-    // Distance to the centreline polyline, with the profile height interpolated at the projection (so neighbouring cells get
-    // nearly equal targets even at a bend); the nearest segment wins and ties keep the earlier one.
-    for k in 0..nodes.len() - 1 {
-        let seg_start: f64 = ds[..k].iter().sum(); // road arc length at the start of segment k, m
-        let ((ax, az), (bx, bz)) = (pts[k], pts[k + 1]);
-        let len2 = (bx - ax) * (bx - ax) + (bz - az) * (bz - az);
-        for j in (az.min(bz).floor() as i64 - r_cells).max(0)..=(az.max(bz).ceil() as i64 + r_cells).min(n as i64 - 1) {
-            for i in
-                (ax.min(bx).floor() as i64 - r_cells).max(0)..=(ax.max(bx).ceil() as i64 + r_cells).min(n as i64 - 1)
-            {
-                let t = (((i as f64 - ax) * (bx - ax) + (j as f64 - az) * (bz - az)) / len2).clamp(0.0, 1.0);
-                let d = scalar::hypot(i as f64 - (ax + t * (bx - ax)), j as f64 - (az + t * (bz - az))) * CELL_M;
-                let c = j as usize * n + i as usize;
-                if d < reach && d < best_d[c] {
-                    best_d[c] = d;
-                    arc[c] = seg_start + t * ds[k];
-                    target[c] = y[k] + t * (y[k + 1] - y[k]);
-                    weight[c] = 1.0 - scalar::smoothstep(w2, reach, d);
-                }
-            }
-        }
-    }
-    let total_arc: f64 = ds.iter().sum();
     let mud_id = materials.id_of("mud").ok_or("material table has no `mud`")?;
-    let mut crossings = Vec::new();
-    for (k, m) in def.road.mud_crossings.iter().enumerate() {
-        m.at_fraction.check(&format!("{}.road.mud_crossings[{k}].at_fraction", def.name))?;
-        m.length_m.check(&format!("{}.road.mud_crossings[{k}].length_m", def.name))?;
-        crossings
-            .push((m.at_fraction.v * total_arc - m.length_m.v * 0.5, m.at_fraction.v * total_arc + m.length_m.v * 0.5));
-    }
     let mut splat = vec![ground.0 as u8; n * n];
     let mut frozen = vec![false; n * n];
-    for c in 0..n * n {
-        if best_d[c] <= w2 {
-            let wet = crossings.iter().any(|&(a, b)| arc[c] >= a && arc[c] <= b);
-            splat[c] = if wet { mud_id.0 } else { road_material.0 } as u8;
-            frozen[c] = true;
+    for (rd, lr) in road_defs.iter().zip(&laid) {
+        let surface = materials.id_of(&rd.surface).ok_or_else(|| format!("unknown road surface `{}`", rd.surface))?;
+        let mut crossings = Vec::new();
+        for (k, m) in rd.mud_crossings.iter().enumerate() {
+            m.at_fraction.check(&format!("{}.road.mud_crossings[{k}].at_fraction", def.name))?;
+            m.length_m.check(&format!("{}.road.mud_crossings[{k}].length_m", def.name))?;
+            crossings.push((
+                m.at_fraction.v * lr.total_arc - m.length_m.v * 0.5,
+                m.at_fraction.v * lr.total_arc + m.length_m.v * 0.5,
+            ));
         }
-        if weight[c] > 0.0 {
-            h[c] += (target[c] - h[c]) * weight[c];
+        for c in 0..n * n {
+            if lr.best_d[c] <= lr.w2 {
+                let wet = crossings.iter().any(|&(a, b)| lr.arc[c] >= a && lr.arc[c] <= b);
+                splat[c] = if wet { mud_id.0 } else { surface.0 } as u8;
+                frozen[c] = true;
+            }
+            if lr.weight[c] > 0.0 {
+                h[c] += (lr.target[c] - h[c]) * lr.weight[c];
+            }
         }
     }
     // The centreline cells are exactly the profile (they have weight 1); keep the shoulders inside the terrain grade limit.
@@ -546,64 +639,111 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
         .rivers
         .first()
         .map(|_| (0..n * n).map(|c| if wet_final[c] { river_surface[c] as f32 } else { f32::NAN }).collect());
+    // Bridge decks: laid after the clamp (it would build ramps into the channel) and after the water (the bed under a deck stays a bed).
+    let mut deck_props: Vec<PropRef> = Vec::new();
+    for (rd, lr) in road_defs.iter().zip(&laid) {
+        let road_surface =
+            materials.id_of(&rd.surface).ok_or_else(|| format!("unknown road surface `{}`", rd.surface))?;
+        let planks = materials.id_of("planks").ok_or("material table has no `planks`")?;
+        let mut deck_d = vec![f64::INFINITY; n * n];
+        for k in 0..lr.pts.len() - 1 {
+            let Some(bi) = lr.bridge[k].filter(|&b| lr.bridge[k + 1] == Some(b)) else { continue };
+            let pb = &lr.bridges[bi];
+            let (dw, reach) = (pb.width_m * 0.5, pb.width_m * 0.5 + DECK_LIMIT_MARGIN_M);
+            let r_cells = (reach / CELL_M).ceil() as i64;
+            let ((ax, az), (bx, bz)) = (lr.pts[k], lr.pts[k + 1]);
+            let len2 = (bx - ax) * (bx - ax) + (bz - az) * (bz - az);
+            for j in
+                (az.min(bz).floor() as i64 - r_cells).max(0)..=(az.max(bz).ceil() as i64 + r_cells).min(n as i64 - 1)
+            {
+                for i in (ax.min(bx).floor() as i64 - r_cells).max(0)
+                    ..=(ax.max(bx).ceil() as i64 + r_cells).min(n as i64 - 1)
+                {
+                    let t = (((i as f64 - ax) * (bx - ax) + (j as f64 - az) * (bz - az)) / len2).clamp(0.0, 1.0);
+                    let d = scalar::hypot(i as f64 - (ax + t * (bx - ax)), j as f64 - (az + t * (bz - az))) * CELL_M;
+                    let c = j as usize * n + i as usize;
+                    if d <= reach {
+                        grade_limit[c] = f64::INFINITY; // the drop beside a deck is a cliff by design
+                    }
+                    if d <= dw && d < deck_d[c] {
+                        deck_d[c] = d;
+                        h[c] = lr.y[k] + t * (lr.y[k + 1] - lr.y[k]);
+                        splat[c] = if pb.kind == BridgeKind::Wooden { planks.0 } else { road_surface.0 } as u8;
+                    }
+                }
+            }
+        }
+        for pb in &lr.bridges {
+            deck_props.extend(rails(0, pb));
+        }
+    }
     // Rough sections. Whoops are long enough for the grid and are added to the heights (after the clamp: they are roughness on top of
     // the graded road, not part of its stated grade, so the cells' limits grow by their slope). Washboard is finer than the grid and
     // becomes a phase and weight layer evaluated per query (see `corrugation.rs`).
-    let lateral = |d: f64| 1.0 - scalar::smoothstep(w2, w2 + ROUGH_EDGE_M, d);
     let mut corr: Option<Corrugation> = None;
-    for (kind, list) in [("whoops", &def.road.whoops), ("washboards", &def.road.washboards)] {
-        for (k, r) in list.iter().enumerate() {
-            let tag = format!("{}.road.{kind}[{k}]", def.name);
-            for (l, p) in [
-                ("at_fraction", &r.at_fraction),
-                ("length_m", &r.length_m),
-                ("wavelength_m", &r.wavelength_m),
-                ("amplitude_m", &r.amplitude_m),
-            ] {
-                p.check(&format!("{tag}.{l}"))?;
-            }
-            let lam = r.wavelength_m.v;
-            if kind == "whoops" && lam < MIN_WHOOP_WAVELENGTH_M {
-                return Err(format!("{tag}: wavelength {lam} m is below {MIN_WHOOP_WAVELENGTH_M} m, too short for the 1 m grid: use a washboard"));
-            }
-            if kind == "washboards" && !(MIN_WASHBOARD_WAVELENGTH_M..=MAX_WASHBOARD_WAVELENGTH_M).contains(&lam) {
-                return Err(format!("{tag}: wavelength {lam} m is outside {MIN_WASHBOARD_WAVELENGTH_M} to {MAX_WASHBOARD_WAVELENGTH_M} m: use whoops for longer swells"));
-            }
-            let (a, b) =
-                (r.at_fraction.v * total_arc - r.length_m.v * 0.5, r.at_fraction.v * total_arc + r.length_m.v * 0.5);
-            let fade = lam.max(ROUGH_MIN_FADE_M); // ripples fade in and out over a wavelength
-            if kind == "washboards" && corr.is_none() {
-                corr = Some(Corrugation::new(n, Vec::new()));
-            }
-            let region = corr.as_ref().map_or(0, |c| c.ripples.len()) as u8;
-            if kind == "washboards" {
-                if let Some(c) = corr.as_mut() {
-                    c.ripples.push(Ripple { wavelength_m: lam, amplitude_m: r.amplitude_m.v });
+    for (rd, lr) in road_defs.iter().zip(&laid) {
+        let (w2, total_arc, best_d, arc) = (lr.w2, lr.total_arc, &lr.best_d, &lr.arc);
+        let lateral = |d: f64| 1.0 - scalar::smoothstep(w2, w2 + ROUGH_EDGE_M, d);
+        for (kind, list) in [("whoops", &rd.whoops), ("washboards", &rd.washboards)] {
+            for (k, r) in list.iter().enumerate() {
+                let tag = format!("{}.road.{kind}[{k}]", def.name);
+                for (l, p) in [
+                    ("at_fraction", &r.at_fraction),
+                    ("length_m", &r.length_m),
+                    ("wavelength_m", &r.wavelength_m),
+                    ("amplitude_m", &r.amplitude_m),
+                ] {
+                    p.check(&format!("{tag}.{l}"))?;
                 }
-            }
-            for c in 0..n * n {
-                if best_d[c] >= w2 + ROUGH_EDGE_M || arc[c] < a || arc[c] > b {
-                    continue;
+                let lam = r.wavelength_m.v;
+                if kind == "whoops" && lam < MIN_WHOOP_WAVELENGTH_M {
+                    return Err(format!("{tag}: wavelength {lam} m is below {MIN_WHOOP_WAVELENGTH_M} m, too short for the 1 m grid: use a washboard"));
                 }
-                let wgt = lateral(best_d[c])
-                    * scalar::smoothstep(a, a + fade, arc[c])
-                    * (1.0 - scalar::smoothstep(b - fade, b, arc[c]));
-                if wgt <= 0.0 {
-                    continue;
+                if kind == "washboards" && !(MIN_WASHBOARD_WAVELENGTH_M..=MAX_WASHBOARD_WAVELENGTH_M).contains(&lam) {
+                    return Err(format!("{tag}: wavelength {lam} m is outside {MIN_WASHBOARD_WAVELENGTH_M} to {MAX_WASHBOARD_WAVELENGTH_M} m: use whoops for longer swells"));
                 }
-                if kind == "whoops" {
-                    h[c] += wgt * r.amplitude_m.v * 0.5 * (1.0 - scalar::cos(scalar::TAU * (arc[c] - a) / lam));
-                    grade_limit[c] += r.amplitude_m.v * scalar::PI / lam;
-                } else if let Some(cc) = corr.as_mut() {
-                    cc.set(c, region, arc[c] - a, wgt);
-                    // The phase is interpolated between nodes whose road distances may differ by up to a diagonal step.
-                    grade_limit[c] += r.amplitude_m.v * scalar::PI / lam * std::f64::consts::SQRT_2;
+                let (a, b) = (
+                    r.at_fraction.v * total_arc - r.length_m.v * 0.5,
+                    r.at_fraction.v * total_arc + r.length_m.v * 0.5,
+                );
+                let fade = lam.max(ROUGH_MIN_FADE_M); // ripples fade in and out over a wavelength
+                if kind == "washboards" && corr.is_none() {
+                    corr = Some(Corrugation::new(n, Vec::new()));
+                }
+                let region = corr.as_ref().map_or(0, |c| c.ripples.len()) as u8;
+                if kind == "washboards" {
+                    if let Some(c) = corr.as_mut() {
+                        c.ripples.push(Ripple { wavelength_m: lam, amplitude_m: r.amplitude_m.v });
+                    }
+                }
+                for c in 0..n * n {
+                    if best_d[c] >= w2 + ROUGH_EDGE_M || arc[c] < a || arc[c] > b {
+                        continue;
+                    }
+                    let wgt = lateral(best_d[c])
+                        * scalar::smoothstep(a, a + fade, arc[c])
+                        * (1.0 - scalar::smoothstep(b - fade, b, arc[c]));
+                    if wgt <= 0.0 {
+                        continue;
+                    }
+                    if kind == "whoops" {
+                        h[c] += wgt * r.amplitude_m.v * 0.5 * (1.0 - scalar::cos(scalar::TAU * (arc[c] - a) / lam));
+                        grade_limit[c] += r.amplitude_m.v * scalar::PI / lam;
+                    } else if let Some(cc) = corr.as_mut() {
+                        cc.set(c, region, arc[c] - a, wgt);
+                        // The phase is interpolated between nodes whose road distances may differ by up to a diagonal step.
+                        grade_limit[c] += r.amplitude_m.v * scalar::PI / lam * std::f64::consts::SQRT_2;
+                    }
                 }
             }
         }
     }
-    let road: Vec<(f64, f64, f64)> =
-        pts.iter().zip(&y).map(|(&(i, j), &yy)| (i * CELL_M - half, j * CELL_M - half, yy)).collect();
+    let centrelines: Vec<Vec<(f64, f64, f64)>> = laid
+        .iter()
+        .map(|lr| lr.pts.iter().zip(&lr.y).map(|(&(i, j), &yy)| (i * CELL_M - half, j * CELL_M - half, yy)).collect())
+        .collect();
+    let road = centrelines[0].clone();
+    let w2 = laid[0].w2;
 
     // Round to the stored precision first: every later rule (drainage, slope) must see exactly what a query sees.
     for v in h.iter_mut() {
@@ -627,6 +767,23 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
             let (x, z) = xz(c % n, c / n);
             if !frozen[c] && cl.in_chute(x, z) {
                 *cell = surf.0 as u8;
+            }
+        }
+    }
+    // Soft patches: sand or deep mud laid over plain ground (never over road, water or mud already there).
+    for (k, sp) in def.soft_patches.iter().enumerate() {
+        sp.radius_m.check(&format!("{}.soft_patches[{k}].radius_m", def.name))?;
+        let mat = materials.id_of(&sp.surface).ok_or_else(|| format!("unknown soft patch surface `{}`", sp.surface))?;
+        if materials.get(mat).soil.is_none() {
+            return Err(format!(
+                "{}.soft_patches[{k}]: `{}` has no soil parameters, so it is not soft ground",
+                def.name, sp.surface
+            ));
+        }
+        for (c, cell) in splat.iter_mut().enumerate() {
+            let (x, z) = xz(c % n, c / n);
+            if *cell == ground.0 as u8 && scalar::hypot(x - sp.x_m, z - sp.z_m) <= sp.radius_m.v {
+                *cell = mat.0 as u8;
             }
         }
     }
@@ -734,6 +891,10 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
             });
         }
     }
+    for mut p in deck_props {
+        p.id = PropId(props.len() as u32);
+        props.push(p);
+    }
     if let Some(b) = &def.barricade {
         for (l, p) in [
             ("at_fraction", &b.at_fraction),
@@ -753,7 +914,15 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
         }));
     }
     world.set_props(props);
-    Ok(Course { world, road, ground, road_material, grade_limit })
+    Ok(Course {
+        world,
+        road,
+        extra_roads: centrelines[1..].to_vec(),
+        bridges: laid.iter().flat_map(|l| l.bridges.clone()).collect(),
+        ground,
+        road_material,
+        grade_limit,
+    })
 }
 
 #[cfg(test)]
@@ -766,9 +935,10 @@ mod tests {
         CourseDef::from_ron(include_str!("../../../content/world/courses/slice.ron")).expect("slice.ron parses")
     }
 
+    const GOLDEN_CROSSING_HASH: u64 = 0x2f47_a346_14ba_26ea;
     const GOLDEN_RIVER_HASH: u64 = 0x33d8_29c2_7af5_f0f9;
     const GOLDEN_RIDGE_HASH: u64 = 0xb275_51a9_3685_9f48;
-    const GOLDEN_SLICE_HASH: u64 = 0xcf18_752c_43dd_a432;
+    const GOLDEN_SLICE_HASH: u64 = 0x1513_2fd9_e808_824a;
 
     fn hash(c: &Course) -> u64 {
         let mut s = StateHasher::new();
@@ -795,7 +965,7 @@ mod tests {
         assert!(generate(&d).is_ok());
         let mut bad = d;
         bad.road.width_m = Param::spec(6.0, "");
-        assert!(generate(&bad).err().expect("refused").contains("road.width_m"));
+        assert!(generate(&bad).err().expect("refused").contains("roads[0].width_m"));
     }
 
     #[test]
@@ -1465,5 +1635,180 @@ mod tests {
         let mut d = river_course();
         d.rivers[0].width_m = Param::spec(8.0, "test: too narrow for its depth");
         assert!(generate(&d).err().expect("refused").contains("at least"));
+    }
+
+    fn crossing() -> CourseDef {
+        CourseDef::from_ron(include_str!("../../../content/world/courses/crossing.ron")).expect("crossing.ron parses")
+    }
+
+    fn bridge(c: &Course, kind: BridgeKind) -> &PlacedBridge {
+        c.bridges.iter().find(|b| b.kind == kind).expect("bridge of this kind")
+    }
+
+    /// Plan point at fraction `f` of the way from `a` to `b` of a bridge.
+    fn on_bridge(b: &PlacedBridge, f: f64) -> (f64, f64) {
+        (b.a.0 + (b.b.0 - b.a.0) * f, b.a.1 + (b.b.1 - b.a.1) * f)
+    }
+
+    #[test]
+    fn bridge_deck_is_level_with_the_banks_and_the_river_runs_beneath_it() {
+        let d = crossing();
+        let c = generate(&d).expect("crossing");
+        let fb = d.rivers[0].freeboard_m.v;
+        for kind in [BridgeKind::Road, BridgeKind::Wooden] {
+            let b = bridge(&c, kind);
+            let mid = on_bridge(b, 0.5);
+            // The deck is dry and at deck level; the water beside it is below by about the freeboard.
+            assert!(c.world.water_surface_m(mid.0, mid.1).is_none(), "{kind:?}: water on the deck");
+            assert!((c.world.height_m(mid.0, mid.1) - b.deck_y_m).abs() < 0.05, "{kind:?}: deck height");
+            let dir = (
+                (b.b.0 - b.a.0) / scalar::hypot(b.b.0 - b.a.0, b.b.1 - b.a.1),
+                (b.b.1 - b.a.1) / scalar::hypot(b.b.0 - b.a.0, b.b.1 - b.a.1),
+            );
+            let side = (-dir.1, dir.0);
+            let beside = (mid.0 + side.0 * (b.width_m * 0.5 + 1.5), mid.1 + side.1 * (b.width_m * 0.5 + 1.5));
+            let level = c.world.water_surface_m(beside.0, beside.1).expect("the river runs beside the deck");
+            assert!(
+                (b.deck_y_m - level - fb).abs() < 0.1,
+                "{kind:?}: deck {} m above the water, expected {fb}",
+                b.deck_y_m - level
+            );
+        }
+    }
+
+    #[test]
+    fn bridge_deck_is_as_wide_as_stated_and_drops_away_beside_it() {
+        let d = crossing();
+        let c = generate(&d).expect("crossing");
+        for kind in [BridgeKind::Road, BridgeKind::Wooden] {
+            let b = bridge(&c, kind);
+            let mid = on_bridge(b, 0.5);
+            let len = scalar::hypot(b.b.0 - b.a.0, b.b.1 - b.a.1);
+            let side = (-(b.b.1 - b.a.1) / len, (b.b.0 - b.a.0) / len);
+            let h = |off: f64| c.world.height_m(mid.0 + side.0 * off, mid.1 + side.1 * off);
+            // The deck's edge is accurate to a grid cell, so look one and a half cells inside it.
+            assert!(
+                (h((b.width_m * 0.5 - 1.5).max(0.0)) - b.deck_y_m).abs() < 0.05,
+                "{kind:?}: the deck reaches its edges"
+            );
+            assert!(b.deck_y_m - h(b.width_m * 0.5 + 1.5) > 1.0, "{kind:?}: a drop into the water beside the deck");
+        }
+    }
+
+    #[test]
+    fn the_wooden_bridge_is_narrower_and_lower_rated_than_the_road_bridge() {
+        let c = generate(&crossing()).expect("crossing");
+        let (w, r) = (bridge(&c, BridgeKind::Wooden), bridge(&c, BridgeKind::Road));
+        assert!(w.width_m < r.width_m && w.load_limit_kg < r.load_limit_kg);
+        assert_eq!(c.world.material_at(on_bridge(w, 0.5).0, on_bridge(w, 0.5).1).name, "planks");
+        assert_eq!(c.world.material_at(on_bridge(r, 0.5).0, on_bridge(r, 0.5).1).name, "asphalt");
+    }
+
+    #[test]
+    fn both_roads_cross_the_river_over_their_bridges_and_never_through_the_water() {
+        let d = crossing();
+        let c = generate(&d).expect("crossing");
+        let line = d.rivers[0].centreline(d.seed);
+        let side_of = |p: (f64, f64)| {
+            let (k, _) = line
+                .iter()
+                .enumerate()
+                .min_by(|a, b| {
+                    scalar::hypot(a.1 .0 - p.0, a.1 .1 - p.1).total_cmp(&scalar::hypot(b.1 .0 - p.0, b.1 .1 - p.1))
+                })
+                .expect("line");
+            let (a, b) = (line[k.saturating_sub(1)], line[(k + 1).min(line.len() - 1)]);
+            ((b.0 - a.0) * (p.1 - line[k].1) - (b.1 - a.1) * (p.0 - line[k].0)).signum()
+        };
+        for road in std::iter::once(&c.road).chain(&c.extra_roads) {
+            let mut flips = 0;
+            for w in road.windows(2) {
+                if side_of((w[0].0, w[0].1)) * side_of((w[1].0, w[1].1)) < 0.0 {
+                    flips += 1;
+                }
+            }
+            assert_eq!(flips, 1, "a road must cross the river exactly once");
+            for p in road {
+                assert!(c.world.water_surface_m(p.0, p.1).is_none(), "road wades at ({}, {})", p.0, p.1);
+            }
+        }
+    }
+
+    #[test]
+    fn roads_keep_their_own_grade_limit_across_a_bridge() {
+        let d = crossing();
+        let c = generate(&d).expect("crossing");
+        for (road, limit) in [(&c.road, d.road.max_grade.v), (&c.extra_roads[0], d.extra_roads[0].max_grade.v)] {
+            for w in road.windows(2) {
+                let run = scalar::hypot(w[1].0 - w[0].0, w[1].1 - w[0].1);
+                assert!(
+                    (w[1].2 - w[0].2).abs() / run <= limit + 1e-4,
+                    "grade over {limit} at ({}, {})",
+                    w[0].0,
+                    w[0].1
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn bridge_rails_stand_on_both_edges_and_only_the_wooden_ones_break() {
+        let c = generate(&crossing()).expect("crossing");
+        let walls: Vec<_> = c.world.props().iter().filter(|p| p.kind == PropKind::Wall).collect();
+        assert_eq!(walls.len(), 4, "two rails per bridge");
+        assert_eq!(walls.iter().filter(|p| p.break_impulse_ns.is_finite()).count(), 2);
+        for p in &walls {
+            let PropShape::Box { half_m } = p.shape else { panic!("rails are boxes") };
+            assert!(half_m.z > 5.0, "a rail runs the length of the deck");
+        }
+    }
+
+    #[test]
+    fn crossing_course_is_deterministic_for_a_seed() {
+        let d = crossing();
+        let (a, b) = (generate(&d).expect("a"), generate(&d).expect("b"));
+        assert_eq!(hash(&a), hash(&b));
+        assert_eq!(hash(&a), GOLDEN_CROSSING_HASH, "crossing hash was {:#018x}", hash(&a));
+    }
+
+    #[test]
+    fn a_bridge_over_a_river_that_does_not_exist_is_refused() {
+        let mut d = crossing();
+        d.road.bridges[0].river = 3;
+        assert!(generate(&d).err().expect("refused").contains("does not exist"));
+    }
+
+    #[test]
+    fn soft_patch_is_sand_inside_its_disc_only_and_never_on_the_road() {
+        let d = def();
+        let c = generate(&d).expect("course");
+        let sp = &d.soft_patches[0];
+        let (mut sand, mut inside) = (0, 0);
+        for k in 0..c.world.n() * c.world.n() {
+            let (i, j) = (k % c.world.n(), k / c.world.n());
+            let (x, z) = c.world.node_xz(i, j);
+            let is_sand =
+                c.world.materials().get(MaterialId(u16::from(c.world.splat_at_node(i, j)))).name == sp.surface;
+            let in_disc = scalar::hypot(x - sp.x_m, z - sp.z_m) <= sp.radius_m.v;
+            if is_sand {
+                sand += 1;
+                assert!(in_disc, "sand outside the patch at ({x}, {z})");
+                assert!(c.world.material_at(x, z).soil.is_some(), "sand carries soil parameters");
+            }
+            if in_disc {
+                inside += 1;
+            }
+        }
+        assert!(sand > inside / 2, "the patch should be mostly sand ({sand} of {inside} cells)");
+        for &(x, z, _) in &c.road {
+            assert_ne!(c.world.material_at(x, z).name, sp.surface, "sand on the road");
+        }
+    }
+
+    #[test]
+    fn a_soft_patch_of_hard_ground_is_refused() {
+        let mut d = def();
+        d.soft_patches[0].surface = "gravel".into();
+        assert!(generate(&d).err().expect("refused").contains("not soft ground"));
     }
 }

@@ -8,12 +8,13 @@ use w5k_geo::module::Assembly;
 use w5k_geo::mount::{ring_mount, RingMountDims};
 use w5k_geo::part::Part;
 use w5k_geo::raster::{render, Camera, Item, Mode};
-use w5k_geo::truck::{utility_assembly, utility_hull, UtilityDims};
+use w5k_geo::skin::Skin;
+use w5k_geo::truck::{truck_assembly as skin_assembly, utility_assembly, utility_hull, UtilityDims};
 use w5k_geo::weapon::{gun_module, GunDims};
 use w5k_geo::wheel::{segments_for, wheel, WheelDims};
 use w5k_math::{Transform, Vec3};
 
-const USAGE: &str = "usage: w5k geometry sheet <subject>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close,gun] [--size WxH] [--grid N: tiles per row] [--back F: pull the camera back by this factor]\n       w5k geometry export <subject> --out DIR [--detail 0|1|2]\nsubject: wheel, or hull | truck (4x4) | truck6 (front steer, rear tandem), then +ring (the roof mount), +mg or +ac25 (a gun on it), +x (pulled apart): truck6+ac25+x";
+const USAGE: &str = "usage: w5k geometry sheet <subject>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close,gun] [--size WxH] [--grid N: tiles per row] [--back F: pull the camera back by this factor]\n       w5k geometry export <subject> --out DIR [--detail 0|1|2]\nsubject: wheel, or hull | truck (4x4) | scout (the light recon 4x4) | truck6 (front steer, rear tandem), then +ring (the roof mount), +mg or +ac25 (a gun on it), +x (pulled apart): truck6+ac25+x";
 
 /// Entry point for `w5k geometry <args>`.
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -48,12 +49,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
             let cols = if views.len() == 1 { 1 } else { 2 };
             let zoom_out: f64 = get("--back").map_or(Ok(1.0), |z| z.parse()).map_err(|_| USAGE.to_string())?;
             let grid: usize = get("--grid").map_or(Ok(1), |g| g.parse()).map_err(|_| USAGE.to_string())?;
+            let all = subjects.iter().map(|name| subject(name, detail)).collect::<Result<Vec<_>, _>>()?;
+            // one scale for every tile, the largest vehicle's, so that sizes can be compared
+            let min_ext = all.iter().map(|p| extent(p)).fold(0.0, f64::max);
             // each subject is one tile (all its views); the tiles go in a grid `grid` wide, row by row
             let (tw, th) = (cols * w, views.len().div_ceil(cols) * h);
             let (pw, ph) = (grid * tw, subjects.len().div_ceil(grid) * th);
             let mut pixels = vec![0u8; pw * ph * 3];
-            for (i, name) in subjects.iter().enumerate() {
-                let tile = sheet(&subject(name, detail)?, mode, &views, w, h, zoom_out)?;
+            for (i, parts) in all.iter().enumerate() {
+                let tile = sheet(parts, mode, &views, w, h, min_ext, zoom_out)?;
                 for y in 0..th {
                     let dst = ((i / grid * th + y) * pw + i % grid * tw) * 3;
                     pixels[dst..dst + tw * 3].copy_from_slice(&tile[y * tw * 3..(y + 1) * tw * 3]);
@@ -67,7 +71,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
             let out = get("--out").ok_or(USAGE)?;
             let detail: u8 = get("--detail").map_or(Ok(1), |d| d.parse()).map_err(|_| USAGE.to_string())?;
             let (asm, _) = truck_assembly(what, detail)?;
-            let stem = if what == "truck" { "utility_4x4".to_string() } else { what.replace('+', "_") };
+            let skin_id = skin_id(what);
+            let stem = skin_id.map_or_else(|| what.replace('+', "_"), str::to_string);
             let rig = render_rig(&stem, &asm.parts, &FlagParams::default_params());
             rig.validate().map_err(|e| e.join("; "))?;
             std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
@@ -86,8 +91,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 rig.triangle_count(),
                 joints.join("\n")
             );
-            if what == "truck" {
-                let table = dimension_table(&UtilityDims::placeholder(), &asm.parts, rig.triangle_count());
+            if let Some(skin) = skin_id.and_then(Skin::for_id) {
+                let table = dimension_table(&skin.dims, &asm.parts, rig.triangle_count());
                 std::fs::write(format!("{out}/{stem}.dimensions.md"), &table).map_err(|e| e.to_string())?;
                 print!("{table}");
             }
@@ -126,7 +131,16 @@ fn dimension_table(d: &UtilityDims, parts: &[Part], triangles: usize) -> String 
         // const-ok: percent
         s += &format!("| {name} | {got:.3} | {want:.3} | {:+.2}% |\n", (got / want - 1.0) * 100.0);
     }
-    s + &format!("\nTriangles in the rig: {triangles} (budget 40,000 for a wheeled vehicle).\n")
+    s + &format!("\nTriangles in the rig: {triangles} (budget 50,000 for a wheeled vehicle).\n")
+}
+
+/// The skin id of a subject name (`truck` is the utility truck), if it is a skin.
+fn skin_id(subject: &str) -> Option<&'static str> {
+    match subject {
+        "truck" => Some("utility_4x4"),
+        "scout" => Some("scout_4x4"),
+        _ => None,
+    }
 }
 
 /// Parts as (mesh, base colour, counts for the camera framing: a tall antenna should not move the view).
@@ -150,7 +164,7 @@ fn subject(what: &str, detail: u8) -> Result<Vec<(Mesh, [f64; 3], bool)>, String
     }
 }
 
-/// A vehicle from its name: a hull or truck (`truck6` has a rear tandem), then `+ring` for the roof mount and `+mg` or `+ac25` for a gun on
+/// A vehicle from its name: a hull, a skin (`truck`, `scout`) or `truck6` (a rear tandem), then `+ring` for the roof mount and `+mg` or `+ac25` for a gun on
 /// it (a gun brings the ring), and `+x` to pull the modules apart (returned as the flag).
 fn truck_assembly(what: &str, detail: u8) -> Result<(Assembly, bool), String> {
     let mut words = what.split('+');
@@ -158,10 +172,13 @@ fn truck_assembly(what: &str, detail: u8) -> Result<(Assembly, bool), String> {
     let z = d.wheelbase_m / 2.0;
     let mut asm = match base {
         "hull" => Assembly::new(utility_hull(&d, &[-z, z], detail)),
-        "truck" => utility_assembly(&d, &[-z, z], &[true, false], detail),
         // front steer axle and a rear tandem 1.2 m apart
         "truck6" => utility_assembly(&d, &[-z, z - 1.2, z], &[true, false, false], detail), // const-ok: tandem spacing for the picture
-        _ => return Err(format!("unknown subject {what}; {USAGE}")),
+        // a skin of the game garage (`truck` is the utility truck) on the axles of its stand-in definition
+        _ => match skin_id(base).and_then(Skin::for_id) {
+            Some(skin) => skin_assembly(skin.kind, &skin.dims, &skin.axles_z, &skin.steered, detail),
+            None => return Err(format!("unknown subject {what}; {USAGE}")),
+        },
     };
     let (mut ringed, mut exploded) = (false, false);
     for word in words {
@@ -227,6 +244,16 @@ const VIEWS: [(&str, [f64; 3], bool); 9] = [
     ("gun", [0.8, 0.45, -1.0], true),     // const-ok: camera direction
 ];
 
+/// The diagonal of the box around the parts that count for the camera framing.
+fn extent(parts: &[(Mesh, [f64; 3], bool)]) -> f64 {
+    let (lo, hi) = parts
+        .iter()
+        .filter(|p| p.2)
+        .map(|p| p.0.bounds())
+        .fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(a, b), (l, u)| (a.min(l), b.max(u)));
+    (hi - lo).length()
+}
+
 /// One picture per name in `views`: a single view fills the image, four views make a 2 x 2 sheet.
 fn sheet(
     parts: &[(Mesh, [f64; 3], bool)],
@@ -234,6 +261,7 @@ fn sheet(
     views: &[&str],
     w: usize,
     h: usize,
+    min_ext: f64,
     zoom_out: f64,
 ) -> Result<Vec<u8>, String> {
     let flags = bake(&parts.iter().map(|p| &p.0).collect::<Vec<_>>(), &FlagParams::default_params());
@@ -247,7 +275,7 @@ fn sheet(
         .filter(|p| p.2)
         .map(|p| p.0.bounds())
         .fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(a, b), (l, u)| (a.min(l), b.max(u)));
-    let (c, ext) = ((lo + hi) * 0.5, (hi - lo).length() * zoom_out);
+    let (c, ext) = ((lo + hi) * 0.5, (hi - lo).length().max(min_ext) * zoom_out);
     let cols = if views.len() == 1 { 1 } else { 2 };
     let mut out = vec![0u8; cols * w * views.len().div_ceil(cols) * h * 3];
     for (i, name) in views.iter().enumerate() {

@@ -136,6 +136,11 @@ mod tests {
 
     /// A Mule-class truck: its gear set, final drive and shift points, the box truck's driveline otherwise.
     fn mule_like() -> (Powertrain, LumpedVehicle) {
+        mule_with(|_| {})
+    }
+
+    /// `mule_like` with a change to its drivetrain definition first.
+    fn mule_with(edit: impl FnOnce(&mut w5k_contract::rig::DrivetrainDef)) -> (Powertrain, LumpedVehicle) {
         let mut def = box_truck().0.drivetrain;
         def.gearbox.forward_ratios = vec![2.48, 1.48, 1.0, 0.75];
         def.gearbox.shift.upshift_rpm = 3500.0;
@@ -144,6 +149,15 @@ mod tests {
         def.engine.torque_curve = vec![(750.0, 300.0), (1900.0, 380.0), (3400.0, 330.0), (3900.0, 280.0)];
         def.engine.redline_rpm = 3900.0;
         def.outputs.iter_mut().for_each(|o| o.final_drive_ratio = 5.13);
+        // the Mule has no separate axle-diff reduction: the box truck's 3.73 would multiply the final drive
+        fn unit_stages(n: &mut w5k_contract::rig::DriveNode) {
+            if let w5k_contract::rig::DriveNode::Diff { ratio, children, .. } = n {
+                *ratio = 1.0;
+                children.iter_mut().for_each(unit_stages);
+            }
+        }
+        unit_stages(&mut def.driveline);
+        edit(&mut def);
         let p = Powertrain::new(&def, &Tunings::shipped()).unwrap();
         let mut v = LumpedVehicle::new(2300.0, 0.4, 2.0, p.output_count());
         v.rolling_coeff = 0.015;
@@ -171,7 +185,7 @@ mod tests {
         }
         // before the fix the box hunted between first and second about every 3 s and never reached third
         assert!((v.speed_m_s - target).abs() < 0.3, "cruise speed {} m/s", v.speed_m_s);
-        let late: Vec<_> = gears.iter().filter(|(t, _)| *t > 12.0).collect();
+        let late: Vec<_> = gears.iter().filter(|(t, _)| *t > 20.0).collect();
         assert!(late.is_empty(), "shifted during the cruise: {gears:?}");
         assert!(gears.last().unwrap().1 >= 3, "cruise should sit in third or above: {gears:?}");
         assert!(gears.len() <= 4, "hunting on the way up: {gears:?}");
@@ -235,5 +249,113 @@ mod tests {
             let top = gears.last().unwrap().1;
             assert!((3..=4).contains(&top), "{speed_kmh} km/h settles in gear {top}: {gears:?}");
         }
+    }
+
+    const RPM: f64 = core::f64::consts::PI / 30.0;
+
+    /// Terminal speed down a grade in a held gear on a closed throttle, from the force balance written independently of the simulation:
+    /// gravity along the slope = rolling + drag + engine braking at the wheel (`T_drag R / (r eta)`), found by bisection.
+    fn engine_braking_terminal_speed(
+        grade: f64,
+        gear_ratio: f64,
+        rig: &w5k_contract::PhysRig,
+        veh: &LumpedVehicle,
+    ) -> f64 {
+        let d = &rig.drivetrain;
+        let (r, eta) = (veh.wheel_radius_m, d.gearbox.efficiency * d.outputs[0].efficiency);
+        let total = gear_ratio * d.outputs[0].final_drive_ratio;
+        let net = |v: f64| {
+            let rpm = v / r * total / RPM;
+            let eb = (d.engine.drag_const_nm + d.engine.drag_per_rpm_nm * rpm) * total / (r * eta);
+            let g = veh.mass_kg * veh.gravity_m_s2;
+            g * w5k_math::scalar::sin(grade)
+                - veh.rolling_coeff * g * w5k_math::scalar::cos(grade)
+                - veh.drag_n_s2_m2 * v * v
+                - eb
+        };
+        let (mut lo, mut hi) = (0.5, 80.0);
+        for _ in 0..80 {
+            let mid = 0.5 * (lo + hi);
+            if net(mid) > 0.0 {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        0.5 * (lo + hi)
+    }
+
+    #[test]
+    fn engine_braking_terminal_speed_down_a_grade_matches_the_force_balance() {
+        let grade = 6.0_f64.to_radians();
+        let rig = box_truck().0;
+        for gear in [2_u8, 3] {
+            let (mut p, mut v) = mule_like();
+            let ratio = [2.48, 1.48, 1.0, 0.75][usize::from(gear) - 1];
+            v.grade_rad = -grade;
+            v.speed_m_s = 8.0;
+            let go = DriveInputs { gear: w5k_contract::GearRequest::Gear(gear), ..Default::default() };
+            for _ in 0..(240 * 150) {
+                v.step(1.0 / 240.0, &mut p, &go);
+            }
+            let mut mule_rig = rig.clone();
+            mule_rig.drivetrain.outputs.iter_mut().for_each(|o| o.final_drive_ratio = 5.13);
+            mule_rig.drivetrain.driveline = w5k_contract::rig::DriveNode::Output(0); // unit root stage: only the gear and the final drive remain
+            let expected = engine_braking_terminal_speed(grade, ratio, &mule_rig, &v);
+            assert!(
+                (v.speed_m_s - expected).abs() < 0.04 * expected,
+                "gear {gear}: simulated {} m/s, force balance {expected} m/s",
+                v.speed_m_s
+            );
+        }
+    }
+
+    /// A 200 s descent of a 12 degree grade at a driver-held 10 m/s, with small lightly cooled discs: peak disc temperature, and the brake
+    /// pedal the driver needed early (20 s to 30 s) and late (the last 10 s).
+    fn descent(gear: w5k_contract::GearRequest) -> (f64, f64, f64) {
+        // small, lightly cooled discs, so the fade (and not the particular truck) is what is being tested
+        let (mut p, mut v) = mule_with(|d| {
+            for b in &mut d.brakes {
+                b.thermal_mass_j_k = 2_000.0;
+                b.cooling_w_k = 4.0;
+                b.cooling_per_ms_w_k = 1.0;
+            }
+        });
+        v.grade_rad = -12.0_f64.to_radians();
+        v.speed_m_s = 10.0;
+        let (dt, mut peak_temp) = (1.0 / 240.0, 0.0_f64);
+        let (mut early, mut late, mut n_early, mut n_late) = (0.0, 0.0, 0.0, 0.0);
+        for k in 0..(200 * 240) {
+            let t = f64::from(k) * dt;
+            let brake = (0.6 * (v.speed_m_s - 10.0) + 0.2).clamp(0.0, 1.0); // a little feed-forward, then trim
+            v.step(dt, &mut p, &DriveInputs { brake, gear, ..Default::default() });
+            peak_temp = p.telemetry().brake_temps_k.iter().copied().fold(peak_temp, f64::max);
+            if (20.0..30.0).contains(&t) {
+                early += brake;
+                n_early += 1.0;
+            } else if t > 190.0 {
+                late += brake;
+                n_late += 1.0;
+            }
+        }
+        (peak_temp, early / n_early, late / n_late)
+    }
+
+    #[test]
+    fn engine_braking_keeps_the_brakes_cooler_on_a_long_descent() {
+        let (t_neutral, ..) = descent(w5k_contract::GearRequest::Neutral);
+        let (t_auto, ..) = descent(w5k_contract::GearRequest::Auto);
+        assert!(t_neutral > t_auto + 20.0, "brakes only {t_neutral} K, with engine braking {t_auto} K");
+    }
+
+    #[test]
+    fn brake_fade_makes_the_driver_press_harder_as_the_discs_heat_up() {
+        let (t, early, late) = descent(w5k_contract::GearRequest::Neutral);
+        // brakes alone: the discs pass the fade start (600 K), the same pedal brakes less, so the driver's pedal has to go up to hold the speed
+        assert!(t > 600.0, "peak disc temperature {t} K");
+        assert!(late > 1.2 * early, "pedal {early} early, {late} late");
+        // with engine braking the discs stay under the fade start and the pedal barely changes
+        let (t_auto, early_auto, late_auto) = descent(w5k_contract::GearRequest::Auto);
+        assert!(t_auto < t && late_auto < late, "auto: {t_auto} K, pedal {early_auto} -> {late_auto}");
     }
 }

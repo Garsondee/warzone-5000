@@ -23,6 +23,9 @@
 ## Substep bake
 The compile bakes `integration.substeps` and `f_max_hz` from the stop-engaged wheel hop (incremental stop rate at full bump travel, as CHASSIS PR 59 reads it) and the hull heave; test `declared_substeps_cover_the_stop_engaged_wheel_hop_of_every_station`.
 
+## Scout damping (CHASSIS #76 finding)
+The scout's mean damping ratio 0.25 with rebound/bump 1.5 meant only 0.20 on the bump side (what the whoops excite). Now zeta 0.30, rebound/bump 1.2: bump side 0.27, rebound 0.33. Slice course: scout peak az 13.43 -> 11.57 m/s2; mule and hauler unchanged.
+
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).
 

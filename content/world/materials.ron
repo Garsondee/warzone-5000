@@ -46,4 +46,26 @@
         rolling_coeff: Param(v: 0.08, lo: 0.04, hi: 0.15, prov: Estimate, src: "UNVALIDATED stand-in; the water's own drag is the water model's job, not this number"),
         roughness_rms_m: Param(v: 0.05, lo: 0.02, hi: 0.1, prov: Estimate, src: "UNVALIDATED stand-in"),
     ),
+    MaterialDef(
+        name: "planks",
+        mu_peak: Param(v: 0.5, lo: 0.3, hi: 0.7, prov: Estimate, src: "UNVALIDATED stand-in; weathered wooden decking, slick when wet"),
+        mu_slide: Param(v: 0.4, lo: 0.25, hi: 0.6, prov: Estimate, src: "UNVALIDATED stand-in"),
+        rolling_coeff: Param(v: 0.02, lo: 0.01, hi: 0.05, prov: Estimate, src: "UNVALIDATED stand-in"),
+        roughness_rms_m: Param(v: 0.02, lo: 0.01, hi: 0.05, prov: Estimate, src: "UNVALIDATED stand-in; gaps and cupped boards"),
+    ),
+    MaterialDef(
+        name: "sand",
+        mu_peak: Param(v: 0.55, lo: 0.4, hi: 0.7, prov: Estimate, src: "UNVALIDATED; tyre or shoe friction on dry sand, order of magnitude; VALIDATION to source"),
+        mu_slide: Param(v: 0.5, lo: 0.35, hi: 0.65, prov: Estimate, src: "UNVALIDATED"),
+        rolling_coeff: Param(v: 0.0, lo: 0.0, hi: 0.01, prov: Estimate, src: "the soil law supplies the compaction resistance"),
+        roughness_rms_m: Param(v: 0.02, lo: 0.01, hi: 0.05, prov: Estimate, src: "UNVALIDATED; ripples the 1 m grid does not resolve"),
+        soil: Some(SoilDef(
+            n: Param(v: 1.1, lo: 0.7, hi: 1.3, prov: Estimate, src: "UNVALIDATED; the dry-sand class of the Bekker-Wong tables in Wong, Theory of Ground Vehicles (values as widely reproduced; VALIDATION to verify table and page)"),
+            kc_pa_m_n1: Param(v: 990.0, lo: 100.0, hi: 3000.0, prov: Estimate, src: "UNVALIDATED; dry-sand class, N/m^(n+1) (0.99 kN/m^(n+1) as widely reproduced)"),
+            kphi_pa_m_n: Param(v: 1528430.0, lo: 800000.0, hi: 2500000.0, prov: Estimate, src: "UNVALIDATED; dry-sand class, N/m^(n+2) (1528 kN/m^(n+2) as widely reproduced)"),
+            cohesion_pa: Param(v: 1040.0, lo: 0.0, hi: 2000.0, prov: Estimate, src: "UNVALIDATED; dry-sand class (about 1 kPa)"),
+            friction_angle_deg: Param(v: 28.0, lo: 25.0, hi: 35.0, prov: Estimate, src: "UNVALIDATED; dry-sand class"),
+            shear_k_m: Param(v: 0.025, lo: 0.01, hi: 0.04, prov: Estimate, src: "UNVALIDATED; dry-sand class"),
+        )),
+    ),
 ]

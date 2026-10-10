@@ -16,8 +16,9 @@ use w5k_replay::ReplayFile;
 use w5k_world::strip::DataStrip;
 
 const USAGE: &str = "usage:
-  w5k viewer render <replay.json|replay.w5kr> --out clip.mp4 [--rig rig.json] [--skin utility_4x4] [--strip standard] [--terrain terrain.json] [--camera rts|quarter|front|chase|orbit]  (default rts) [--plots inset|full|off] [--seconds N] [--start S] [--fps N]
+  w5k viewer render <replay.json|replay.w5kr> --out clip.mp4 [--rig rig.json] [--rig a.json,b.json] [--skin utility_4x4[,..]] [--strip standard] [--terrain terrain.json] [--camera rts|quarter|front|chase|orbit] [--plots inset|full|off] [--seconds N] [--start S] [--fps N]
   w5k viewer page   <replay.json|replay.w5kr> --out page.html [--rig rig.json]   (a self-contained page to open in a browser)
+  w5k viewer fake-fleet <replay> --out fleet.w5kr [--n 3] [--offset S]   (test data: the first vehicle repeated n times, each S seconds behind the last)
   w5k viewer plot   <data.csv> --out chart.png [--title T] [--xlabel X] [--ylabel Y] [--width W] [--height H]
   w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.w5kr, replay.json and rig.json)";
 
@@ -28,6 +29,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some("render") => render(&args[1..], true),
         Some("page") => render(&args[1..], false),
         Some("plot") => plot(&args[1..]),
+        Some("fake-fleet") => fake_fleet(&args[1..]),
         _ => Err(USAGE.to_string()),
     }
 }
@@ -106,13 +108,19 @@ fn terrain_json(world: &dyn WorldQuery, replay: &ReplayFile) -> String {
     .to_string()
 }
 
+/// The `i`-th item of a comma-separated option (the last one repeats for later vehicles): `--rig a.json,b.json`, `--skin x,y,z`.
+fn pick(list: Option<&str>, i: usize) -> Option<&str> {
+    let items: Vec<&str> = list?.split(',').collect();
+    items.get(i).or(items.last()).copied()
+}
+
 /// The rig to draw: `--rig file.json` (a serialised `RenderRig`), or, for the canned stand-ins, the rig named in the header.
-fn rig_for(replay: &ReplayFile, rig_arg: Option<&str>) -> Result<RenderRig, String> {
+fn rig_for(replay: &ReplayFile, vehicle: usize, rig_arg: Option<&str>) -> Result<RenderRig, String> {
     if let Some(p) = rig_arg {
         let s = std::fs::read_to_string(p).map_err(|e| format!("cannot read {p}: {e}"))?;
         return serde_json::from_str(&s).map_err(|e| format!("cannot parse {p}: {e}"));
     }
-    match replay.header.vehicles.first().map(|v| v.rig_id.as_str()) {
+    match replay.header.vehicles.get(vehicle).map(|v| v.rig_id.as_str()) {
         Some("box_truck") => Ok(box_truck().1),
         Some("box_tank") => Ok(box_tank().1),
         // GEOMETRY's utility truck (same node layout as the stand-in truck, so the canned truck replay drives it).
@@ -128,15 +136,21 @@ fn render(args: &[String], record: bool) -> Result<(), String> {
     let input = args.first().ok_or(USAGE)?;
     let out = opt(args, "--out").ok_or("--out is required")?;
     let replay = read_any(Path::new(input))?;
-    let mut rig = rig_for(&replay, opt(args, "--rig"))?;
-    if let Some(skin) = opt(args, "--skin") {
-        rig = w5k_replay::skin::retarget(&skin_rig(skin)?, &rig)?;
-    }
     let tmp = std::env::temp_dir().join(format!("w5k-viewer-{}", std::process::id()));
     std::fs::create_dir_all(&tmp).map_err(|e| format!("cannot create {}: {e}", tmp.display()))?;
-    let (bin, rig_json) = (tmp.join("replay.w5kr"), tmp.join("rig.json"));
+    // One rig per vehicle in the header (`--rig` and `--skin` take comma-separated lists, the last item repeats).
+    let mut rig_files = Vec::new();
+    for i in 0..replay.header.vehicles.len() {
+        let mut rig = rig_for(&replay, i, pick(opt(args, "--rig"), i))?;
+        if let Some(skin) = pick(opt(args, "--skin"), i) {
+            rig = w5k_replay::skin::retarget(&skin_rig(skin)?, &rig)?;
+        }
+        let file = tmp.join(format!("rig{i}.json"));
+        std::fs::write(&file, serde_json::to_string(&rig).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        rig_files.push(file.display().to_string());
+    }
+    let bin = tmp.join("replay.w5kr");
     w5k_replay::write_bin(&bin, &replay)?;
-    std::fs::write(&rig_json, serde_json::to_string(&rig).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     let mut extra = Vec::new();
     match opt(args, "--strip") {
         None => {
@@ -159,16 +173,10 @@ fn render(args: &[String], record: bool) -> Result<(), String> {
         Some(other) => return Err(format!("unknown strip {other} (known: standard)")),
     }
     let page = if record { tmp.join("page.html") } else { PathBuf::from(out) };
-    let mut build: Vec<String> = [
-        "--rig",
-        &rig_json.display().to_string(),
-        "--replay",
-        &bin.display().to_string(),
-        "--out",
-        &page.display().to_string(),
-    ]
-    .map(String::from)
-    .to_vec();
+    let mut build: Vec<String> =
+        ["--rig", &rig_files.join(","), "--replay", &bin.display().to_string(), "--out", &page.display().to_string()]
+            .map(String::from)
+            .to_vec();
     build.extend(extra);
     node("build.mjs", &build)?;
     if record {
@@ -203,4 +211,58 @@ fn dump_canned(args: &[String]) -> Result<(), String> {
     let rig_json = serde_json::to_string(&rig).map_err(|e| format!("cannot serialise the rig: {e}"))?;
     std::fs::write(out.join("rig.json"), rig_json).map_err(|e| format!("cannot write rig.json: {e}"))?;
     Ok(())
+}
+
+/// Test data for multi-vehicle replays: vehicle 0 repeated `n` times, vehicle `i` driving `i * offset` seconds behind it (it waits at
+/// the start), named `<name>-A`, `-B`, ... Until a real scenario writes several vehicles.
+fn fake_fleet(args: &[String]) -> Result<(), String> {
+    let input = args.first().ok_or(USAGE)?;
+    let out = opt(args, "--out").ok_or("--out is required")?;
+    let n: usize = opt(args, "--n").map_or(Ok(3), str::parse).map_err(|_| "--n is a number")?;
+    let offset_s: f64 = opt(args, "--offset").map_or(Ok(3.0), str::parse).map_err(|_| "--offset is seconds")?;
+    let mut replay = read_any(Path::new(input))?;
+    let base = replay.header.vehicles.first().ok_or("the replay has no vehicles")?.clone();
+    replay.header.vehicles = (0..n)
+        .map(|i| {
+            let mut v = base.clone();
+            v.name = format!("{}-{}", base.name, char::from(b'A' + i as u8));
+            v
+        })
+        .collect();
+    let lag = (offset_s / replay.header.frame_dt_s).round() as usize;
+    let source = replay.frames.clone();
+    for (k, f) in replay.frames.iter_mut().enumerate() {
+        let first = f.vehicles[0].clone();
+        f.vehicles = (0..n)
+            .map(|i| {
+                let mut v = if i == 0 { first.clone() } else { source[k.saturating_sub(i * lag)].vehicles[0].clone() };
+                v.vehicle = i as u32;
+                v
+            })
+            .collect();
+    }
+    w5k_replay::write_bin(Path::new(out), &replay)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `w5k drive --web tools/viewer/dist` serves the committed page; no Node runs on the player's PC, so the build output is in git.
+    /// `node tools/viewer/build.mjs --live --check` (a developer's check) says whether it is current; this one says it is there and
+    /// speaks the protocol.
+    #[test]
+    fn the_test_drive_page_is_built_into_dist_and_calls_every_endpoint_it_needs() {
+        let page = viewer_dir().join("dist/index.html");
+        let html = std::fs::read_to_string(&page)
+            .unwrap_or_else(|e| panic!("{} is missing ({e}): run node tools/viewer/build.mjs --live", page.display()));
+        for endpoint in ["/api/vehicles", "/api/world", "/api/rig/", "/api/select", "/api/input", "/api/stream"] {
+            assert!(html.contains(endpoint), "the page never mentions {endpoint}");
+        }
+        assert!(
+            html.len() < 1024 * 1024,
+            "the page is {} bytes: the media lint refuses committed files over 1 MiB",
+            html.len()
+        ); // const-ok: the lint's limit
+    }
 }
