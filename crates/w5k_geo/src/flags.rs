@@ -15,6 +15,7 @@ pub struct FlagParams {
     pub smooth_angle_deg: f64,
     pub max_edge_m: f64,
     pub cavity_rays: u32,
+    pub preview_cavity_rays: u32,
     pub cavity_cap_m: f64,
     pub cavity_lift_m: f64,
 }
@@ -22,6 +23,18 @@ pub struct FlagParams {
 impl FlagParams {
     pub fn default_params() -> FlagParams {
         ron::from_str(include_str!("../shapes/flags.ron")).expect("shapes/flags.ron parses")
+    }
+
+    /// The same bake with `rays` cavity rays per vertex. The cost is proportional to it, the positions, triangles and edge flags do not depend on
+    /// it, and the cavity only gets noisier as it falls: a per-call knob for a caller that wants a cheaper skin.
+    pub fn with_cavity_rays(self, rays: u32) -> FlagParams {
+        FlagParams { cavity_rays: rays, ..self }
+    }
+
+    /// The bake for a preview skin (a Workshop slider moving): `preview_cavity_rays` rays, a small fraction of the default's cost.
+    pub fn preview() -> FlagParams {
+        let full = FlagParams::default_params();
+        full.with_cavity_rays(full.preview_cavity_rays)
     }
 }
 
