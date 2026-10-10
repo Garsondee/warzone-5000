@@ -9,7 +9,8 @@
 //! on the parent's socket frame with the two normals opposed and the two references together (the child is rotated half a turn about
 //! the socket's Z axis). A module authored with its mount normal pointing down (-Y) therefore stands upright on a roof socket, and one
 //! authored with its normal pointing back (+Z) points its barrel forward when it sits on a trunnion. A socket on the left of the
-//! vehicle takes the mirror image of a module that is not symmetric.
+//! vehicle takes the mirror image of a module that is not symmetric. The caller labels each placement (`tyre` placed at `0.r` is
+//! `tyre.0.r`, a `trunnion` offered by the module labelled `ring` is `trunnion.ring`), so names say where a thing is.
 //!
 //! Nothing here knows what a hull or a gun is: the families (`hull`, `gear`, `mount`, `weapon`) build modules, and this file composes
 //! them, so a new hull can take an old weapon and a new weapon an old mount.
@@ -37,6 +38,8 @@ pub struct Socket {
     pub side: Side,
     pub pose: Transform,
     pub size_m: f64,
+    /// The axle or road-wheel index of a `Station` socket; the parts attached there that have no index of their own take it.
+    pub station: Option<u8>,
     pub hints: Vec<(String, f64)>,
 }
 
@@ -152,10 +155,10 @@ impl Module {
 pub struct Assembly {
     /// Every part, its frame in the hull frame.
     pub parts: Vec<Part>,
-    /// Every socket still open or taken, in the hull frame, named `instance.socket` for those offered by an attached module.
+    /// Every socket still open or taken, in the hull frame, named `socket.label` for those offered by an attached module.
     pub sockets: Vec<Socket>,
     taken: Vec<String>,
-    /// What was attached where: (instance name, socket name, module name).
+    /// What was attached where: (label, socket name, module name).
     pub log: Vec<(String, String, String)>,
 }
 
@@ -177,10 +180,13 @@ impl Assembly {
     }
 
     /// Put `module` on the socket named `socket`, turned `spin_rad` about the socket's normal (positive is counter-clockwise seen from outside,
-    /// so on a roof socket a positive spin turns the module's nose to the left, like positive yaw). Returns the instance name under which the
-    /// module's own sockets and parts now appear (`ring_1.trunnion`, ...). The assembly is unchanged when this fails.
-    pub fn attach(&mut self, socket: &str, module: &Module, spin_rad: f64) -> Result<String, FitError> {
+    /// so on a roof socket a positive spin turns the module's nose to the left, like positive yaw). Every part and socket of the module is
+    /// renamed `<name>.<label>`, so a second copy of a module needs another label. The assembly is unchanged when this fails.
+    pub fn attach(&mut self, socket: &str, module: &Module, spin_rad: f64, label: &str) -> Result<(), FitError> {
         let fail = |reason: String| FitError { socket: socket.to_string(), reason };
+        if label.is_empty() {
+            return Err(fail("the label is empty".into()));
+        }
         let parent = self.socket(socket).ok_or_else(|| fail("no such socket".into()))?.clone();
         if self.taken.iter().any(|t| t == socket) {
             return Err(fail("the socket is already taken".into()));
@@ -206,8 +212,19 @@ impl Assembly {
         let half_turn = Transform::new(Vec3::ZERO, Quat::new(0.0, 0.0, 0.0, 1.0)); // exactly pi about Z, so axis-aligned sockets compose without noise
         let spin = Transform::new(Vec3::ZERO, Quat::from_axis_angle(Vec3::Y, spin_rad));
         let placement = parent.pose.compose(&spin).compose(&half_turn).compose(&child_mount.pose.inverse());
-        let instance = format!("{}_{}", socket, self.log.len() + 1);
-        for p in &child.parts {
+        let part_names: Vec<String> = child.parts.iter().map(|p| format!("{}.{label}", p.name)).collect();
+        let socket_names: Vec<String> = child.sockets.iter().map(|s| format!("{}.{label}", s.name)).collect();
+        for (i, n) in part_names.iter().enumerate() {
+            if part_names[..i].contains(n) || self.parts.iter().any(|p| &p.name == n) {
+                return Err(fail(format!("a part named {n} exists already")));
+            }
+        }
+        for (i, n) in socket_names.iter().enumerate() {
+            if socket_names[..i].contains(n) || self.socket(n).is_some() {
+                return Err(fail(format!("a socket named {n} exists already")));
+            }
+        }
+        for (p, name) in child.parts.iter().zip(part_names) {
             let mut p = p.clone();
             if p.role == w5k_contract::render::NodeRole::Hull {
                 // fixed to the hull: the mesh goes into the hull frame
@@ -216,17 +233,18 @@ impl Assembly {
             } else {
                 p.pose = placement.compose(&p.pose);
             }
-            p.name = format!("{instance}/{}", p.name);
+            p.name = name;
+            p.station = p.station.or(parent.station);
             self.parts.push(p);
         }
-        for s in &child.sockets {
+        for (s, name) in child.sockets.iter().zip(socket_names) {
             let mut s = s.clone();
             s.pose = placement.compose(&s.pose);
-            s.name = format!("{instance}.{}", s.name);
+            s.name = name;
             self.sockets.push(s);
         }
         self.taken.push(socket.to_string());
-        self.log.push((instance.clone(), socket.to_string(), module.name.clone()));
-        Ok(instance)
+        self.log.push((label.to_string(), socket.to_string(), module.name.clone()));
+        Ok(())
     }
 }
