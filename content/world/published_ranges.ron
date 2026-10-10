@@ -1,0 +1,24 @@
+// Published ranges for the numbers in materials.ron, so `w5k world stats` can put each value beside what the literature says.
+// STATUS: every range here is UNVERIFIED: written from memory of the Bekker-Wong tables and the tyre-road friction tables in
+// Wong, "Theory of Ground Vehicles" (4th ed., chapters 1 and 2, the soil parameter table) and the WES cone-index literature, widened to cover
+// disagreements between editions. VALIDATION must open the book, fill in the real page and table and set status to Verified, or correct the
+// range. A value outside its range is a finding for them, not a verdict.
+[
+    PublishedRange(material: "asphalt", quantity: "mu_peak", lo: 0.8, hi: 1.0, source: "Wong ch. 1, peak coefficient of road adhesion, dry asphalt (page and table to verify)", status: Unverified),
+    PublishedRange(material: "dirt", quantity: "mu_peak", lo: 0.5, hi: 0.8, source: "Wong ch. 1, dry dirt and gravel roads (page and table to verify)", status: Unverified),
+    PublishedRange(material: "gravel", quantity: "mu_peak", lo: 0.5, hi: 0.75, source: "Wong ch. 1, gravel (page and table to verify)", status: Unverified),
+    PublishedRange(material: "mud", quantity: "mu_peak", lo: 0.2, hi: 0.6, source: "Wong ch. 1, wet clay and mud (page and table to verify)", status: Unverified),
+    PublishedRange(material: "sand", quantity: "mu_peak", lo: 0.3, hi: 0.7, source: "Wong ch. 1, sand (page and table to verify)", status: Unverified),
+    PublishedRange(material: "mud", quantity: "soil.n", lo: 0.1, hi: 0.7, source: "Wong ch. 2 soil table, the clay classes (clayey soil about 0.5, heavy clay lower); page and table to verify", status: Unverified),
+    PublishedRange(material: "mud", quantity: "soil.kc_pa_m_n1", lo: 10000.0, hi: 15000.0, source: "Wong ch. 2 soil table, clay classes, N/m^(n+1) (about 13 kN/m^(n+1)); to verify", status: Unverified),
+    PublishedRange(material: "mud", quantity: "soil.kphi_pa_m_n", lo: 600000.0, hi: 1600000.0, source: "Wong ch. 2 soil table, clay classes, N/m^(n+2); to verify", status: Unverified),
+    PublishedRange(material: "mud", quantity: "soil.cohesion_pa", lo: 3000.0, hi: 70000.0, source: "Wong ch. 2 soil table, clay classes, Pa; to verify", status: Unverified),
+    PublishedRange(material: "mud", quantity: "soil.friction_angle_deg", lo: 10.0, hi: 35.0, source: "Wong ch. 2 soil table, clay classes; to verify", status: Unverified),
+    PublishedRange(material: "mud", quantity: "soil.shear_k_m", lo: 0.005, hi: 0.03, source: "Wong ch. 2 soil table, clay classes, m; to verify", status: Unverified),
+    PublishedRange(material: "sand", quantity: "soil.n", lo: 0.7, hi: 1.2, source: "Wong ch. 2 soil table, the sand classes (dry sand about 1.1, LETE sand about 0.8); to verify", status: Unverified),
+    PublishedRange(material: "sand", quantity: "soil.kc_pa_m_n1", lo: 900.0, hi: 110000.0, source: "Wong ch. 2 soil table, the sand classes, N/m^(n+1); the two sands differ by about 100x; to verify", status: Unverified),
+    PublishedRange(material: "sand", quantity: "soil.kphi_pa_m_n", lo: 1400000.0, hi: 5400000.0, source: "Wong ch. 2 soil table, the sand classes, N/m^(n+2); to verify", status: Unverified),
+    PublishedRange(material: "sand", quantity: "soil.cohesion_pa", lo: 0.0, hi: 2000.0, source: "Wong ch. 2 soil table, the sand classes, Pa; to verify", status: Unverified),
+    PublishedRange(material: "sand", quantity: "soil.friction_angle_deg", lo: 27.0, hi: 33.0, source: "Wong ch. 2 soil table, the sand classes; to verify", status: Unverified),
+    PublishedRange(material: "sand", quantity: "soil.shear_k_m", lo: 0.01, hi: 0.03, source: "Wong ch. 2 soil table, the sand classes, m; to verify", status: Unverified),
+]
