@@ -6,6 +6,7 @@
 //! `docs/swarm/lanes/chassis.md`. Only lane CHASSIS edits this crate (`docs/swarm/ownership.toml`).
 
 pub mod hull;
+pub mod modes;
 pub mod quarter_car;
 pub mod steering;
 pub mod suspension;
