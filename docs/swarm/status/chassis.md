@@ -5,19 +5,21 @@
 **Last updated:** 2026-10-10 UTC | **Branch:** lane/chassis/build | **Contract pinned:** 80adac2 (0.2.0) | **Phase:** build (M1)
 
 ## Done
-- Spike S1 + design note (PR #7): substep rule `ceil(20 f_max/60)`; relaxation-length friction holds a 10% grade.
-- Steps 1-4 merged (#13, #30): `quarter_car`, `suspension`, `tyre`, `hull`, each with its oracle tests; `tuning.ron` Params.
-- Step 5a (PR A): `wheeled` assembly + `steering` (Ackermann). Tests: ride height, axle loads, braking distance, braking load transfer,
-  Ackermann radius, step steer, hump without bottoming. Contract now 0.2.0 (`80adac2`).
-- Step 5b (PR B, stacked on A; split to stay under 400 lines): `w5k chassis strip` drives FORGE's Mule on WORLD's DataStrip (stand-in
-  powertrain), writes replay + CSV; plots and a clip frame in `docs/lanes/chassis/media/`.
+- S1 + design note (#7); steps 1-4 (#13, #30); wheeled assembly + Ackermann (#42); Mule strip run (#43); modes + ledger (#59);
+  tilt-table and skidpad benches + patch-moment fix (#69). Every step with its oracle tests; contract 0.2.0.
 
 ## In progress
-- #59 merged (modes + ledger). #69: `bench` (tilt table, skidpad) + the steady-turn load-transfer test + a fix: the tyre's lateral
-  force now carries its patch-to-hub moment (rolled too little before; the tilt table caught it). Next: ARCH's call (Scout/Hauler when FORGE lands them).
-- **Parameters I would not trust yet:** tyre curve linear to the friction-circle cap (no slide drop: `mu_slide`, `kappa_peak`, `alpha_peak_rad` unused),
-  so locked braking and the cornering limit read high; no tyre load sensitivity; roll centre fixed at wheel-centre height by the sliding-strut
-  kinematics (real trucks: near the ground or at the spring seat); single-ray contact; `relaxation_length_m`, `slip_damping_time_s` are estimates.
+- #69 merged. ARCH's Scout check (course-compare on slice.ron): **not a chassis bug; a real transient.** 420-460 m is the
+  whoops (12 m waves, 0.3 m p-p); at 10.5 m/s that is 0.87 Hz, close to the Scout's 1.15/1.27 Hz ride with light damping
+  (zeta 0.19 bump / 0.29 rebound), so it pitches hard: front tyres swing 0.1 to 11.5 kN. The 3.7 m/s2 peak (v x yaw rate) is a yaw
+  catch-up: the driver adds steer while the fronts are unloaded, they reload at 57.3 s and the yaw overshoots the kinematic
+  v^2 delta / L (1.7) by 2x. The front wheels run 31-46 mm into the bump stops (196/211 of 220 mm travel; stops at 165 mm),
+  no hard limit; Mule (102 of 150) and Hauler (63 of 120) never reach theirs. Plausible for a soft jeep near resonance. Would change
+  it: Scout damping (zeta 0.25-0.35 bump is typical off-road) and no tyre load sensitivity (yaw jolt reads high). `modes` prints zeta.
+- **Known gap: no tyre load sensitivity** (grip and cornering stiffness per unit load are constant, so load transfer never costs grip; the limit
+  and the anti-roll front/rear balance read wrong). NOT-MODELLED row requested (`requests/chassis-not-modelled-tyre-load-sensitivity.md`); fix = CCR + one PR.
+- **Not trusted yet:** tyre curve linear to the cap (no slide drop; locked braking reads high); roll centre at wheel-centre height (sliding struts);
+  single-ray contact; `relaxation_length_m`, `slip_damping_time_s` are estimates.
 - **6x6:** expressible today with independent axles; walking beams / inboard leaves (`LinkageDef`) are refused until linkages land (about one PR).
 
 ## Blocked
@@ -35,6 +37,5 @@
 ## Owner instructions received
 - 2026-10-10 (owner, in chat): "go ahead with the hull".
 - ARCH (2026-10-10): CCR-1..3 landed in contract-v0.2 (applied); rolling-resistance fade speed is a `Param` (done).
-
 ## Handoff note (fill in when you stop)
 - (fill in at M1)

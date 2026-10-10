@@ -1,6 +1,6 @@
 # Status: VIEWER
 
-**Last updated:** 2026-10-10 11:30 UTC | **Branch:** lane/viewer/rts | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** M1 deliverables done, awaiting CI/merge
+**Last updated:** 2026-10-10 11:30 UTC | **Branch:** lane/viewer/fleet | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** M1 deliverables done, awaiting CI/merge
 
 ## Done
 - Spike S-V passes (WebGL 2 under SwiftShader, 46 ms/frame, 10 s clip = 72 KB): `docs/lanes/viewer/spike-v.md`.
@@ -24,6 +24,8 @@
 - Front camera (PR on `lane/viewer/front-cam`): `--camera front` (front-quarter, 7 m, pitch 0.22), page dropdown entry, HUD steering readout from the replay's steer joints, e.g. `steer L -15.0 R -13.2 deg (+ right)`.
 
 - RTS camera (PR on `lane/viewer/rts`, default for recordings): pitch 55 degrees, heading-up (heading = centroid travel over 2.5 s), follows the centroid of all vehicles, aims 25 m ahead, distance auto-framed for the vehicles plus about 60 m of road. Next: multi-vehicle replays (PR B).
+
+- Fleet (PR B on `lane/viewer/fleet`, stacked on the RTS PR): every vehicle in the header is drawn, one rig and skin each (`--rig a.json,b.json`, `--skin a,b,c`, the last repeats), name label above each, an accent tint on each paint (orange, cyan, magenta, lime: plain accents, LOOK has no palette tokens), leader line + per-vehicle table (name, speed, gear, steer), speed plot with one line per vehicle. `w5k viewer fake-fleet` writes test data (the first vehicle repeated, each 3 s behind) until ARCH's `course-compare` exists. The follow cameras (quarter, chase, front, orbit) still follow vehicle 0; RTS frames all.
 
 ## In progress
 - Nothing: PRs #15, #22, #26, #28, #33 (stacked, merge in that order) await ARCH. Idle.
