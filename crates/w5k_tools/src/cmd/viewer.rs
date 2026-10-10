@@ -18,6 +18,7 @@ use w5k_contract::world::WorldQuery;
 use w5k_geo::export::render_rig;
 use w5k_geo::flags::FlagParams;
 use w5k_geo::skin::Skin;
+use w5k_geo::track::{link_frames, Belt, Circle};
 use w5k_math::scalar;
 use w5k_replay::ReplayFile;
 use w5k_validate::impact::{BENCHES, EPS};
@@ -34,7 +35,7 @@ const USAGE: &str = "usage:
   w5k viewer ladder  <ladder.json> --out ladder.png [--theme light|dark]   (sinkage up a ladder of load or track width, beside the soil theory)
   w5k viewer design <scout_4x4|mule_4x4|hauler_4x4|base.ron> --out DIR [--lever wheelbase=1.1,mass=0.9] [--skin preview|final|off] [--score off]   (the Workshop's step: levers in; the compiled design, its skin and the proving scoreboard out)
   w5k viewer workshop [--port 8789] [--web DIR]   (the Workshop's design endpoints and page on 127.0.0.1; run it from the folder that holds content/)
-  w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.w5kr, replay.json and rig.json)";
+  w5k viewer dump-canned <truck|tank|belt> --out <dir>   (writes replay.w5kr, replay.json and rig.json; belt: belt.json, GEOMETRY's belt maths for test-tracks.mjs)";
 
 /// Entry point for `w5k viewer <args>`.
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -816,10 +817,46 @@ fn workshop(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+const BELT_SPINS_RAD: [f64; 3] = [0.0, 1.234, -2.5]; // const-ok: the sprocket spins of the belt test vector, rad
+
+/// The belt vector `tools/viewer/test-tracks.mjs` checks its JS port against: GEOMETRY's `link_frames` on two real loops, GEOMETRY's carrier
+/// (counter-clockwise, rear sprocket) and FORGE's (clockwise, front sprocket: GEOMETRY refuses that winding, so the reference is its mirror
+/// image, z negated, which the test mirrors back).
+fn dump_belt(root: &Path, out: &Path) -> Result<(), String> {
+    let forge = build_design(&root.join("content/vehicles/game/carrier_tracked.ron"), &[], "off")?.rig;
+    let mut cases = Vec::new();
+    for (name, rig, mirror) in [("geometry", skin_rig("carrier_tracked", true)?, false), ("forge", forge, true)] {
+        let run = rig.track_runs.first().ok_or_else(|| format!("the {name} carrier has no track runs"))?;
+        let centres: Vec<[f64; 2]> = run // each wheel's (z, y) in the hull frame: the rest poses of its node and its parents
+            .wheels
+            .iter()
+            .map(|w| {
+                let (mut c, mut at) = ([0.0, 0.0], Some(w.node));
+                while let Some(n) = at {
+                    c = [c[0] + rig.nodes[n].rest.pos.z, c[1] + rig.nodes[n].rest.pos.y];
+                    at = rig.nodes[n].parent;
+                }
+                c
+            })
+            .collect();
+        let seen: Vec<[f64; 2]> = centres.iter().map(|c| if mirror { [-c[0], c[1]] } else { *c }).collect();
+        let circles: Vec<_> =
+            seen.iter().zip(&run.wheels).map(|(c, w)| Circle { z: c[0], y: c[1], r: w.radius_m }).collect();
+        let length = Belt::round(&circles)?.length_m;
+        for spin in BELT_SPINS_RAD {
+            let frames: Vec<_> = link_frames(run, &seen, spin)?.iter().map(|(p, t)| [p[0], p[1], t[0], t[1]]).collect();
+            cases.push(serde_json::json!({"name": name, "run": run, "centres": centres, "mirror": mirror, "spin_rad": spin, "length_m": length, "frames": frames}));
+        }
+    }
+    let doc = serde_json::to_string(&cases).map_err(|e| e.to_string())?;
+    std::fs::write(out.join("belt.json"), doc).map_err(|e| format!("cannot write belt.json: {e}"))
+}
+
 fn dump_canned(args: &[String]) -> Result<(), String> {
-    let which = args.first().ok_or("dump-canned needs truck or tank")?;
+    let which = args.first().ok_or("dump-canned needs truck, tank or belt")?;
     let out = opt(args, "--out").map(PathBuf::from).ok_or("dump-canned needs --out <dir>")?;
     let (header, frames, rig) = match which.as_str() {
+        "belt" => return dump_belt(Path::new("."), &out),
         "truck" => truck_over_bumps(),
         "tank" => tank_slew_and_pitch(),
         other => return Err(format!("unknown canned replay {other}")),
@@ -1340,5 +1377,21 @@ mod tests {
         for file in ["index.html", &format!("skins/{id}.skin"), "skins/scout_4x4.skin"] {
             assert!(web.join(file).exists(), "{file} is missing from the page folder");
         }
+    }
+
+    /// GEOMETRY's belt maths must still draw both carriers' loops (the viewer's JS port is checked against what this writes: test-tracks.mjs):
+    /// GEOMETRY's own (counter-clockwise) and FORGE's (clockwise, so its mirror image).
+    #[test]
+    fn the_belt_vector_covers_geometrys_carrier_and_forges_mirrored() {
+        let dir = std::env::temp_dir().join(format!("w5k-belt-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dump_belt(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."), &dir).unwrap();
+        let cases: Vec<serde_json::Value> =
+            serde_json::from_slice(&std::fs::read(dir.join("belt.json")).unwrap()).unwrap();
+        let mirrored: Vec<_> = cases.iter().map(|c| c["mirror"].as_bool().unwrap()).collect();
+        assert_eq!(mirrored, [false, false, false, true, true, true], "three spins of each carrier");
+        assert!(cases
+            .iter()
+            .all(|c| c["frames"].as_array().unwrap().len() == c["run"]["links"].as_u64().unwrap() as usize));
     }
 }
