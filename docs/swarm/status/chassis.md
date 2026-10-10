@@ -10,8 +10,8 @@
 
 ## In progress
 - Slice 2 stage A (ARCH 17:13Z: owner approved; C-016 still OPEN in QUEUE.md): tyre load sensitivity PR #118 (CCR-chassis-4 text in the design
-- **Critical path (ARCH 18:16Z): tracked hull** on the chassis integrator via TRACKS' `TrackedVehicleGear` (glue-note supersedes my seam). PR 1:
-  design delta + `tracked.rs` skeleton (torsion arm, reflected sprocket inertia, tests). PR 2: integrated tank rest + ledger balance.
+- **Tracked hull**: part 1 merged (#148). Part 2: `TrackedChassis` stepping box_tank with TRACKS' gear (rest, accel, ledger 1e-15). **Tripwire:**
+  464 non-test lines (one integrator; a split leaves dead code); ARCH to decide. Two fixes inside: soil forces in the ground frame; spin implicit in the slip.
   note, shared PROVISIONAL Params) + skidpad bench fix (a gear-shift lurch read as slide-out: the Scout's -34% impact row; now +0.4%).
   Hauler skidpad is at rollover onset (lightest wheel 0.6 kN of ~15 kN static), not power: `min_wheel_load_n` added. Tracked/sinkage note #123
   (ARCH: terramech soil dep + RunningGear seam approved). Sinking tyre (rigid-wheel Bekker, UNVALIDATED): #126. Tyre reads contract 0.3 fields
