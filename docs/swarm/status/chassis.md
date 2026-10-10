@@ -14,9 +14,8 @@
   (zeta 0.19 bump / 0.29 rebound), so it pitches hard: front tyres swing 0.1 to 11.5 kN. The 3.7 m/s2 peak (v x yaw rate) is a yaw
   catch-up: the driver adds steer while the fronts are unloaded, they reload at 57.3 s and the yaw overshoots the kinematic
   v^2 delta / L (1.7) by 2x. The front wheels run 31-46 mm into the bump stops (196/211 of 220 mm travel; stops at 165 mm),
-  no hard-limit hit; Mule (max 102 of 150) and Hauler (63 of 120) never reach theirs. Plausible for a soft jeep near resonance.
-  Would change the numbers: Scout damping (FORGE: zeta 0.25-0.35 bump is more typical off-road) and no tyre load sensitivity
-  (an 11 kN front tyre grips 4x its static load here, so the yaw jolt reads high). `w5k chassis modes` now prints ride Hz and zeta.
+  no hard limit; Mule (102 of 150) and Hauler (63 of 120) never reach theirs. Plausible for a soft jeep near resonance. Would change
+  it: Scout damping (zeta 0.25-0.35 bump is typical off-road) and no tyre load sensitivity (yaw jolt reads high). `modes` prints zeta.
 - **Parameters I would not trust yet:** tyre curve linear to the friction-circle cap (no slide drop: `mu_slide`, `kappa_peak`, `alpha_peak_rad` unused),
   so locked braking and the cornering limit read high; no tyre load sensitivity; roll centre fixed at wheel-centre height by the sliding-strut
   kinematics (real trucks: near the ground or at the spring seat); single-ray contact; `relaxation_length_m`, `slip_damping_time_s` are estimates.
