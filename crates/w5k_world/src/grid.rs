@@ -4,6 +4,7 @@
 //! heights of each 1 m cell, its normal is the analytic gradient of that same patch, the material is a u8 splat map read
 //! at the nearest cell, and props live in a uniform grid (CSR layout, no allocation on query).
 
+use crate::corrugation::Corrugation;
 use w5k_contract::world::{MaterialId, MaterialTable, PropId, PropKind, PropRef, PropShape, RayHit, WorldQuery};
 use w5k_math::{Pcg32, Quat, StateHasher, Transform, Vec3};
 
@@ -78,6 +79,7 @@ pub struct GridWorld {
     props: Vec<PropRef>,
     cell_start: Vec<u32>,
     cell_items: Vec<u32>,
+    corrugation: Option<Corrugation>,
 }
 
 fn prop_n_for(half_m: f64) -> usize {
@@ -104,7 +106,22 @@ impl GridWorld {
             props: Vec::new(),
             cell_start: vec![0; prop_n * prop_n + 1],
             cell_items: Vec::new(),
+            corrugation: None,
         }
+    }
+
+    /// Attach washboard ripples (see `corrugation.rs`).
+    pub fn set_corrugation(&mut self, c: Corrugation) {
+        self.corrugation = Some(c);
+    }
+
+    /// Hash of the washboard layer (0 when there is none), for determinism checks.
+    pub fn corrugation_hash(&self) -> u64 {
+        let mut h = StateHasher::new();
+        if let Some(c) = &self.corrugation {
+            c.hash_into(&mut h);
+        }
+        h.finish()
     }
 
     /// The 2 km spike terrain (seed-driven fBm, test road stripe, low-ground mud rule, scattered trees and boxes).
@@ -510,13 +527,22 @@ impl WorldQuery for GridWorld {
     fn height_m(&self, x: f64, z: f64) -> f64 {
         let (i, j, u, v) = self.locate(x, z);
         let (a, b, c, d) = self.patch(i, j);
-        a + b * u + c * v + d * u * v
+        let base = a + b * u + c * v + d * u * v;
+        match &self.corrugation {
+            Some(r) => base + r.eval(self.n, i, j, u, v).0,
+            None => base,
+        }
     }
 
     fn normal(&self, x: f64, z: f64) -> Vec3 {
         let (i, j, u, v) = self.locate(x, z);
         let (_, b, c, d) = self.patch(i, j);
-        let (gx, gz) = ((b + d * v) / CELL_M, (c + d * u) / CELL_M);
+        let (mut gx, mut gz) = ((b + d * v) / CELL_M, (c + d * u) / CELL_M);
+        if let Some(r) = &self.corrugation {
+            let (_, rx, rz) = r.eval(self.n, i, j, u, v);
+            gx += rx;
+            gz += rz;
+        }
         Vec3::new(-gx, 1.0, -gz).normalized_or_zero()
     }
 
