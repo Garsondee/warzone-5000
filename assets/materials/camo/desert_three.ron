@@ -1,0 +1,14 @@
+#![enable(implicit_some)]
+// Camo scheme desert_three: procedural, node-local, no UVs. Spec: docs/art/CAMO-ALGORITHM.md. Names describe the look, not an army (card C-002).
+// Colour values are ESTIMATE: hand-read from published scheme descriptions, to be checked against colour-standard chips (docs/art/ART-DIRECTION.md).
+(
+    id: "desert_three",
+    pattern: Blob(octaves: 3, lacunarity: 2.0, gain: 0.5),
+    scale_m: Param(v: 0.7, lo: 0.5, hi: 1.6, prov: Tuned, src: "blob size read off the character of the scheme; the owner can retune by eye"),
+    seed_salt: 13,
+    colours: [
+        (name: "sand", srgb: "#B39A70", coverage: Param(v: 0.50, lo: 0.45, hi: 0.55, prov: Estimate, src: "typical share of the scheme by area, from published descriptions"), prov: Estimate, band_de: 6.0, src: "light sand of three-colour desert schemes, hand-read"),
+        (name: "tan_brown", srgb: "#8A6D48", coverage: Param(v: 0.30, lo: 0.25, hi: 0.35, prov: Estimate, src: "typical share of the scheme by area, from published descriptions"), prov: Estimate, band_de: 6.0, src: "tan-brown, hand-read"),
+        (name: "olive_drab", srgb: "#6E6A45", coverage: Param(v: 0.20, lo: 0.15, hi: 0.25, prov: Estimate, src: "typical share of the scheme by area, from published descriptions"), prov: Estimate, band_de: 6.0, src: "olive-drab accent, hand-read"),
+    ],
+)
