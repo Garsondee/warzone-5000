@@ -20,9 +20,21 @@ use serde::Deserialize;
 use w5k_contract::render::{NodeRole, SlotKind};
 use w5k_math::{scalar, Transform, Vec3};
 
+/// The shell's three longitudinal regions in metres, from the nose face to the tail face: the hood up to the cowl, the cab from the cowl to
+/// its back wall, the bed behind it. Each is stretched on its own, so a longer bed leaves the hood and the cab alone. What the overall
+/// length has beyond them is the end margins (the bumpers' allowance), which do not stretch.
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Regions {
+    pub front_m: f64,
+    pub cab_m: f64,
+    pub bed_m: f64,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct UtilityDims {
+    /// Overall length, bumpers included: with `regions_m` it is the sum of the three regions and the end margins.
     pub length_m: f64,
     pub width_m: f64,
     pub height_m: f64,
@@ -30,6 +42,9 @@ pub struct UtilityDims {
     pub track_m: f64,
     pub ground_clearance_m: f64,
     pub wheel: WheelDims,
+    /// The lengths of the three regions of the shell; without it they are the template's proportions of `length_m`.
+    #[serde(default)]
+    pub regions_m: Option<Regions>,
 }
 
 impl UtilityDims {
@@ -37,6 +52,34 @@ impl UtilityDims {
     pub fn placeholder() -> UtilityDims {
         ron::from_str(include_str!("../shapes/placeholder_utility_4x4.ron"))
             .expect("placeholder_utility_4x4.ron parses")
+    }
+
+    /// The same truck of family `kind` with the bed (everything behind the cab's back wall) `extra_m` longer: the hood and the cab keep
+    /// their lengths and everything anchored in them, the tail and what is anchored to it move back by `extra_m`, and the overall length
+    /// grows by `extra_m`. The regions are the family's: the cuts between them are its template's `cab_f`.
+    pub fn with_bed_stretch(&self, kind: TruckKind, extra_m: f64) -> UtilityDims {
+        let t = template(kind).body;
+        let (cowl, back) = t.cab_f;
+        let (nose, tail) = (t.stations[0].z, t.stations[t.stations.len() - 1].z);
+        let l = self.length_m;
+        let r = self.regions_m.unwrap_or(Regions {
+            front_m: (cowl - nose) * l,
+            cab_m: (back - cowl) * l,
+            bed_m: (tail - back) * l,
+        });
+        UtilityDims { length_m: l + extra_m, regions_m: Some(Regions { bed_m: r.bed_m + extra_m, ..r }), ..*self }
+    }
+
+    /// Overhang of the first and last axle beyond the hull box ends, for a truck whose axles are symmetric (the 4x4).
+    pub fn overhang_m(&self) -> f64 {
+        (self.length_m - self.wheelbase_m) / 2.0
+    }
+
+    /// Axle positions in the hull frame, front first: the first axle `overhang_m` behind the nose, the last `overhang_m` before the tail, and
+    /// with `tandem_m` a middle axle that far ahead of the last (a front steer axle and a rear tandem).
+    pub fn axles_z(&self, overhang_m: f64, tandem_m: Option<f64>) -> Vec<f64> {
+        let (front, rear) = (-self.length_m / 2.0 + overhang_m, self.length_m / 2.0 - overhang_m);
+        tandem_m.map_or(vec![front, rear], |t| vec![front, rear - t, rear])
     }
 
     /// Distance from the hull box centre down to the ground (FORGE's ride height: clearance + height / 2).
@@ -90,6 +133,8 @@ struct StationSpec {
 #[serde(deny_unknown_fields)]
 struct BodySpec {
     stations: Vec<StationSpec>,
+    /// Where the cab starts (the cowl) and ends (its back wall), as fractions of the template's length: the cuts between the regions.
+    cab_f: (f64, f64),
     /// How far the arch lips stand outside the lower wall: the hull box width includes them.
     lip_proud_m: f64,
     lower_chamfer_m: f64,
@@ -242,15 +287,56 @@ struct St {
     tilt: f64,
 }
 
+/// Template fractions of the length to hull-frame metres. Without `regions_m` it is (f - 1/2) L. With it the shell is cut at the nose, the
+/// cowl, the back of the cab and the tail, each region is stretched on its own to its length in metres, and the margins beyond the end
+/// stations keep the template's scale, so everything anchored by a fraction inside a region follows that region.
+#[derive(Clone, Copy)]
+struct ZMap {
+    length_m: f64,
+    /// Template fractions of the nose face, the cowl, the back wall of the cab and the tail face.
+    cuts: [f64; 4],
+    regions: Option<Regions>,
+}
+
+impl ZMap {
+    fn new(d: &UtilityDims, b: &BodySpec) -> ZMap {
+        let cuts = [b.stations[0].z, b.cab_f.0, b.cab_f.1, b.stations[b.stations.len() - 1].z];
+        if let Some(r) = d.regions_m {
+            assert!(r.front_m + r.cab_m + r.bed_m <= d.length_m, "the regions must fit in the length");
+        }
+        ZMap { length_m: d.length_m, cuts, regions: d.regions_m }
+    }
+
+    fn at(&self, f: f64) -> f64 {
+        let Some(r) = self.regions else { return (f - 0.5) * self.length_m };
+        let [nose, cowl, back, tail] = self.cuts;
+        // metres per unit fraction outside the end stations: the margin the regions leave, over the fraction the template leaves
+        let slope = (self.length_m - r.front_m - r.cab_m - r.bed_m) / (nose + 1.0 - tail);
+        let z_nose = -self.length_m / 2.0 + nose * slope;
+        if f <= nose {
+            z_nose - (nose - f) * slope
+        } else if f <= cowl {
+            z_nose + (f - nose) / (cowl - nose) * r.front_m
+        } else if f <= back {
+            z_nose + r.front_m + (f - cowl) / (back - cowl) * r.cab_m
+        } else if f <= tail {
+            z_nose + r.front_m + r.cab_m + (f - back) / (tail - back) * r.bed_m
+        } else {
+            z_nose + r.front_m + r.cab_m + r.bed_m + (f - tail) * slope
+        }
+    }
+}
+
 /// The shell's lines: stations interpolated linearly in z (as the loft does between sections).
 struct Frame {
     st: Vec<St>,
     dims: UtilityDims,
+    zmap: ZMap,
 }
 
 impl Frame {
     fn new(d: &UtilityDims, b: &BodySpec) -> Frame {
-        let half = d.width_m / 2.0 - b.lip_proud_m;
+        let (zmap, half) = (ZMap::new(d, b), d.width_m / 2.0 - b.lip_proud_m);
         let st = b
             .stations
             .iter()
@@ -258,7 +344,7 @@ impl Frame {
                 let (yb, yt) = ((s.yb - 0.5) * d.height_m, (s.yt - 0.5) * d.height_m);
                 let xu = s.wu * half;
                 St {
-                    z: (s.z - 0.5) * d.length_m,
+                    z: zmap.at(s.z),
                     xl: s.w * half,
                     yb,
                     xu,
@@ -269,7 +355,7 @@ impl Frame {
                 }
             })
             .collect();
-        Frame { st, dims: *d }
+        Frame { st, dims: *d, zmap }
     }
 
     fn at(&self, z: f64) -> St {
@@ -312,9 +398,8 @@ impl Frame {
     }
 
     fn z(&self, r: &ZR) -> (f64, f64) {
-        let d = &self.dims;
         match *r {
-            ZR::Frac(a, b) => ((a - 0.5) * d.length_m, (b - 0.5) * d.length_m),
+            ZR::Frac(a, b) => (self.zmap.at(a), self.zmap.at(b)),
             ZR::Front(a, b) => (self.front_z() + a, self.front_z() + b),
             ZR::Rear(a, b) => (self.rear_z() + a, self.rear_z() + b),
         }
@@ -536,8 +621,8 @@ pub fn truck_hull(kind: TruckKind, d: &UtilityDims, axles_z: &[f64], detail: u8)
     let band = FlagParams::default_params().edge_band_m;
     let frame = Frame::new(d, &tpl.body);
     let arches = Arches::new(d, &tpl.body, axles_z);
-    let (w, h, l) = (d.width_m, d.height_m, d.length_m);
-    let (fx, fy, fz) = (|f: f64| f * w, |f: f64| (f - 0.5) * h, |f: f64| (f - 0.5) * l);
+    let (w, h) = (d.width_m, d.height_m);
+    let (fx, fy, fz) = (|f: f64| f * w, |f: f64| (f - 0.5) * h, |f: f64| frame.zmap.at(f));
     let sides = |mirror: bool| if mirror { vec![Side::Right, Side::Left] } else { vec![Side::Centre] };
     let finish = Mesh::finished;
     let mut parts: Vec<Part> = Vec::new();
@@ -614,7 +699,7 @@ pub fn truck_hull(kind: TruckKind, d: &UtilityDims, axles_z: &[f64], detail: u8)
                     add(spec, name, spec.slot, side, None, m);
                 }
                 Shape::Overlay { z, inset_m, embed_m, proud_m, corner_m } => {
-                    let (za, zb) = ((z.0 - 0.5) * l, (z.1 - 0.5) * l);
+                    let (za, zb) = (frame.zmap.at(z.0), frame.zmap.at(z.1));
                     let mut zs = vec![za];
                     zs.extend(frame.st.iter().map(|s| s.z).filter(|&s| s > za + 1e-6 && s < zb - 1e-6)); // const-ok: stations strictly inside the panel
                     zs.push(zb);
