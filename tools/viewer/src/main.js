@@ -5,11 +5,11 @@ import { makeScope } from './scope.js';
 import { makeLook } from './look.js';
 import * as THREE from 'three';
 
-const { rig, replay: b64, look: lookData } = JSON.parse(document.getElementById('data').textContent);
+const { rig, replay: b64, look: lookData, terrain } = JSON.parse(document.getElementById('data').textContent);
 const replay = decodeReplay(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
 const canvas = document.getElementById('c');
 const W = canvas.clientWidth || innerWidth, H = canvas.clientHeight || innerHeight;
-const { renderer, scene, camera } = makeScene(canvas, W, H);
+const { renderer, scene, camera } = makeScene(canvas, W, H, terrain);
 camera.setViewOffset(W, H, 0, 110, W, H); // lift the picture above the scope panel
 const built = buildRig(rig);
 scene.add(built.root);

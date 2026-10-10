@@ -23,7 +23,8 @@ const look = {
   weathering: JSON.parse(read(path.join(repo, 'assets/materials/baked/weathering.json'))),
   cdf: JSON.parse(read(path.join(camoDir, 'cdf.json')))['o3_l2_g0.5'],
 };
-const data = { rig: JSON.parse(read(arg('rig'))), replay: fs.readFileSync(arg('replay')).toString('base64'), look };
+const terrain = process.argv.includes('--terrain') ? JSON.parse(read(arg('terrain'))) : null; // heightfield from `w5k viewer render --strip`
+const data = { terrain, rig: JSON.parse(read(arg('rig'))), replay: fs.readFileSync(arg('replay')).toString('base64'), look };
 
 const boot = `
 const blob = (s) => URL.createObjectURL(new Blob([s], { type: 'text/javascript' }));
