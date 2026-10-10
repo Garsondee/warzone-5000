@@ -76,3 +76,9 @@ axes meeting at one turn centre on the rear axle line. Then neither tyre scrubs.
 
 ![Mule on the data strip: heave and pitch](../lanes/chassis/media/mule_strip_heave_pitch.png)
 ![Suspension travel per wheel](../lanes/chassis/media/mule_strip_travel.png)
+
+## How many substeps a truck needs
+Each wheel is a small mass (100 to 200 kg) held between two springs, its suspension and its tyre, so it rings fast: the **wheel hop**, `f = sqrt((k_spring + k_tyre) / m_wheel) / 2 pi`,
+about 10 Hz on the Mule. When a wheel slams into its bump stop, the stop adds a third, much stiffer spring and the ring goes up to about 13 Hz. The integrator needs about 20 samples per
+period of the fastest ring (spike S1), so `substeps = ceil(20 f_max / 60)`. For the Mule that is 5 substeps per 60 Hz tick (300 Hz). `w5k chassis modes <vehicle>` prints this for any vehicle, and the
+chassis always runs at least that many substeps, even if a rig declares fewer, because too few is an explosion waiting for the first hard bump, while one extra costs 20% more time.

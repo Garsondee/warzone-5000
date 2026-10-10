@@ -1,6 +1,7 @@
 //! `w5k chassis`: the command line of lane CHASSIS (only that lane edits this file).
 //!
 //!   w5k chassis strip [--scenario content/physics/chassis/scenarios/mule_strip.ron] --out DIR
+//!   w5k chassis modes <vehicle.ron> <vehicle.extras.ron>   (stiffest modes and the substeps they need)
 //!
 //! Compiles the scenario's vehicle with FORGE, drives it on WORLD's standard data strip with the stand-in powertrain and writes
 //! `replay.json`, `replay.w5kr`, `rig.json` (the render rig, for `w5k viewer render`) and CSV traces (`heave_pitch.csv`, `speed.csv`,
@@ -23,7 +24,7 @@ use w5k_math::{scalar, StateHasher};
 use w5k_replay::ReplayFile;
 use w5k_world::strip::DataStrip;
 
-const USAGE: &str = "usage: w5k chassis strip [--scenario FILE.ron] --out DIR";
+const USAGE: &str = "usage: w5k chassis strip [--scenario FILE.ron] --out DIR\n       w5k chassis modes <vehicle.ron> <vehicle.extras.ron>";
 const DEFAULT_SCENARIO: &str = "content/physics/chassis/scenarios/mule_strip.ron";
 const TUNING: &str = "content/physics/chassis/tuning.ron";
 const MM_PER_M: f64 = 1e3; // const-ok: unit conversion for the CSV traces
@@ -49,6 +50,7 @@ struct StripRun {
 pub fn run(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
         Some("strip") => strip(&args[1..]),
+        Some("modes") => modes(&args[1..]),
         _ => Err(USAGE.to_string()),
     }
 }
@@ -59,6 +61,25 @@ fn opt<'a>(args: &'a [String], key: &str) -> Option<&'a str> {
 
 fn read(path: &str) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))
+}
+
+/// Print the stiffest modes of a vehicle and the substeps they need.
+fn modes(args: &[String]) -> Result<(), String> {
+    let (Some(def), Some(ex)) = (args.first(), args.get(1)) else { return Err(USAGE.to_string()) };
+    let tuning = ChassisTuning::from_ron(&read(TUNING)?).map_err(|e| format!("{TUNING}: {e}"))?;
+    let def = w5k_forge::compile::parse_def(&read(def)?)?;
+    let extras = w5k_forge::compile::parse_extras(&read(ex)?)?;
+    let rig = w5k_forge::compile::compile(&def, &extras).map_err(|e| format!("FORGE refused: {e:?}"))?.rig;
+    let r = w5k_chassis::modes::modes(&rig, &tuning);
+    println!("{}: hull {:.0} kg, heave {:.2} Hz", rig.id, rig.hull.mass_kg, r.heave_hz);
+    for s in &r.stations {
+        println!(
+            "  {:6} spring {:7.0} N/m  stop {:7.0} N/m  tyre {:7.0} N/m  hop {:5.2} Hz  on stop {:5.2} Hz",
+            s.name, s.spring_rate_n_m, s.stop_rate_n_m, s.tyre_rate_n_m, s.hop_hz, s.hop_on_stop_hz
+        );
+    }
+    println!("  f_max {:.2} Hz -> {} substeps (rig declares {})", r.f_max_hz, r.required_substeps, r.declared_substeps);
+    Ok(())
 }
 
 fn strip(args: &[String]) -> Result<(), String> {

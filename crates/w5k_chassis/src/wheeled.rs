@@ -26,6 +26,11 @@ pub enum ChassisRefusal {
     /// A part of the rig outside this solver's scope (tracks, swinging arms, a station without a tyre).
     Unsupported(String),
     Hull(HullError),
+    /// The stiffest mode needs more substeps than the contract allows (`MAX_SUBSTEPS`).
+    TooStiff {
+        f_max_hz: f64,
+        required_substeps: u32,
+    },
 }
 
 /// What one station did in the last substep (for frames, plots and the ledger).
@@ -133,6 +138,15 @@ impl WheeledChassis {
                 anti_roll_n: 0.0,
             });
         }
+        // substeps: what the rig declares, raised to what its stiffest mode needs (never fewer than the rule)
+        let report = crate::modes::modes(rig, tuning);
+        if report.required_substeps > w5k_contract::rig::MAX_SUBSTEPS {
+            return Err(ChassisRefusal::TooStiff {
+                f_max_hz: report.f_max_hz,
+                required_substeps: report.required_substeps,
+            });
+        }
+        let substeps = rig.integration.substeps.max(report.required_substeps).max(1);
         let rot = Quat::from_yaw(yaw_rad);
         let datum = Vec3::new(x_m, world.height_m(x_m, z_m) + rig.ride_height_m, z_m);
         let hull = Hull::new(rig.hull.mass_kg, rig.hull.inertia_kg_m2, datum + rot.rotate(com), rot)
@@ -144,7 +158,7 @@ impl WheeledChassis {
             com_m: com,
             aero: rig.aero.clone(),
             anti_roll: rig.anti_roll.iter().map(|a| (a.left_station, a.right_station, a.rate_n_m)).collect(),
-            substeps: rig.integration.substeps.max(1),
+            substeps,
             shafts: vec![ShaftState::default(); outputs],
             torque_out: vec![0.0; outputs],
             time_s: 0.0,
