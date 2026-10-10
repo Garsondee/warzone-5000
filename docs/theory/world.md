@@ -48,3 +48,12 @@ This is the same idea as an anisotropic cost map in game navigation, or a geodes
 
 ## 10. Determinism
 The same seed must give the same world on any machine: all randomness is derived from `(seed, stage, item)`, never from the order of queries; every function comes from the portable maths library; containers are ordered. Each course has a hash of its baked output, checked as a constant on Linux and Windows.
+
+## 11. How the picture is made (`w5k world view`, `render.rs`)
+A software rasteriser, the graphics pipeline in miniature.
+1. **View space.** Subtract the camera position and project onto three axes (right, up, forward): now the camera is the origin looking down +z. This is the *view matrix*, written as three dot products.
+2. **Clip, project.** A triangle that crosses the near plane would divide by zero or negative depth, so it is cut at the plane (Sutherland-Hodgman) into a polygon, then fanned into triangles. Perspective is one division: `screen = centre + (x / z) * f`, `f = (h / 2) / tan(fov / 2)`.
+3. **Fill by edge functions.** For a pixel `p` and an edge `a -> b`, the 2D cross product `(b - a) x (p - a)` is positive on one side and negative on the other. Divided by the triangle's area, the three values are the pixel's **barycentric coordinates**; all three non-negative means inside. They also interpolate depth.
+4. **Z-buffer.** Per pixel, keep the nearest surface. Depth `z` is not linear on screen, but `1/z` is, so that is what the buffer stores (a greater `1/z` is nearer).
+5. **Flat shading.** One normal per triangle (the cross product of two edges), Lambert's law `max(0, n . L)`, banded to 12 steps: the low-poly look, and the picture compresses well. Fog mixes toward the horizon colour with distance.
+6. **Shadows by ray marching the heightfield.** From a ground point, walk toward the sun in 1 m steps; if the terrain is ever above the ray, the sun is blocked. For a pillar of height `H` the shadow is `H / tan(elevation)` long (tested). Props do not cast shadows yet.

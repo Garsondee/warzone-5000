@@ -4,8 +4,6 @@
 use std::collections::BTreeMap;
 
 use serde::Serialize;
-use w5k_contract::def::{RunningGearDef, VehicleDef};
-use w5k_contract::Param;
 
 /// A relative change smaller than this counts as "no change" (`~0`).
 pub const EPS: f64 = 0.005; // const-ok: resolution below which a change is not a sign
@@ -34,89 +32,43 @@ const PERCENT: f64 = 100.0; // const-ok: unit conversion for display
 /// A benchmark the proving runner can measure today: matrix id, proving test, result key.
 pub struct Bench {
     pub id: &'static str,
+    /// What the runner measures, for charts (B1 is timed 0-48 km/h although the table says 0-32).
+    pub name: &'static str,
     pub test: &'static str,
     pub key: &'static str,
 }
 
 pub const BENCHES: &[Bench] = &[
-    Bench { id: "B1", test: "accel_0_48kmh", key: "t_0_48_s" }, // the table says 0-32 km/h; the runner times 0-48
-    Bench { id: "B4", test: "braking_50kmh", key: "stop_distance_m" },
-    Bench { id: "B6", test: "gradeability", key: "max_grade_ratio" },
-    Bench { id: "B7", test: "side_slope_rollover", key: "slope_angle_rad" },
-    Bench { id: "B11", test: "step_climb", key: "step_height_m" },
-    Bench { id: "B12", test: "skidpad", key: "max_lat_accel_g" },
+    Bench { id: "B1", name: "0-48 km/h time (s)", test: "accel_0_48kmh", key: "t_0_48_s" }, // the table says 0-32 km/h; the runner times 0-48
+    Bench { id: "B4", name: "braking distance from 50 km/h (m)", test: "braking_50kmh", key: "stop_distance_m" },
+    Bench { id: "B6", name: "maximum grade held (rise/run)", test: "gradeability", key: "max_grade_ratio" },
+    Bench { id: "B7", name: "side-slope limit (rad)", test: "side_slope_rollover", key: "slope_angle_rad" },
+    Bench { id: "B11", name: "vertical step cleared (m)", test: "step_climb", key: "step_height_m" },
+    Bench { id: "B12", name: "skidpad lateral acceleration (g)", test: "skidpad", key: "max_lat_accel_g" },
 ];
 
-/// A design lever: `row` is how the table names it; `apply` scales it by `factor` in a `VehicleDef`.
+/// A design lever: `forge` is the name in FORGE's lever API (`w5k_forge::levers::apply_both`), `row` how the table names it.
 pub struct Lever {
     pub id: &'static str,
+    pub forge: &'static str,
     pub row: &'static str,
-    pub apply: fn(&mut VehicleDef, f64),
-}
-
-fn scale(p: &mut Param, f: f64) {
-    p.v *= f;
-    p.lo = p.lo.map(|x| x * f);
-    p.hi = p.hi.map(|x| x * f);
-}
-
-fn each_axle(d: &mut VehicleDef, mut f: impl FnMut(&mut w5k_contract::def::AxleDef)) {
-    if let RunningGearDef::Wheeled(w) = &mut d.running_gear {
-        w.axles.iter_mut().for_each(&mut f);
-    }
 }
 
 pub fn levers() -> Vec<Lever> {
+    let l = |id, forge, row| Lever { id, forge, row };
     vec![
-        Lever {
-            id: "engine_power",
-            row: "Engine peak power",
-            apply: |d, f| {
-                scale(&mut d.powertrain.engine.peak_power_w, f);
-                scale(&mut d.powertrain.engine.peak_torque_nm, f); // a bigger engine: power and torque together
-            },
-        },
-        Lever {
-            id: "first_gear",
-            row: "First-gear ratio",
-            apply: |d, f| d.powertrain.gearbox.forward_ratios.iter_mut().take(1).for_each(|p| scale(p, f)),
-        },
-        Lever {
-            id: "final_drive",
-            row: "Final-drive ratio",
-            apply: |d, f| scale(&mut d.powertrain.final_drive_ratio, f),
-        },
-        Lever {
-            id: "brake_capacity",
-            row: "Brake torque capacity",
-            apply: |d, f| scale(&mut d.brakes.service_decel_g, f),
-        },
-        Lever { id: "mass", row: "Vehicle mass", apply: |d, f| scale(&mut d.hull.mass_kg, f) },
-        Lever { id: "com_height", row: "Centre-of-mass height", apply: |d, f| scale(&mut d.hull.com_height_m, f) },
-        Lever { id: "track_gauge", row: "Track gauge", apply: |d, f| each_axle(d, |a| scale(&mut a.track_width_m, f)) },
-        Lever {
-            id: "ground_clearance",
-            row: "Ground clearance",
-            apply: |d, f| scale(&mut d.hull.ground_clearance_m, f),
-        },
-        Lever {
-            id: "ride_frequency",
-            row: "Ride frequency",
-            apply: |d, f| {
-                scale(&mut d.suspension.front_ride_frequency_hz, f);
-                scale(&mut d.suspension.rear_ride_frequency_hz, f);
-            },
-        },
-        Lever {
-            id: "tyre_mu",
-            row: "Tyre peak friction",
-            apply: |d, f| {
-                if let RunningGearDef::Wheeled(w) = &mut d.running_gear {
-                    scale(&mut w.tyre.mu_peak_ref, f);
-                }
-                each_axle(d, |a| a.tyre.iter_mut().for_each(|t| scale(&mut t.mu_peak_ref, f)));
-            },
-        },
+        l("engine_power", "engine_peak_power", "Engine peak power"),
+        l("first_gear", "first_gear", "First-gear ratio"),
+        l("final_drive", "final_drive", "Final-drive ratio"),
+        l("brake_capacity", "brake_axle_torque", "Brake torque capacity"),
+        l("mass", "mass", "Vehicle mass"),
+        l("com_height", "com_height", "Centre-of-mass height"),
+        l("track_gauge", "track_gauge", "Track gauge"),
+        l("ground_clearance", "ground_clearance", "Ground clearance"),
+        l("ride_frequency", "ride_frequency", "Ride frequency"),
+        l("tyre_mu", "tyre_friction", "Tyre peak friction"),
+        // not a +10% scaling: the centre differential goes from open to limited slip (the bias is PROVISIONAL, see the tools command)
+        l("centre_diff_limited_slip", "centre_diff_limited_slip", "Centre differential"),
     ]
 }
 
@@ -213,8 +165,24 @@ fn regime_override(bench: &str, lever: &str, label: &str) -> Option<Vec<Sign>> {
     zero.then(|| vec![Sign::Zero])
 }
 
+/// A named id for charts.
+#[derive(Debug, Serialize)]
+pub struct Named {
+    pub id: String,
+    pub name: String,
+}
+
+/// The perturbation, the no-change threshold and the acceptance target, in percent (for the tornado chart's captions).
+const PERTURB_PCT: f64 = 10.0; // const-ok: the +10% perturbation of IMPACT-MATRIX.md
+const ACCEPTANCE_PCT: f64 = 80.0; // const-ok: ARCH's target for right signs
+
 #[derive(Debug, Serialize)]
 pub struct Report {
+    pub benchmarks: Vec<Named>,
+    pub levers: Vec<Named>,
+    pub perturb_pct: f64,
+    pub deadband_pct: f64,
+    pub acceptance_pct: f64,
     pub entries: Vec<Entry>,
     /// Scored entries that agreed with the table, out of all scored entries.
     pub right: usize,
@@ -293,7 +261,20 @@ pub fn evaluate(table: &[Expected], levers: &[Lever], obs: &Observations) -> Rep
         })
         .map(String::from)
         .collect();
-    Report { entries, right, scored, dead_levers, orphan_benchmarks }
+    let benchmarks = BENCHES.iter().map(|b| Named { id: b.id.into(), name: b.name.into() }).collect();
+    let levers = levers.iter().map(|l| Named { id: l.id.into(), name: l.row.into() }).collect();
+    Report {
+        benchmarks,
+        levers,
+        perturb_pct: PERTURB_PCT,
+        deadband_pct: PERCENT * EPS,
+        acceptance_pct: ACCEPTANCE_PCT,
+        entries,
+        right,
+        scored,
+        dead_levers,
+        orphan_benchmarks,
+    }
 }
 
 fn sign_word(s: Sign) -> &'static str {
@@ -461,21 +442,5 @@ mod tests {
         let mut quiet = obs(&[("brake_capacity", "B4", 0.0)]);
         quiet.regimes.insert("t".into(), Regime::TyreLimited);
         assert_eq!(evaluate(&table(), &levers(), &quiet).right, 1);
-    }
-
-    #[test]
-    fn every_lever_changes_the_vehicle_def_and_keeps_its_params_valid() {
-        let text = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content/vehicles/game/mule_4x4.ron"),
-        )
-        .expect("mule");
-        let base: VehicleDef = ron::from_str(&text).expect("parse");
-        for l in levers() {
-            let mut d = base.clone();
-            (l.apply)(&mut d, 1.1);
-            assert_ne!(d, base, "lever {} edits nothing", l.id);
-            let again: VehicleDef = ron::from_str(&ron::to_string(&d).expect("ser")).expect("round trip");
-            assert_eq!(again, d);
-        }
     }
 }

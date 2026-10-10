@@ -158,6 +158,7 @@ fn ladder(args: &[String]) -> Result<(), String> {
     let belly = LadderTank::shipped().belly(&tuning);
     let gauge_m = (rig.stations[0].rest_pos_m.x - rig.stations[rig.stations.len() - 1].rest_pos_m.x).abs();
     let mut csv = String::from("mass_t,theory_mm,sinkage_mm,clearance_mm,net_pull_kn,bog_limit_kn\n");
+    let mut rungs = Vec::new();
     for step in 1..=LADDER_RUNGS {
         let mass_kg = f64::from(step) * LADDER_STEP_T * KG_PER_TONNE;
         let r = ladder_row(&cfg, belly, gauge_m, tuning, &ground, mass_kg, LADDER_MAX_SINKAGE_M);
@@ -171,6 +172,21 @@ fn ladder(args: &[String]) -> Result<(), String> {
             r.net_pull_n / N_PER_KN,
             limit / N_PER_KN
         );
+        rungs.push(format!(
+            r#"{{"x":{:.0},"sim":{:.5},"theory":{:.5},"bogged":{}}}"#,
+            mass_kg / KG_PER_TONNE,
+            r.sinkage_m,
+            r.predicted_sinkage_m,
+            r.bogged
+        ));
     }
+    // The same rungs in VIEWER's `w5k-ladder-1` shape (`w5k viewer ladder ladder_<soil>.json --out ladder.png`): sinkage in m, the bog depth is
+    // the clearance (where the hull starts to drag); `bogged` is the bench's own judgement (net pull below the bog fraction of the weight).
+    let json = format!(
+        r#"{{"schema":"w5k-ladder-1","title":"Sinkage of the reference tank on {name} as it gets heavier","x":{{"name":"tank mass","unit":"t"}},"y":{{"name":"sinkage","unit":"m"}},"threshold":{{"name":"hull drags","value":{:.3}}},"tolerance_pct":25,"vehicles":[{{"id":"tank","name":"Reference tank","rungs":[{}]}}]}}"#,
+        belly.clearance_m,
+        rungs.join(",")
+    );
+    write(&dir, &format!("ladder_{name}.json"), json + "\n")?;
     write(&dir, &format!("ladder_{name}.csv"), csv)
 }

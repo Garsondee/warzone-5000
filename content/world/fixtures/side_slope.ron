@@ -1,0 +1,12 @@
+#![enable(implicit_some)]
+// Side-slope rollover: the ground falls toward +X (the right-hand side) by `grade` per metre. The runner raises `grade` until the vehicle
+// slides or tips. Drive toward -Z along the slope.
+FixtureDef(
+    name: "side_slope",
+    kind: SideSlope(
+        grade: Param(v: 0.2, lo: 0.01, hi: 1.5, prov: Spec, src: "proving-ground default; the runner raises it (docs/validation/proving-ground.md, side_slope_rollover)"),
+        length_m: Param(v: 80.0, prov: Spec, src: "course design: room to settle on the slope"),
+        ease_m: Param(v: 10.0, prov: Spec, src: "course design: the tilt eases in and out over this distance"),
+    ),
+    surface: "asphalt",
+)

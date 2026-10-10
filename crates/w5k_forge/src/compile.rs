@@ -4,7 +4,7 @@
 use std::fmt;
 
 use w5k_contract::combat::CombatDef;
-use w5k_contract::def::{CouplingSliders, RunningGearDef, SuspensionKind, VehicleDef, WheeledDef};
+use w5k_contract::def::{CouplingSliders, HullDef, RunningGearDef, SuspensionKind, VehicleDef, WheeledDef};
 use w5k_contract::param::Param;
 use w5k_contract::rig::*;
 use w5k_math::{scalar, Mat3, Transform, Vec3};
@@ -13,9 +13,9 @@ use crate::curve::torque_curve_through_peaks;
 use crate::extras::{DiffSpec, Extras};
 
 /// The design tripwire: a rig that needs more substeps than this is a numerically unstable design.
-const MAX_SUBSTEPS: u32 = 8; // const-ok: lane tripwire from the CHASSIS and DRIVE briefs
+pub(crate) const MAX_SUBSTEPS: u32 = 8; // const-ok: lane tripwire from the CHASSIS and DRIVE briefs
 const RAD_PER_DEG: f64 = scalar::PI / 180.0; // const-ok: unit conversion
-const J_PER_KJ: f64 = 1e3; // const-ok: unit conversion
+pub(crate) const J_PER_KJ: f64 = 1e3; // const-ok: unit conversion
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Rejection {
@@ -30,7 +30,7 @@ impl fmt::Display for Rejection {
 }
 
 /// A slider that contract 0.2 made optional: absent means the design is incomplete, which is a rejection with the field's name.
-fn need(p: &Option<Param>, field: &str) -> Result<f64, String> {
+pub(crate) fn need(p: &Option<Param>, field: &str) -> Result<f64, String> {
     p.as_ref()
         .map(|p| p.v)
         .ok_or_else(|| format!("{field} is missing: the compile derives nothing for it, state it in the def"))
@@ -45,7 +45,7 @@ fn diff_bias(d: &DiffSpec) -> f64 {
     }
 }
 
-fn rej(field: &str, reason: impl Into<String>) -> Vec<Rejection> {
+pub(crate) fn rej(field: &str, reason: impl Into<String>) -> Vec<Rejection> {
     vec![Rejection { field: field.into(), reason: reason.into() }]
 }
 
@@ -59,7 +59,7 @@ pub struct Compiled {
 
 /// Static vertical load on each axle from statics: loads are linear in the axle position, `N_i = a + b z_i`, with `sum N = W` and
 /// `sum N z = W z_com` (the minimum-norm solution; exact for two axles).
-fn axle_loads(z: &[f64], z_com: f64, weight: f64) -> Result<Vec<f64>, String> {
+pub(crate) fn axle_loads(z: &[f64], z_com: f64, weight: f64) -> Result<Vec<f64>, String> {
     let (n, sz, szz) = (z.len() as f64, z.iter().sum::<f64>(), z.iter().map(|v| v * v).sum::<f64>());
     let det = n * szz - sz * sz;
     if det.abs() < 1e-9 {
@@ -83,10 +83,11 @@ pub fn compile(def: &VehicleDef, ex: &Extras) -> Result<Compiled, Vec<Rejection>
     if !errs.is_empty() {
         return Err(errs);
     }
-    let RunningGearDef::Wheeled(w) = &def.running_gear else {
-        return Err(rej("running_gear", "the wheeled compile got a tracked def"));
-    };
-    wheeled(def, w, ex).map_err(|e| rej("compile", e))
+    match &def.running_gear {
+        RunningGearDef::Wheeled(w) => wheeled(def, w, ex),
+        RunningGearDef::Tracked(t) => crate::tracked::tracked(def, t, ex),
+    }
+    .map_err(|e| rej("compile", e))
 }
 
 fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, String> {
@@ -226,10 +227,12 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
                         aligning_trail_frac: 0.0,
                         kappa_peak: 0.0,
                         alpha_peak_rad: 0.0,
-                        // 0.3: the load sensitivity is not authored yet (CHASSIS carries a provisional shared value in its tuning).
-                        mu_load_sensitivity: 0.0,
-                        stiffness_load_sensitivity: 0.0,
-                        nominal_load_n: 0.0,
+                        mu_load_sensitivity: ex.tyre_load.as_ref().map_or(0.0, |l| l.mu_load_sensitivity.v),
+                        stiffness_load_sensitivity: ex
+                            .tyre_load
+                            .as_ref()
+                            .map_or(0.0, |l| l.stiffness_load_sensitivity.v),
+                        nominal_load_n: 0.0, // 0 = the solver uses the tyre's static load
                     }),
                     patches_x_m: vec![],
                 },
@@ -260,68 +263,12 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
         "stiffest mode {f_max_hz:.1} Hz (wheel hop with the bump stop fully engaged at full bump travel) -> {substeps} substeps per tick"
     ));
 
-    // ---- hull mass properties: a uniform box moved to the COM (parallel-axis theorem)
-    let size = Vec3::new(h.width_m.v, h.height_m.v, h.length_m.v);
-    let k = h.mass_kg.v / 12.0; // const-ok: solid box inertia 1/12
-    let box_i = Mat3::diagonal(
-        k * (size.y * size.y + size.z * size.z),
-        k * (size.x * size.x + size.z * size.z),
-        k * (size.x * size.x + size.y * size.y),
-    );
-    let shift =
-        Mat3::diagonal(1.0, 1.0, 1.0).scaled(com.dot(com)).add(&Mat3::outer(com, com).scaled(-1.0)).scaled(h.mass_kg.v);
-    let hull = BodyDef { name: "hull".into(), mass_kg: h.mass_kg.v, com_m: com, inertia_kg_m2: box_i.add(&shift) };
+    let (hull, size) = hull_body(h, com);
     let total_mass = h.mass_kg.v + ty.unsprung_mass_kg.v * stations.len() as f64;
 
-    // ---- powertrain
+    let (engine, coupling, gearbox) = powertrain_parts(def, ex)?;
     let en = &pt.engine;
-    let curve = torque_curve_through_peaks(
-        en.peak_torque_nm.v,
-        en.peak_torque_rpm.v,
-        en.peak_power_w.v,
-        en.peak_power_rpm.v,
-        en.idle_rpm.v,
-        en.redline_rpm.v,
-        need(&en.idle_torque_frac, "powertrain.engine.idle_torque_frac")?,
-    )?;
-    let engine = EngineDef {
-        kind: en.kind,
-        torque_curve: curve,
-        idle_rpm: en.idle_rpm.v,
-        redline_rpm: en.redline_rpm.v,
-        inertia_kg_m2: en.inertia_kg_m2.v,
-        drag_const_nm: need(&en.drag_const_nm, "powertrain.engine.drag_const_nm")?,
-        drag_per_rpm_nm: need(&en.drag_per_rpm_nm, "powertrain.engine.drag_per_rpm_nm")?,
-        bsfc_best_g_kwh: en.bsfc_best_g_kwh.v,
-        free_output: false,
-        response_time_s: 0.0,
-        idle_fuel_kg_s: 0.0,
-    };
     let dx = &ex.drive;
-    let coupling = match &pt.coupling {
-        CouplingSliders::Clutch => CouplingDef::Clutch {
-            max_torque_nm: dx.clutch_capacity_factor.v * en.peak_torque_nm.v,
-            engage_rpm: dx.clutch_engage_rpm.v,
-        },
-        CouplingSliders::TorqueConverter { stall_ratio, lockup } => CouplingDef::TorqueConverter {
-            stall_ratio: stall_ratio.v,
-            k_factor_rpm_per_sqrt_nm: dx.converter_k_factor_rpm_per_sqrt_nm.v,
-            lockup_speed_ratio: lockup.then_some(dx.converter_lockup_speed_ratio.v),
-        },
-    };
-    let gb = &pt.gearbox;
-    let gearbox = GearboxDef {
-        forward_ratios: gb.forward_ratios.iter().map(|p| p.v).collect(),
-        reverse_ratios: gb.reverse_ratios.iter().map(|p| p.v).collect(),
-        efficiency: gb.efficiency.v,
-        inertia_kg_m2: dx.gearbox_inertia_kg_m2.v,
-        shift: ShiftDef {
-            automatic: gb.automatic,
-            upshift_rpm: gb.upshift_rpm.v,
-            downshift_rpm: gb.downshift_rpm.v,
-            shift_time_s: gb.shift_time_s.v,
-        },
-    };
     // Driveline: an open differential per driven axle (final drive), under an open centre differential when several axles drive.
     let mut outputs = Vec::new();
     let mut axle_diffs = Vec::new();
@@ -460,6 +407,75 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
     };
     rig.validate().map_err(|e| format!("the compiled rig fails PhysRig::validate(): {e:?}"))?;
     Ok(Compiled { rig, report, hull_size_m: size })
+}
+
+/// A uniform box moved to the COM with the parallel-axis theorem: the hull body and the box size (width, height, length).
+pub(crate) fn hull_body(h: &HullDef, com: Vec3) -> (BodyDef, Vec3) {
+    let size = Vec3::new(h.width_m.v, h.height_m.v, h.length_m.v);
+    let k = h.mass_kg.v / 12.0; // const-ok: solid box inertia 1/12
+    let box_i = Mat3::diagonal(
+        k * (size.y * size.y + size.z * size.z),
+        k * (size.x * size.x + size.z * size.z),
+        k * (size.x * size.x + size.y * size.y),
+    );
+    let shift =
+        Mat3::diagonal(1.0, 1.0, 1.0).scaled(com.dot(com)).add(&Mat3::outer(com, com).scaled(-1.0)).scaled(h.mass_kg.v);
+    let hull = BodyDef { name: "hull".into(), mass_kg: h.mass_kg.v, com_m: com, inertia_kg_m2: box_i.add(&shift) };
+    (hull, size)
+}
+
+/// Engine, coupling and gearbox from the sliders (shared by the wheeled and tracked compiles).
+pub(crate) fn powertrain_parts(def: &VehicleDef, ex: &Extras) -> Result<(EngineDef, CouplingDef, GearboxDef), String> {
+    let pt = &def.powertrain;
+    let en = &pt.engine;
+    let curve = torque_curve_through_peaks(
+        en.peak_torque_nm.v,
+        en.peak_torque_rpm.v,
+        en.peak_power_w.v,
+        en.peak_power_rpm.v,
+        en.idle_rpm.v,
+        en.redline_rpm.v,
+        need(&en.idle_torque_frac, "powertrain.engine.idle_torque_frac")?,
+    )?;
+    let engine = EngineDef {
+        kind: en.kind,
+        torque_curve: curve,
+        idle_rpm: en.idle_rpm.v,
+        redline_rpm: en.redline_rpm.v,
+        inertia_kg_m2: en.inertia_kg_m2.v,
+        drag_const_nm: need(&en.drag_const_nm, "powertrain.engine.drag_const_nm")?,
+        drag_per_rpm_nm: need(&en.drag_per_rpm_nm, "powertrain.engine.drag_per_rpm_nm")?,
+        bsfc_best_g_kwh: en.bsfc_best_g_kwh.v,
+        free_output: false,
+        response_time_s: 0.0,
+        idle_fuel_kg_s: 0.0,
+    };
+    let dx = &ex.drive;
+    let coupling = match &pt.coupling {
+        CouplingSliders::Clutch => CouplingDef::Clutch {
+            max_torque_nm: dx.clutch_capacity_factor.v * en.peak_torque_nm.v,
+            engage_rpm: dx.clutch_engage_rpm.v,
+        },
+        CouplingSliders::TorqueConverter { stall_ratio, lockup } => CouplingDef::TorqueConverter {
+            stall_ratio: stall_ratio.v,
+            k_factor_rpm_per_sqrt_nm: dx.converter_k_factor_rpm_per_sqrt_nm.v,
+            lockup_speed_ratio: lockup.then_some(dx.converter_lockup_speed_ratio.v),
+        },
+    };
+    let gb = &pt.gearbox;
+    let gearbox = GearboxDef {
+        forward_ratios: gb.forward_ratios.iter().map(|p| p.v).collect(),
+        reverse_ratios: gb.reverse_ratios.iter().map(|p| p.v).collect(),
+        efficiency: gb.efficiency.v,
+        inertia_kg_m2: dx.gearbox_inertia_kg_m2.v,
+        shift: ShiftDef {
+            automatic: gb.automatic,
+            upshift_rpm: gb.upshift_rpm.v,
+            downshift_rpm: gb.downshift_rpm.v,
+            shift_time_s: gb.shift_time_s.v,
+        },
+    };
+    Ok((engine, coupling, gearbox))
 }
 
 /// Read a `VehicleDef` from RON text.

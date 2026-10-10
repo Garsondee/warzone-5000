@@ -1,77 +1,76 @@
-# Design Impact Matrix v0: first run (scout, mule, hauler)
+# Design Impact Matrix v0: first runs (scout, mule, hauler)
 
-`w5k validation impact --out DIR` perturbs ten levers by +10% (RON edits of the `VehicleDef`, one proving-ground run per variant, about 30 s in total), compares the sign of each change with `docs/validation/IMPACT-MATRIX.md` and writes `impact.json` and `impact.md`. Nothing is tuned: this is a measurement.
+`w5k validation impact --out DIR` perturbs eleven levers on each vehicle through FORGE's lever API (`w5k_forge::levers::apply_both`: ten at +10%, plus the centre differential swapped from open to limited slip, bias 2, PROVISIONAL), runs the proving ground on every variant (about 35 s in total), compares the sign of each change with `docs/validation/IMPACT-MATRIX.md` and writes `impact.json` and `impact.md`. Nothing is tuned: this is a measurement.
 
-**Coverage today:** 6 of the 16 benchmarks (B1 timed 0-48 km/h, not 0-32; B4, B6, B7, B11, B12) and 10 levers. Ride (B9, B10), fuel (B3), soft ground (B8), pivot (B13) and the turret benchmarks have no runner yet, and the size check (within a factor of 2) is not implemented: only two table rows carry a number.
+**Coverage today:** 6 of the 16 benchmarks (B1 is timed 0-48 km/h, not 0-32; B4, B6, B7, B11, B12). Ride (B9, B10), fuel (B3), soft ground (B8), pivot (B13) and the turret benchmarks have no runner, and the size check (within a factor of 2) is not implemented: only two table rows carry a number.
 **Threshold:** a change under 0.5% counts as "no change" (`~0`).
 
-## Result: 37 of 54 scored signs agree with the table (69%), below the 80% target
+## Result: 41 of 57 scored signs agree with the table (72%), below the 80% target
 
-Cells are the change in the benchmark for +10% of the lever; `ok` agrees with the table, `WRONG` does not (the table's sign follows), `unlisted` moved but the table has no row for it (reported, not scored).
+Cells are the change in the benchmark for the lever's perturbation; `ok` agrees with the table, `WRONG` does not (the table's sign follows), `unlisted` moved but the table has no row for it (reported, not scored). No dead lever and no orphan benchmark.
+
+**The score depends on the "no change" threshold:** 72% at 0.5%, 79% at 1%, 67% at 2%. Six of the sixteen wrong entries are couplings below 1% (a sliding vehicle's side-slope angle moving by 0.6 to 0.9% with centre-of-mass height or track). I kept 0.5% because moving the threshold after seeing the results would be tuning the judge.
 
 ### hauler_4x4
 
 | lever | B1 | B4 | B6 | B7 | B11 | B12 |
 |---|---|---|---|---|---|---|
-| brake_capacity | +0.0%  | -4.3% ok | +6.2% unlisted | +0.0%  | +0.0%  | +0.0%  |
-| com_height | +1.6% unlisted | +2.1% ok | +0.0%  | -7.5% ok | -7.7% unlisted | -7.8% WRONG (table: ~0) |
-| engine_power | -6.8% ok | +0.0%  | +0.0% WRONG (table: +) | +0.0%  | +0.0%  | +0.8% unlisted |
-| final_drive | +1.0% WRONG (table: -) | -0.3%  | -4.6% unlisted | +0.0%  | +0.0%  | +0.4%  |
-| first_gear | -0.5% unlisted | -0.0%  | +0.0% WRONG (table: +) | +0.0%  | +0.0%  | +0.0%  |
-| ground_clearance | -0.3%  | -0.0%  | +0.0%  | +0.0% WRONG (table: -) | +0.0% WRONG (table: +) | +0.1%  |
-| mass | +6.2% ok | -0.1% WRONG (table: +) | -1.5% ok | -0.6% unlisted | +0.0%  | -0.9% unlisted |
-| ride_frequency | +1.2% unlisted | -0.1%  | +0.0%  | +0.7% unlisted | +0.0%  | +0.8% WRONG (table: ~0) |
-| track_gauge | +0.0%  | +0.0%  | +0.0%  | +8.1% ok | +0.0%  | +9.4% WRONG (table: ~0) |
-| tyre_mu | +0.0%  | -2.7% ok | +0.0%  | +0.0%  | +0.0%  | +0.7% WRONG (table: ~0) |
+| brake_capacity | +0.0%  | -4.2% ok | +7.8% unlisted | +0.0%  | +0.0%  | +0.0%  |
+| centre_diff_limited_slip | -0.5% unlisted | -0.0%  | +0.0% ok | +0.0%  | +7.7% unlisted | +4.1% unlisted |
+| com_height | -0.1%  | +2.0% ok | +1.6% unlisted | -7.5% ok | +0.0%  | -8.9% WRONG (table: ~0) |
+| engine_power | -6.2% ok | +0.0%  | +0.0% WRONG (table: +) | +0.0%  | +0.0%  | -0.3%  |
+| final_drive | +1.1% WRONG (table: -) | -0.2%  | -3.1% unlisted | +0.0%  | +0.0%  | -0.1%  |
+| first_gear | -0.6% unlisted | -0.0%  | +0.0% WRONG (table: +) | +0.0%  | +7.7% unlisted | +0.0%  |
+| ground_clearance | -0.1%  | -0.0%  | +0.0%  | +0.0% WRONG (table: -) | +7.7% ok | +0.1%  |
+| mass | +6.2% ok | +4.0% ok | -4.7% ok | -0.6% unlisted | +7.7% unlisted | -1.3% unlisted |
+| ride_frequency | -0.3%  | -0.0%  | +1.6% unlisted | +0.8% unlisted | +7.7% unlisted | +0.6% WRONG (table: ~0) |
+| track_gauge | +0.0%  | +0.0%  | +0.0%  | +8.2% ok | +0.0%  | +7.6% WRONG (table: ~0) |
+| tyre_mu | +0.2%  | -2.8% ok | +0.0%  | +0.0%  | +0.0%  | +1.1% WRONG (table: ~0) |
 
 ### mule_4x4
 
 | lever | B1 | B4 | B6 | B7 | B11 | B12 |
 |---|---|---|---|---|---|---|
-| brake_capacity | +0.0%  | -5.8% ok | +1.9% unlisted | +0.0%  | +0.0%  | +0.0%  |
-| com_height | -0.0%  | +1.4% ok | -1.9% unlisted | +0.2% ok | +4.7% unlisted | -3.5% ok |
-| engine_power | -9.3% ok | -0.1%  | +0.0% WRONG (table: +) | +0.0%  | -51.2% unlisted | -0.0%  |
-| final_drive | -2.2% ok | +0.8% unlisted | +0.9% unlisted | +0.0%  | +9.3% unlisted | -0.0%  |
-| first_gear | +0.7% unlisted | +0.0%  | +0.9% ok | +0.0%  | -39.5% unlisted | +0.0%  |
-| ground_clearance | -0.1%  | -0.0%  | +0.0%  | +0.0% ok | +2.3% ok | -0.0%  |
-| mass | +7.5% ok | -0.5% WRONG (table: +) | -1.9% ok | +0.0%  | +0.0%  | +0.0%  |
-| ride_frequency | +0.0%  | -0.1%  | +0.0%  | -0.1%  | -46.5% unlisted | +0.0% WRONG (table: +) |
-| track_gauge | +0.0%  | +0.0%  | +0.0%  | -0.2% ok | +0.0%  | +0.3% WRONG (table: +) |
-| tyre_mu | +0.0%  | -1.9% ok | +4.7% unlisted | +6.6% unlisted | +0.0%  | +7.1% ok |
+| brake_capacity | +0.0%  | -5.7% ok | +2.7% unlisted | +0.0%  | +0.0%  | +0.0%  |
+| centre_diff_limited_slip | +0.1%  | -0.0%  | +12.7% ok | +0.0%  | -36.4% unlisted | -0.2%  |
+| com_height | +0.0%  | +1.4% ok | -1.8% unlisted | -0.6% WRONG (table: ~0) | +0.0%  | -1.6% ok |
+| engine_power | -9.4% ok | -0.1%  | +0.9% ok | +0.0%  | +6.8% unlisted | +0.0%  |
+| final_drive | -1.7% ok | +0.4%  | +1.8% unlisted | +0.0%  | +9.1% unlisted | +0.0%  |
+| first_gear | +0.6% unlisted | +0.0%  | +1.8% ok | +0.0%  | +4.5% unlisted | +0.0%  |
+| ground_clearance | +0.0%  | +0.0%  | +0.0%  | +0.0% ok | -2.3% WRONG (table: +) | -0.0%  |
+| mass | +7.6% ok | +4.8% ok | -2.7% ok | -0.0%  | +0.0%  | -0.0%  |
+| ride_frequency | -0.1%  | -0.1%  | +0.0%  | +0.1%  | -47.7% unlisted | +0.0% WRONG (table: +) |
+| track_gauge | +0.0%  | +0.0%  | +0.0%  | +0.7% WRONG (table: ~0) | +0.0%  | +1.2% ok |
+| tyre_mu | +0.0%  | -2.0% ok | +5.5% unlisted | +6.6% unlisted | +0.0%  | +8.0% ok |
 
 ### scout_4x4
 
 | lever | B1 | B4 | B6 | B7 | B11 | B12 |
 |---|---|---|---|---|---|---|
-| brake_capacity | +0.0%  | -5.3% ok | +0.0%  | +0.0%  | +0.0%  | +0.0%  |
-| com_height | +0.2%  | +1.5% ok | +0.0%  | +0.0% ok | +0.0%  | -34.1% ok |
-| engine_power | -9.3% ok | +0.1%  | +10.6% ok | +0.0%  | +7.1% unlisted | -0.1%  |
-| final_drive | -3.0% ok | +0.1%  | +10.6% unlisted | +0.0%  | +7.1% unlisted | -0.1%  |
-| first_gear | -1.6% unlisted | -0.1%  | +10.6% ok | +0.0%  | +7.1% unlisted | +0.0%  |
-| ground_clearance | -0.4%  | +0.0%  | +0.0%  | +0.0% ok | +0.0% WRONG (table: +) | -0.0%  |
-| mass | +7.3% ok | -0.4% WRONG (table: +) | -8.5% ok | +0.1%  | +0.0%  | +0.1%  |
-| ride_frequency | +0.0%  | -0.3%  | +0.0%  | +0.0%  | +0.0%  | -33.7% WRONG (table: +) |
-| track_gauge | +0.0%  | +0.0%  | +0.0%  | -0.3% ok | +0.0%  | +0.6% ok |
-| tyre_mu | +0.0%  | -1.2% ok | +0.0%  | +6.5% unlisted | +0.0%  | +8.0% ok |
+| brake_capacity | +0.0%  | -5.7% ok | +1.9% unlisted | +0.0%  | +0.0%  | +0.0%  |
+| centre_diff_limited_slip | +0.4%  | -0.0%  | +0.0% ok | +0.0%  | +7.1% unlisted | -0.1%  |
+| com_height | -0.5%  | +1.1% ok | +0.0%  | -0.7% WRONG (table: ~0) | +7.1% unlisted | -2.1% ok |
+| engine_power | -9.5% ok | +0.1%  | +9.3% ok | +0.0%  | +21.4% unlisted | +3.3% unlisted |
+| final_drive | -2.6% ok | +0.2%  | +7.4% unlisted | +0.0%  | +42.9% unlisted | +2.4% unlisted |
+| first_gear | -0.6% unlisted | -0.0%  | +7.4% ok | +0.0%  | +7.1% unlisted | -0.0%  |
+| ground_clearance | -0.2%  | +0.1%  | +0.0%  | +0.0% ok | +14.3% ok | -0.0%  |
+| mass | +6.8% ok | +6.9% ok | -9.3% ok | -0.0%  | +7.1% unlisted | -0.0%  |
+| ride_frequency | +0.2%  | -0.3%  | +0.0%  | +0.4%  | +7.1% unlisted | +0.5% WRONG (table: +) |
+| track_gauge | +0.0%  | +0.0%  | +0.0%  | +0.9% WRONG (table: ~0) | +0.0%  | +1.6% ok |
+| tyre_mu | +0.0%  | -0.5% WRONG (table: -) | +0.0%  | +6.7% unlisted | +7.1% unlisted | +7.3% ok |
 
-**Right signs: 37 of 54 scored (69%).**
+**Right signs: 41 of 57 scored (72%).**
 
-Dead levers (moved no runnable benchmark): [("hauler_4x4", "ground_clearance"), ("mule_4x4", "track_gauge"), ("scout_4x4", "ground_clearance")]
+Dead levers (moved no runnable benchmark): []
 
 Orphan benchmarks (no lever moved them): []
 
-## What the wrong signs and dead levers say (each is for the lane that owns the model; none is "fixed" here)
-1. **Mass does not lengthen a brake-limited stop (all three, -0.1% to -0.5%; table: `+`).** FORGE's brake lever is `service_decel_g`, a deceleration, which does not depend on mass by construction. The table's reasoning assumes a brake *torque* (more mass, same torque, less deceleration). Either the lever should be a torque (a real brake is) or the table row is wrong for this model. For FORGE and DRIVE.
-2. **Torque does not help gradeability on the Hauler and the Mule (power and first gear: 0.0%; table: `+`).** Both are well below the traction limit (`mu f` = 0.85 to 0.9; Hauler 0.38, Mule 0.63), yet more engine torque or a lower first gear changes nothing; the Scout (0.28) responds fully (+10.6%). Something other than torque or traction limits those two (launch or converter logic). The ledger regime check cannot explain it. For DRIVE and ARCH.
-3. **Ground clearance is nearly a dead lever.** It moves the step climb only on the Mule (+2.3%), and not the Scout or the Hauler (0.0%; table: `+`); on the Hauler, which tips (`mode = roll`), it does not raise the side-slope limit's centre of mass either (0.0%; table: `-`), because `ground_clearance_m` and `com_height_m` are separate fields in the `VehicleDef`. The step test also has no belly or ground collision (ARCH gaps, item 4). For FORGE and WORLD.
-4. **A stiffer ride cuts the Scout's skidpad limit by a third (-33.7%; table: `+`) and does nothing to the Mule's (0.0%).** A 10% frequency change should not move the limit by that much: a suspension-travel or roll-stiffness effect to explain from the ledger. For CHASSIS.
-5. **The Hauler's skidpad is labelled power-limited but moves with track (+9.4%) and centre-of-mass height (-7.8%).** Either the label is wrong or the limit is roll-related. For CHASSIS and ARCH.
-6. **A numerically higher final drive slows the Hauler's launch (+1.0%; table: `-`)** (DRIVE: shift schedule).
-7. **The Mule's track gauge moves nothing** (dead on this vehicle): it slides before it tips and its skidpad is grip-limited. That is correct physics, so the regime override says `~0` is right; it is listed because a lever with no effect anywhere on a vehicle is always reported.
-8. **Large unlisted effects on the step climb** (engine power -51% and first gear -39% on the Mule; ride frequency -47%): the step test is decided by run-up momentum (ARCH gap 4), not by the quasi-static traction limit the table assumes. The table needs momentum rows, or the test needs a controlled approach speed.
-
-## Orphan benchmarks
-None: every benchmark that was run is moved by at least one lever.
-
-## About the regime rules
-The first run scored 65%. Three table rows were regime-dependent in a way the table did not say: the side-slope formula applies only to a vehicle that tips (the Mule and Scout slide first), and a power-limited skidpad cannot depend on chassis levers. The "Regimes" section in `IMPACT-MATRIX.md` says so, from the physics; the rows without a regime keep their signs. That moved the score from 65% to 69%; most of the remaining 17 wrong signs are items 1 to 6.
+## What the wrong signs say (each is for the lane that owns the model; none is "fixed" here)
+History: the first run (own RON edits) scored 65%; regime rules (side slope, skidpad: see "Regimes" in `IMPACT-MATRIX.md`) 69%; after contract 0.3 and FORGE's lever API (brake torque authored, mass holds brake torque) 72%.
+1. **Fixed since the first run:** mass now lengthens a brake-limited stop on all three vehicles (+4% to +7%); the brake lever is an authored axle torque. The ground-clearance lever now helps the step climb on the Scout (+14%) and Hauler (+7.7%).
+2. **The Mule's gradeability responds to the centre differential (+12.7% open to limited slip), as DRIVE found; the Scout and the Hauler do not.** More engine torque or a lower first gear still does nothing for the Hauler's grade (0.0%; table: `+`): DRIVE reports a launch-transient limit there.
+3. **The Hauler's skidpad is labelled power-limited but moves with track (+7.6%) and centre-of-mass height (-8.9%).** The label or the limit is wrong (CHASSIS and ARCH).
+4. **Ground clearance on the Mule lowers the step climb (-2.3%; table: `+`), and on the Hauler it does not move the side-slope limit** because `ground_clearance_m` and `com_height_m` are separate fields (FORGE).
+5. **Ride frequency barely moves the skidpad limit (0.0 to +0.5%; table: `+`):** the earlier -34% on the Scout is gone; the sign is weak (CHASSIS).
+6. **A numerically higher final drive slows the Hauler's launch by 1.1% (table: `-`)**; the Scout's tyre-friction lever moves its braking by only -0.5% (brake-limited, so the tyre is not the limit).
+7. **Large unlisted effects on the step climb** (ride frequency -48% on the Mule; final drive +43% on the Scout): the step test is decided by run-up momentum (ARCH gap 4), not by the quasi-static limit the table assumes. The table needs momentum rows, or the test a fixed approach speed.

@@ -131,3 +131,24 @@ fn declared_substeps_cover_the_stop_engaged_wheel_hop_of_every_station() {
         assert!(f64::from(rig.integration.substeps) * TICK_HZ >= SAMPLES_PER_PERIOD * worst, "{id}");
     }
 }
+
+#[test]
+fn tyre_load_sensitivity_reaches_every_tyre_and_absent_means_linear() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../content/vehicles/game/");
+    for id in IDS {
+        let (_, c) = build(id);
+        for s in &c.rig.stations {
+            let t = s.wheel.tyre.as_ref().unwrap();
+            assert!(
+                (t.mu_load_sensitivity - 0.15).abs() < 1e-12 && (t.stiffness_load_sensitivity - 0.3).abs() < 1e-12,
+                "{id} {}",
+                s.name
+            );
+        }
+        let d = parse_def(&std::fs::read_to_string(format!("{dir}{id}.ron")).unwrap()).unwrap();
+        let mut x = parse_extras(&std::fs::read_to_string(format!("{dir}{id}.extras.ron")).unwrap()).unwrap();
+        x.tyre_load = None;
+        let c = compile(&d, &x).unwrap();
+        assert!(c.rig.stations.iter().all(|s| s.wheel.tyre.as_ref().unwrap().mu_load_sensitivity == 0.0));
+    }
+}

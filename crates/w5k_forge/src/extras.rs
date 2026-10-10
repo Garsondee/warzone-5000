@@ -16,6 +16,21 @@ pub struct Extras {
     pub aero_cop_height_m: Param,
     /// Peak friction of the terrain table's dry hard reference surface (the denominator of `mu_scale`).
     pub ref_surface_mu_peak: Param,
+    /// PROVISIONAL(CCR-forge, tracked): what `TrackedDef` cannot state yet (design note `tracked-design-note.md`, section 8).
+    #[serde(default)]
+    pub tracked: Option<TrackedExtras>,
+    /// PROVISIONAL(CCR-forge): the tyre's load sensitivity (contract 0.3, CHASSIS CCR-4). Absent = linear tyres (0).
+    #[serde(default)]
+    pub tyre_load: Option<TyreLoadExtras>,
+}
+
+/// `s(k) = 1 / (1 + k (Fz / Fz0 - 1))` scales the friction coefficient and the slip and cornering stiffnesses (Pacejka, ch. 4); `Fz0`
+/// is the tyre's static load (the solver's default while the rig's `nominal_load_n` is 0).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TyreLoadExtras {
+    pub mu_load_sensitivity: Param,
+    pub stiffness_load_sensitivity: Param,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -74,9 +89,71 @@ pub struct BrakeExtras {
     pub axle_torque_nm: Vec<Param>,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrackedExtras {
+    /// Positions of the sprocket and the idler measured back from the front of the hull, m, and the heights of their centres above the ground.
+    pub sprocket_from_front_m: Param,
+    pub idler_from_front_m: Param,
+    pub sprocket_height_m: Param,
+    pub idler_height_m: Param,
+    pub idler_diameter_m: Param,
+    /// Return rollers on the top run (a count) and their diameter.
+    pub return_rollers: Param,
+    pub roller_diameter_m: Param,
+    pub belt_thickness_m: Param,
+    pub sprocket_teeth: Param,
+    /// Cells along the ground run for the soil solver.
+    pub samples: Param,
+    pub tension_n: Param,
+    pub resist_c0: Param,
+    pub road_wheel_width_m: Param,
+    pub road_wheel_unsprung_kg: Param,
+    pub road_wheel_inertia_kg_m2: Param,
+    /// Spin inertia of the sprocket, idler and rollers about their axles (rigid stations), kg m^2.
+    pub rigid_wheel_inertia_kg_m2: Param,
+    /// Road-wheel contact with the belt: stiffness and damping per wheel (the belt itself is massless).
+    pub wheel_contact_stiffness_n_m: Param,
+    pub wheel_contact_damping_ns_m: Param,
+}
+
+impl TrackedExtras {
+    pub fn visit_params(&self, f: &mut dyn FnMut(&str, &Param)) {
+        for (n, p) in [
+            ("sprocket_from_front_m", &self.sprocket_from_front_m),
+            ("idler_from_front_m", &self.idler_from_front_m),
+            ("sprocket_height_m", &self.sprocket_height_m),
+            ("idler_height_m", &self.idler_height_m),
+            ("idler_diameter_m", &self.idler_diameter_m),
+            ("return_rollers", &self.return_rollers),
+            ("roller_diameter_m", &self.roller_diameter_m),
+            ("belt_thickness_m", &self.belt_thickness_m),
+            ("sprocket_teeth", &self.sprocket_teeth),
+            ("samples", &self.samples),
+            ("tension_n", &self.tension_n),
+            ("resist_c0", &self.resist_c0),
+            ("road_wheel_width_m", &self.road_wheel_width_m),
+            ("road_wheel_unsprung_kg", &self.road_wheel_unsprung_kg),
+            ("road_wheel_inertia_kg_m2", &self.road_wheel_inertia_kg_m2),
+            ("rigid_wheel_inertia_kg_m2", &self.rigid_wheel_inertia_kg_m2),
+            ("wheel_contact_stiffness_n_m", &self.wheel_contact_stiffness_n_m),
+            ("wheel_contact_damping_ns_m", &self.wheel_contact_damping_ns_m),
+        ] {
+            f(&format!("tracked.{n}"), p);
+        }
+    }
+}
+
 impl Extras {
     pub fn visit_params(&self, f: &mut dyn FnMut(&str, &Param)) {
         let (s, d, b) = (&self.susp, &self.drive, &self.brake);
+        if let Some(t) = &self.tracked {
+            t.visit_params(f);
+        }
+        if let Some(l) = &self.tyre_load {
+            f("tyre_load.mu_load_sensitivity", &l.mu_load_sensitivity);
+            f("tyre_load.stiffness_load_sensitivity", &l.stiffness_load_sensitivity);
+        }
         f("drive.centre_diff.bias", &d.centre_diff.bias);
         f("drive.axle_diff.bias", &d.axle_diff.bias);
         for (i, p) in b.axle_torque_nm.iter().enumerate() {

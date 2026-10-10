@@ -1,0 +1,26 @@
+[
+  {
+    "feature_length_m": 60.0,
+    "name": "ramp",
+    "primary": 0.3,
+    "surface": "asphalt"
+  },
+  {
+    "feature_length_m": 80.0,
+    "name": "side_slope",
+    "primary": 0.2,
+    "surface": "asphalt"
+  },
+  {
+    "feature_length_m": 0.05,
+    "name": "step",
+    "primary": 0.3,
+    "surface": "asphalt"
+  },
+  {
+    "feature_length_m": 1.0,
+    "name": "trench",
+    "primary": 1.0,
+    "surface": "asphalt"
+  }
+]
