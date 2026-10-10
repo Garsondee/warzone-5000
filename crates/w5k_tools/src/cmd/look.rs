@@ -129,6 +129,38 @@ fn bake_scheme(s: &Scheme) -> Result<Baked, String> {
     })
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WeatheringFile {
+    params: std::collections::BTreeMap<String, Param>,
+    /// `#RRGGBB` at the authoring edge, written out as `<name>_linear`.
+    colours: std::collections::BTreeMap<String, String>,
+}
+
+/// `weathering.ron` to flat JSON: each `Param` becomes its value, each colour becomes `<name>_linear`. Every Param must sit inside its own band.
+pub fn bake_weathering_text(text: &str) -> Result<String, String> {
+    let file: WeatheringFile = ron::from_str(text).map_err(|e| e.to_string())?;
+    let mut out = serde_json::Map::new();
+    for (k, p) in file.params {
+        if p.lo.is_some_and(|lo| p.v < lo) || p.hi.is_some_and(|hi| p.v > hi) || p.src.trim().is_empty() {
+            return Err(format!("{k}: outside its band or without a source"));
+        }
+        out.insert(k, p.v.into());
+    }
+    for (k, h) in file.colours {
+        out.insert(format!("{k}_linear"), parse_hex(&h)?.to_vec().into());
+    }
+    let get = |k: &str| out.get(k).and_then(serde_json::Value::as_f64).unwrap_or(f64::NAN);
+    if get("wear_bias") <= get("wear_noise_amp") / 2.0 {
+        return Err("wear_bias must exceed wear_noise_amp / 2 (a face with edge 0 must never chip)".to_string());
+    }
+    serde_json::to_string_pretty(&out).map_err(|e| e.to_string())
+}
+
+fn bake_weathering(path: &Path) -> Result<String, String> {
+    bake_weathering_text(&std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?)
+}
+
 /// Parse one scheme file (also used by the tests).
 pub fn read_scheme(path: &Path) -> Result<Scheme, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -140,9 +172,14 @@ fn bake(args: &[String]) -> Result<(), String> {
     let out = Path::new(args.get(out_at + 1).ok_or("--out needs a directory")?);
     std::fs::create_dir_all(out).map_err(|e| e.to_string())?;
     for f in args.iter().take(out_at) {
-        let baked = bake_scheme(&read_scheme(Path::new(f))?)?;
-        let json = serde_json::to_string_pretty(&baked).map_err(|e| e.to_string())?;
-        std::fs::write(out.join(format!("{}.json", baked.id)), json + "\n").map_err(|e| e.to_string())?;
+        let path = Path::new(f);
+        let (name, json) = if path.file_stem().is_some_and(|n| n == "weathering") {
+            ("weathering".to_string(), bake_weathering(path)?)
+        } else {
+            let baked = bake_scheme(&read_scheme(path)?)?;
+            (baked.id.clone(), serde_json::to_string_pretty(&baked).map_err(|e| e.to_string())?)
+        };
+        std::fs::write(out.join(format!("{name}.json")), json + "\n").map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -180,6 +217,17 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn weathering_ron_bakes_and_matches_the_committed_json() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/materials");
+        let fresh = bake_weathering(&dir.join("weathering.ron")).unwrap() + "\n";
+        assert_eq!(
+            fresh,
+            std::fs::read_to_string(dir.join("baked/weathering.json")).unwrap(),
+            "re-run `w5k look bake`"
+        );
     }
 
     #[test]
