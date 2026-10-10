@@ -144,6 +144,15 @@ Cost of being wrong: low; the sliders and prices are data and can be reshaped wi
 Default: (a), tagged `PROVISIONAL(C-021)`.
 Answer: (pending)
 
+### C-022  The owner's roster drawings: which vehicles enter scope, in what order
+Asked by: GEOMETRY (the owner pasted four side-view drawings of a fictional roster into its session), numbered by ARCH | Date: 2026-10-10 | Status: OPEN, default taken
+What the drawings show (GEOMETRY's reading; the images are the owner's, kept off the repo, silhouette references and not physics data): rigid 4x4, 6x6 and 8x8 trucks; a **tracked launcher carrier** with a rear **spade** (a ground anchor that takes recoil), launcher boxes and **outriggers** (deployable stabiliser legs); and **tractor plus semitrailer** combinations (a trailer is a second hull behind a hitch).
+Options: (a) sequence by what each needs: 1. more axles (6x6, 8x8: the contract already has a `linkages` feature for walking beams and tandems, FORGE and CHASSIS do not compile it yet), 2. deployable stabilisers (spade, outriggers: contact elements that extend on command, with a recoil and tip-over payoff that the design model already prices) together with the tracked launcher carrier and a missile-launcher weapon type, 3. trailers and combinations (a second body, a hitch joint with its own degrees of freedom, jackknife behaviour: a contract change request and chassis physics), after the design loop (slice 2) and its Workshop are finished; (b) pull trailers forward; (c) leave trailers out of scope.
+Recommendation: (a). Each step reuses the one before it, and only step 3 needs a contract change; none of it blocks slice 2.
+Cost of being wrong: low. Nothing is built before slice 2 ends; GEOMETRY writes a module wish list (spade, launcher boxes, outriggers, hitch plate, semitrailer body, 6x6 and 8x8 chassis) in its own paths so the shapes are ready when the physics is.
+Default: (a).
+Answer: (pending)
+
 ## Answered cards
 *(the owner's four scoping answers are recorded as ADR-0001 to ADR-0004; the cards below were answered in the Control Room on 2026-10-08.)*
 
