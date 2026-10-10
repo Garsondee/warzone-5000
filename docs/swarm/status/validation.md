@@ -1,11 +1,12 @@
 # Status: VALIDATION
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/validation/impact-v1 | **Contract pinned:** contract-v0.3 | **Phase:** building
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/validation/matrix-honesty | **Contract pinned:** contract-v0.3 | **Phase:** building
 
 ## Done
 - Spike S9 (`docs/lanes/validation/spike-s9.md`), design note with CCR text (`design-note.md`), theory note stub (`docs/theory/validation.md`).
 
 ## In progress
+- Matrix honesty PR (ARCH's three requests): table rows corrected (B11 torque rows, B12 power-limited rule removed), headline at 0.5% and 1%, 23 of 53 rows tested and the untested list; `docs/lanes/validation/impact-v1-corrected.md`. Then idle.
 - Impact Matrix v1 (`docs/lanes/validation/impact-v1.md`, tornado JSON `impact-v1.json`): 41 of 57 (72%) on the integration head after #147; 16 wrong signs with causes. PR open; then idle.
 - Capability export for WORLD's mobility map (`w5k validation capability`, `docs/swarm/requests/validation-world-capability-table.md`, files in `docs/lanes/validation/capability/`). PR open; WORLD to confirm the shape.
 - **Reply to ARCH (lane sessions cannot send messages): the proving-ground spec PR is #57.** Runner target: result JSON `w5k.proving.result.v1` (spec section 2); the runner must echo in `inputs` the numbers the sim actually used (mass_kg, mu, track_m, cg_height_m, wheel_radius_m, power_w ...); required keys per test are in the spec and `proving::TESTS`.

@@ -64,12 +64,17 @@ fn track_and_station_indices_are_consistent() {
 }
 
 #[test]
-fn road_wheel_bottoms_plus_belt_sit_on_the_ground_plane() {
+fn road_wheel_bottoms_plus_belt_stand_into_the_ground_by_the_static_penetration() {
     let (_, x, c) = built();
-    let th = x.tracked.as_ref().unwrap().belt_thickness_m.v;
+    let tx = x.tracked.as_ref().unwrap();
+    let k_wc = c.rig.tracks[0].wheel_contact.vertical_stiffness_n_m;
     for s in c.rig.stations.iter().filter(|s| s.wheel.kind == WheelKind::RoadWheel) {
-        let bottom = s.rest_pos_m.y - s.wheel.radius_m - th;
-        assert!((bottom - c.rig.ground_y_m()).abs() < 1e-9, "{}", s.name);
+        let bottom = s.rest_pos_m.y - s.wheel.radius_m - tx.belt_thickness_m.v;
+        let pen = c.rig.ground_y_m() - bottom;
+        // The belt contact carries the wheel's whole load at rest: preload plus the unsprung weight.
+        let want = (s.suspension.preload_n + s.unsprung_mass_kg * G) / k_wc;
+        assert!((pen - want).abs() < 1e-9, "{}: penetration {pen}, want {want}", s.name);
+        assert!(pen > 0.0 && pen < 0.015, "{}: {pen}", s.name);
     }
 }
 
@@ -156,14 +161,64 @@ fn static_preload_carries_the_sprung_weight_and_follows_the_com() {
     assert!((moment - total * c.rig.hull.com_m.z).abs() < 0.01 * total * 0.5);
 }
 
+/// The contract's torsion law: `T = T0 + K (phi0 - phi)`, `T0 = F0 L cos(phi0)`, `sin(phi) = sin(phi0) - c / L`, wheel force `T / (L cos(phi))`.
+fn torsion_force(preload_n: f64, rate: f64, l: f64, phi0: f64, c: f64) -> f64 {
+    let phi = scalar::asin(scalar::sin(phi0) - c / l);
+    (preload_n * l * scalar::cos(phi0) + rate * (phi0 - phi)) / (l * scalar::cos(phi))
+}
+
 #[test]
-fn ride_frequency_slider_gives_the_stated_natural_frequency_with_no_tyre_in_series() {
+fn torsion_bar_rate_gives_the_stated_ride_frequency_and_the_preload_carries_the_wheel_share() {
     let (d, _, c) = built();
     for s in c.rig.stations.iter().filter(|s| s.wheel.kind == WheelKind::RoadWheel) {
-        let SpringKind::Linear { rate_n_m } = s.suspension.spring else { panic!("linear") };
-        let f = scalar::sqrt(rate_n_m / (s.suspension.preload_n / G)) / scalar::TAU;
-        assert!((f - d.suspension.front_ride_frequency_hz.v).abs() < 0.005 * f, "{}: {f}", s.name);
+        let SpringKind::Torsion { rate_nm_rad, arm_length_m, rest_arm_angle_rad } = s.suspension.spring else {
+            panic!("a torsion bar")
+        };
+        let f0 = torsion_force(s.suspension.preload_n, rate_nm_rad, arm_length_m, rest_arm_angle_rad, 0.0);
+        assert!((f0 - s.suspension.preload_n).abs() < 1e-9 * f0, "the force at rest is the preload");
+        // The wheel rate at rest by a central difference of the closed form, no tyre in series: sqrt(k / m) / 2 pi is the slider.
+        let h = 1e-5;
+        let k = (torsion_force(s.suspension.preload_n, rate_nm_rad, arm_length_m, rest_arm_angle_rad, h)
+            - torsion_force(s.suspension.preload_n, rate_nm_rad, arm_length_m, rest_arm_angle_rad, -h))
+            / (2.0 * h);
+        let f = scalar::sqrt(k / (s.suspension.preload_n / G)) / scalar::TAU;
+        assert!((f - d.suspension.front_ride_frequency_hz.v).abs() < 0.005 * f, "{}: {f} Hz", s.name);
     }
+}
+
+#[test]
+fn the_arm_pivot_gives_the_stated_arm_and_it_trails() {
+    let (_, x, c) = built();
+    let tx = x.tracked.as_ref().unwrap();
+    for s in c.rig.stations.iter().filter(|s| s.wheel.kind == WheelKind::RoadWheel) {
+        let p = s.arm_pivot_m.expect("a torsion station has its pivot");
+        let (dy, dz) = (s.rest_pos_m.y - p.y, s.rest_pos_m.z - p.z);
+        assert!((scalar::hypot(dy, dz) - tx.torsion_arm_length_m.v).abs() < 1e-9);
+        assert!(
+            (scalar::atan2(-dy, dz.abs()) - tx.torsion_rest_angle_rad.v).abs() < 1e-9,
+            "angle below the horizontal"
+        );
+        assert!(dz > 0.0, "the pivot is ahead of the wheel (a trailing arm): -Z is forward");
+    }
+    // Sprocket, idler and rollers are rigid and have no arm.
+    assert!(c.rig.stations.iter().filter(|s| s.wheel.kind != WheelKind::RoadWheel).all(|s| s.arm_pivot_m.is_none()));
+}
+
+#[test]
+fn the_belly_proxy_underside_is_the_ground_clearance_and_the_steer_law_reaches_the_rig() {
+    let (d, x, c) = built();
+    let belly = c.rig.proxies.iter().find(|p| p.role == ProxyRole::Belly).expect("a belly proxy");
+    let ProxyShape::Box { half_m } = belly.shape else { panic!("a box") };
+    let underside = belly.pose.pos.y - half_m.y - c.rig.ground_y_m();
+    assert!((underside - d.hull.ground_clearance_m.v).abs() < 1e-9, "{underside}");
+    assert!(
+        (2.0 * half_m.x - (tracked(&d).track_gauge_m.v - tracked(&d).track_width_m.v)).abs() < 1e-9,
+        "between the tracks"
+    );
+    let DriveNode::SteerUnit { law, .. } = &c.rig.drivetrain.driveline else { panic!("a steer unit") };
+    assert_eq!(law.diff_ratio_by_gear.len(), x.tracked.as_ref().unwrap().steer_law.diff_ratio_by_gear.len());
+    assert_eq!(law.steer_brakes, Some([0, 1]), "a controlled differential steers with the sprocket brakes");
+    assert!(law.max_steer_torque_nm > 0.0);
 }
 
 #[test]

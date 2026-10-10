@@ -14,6 +14,7 @@ MuleCourse(
     brake_deadband_m_s: Param(v: 0.5, lo: 0.1, hi: 1.5, prov: Tuned, src: "driver: overspeed tolerated before the brake pedal is touched (stops throttle/brake chatter on a descent)"),
     lookahead_base_m: Param(v: 4.0, lo: 2.0, hi: 8.0, prov: Tuned, src: "driver: pure-pursuit lookahead at standstill, about one wheelbase"),
     lookahead_per_m_s: Param(v: 0.8, lo: 0.3, hi: 2.0, prov: Tuned, src: "driver: extra lookahead per m/s of speed (0.8 s of travel), keeps the pursuit damped"),
+    tracked_bearing_gain_per_rad: Param(v: 1.5, lo: 0.5, hi: 4.0, prov: Tuned, src: "driver, tracked rigs only: steer demand (-1..1, sprocket speed difference) per radian of bearing to the lookahead point; a proportional heading loop, chosen so the carrier follows the slice road without oscillating"),
     curvature_window_m: Param(v: 12.0, lo: 5.0, hi: 25.0, prov: Tuned, src: "driver: distance ahead over which the upcoming path curvature is estimated for the speed cap"),
     final_decel_m_s2: Param(v: 1.5, lo: 0.8, hi: 3.0, prov: Tuned, src: "driver: planned deceleration for the final approach, gentle enough to be well inside the brakes and tyres"),
     finish_stop_margin_m: Param(v: 1.0, lo: 0.2, hi: 3.0, prov: Tuned, src: "driver: aims to be stopped this far before the end of the route"),

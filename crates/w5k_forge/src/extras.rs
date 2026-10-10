@@ -115,6 +115,34 @@ pub struct TrackedExtras {
     /// Road-wheel contact with the belt: stiffness and damping per wheel (the belt itself is massless).
     pub wheel_contact_stiffness_n_m: Param,
     pub wheel_contact_damping_ns_m: Param,
+    /// Torsion-bar arm (used when the suspension kind is `TorsionBar`): length, m, and rest angle below the horizontal, rad. The arm trails:
+    /// its pivot is ahead of the wheel.
+    pub torsion_arm_length_m: Param,
+    pub torsion_rest_angle_rad: Param,
+    /// The belly plate (a Belly collision proxy between the tracks): its length along the hull and its thickness, m.
+    pub belly_length_m: Param,
+    pub belly_thickness_m: Param,
+    /// The steering law of the steer unit (empty = the kind's default).
+    #[serde(default)]
+    pub steer_law: SteerLawExtras,
+}
+
+/// The `SteerLaw` numbers (design note section 5); the brakes that realise clutch-brake and controlled-differential steering are the two
+/// sprocket brakes, set by the compile.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SteerLawExtras {
+    /// `(v_outer - v_inner) / (v_outer + v_inner)` at full demand, per forward gear.
+    #[serde(default)]
+    pub diff_ratio_by_gear: Vec<Param>,
+    #[serde(default)]
+    pub detents: Vec<Param>,
+    #[serde(default)]
+    pub diff_speed_rad_s: Option<Param>,
+    #[serde(default)]
+    pub works_in_neutral: bool,
+    #[serde(default)]
+    pub max_steer_torque_nm: Option<Param>,
 }
 
 impl TrackedExtras {
@@ -138,8 +166,24 @@ impl TrackedExtras {
             ("rigid_wheel_inertia_kg_m2", &self.rigid_wheel_inertia_kg_m2),
             ("wheel_contact_stiffness_n_m", &self.wheel_contact_stiffness_n_m),
             ("wheel_contact_damping_ns_m", &self.wheel_contact_damping_ns_m),
+            ("torsion_arm_length_m", &self.torsion_arm_length_m),
+            ("torsion_rest_angle_rad", &self.torsion_rest_angle_rad),
+            ("belly_length_m", &self.belly_length_m),
+            ("belly_thickness_m", &self.belly_thickness_m),
         ] {
             f(&format!("tracked.{n}"), p);
+        }
+        let l = &self.steer_law;
+        for (i, p) in l.diff_ratio_by_gear.iter().enumerate() {
+            f(&format!("tracked.steer_law.diff_ratio_by_gear[{i}]"), p);
+        }
+        for (i, p) in l.detents.iter().enumerate() {
+            f(&format!("tracked.steer_law.detents[{i}]"), p);
+        }
+        for (n, p) in [("diff_speed_rad_s", &l.diff_speed_rad_s), ("max_steer_torque_nm", &l.max_steer_torque_nm)] {
+            if let Some(p) = p {
+                f(&format!("tracked.steer_law.{n}"), p);
+            }
         }
     }
 }
