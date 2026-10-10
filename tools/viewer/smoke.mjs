@@ -16,7 +16,7 @@ let failed = false;
 const check = (ok, msg) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${msg}`); failed ||= !ok; };
 const tri = await page.evaluate(() => [window.__v.triangles, window.__v.expectedTriangles]);
 check(tri[0] === tri[1] && tri[0] > 0, `triangle count ${tri[0]} equals RenderRig::triangle_count() ${tri[1]}`);
-await page.evaluate(() => { window.__v.setFreeze(true); window.__v.pause(); window.__v.setCamera({ mode: 'orbit', yaw: 0.6, pitch: 0.3, dist: 8 }); });
+await page.evaluate(() => { window.__v.setDebug(false); window.__v.setFreeze(true); window.__v.pause(); window.__v.setCamera({ mode: 'orbit', yaw: 0.6, pitch: 0.3, dist: 8 }); });
 for (const part of parts) {
   const r = await page.evaluate((name) => {
     // Show the part's subtree alone, every other joint at its t=0 value, and move this joint alone: by the largest excursion
