@@ -246,11 +246,16 @@ fn steady_turn_lateral_load_transfer_matches_m_ay_h_over_track() {
     assert!(worst < 0.03);
 }
 
-fn with_load_sensitivity(mu_k: f64, stiff_k: f64) -> ChassisTuning {
-    let mut t = tuning();
-    t.tyre_mu_load_sensitivity.v = mu_k;
-    t.tyre_stiffness_load_sensitivity.v = stiff_k;
-    t
+/// The rig with every tyre's load sensitivity set (contract 0.3 `TyreDef` fields); 0.15 and 0.3 are typical truck tyres (Pacejka ch. 4).
+fn with_load_sensitivity(r: &PhysRig, mu_k: f64, stiff_k: f64) -> PhysRig {
+    let mut r = r.clone();
+    for s in r.stations.iter_mut() {
+        if let Some(t) = s.wheel.tyre.as_mut() {
+            t.mu_load_sensitivity = mu_k;
+            t.stiffness_load_sensitivity = stiff_k;
+        }
+    }
+    r
 }
 
 /// The understeer angle `delta - L / R` (rad) averaged over the skidpad samples with `a_y` in `[lo, hi]` m/s^2.
@@ -279,10 +284,12 @@ fn a_stiffer_front_anti_roll_bar_adds_understeer_only_because_tyres_are_load_sen
             a.rate_n_m *= 4.0;
         }
     }
-    let (lin, sens) = (with_load_sensitivity(0.0, 0.0), tuning());
-    let extra =
-        |t: &ChassisTuning| understeer_angle_rad(&stiff_front, t, 5.5, 6.5) - understeer_angle_rad(&base, t, 5.5, 6.5);
-    let (d_lin, d_sens) = (extra(&lin), extra(&sens));
+    let t = tuning();
+    let extra = |k_mu: f64, k_c: f64| {
+        understeer_angle_rad(&with_load_sensitivity(&stiff_front, k_mu, k_c), &t, 5.5, 6.5)
+            - understeer_angle_rad(&with_load_sensitivity(&base, k_mu, k_c), &t, 5.5, 6.5)
+    };
+    let (d_lin, d_sens) = (extra(0.0, 0.0), extra(0.15, 0.3));
     println!(
         "front bar x4 adds {:.3} mrad of steer at 0.6 g with linear tyres, {:.3} mrad with load-sensitive tyres",
         d_lin * 1e3,
@@ -296,8 +303,9 @@ fn a_stiffer_front_anti_roll_bar_adds_understeer_only_because_tyres_are_load_sen
 fn load_transfer_costs_grip_on_the_skidpad() {
     let r = box_truck().0;
     let w = FlatPlane::new();
-    let lim = |t: &ChassisTuning| skidpad(&r, t, &w, &mut drive(&r), &PAD).unwrap().max_lateral_acc_m_s2;
-    let (a_lin, a_sens) = (lim(&with_load_sensitivity(0.0, 0.0)), lim(&tuning()));
+    let t = tuning();
+    let lim = |r: &PhysRig| skidpad(r, &t, &w, &mut drive(r), &PAD).unwrap().max_lateral_acc_m_s2;
+    let (a_lin, a_sens) = (lim(&r), lim(&with_load_sensitivity(&r, 0.15, 0.3)));
     println!(
         "skidpad limit {:.3} g with linear tyres, {:.3} g with load-sensitive tyres",
         a_lin / scalar::G,

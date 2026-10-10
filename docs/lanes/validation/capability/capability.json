@@ -1,0 +1,152 @@
+[
+  {
+    "schema": "w5k.capability.v1",
+    "vehicle": "scout_4x4",
+    "contract_pin": "contract-v0.3",
+    "surface": "dry asphalt (the proving ground's flat plane)",
+    "max_grade_ratio": {
+      "value": 0.31640625,
+      "unit": "ratio",
+      "test": "gradeability",
+      "light": "not scored",
+      "note": ""
+    },
+    "max_side_slope_rad": {
+      "value": 0.6896666666666572,
+      "unit": "rad",
+      "test": "side_slope_rollover",
+      "light": "green",
+      "note": "slide"
+    },
+    "braking_distance_m": {
+      "value": 13.988424968599787,
+      "unit": "m",
+      "test": "braking_50kmh",
+      "light": "red",
+      "note": ""
+    },
+    "braking_speed_m_s": 13.8383752226046,
+    "time_0_48kmh_s": {
+      "value": 6.168098535273999,
+      "unit": "s",
+      "test": "accel_0_48kmh",
+      "light": "not scored",
+      "note": ""
+    },
+    "max_lateral_accel_m_s2": {
+      "value": 7.240350190190188,
+      "unit": "m/s^2",
+      "test": "skidpad",
+      "light": "not scored",
+      "note": "grip plateau (speed rose, lateral acceleration did not)"
+    },
+    "max_step_m": {
+      "value": 0.109375,
+      "unit": "m",
+      "test": "step_climb",
+      "light": "amber",
+      "note": ""
+    },
+    "missing": []
+  },
+  {
+    "schema": "w5k.capability.v1",
+    "vehicle": "mule_4x4",
+    "contract_pin": "contract-v0.3",
+    "surface": "dry asphalt (the proving ground's flat plane)",
+    "max_grade_ratio": {
+      "value": 0.64453125,
+      "unit": "ratio",
+      "test": "gradeability",
+      "light": "not scored",
+      "note": ""
+    },
+    "max_side_slope_rad": {
+      "value": 0.7233333333333202,
+      "unit": "rad",
+      "test": "side_slope_rollover",
+      "light": "green",
+      "note": "slide"
+    },
+    "braking_distance_m": {
+      "value": 11.957621385326647,
+      "unit": "m",
+      "test": "braking_50kmh",
+      "light": "green",
+      "note": ""
+    },
+    "braking_speed_m_s": 13.879630502517442,
+    "time_0_48kmh_s": {
+      "value": 4.6458377088826825,
+      "unit": "s",
+      "test": "accel_0_48kmh",
+      "light": "not scored",
+      "note": ""
+    },
+    "max_lateral_accel_m_s2": {
+      "value": 7.867530552532458,
+      "unit": "m/s^2",
+      "test": "skidpad",
+      "light": "not scored",
+      "note": "grip plateau (speed rose, lateral acceleration did not)"
+    },
+    "max_step_m": {
+      "value": 0.34375,
+      "unit": "m",
+      "test": "step_climb",
+      "light": "green",
+      "note": ""
+    },
+    "missing": []
+  },
+  {
+    "schema": "w5k.capability.v1",
+    "vehicle": "hauler_4x4",
+    "contract_pin": "contract-v0.3",
+    "surface": "dry asphalt (the proving ground's flat plane)",
+    "max_grade_ratio": {
+      "value": 0.375,
+      "unit": "ratio",
+      "test": "gradeability",
+      "light": "not scored",
+      "note": ""
+    },
+    "max_side_slope_rad": {
+      "value": 0.5853333333333354,
+      "unit": "rad",
+      "test": "side_slope_rollover",
+      "light": "green",
+      "note": "roll"
+    },
+    "braking_distance_m": {
+      "value": 18.863875123780815,
+      "unit": "m",
+      "test": "braking_50kmh",
+      "light": "red",
+      "note": ""
+    },
+    "braking_speed_m_s": 13.902724361803084,
+    "time_0_48kmh_s": {
+      "value": 11.36188892499316,
+      "unit": "s",
+      "test": "accel_0_48kmh",
+      "light": "not scored",
+      "note": ""
+    },
+    "max_lateral_accel_m_s2": {
+      "value": 5.78163217915313,
+      "unit": "m/s^2",
+      "test": "skidpad",
+      "light": "not scored",
+      "note": "power (speed stopped rising below the grip limit)"
+    },
+    "max_step_m": {
+      "value": 0.1015625,
+      "unit": "m",
+      "test": "step_climb",
+      "light": "red",
+      "note": ""
+    },
+    "missing": []
+  }
+]

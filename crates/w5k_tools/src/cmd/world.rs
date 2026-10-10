@@ -6,6 +6,10 @@
 //! `w5k world view <course.ron> --out DIR [--step N] [--size WxH]` writes `view-road.png` and `view-overview.png`: perspective pictures
 //! from the software renderer (`w5k_world::render`), flat-shaded with fog and a sky.
 //!
+//! `w5k world mobility <course.ron> --out DIR [--vehicle spec.ron ...]` writes `mobility.json` and `mobility.png`: for each vehicle
+//! a go / slow / no-go map of the course and the quickest route from the start of the main road to its end (the answer key for a
+//! route-choosing AI). Without `--vehicle` it uses the three placeholder specs in `content/world/mobility/`.
+//!
 //! `w5k world preview <course.ron> --out DIR` generates the course and writes `topdown.png` (hill-shaded, materials coloured, props
 //! as dots). `w5k world export <course.ron> --out DIR [--step N]` writes `terrain.json` for the viewers (format in
 //! `docs/swarm/requests/world-viewer-terrain.md`); a replay's `WorldHeader.terrain` names that file.
@@ -16,6 +20,7 @@ use w5k_contract::world::{PropKind, PropShape, WorldQuery};
 use w5k_math::{scalar, Vec3};
 use w5k_world::course::{generate, CourseDef};
 use w5k_world::grid::CELL_M;
+use w5k_world::mobility::{classify, route, Mobility, MobilitySpec};
 use w5k_world::plot::{Canvas, CHAR_W, LINE_H};
 use w5k_world::stats::{
     check_materials, grade_stats, iso8608_class, profile_along, psd, segment_for, slope_stats, Psd, PublishedRange,
@@ -48,9 +53,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some("export") => export(&args[1..]),
         Some("stats") => stats(&args[1..]),
         Some("view") => view(&args[1..]),
-        _ => {
-            Err("usage: w5k world preview|export|stats|view <course.ron> --out DIR [--step N] [--size WxH]".to_string())
-        }
+        Some("mobility") => mobility(&args[1..]),
+        _ => Err("usage: w5k world preview|export|stats|view|mobility <course.ron> --out DIR [--step N] [--size WxH] [--vehicle spec.ron]"
+            .to_string()),
     }
 }
 
@@ -347,14 +352,16 @@ fn stats(args: &[String]) -> Result<(), String> {
     for (k, r) in course.extra_roads.iter().enumerate() {
         roads.push((format!("track {}", k + 1), r));
     }
-    // The scored roughness lines come from the course *without* its deliberate washboard and whoops (they are features, not roughness:
-    // a 12 m whoop is a spike in the spectrum by design), which are analysed and reported separately.
+    // The scored roughness lines come from the course *without* its deliberate washboard, whoops and mud-pit dips (they are features, not roughness:
+    // a 12 m whoop or a 25 m pit is a spike in the spectrum by design), which are analysed and reported separately.
     let mut base_def = def.clone();
     base_def.road.whoops.clear();
     base_def.road.washboards.clear();
+    base_def.road.mud_crossings.clear();
     base_def.extra_roads.iter_mut().for_each(|r| {
         r.whoops.clear();
         r.washboards.clear();
+        r.mud_crossings.clear();
     });
     let has_features = base_def != def;
     let base = generate(&base_def)?;
@@ -599,6 +606,156 @@ fn stats(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+/// The placeholder vehicles, embedded so the command works from any directory.
+const DEFAULT_VEHICLES: [&str; 3] = [
+    include_str!("../../../../content/world/mobility/scout.ron"),
+    include_str!("../../../../content/world/mobility/mule.ron"),
+    include_str!("../../../../content/world/mobility/hauler.ron"),
+];
+const GO_RGB: [f64; 3] = [70.0, 170.0, 80.0]; // const-ok: display colour
+const SLOW_RGB: [f64; 3] = [225.0, 180.0, 50.0]; // const-ok: display colour
+const NOGO_RGB: [f64; 3] = [190.0, 55.0, 50.0]; // const-ok: display colour
+const ROUTE_RGB: [u8; 3] = [255, 255, 255]; // const-ok: display colour
+const PANEL_PX: usize = 400; // const-ok: width of one vehicle's map in the picture
+const PANEL_GAP: usize = 10; // const-ok: gap between maps, px
+const MAP_SHADE_FLOOR: f64 = 0.55; // const-ok: how dark the hill shading may make the class colour
+
+fn mobility(args: &[String]) -> Result<(), String> {
+    let (mut file, mut out, mut specs) = (None, None, Vec::new());
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--out" => out = it.next().map(PathBuf::from),
+            "--vehicle" => {
+                let f = it.next().ok_or("--vehicle needs a file")?;
+                specs.push(MobilitySpec::from_ron(&std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?)?);
+            }
+            _ => file = Some(a.clone()),
+        }
+    }
+    let (file, out) = (file.ok_or("missing <course.ron>")?, out.ok_or("missing --out DIR")?);
+    if specs.is_empty() {
+        for t in DEFAULT_VEHICLES {
+            specs.push(MobilitySpec::from_ron(t)?);
+        }
+    }
+    let def = CourseDef::from_ron(&std::fs::read_to_string(&file).map_err(|e| format!("{file}: {e}"))?)?;
+    let course = generate(&def)?;
+    std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    let w = &course.world;
+    let n = w.n();
+    let (start, finish) = (course.road[0], course.road[course.road.len() - 1]);
+    let step = n.div_ceil(PANEL_PX);
+    let panel = n.div_ceil(step);
+    let light = Vec3::new(LIGHT_DIR[0], LIGHT_DIR[1], LIGHT_DIR[2]).normalized_or_zero();
+    let head = LINE_H * 3;
+    let mut cv = Canvas::new(
+        PANEL_GAP + specs.len() * (panel + PANEL_GAP),
+        head * 2 + panel + PANEL_GAP,
+        [235, 235, 235], // const-ok: display colour
+    );
+    let mut report = Vec::new();
+    for (k, spec) in specs.iter().enumerate() {
+        let map = classify(&course, spec);
+        let found = route(&course, spec, &map, (start.0, start.1), (finish.0, finish.1));
+        let (go, slow, nogo) = map.shares();
+        let (x0, y0) = ((PANEL_GAP + k * (panel + PANEL_GAP)) as i64, (head * 2) as i64);
+        for r in 0..panel {
+            for c in 0..panel {
+                let (i, j) = ((c * step).min(n - 1), (r * step).min(n - 1));
+                let (x, z) = w.node_xz(i, j);
+                let shade = ((w.normal(x, z).dot(light) * SHADE_GAIN + SHADE_AMBIENT).clamp(0.0, 1.0) * SHADE_BANDS)
+                    .round()
+                    / SHADE_BANDS;
+                let shade = MAP_SHADE_FLOOR + (1.0 - MAP_SHADE_FLOOR) * shade;
+                let base = match map.class[j * n + i] {
+                    Mobility::Go => GO_RGB,
+                    Mobility::Slow => SLOW_RGB,
+                    Mobility::NoGo => NOGO_RGB,
+                };
+                cv.put(x0 + c as i64, y0 + r as i64, [0, 1, 2].map(|q| (base[q] * shade).min(CHANNEL_MAX) as u8));
+            }
+        }
+        let to_px = |p: (f64, f64)| {
+            let half = (n - 1) as f64 * 0.5 * CELL_M;
+            (x0 + ((p.0 + half) / CELL_M / step as f64) as i64, y0 + ((p.1 + half) / CELL_M / step as f64) as i64)
+        };
+        if let Some(rt) = &found {
+            for pair in rt.points.windows(2) {
+                let (a, b) = (to_px(pair[0]), to_px(pair[1]));
+                cv.line(a.0, a.1, b.0, b.1, ROUTE_RGB);
+            }
+        }
+        for (p, rgb) in [((start.0, start.1), [20, 90, 30]), ((finish.0, finish.1), [30, 30, 30])] {
+            let q = to_px(p);
+            cv.rect(q.0 - 2, q.1 - 2, 5, 5, rgb); // const-ok: marker size, px
+        }
+        let ink = [20, 20, 20]; // const-ok: display colour
+        cv.text(x0, 4, &format!("{} {:.0} kg {:.2} m", spec.name, spec.mass_kg, spec.width_m), 1, ink); // const-ok: label position
+        let line = match &found {
+            Some(r) => format!("route {:.0} m {:.0} s {}", r.length_m, r.time_s, r.uses.join("+")),
+            None => "NO ROUTE".to_string(),
+        };
+        cv.text(
+            x0,
+            4 + LINE_H as i64,
+            &format!("go {:.0}% slow {:.0}% no-go {:.0}%", go * PERCENT, slow * PERCENT, nogo * PERCENT),
+            1,
+            ink,
+        ); // const-ok: label position
+        cv.text(x0, 4 + 2 * LINE_H as i64, &line, 1, ink); // const-ok: label position
+        report.push(serde_json::json!({
+            "vehicle": spec.name,
+            "note": spec.note,
+            "mass_kg": spec.mass_kg,
+            "width_m": spec.width_m,
+            "share_go": go,
+            "share_slow": slow,
+            "share_nogo": nogo,
+            "route": found.as_ref().map(|r| serde_json::json!({
+                "length_m": r.length_m,
+                "time_s": r.time_s,
+                "max_grade_climbed": r.max_grade_climbed,
+                "max_cross_slope": r.max_cross_slope,
+                "uses": r.uses,
+                "points_m": r.points,
+            })),
+        }));
+        println!(
+            "{}: go {:.1}% slow {:.1}% no-go {:.1}%; {}",
+            spec.name,
+            go * PERCENT,
+            slow * PERCENT,
+            nogo * PERCENT,
+            found.map_or("no route from start to finish".to_string(), |r| format!(
+                "route {:.0} m in {:.0} s via [{}]",
+                r.length_m,
+                r.time_s,
+                r.uses.join(", ")
+            ))
+        );
+    }
+    let doc = serde_json::json!({
+        "format": "w5k-mobility-1",
+        "course": def.name,
+        "start_m": [start.0, start.1],
+        "finish_m": [finish.0, finish.1],
+        "vehicles": report,
+    });
+    std::fs::write(out.join("mobility.json"), serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+    let f = std::fs::File::create(out.join("mobility.png")).map_err(|e| e.to_string())?;
+    let mut enc = png::Encoder::new(std::io::BufWriter::new(f), cv.w as u32, cv.h as u32);
+    enc.set_compression(png::Compression::High);
+    enc.set_filter(png::Filter::Adaptive);
+    enc.set_color(png::ColorType::Rgb);
+    enc.set_depth(png::BitDepth::Eight);
+    let mut wr = enc.write_header().map_err(|e| e.to_string())?;
+    wr.write_image_data(&cv.rgb).map_err(|e| e.to_string())?;
+    println!("wrote {} and mobility.json", out.join("mobility.png").display());
+    Ok(())
+}
+
 const PAGE_W: usize = 1280; // const-ok: page size, px
 const PAGE_H: usize = 1180; // const-ok: page size, px
 
@@ -652,6 +809,25 @@ mod tests {
             let info = dec.read_info().expect("png").info().clone();
             assert_eq!((info.width, info.height), (320, 180), "{name}");
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn mobility_writes_a_map_per_vehicle_and_every_vehicle_crosses_the_river_on_the_road_bridge() {
+        let dir = std::env::temp_dir().join(format!("w5k-world-mobility-{}", std::process::id()));
+        let course = format!("{}/../../content/world/courses/crossing.ron", env!("CARGO_MANIFEST_DIR"));
+        mobility(&[course, "--out".into(), dir.to_str().expect("utf8").into()]).expect("mobility");
+        let doc: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("mobility.json")).expect("read")).expect("json");
+        let vehicles = doc["vehicles"].as_array().expect("vehicles");
+        assert_eq!(vehicles.len(), 3);
+        for v in vehicles {
+            let shares = ["share_go", "share_slow", "share_nogo"].map(|k| v[k].as_f64().expect("share"));
+            assert!((shares.iter().sum::<f64>() - 1.0).abs() < 1e-9, "shares sum to one");
+            let uses = v["route"]["uses"].as_array().expect("every vehicle has a route");
+            assert!(uses.iter().any(|u| u == "bridge:Road"), "{} uses the road bridge", v["vehicle"]);
+        }
+        assert!(std::fs::metadata(dir.join("mobility.png")).expect("png").len() > 5_000);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

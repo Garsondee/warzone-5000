@@ -27,8 +27,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some("dashboard") => dashboard(&args[1..]),
         Some("terrain") => terrain(&args[1..]),
         Some("impact") => impact(&args[1..]),
+        Some("capability") => capability(&args[1..]),
         _ => Err(
-            "usage: w5k validation impact --out DIR [--vehicles a.ron,b.ron] | terrain --stats FILE [--reference-grade X] | dashboard --out DIR [--replay FILE] [--def FILE] [--dossier FILE] [--top-speed-run]"
+            "usage: w5k validation capability --out DIR [--vehicles a.ron,...] | impact --out DIR [--vehicles a.ron,b.ron] | terrain --stats FILE [--reference-grade X] | dashboard --out DIR [--replay FILE] [--def FILE] [--dossier FILE] [--top-speed-run]"
                 .into(),
         ),
     }
@@ -191,5 +192,29 @@ fn impact(args: &[String]) -> Result<(), String> {
     let md = impact::render_markdown(&report);
     std::fs::write(out.join("impact.md"), &md).map_err(|e| e.to_string())?;
     println!("{md}");
+    Ok(())
+}
+
+/// `w5k validation capability --out DIR [--vehicles a.ron,...]`: run the proving ground on each vehicle and write
+/// `DIR/<vehicle>.json` (one `w5k.capability.v1` table) and `DIR/capability.json` (all vehicles).
+fn capability(args: &[String]) -> Result<(), String> {
+    let out = PathBuf::from(flag(args, "--out").ok_or("--out DIR is required")?);
+    let list = flag(args, "--vehicles").unwrap_or(IMPACT_VEHICLES);
+    let mut all = Vec::new();
+    for path in list.split(',').filter(|v| !v.is_empty()) {
+        let path = root().join(path);
+        let def = w5k_forge::compile::parse_def(
+            &std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?,
+        )?;
+        let results = proving_results(&path, &out.join("runs").join(&def.id))?;
+        let table = w5k_validate::capability::from_results(&def.id, &results);
+        std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+        let text = serde_json::to_string_pretty(&table).map_err(|e| e.to_string())?;
+        std::fs::write(out.join(format!("{}.json", def.id)), format!("{text}\n")).map_err(|e| e.to_string())?;
+        println!("{}: {} values, missing {:?}", def.id, 6 - table.missing.len(), table.missing);
+        all.push(table);
+    }
+    let text = serde_json::to_string_pretty(&all).map_err(|e| e.to_string())?;
+    std::fs::write(out.join("capability.json"), format!("{text}\n")).map_err(|e| e.to_string())?;
     Ok(())
 }
