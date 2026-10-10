@@ -139,4 +139,20 @@
         prov: Estimate,
         src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
     ),
+    tyre_load: Some((
+        mu_load_sensitivity: (
+            v: 0.15,
+            lo: Some(0.05),
+            hi: Some(0.3),
+            prov: Estimate,
+            src: "Pacejka, Tire and Vehicle Dynamics, 3rd ed., ch. 4 (pDy2, pKy1/pKy2 terms); archetype estimate for a light reconnaissance 4x4 tyre, via CHASSIS\' request chassis-forge-tyre-load-sensitivity.md",
+        ),
+        stiffness_load_sensitivity: (
+            v: 0.3,
+            lo: Some(0.1),
+            hi: Some(0.5),
+            prov: Estimate,
+            src: "Pacejka, Tire and Vehicle Dynamics, 3rd ed., ch. 4 (pDy2, pKy1/pKy2 terms); archetype estimate for a light reconnaissance 4x4 tyre, via CHASSIS\' request chassis-forge-tyre-load-sensitivity.md",
+        ),
+    )),
 )
