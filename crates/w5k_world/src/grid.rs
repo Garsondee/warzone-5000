@@ -4,15 +4,14 @@
 //! heights of each 1 m cell, its normal is the analytic gradient of that same patch, the material is a u8 splat map read
 //! at the nearest cell, and props live in a uniform grid (CSR layout, no allocation on query).
 
+use crate::corrugation::Corrugation;
 use w5k_contract::world::{MaterialId, MaterialTable, PropId, PropKind, PropRef, PropShape, RayHit, WorldQuery};
 use w5k_math::{Pcg32, Quat, StateHasher, Transform, Vec3};
 
-pub const N: usize = 2001;
+pub const SPIKE_N: usize = 2001;
 pub const CELL_M: f64 = 1.0;
-pub const HALF_M: f64 = 1000.0; // const-ok: spike placeholder, the generator reads these from CourseDef
 const PROP_CELL_M: f64 = 16.0; // const-ok: spike placeholder, the generator reads these from CourseDef
 const MUD_BELOW_M: f64 = -12.0; // const-ok: spike placeholder for the drainage rule
-const PROP_N: usize = 126; // const-ok: ceil(2000 / 16) + 1 cells per side
 
 // ---- noise: value noise from an integer hash, a pure function of (seed, lattice point) ----
 
@@ -69,67 +68,163 @@ pub fn micro_roughness_m(seed: u64, x: f64, z: f64, rms_m: f64) -> f64 {
 
 // ---- the world ----
 
-pub struct SpikeWorld {
+pub struct GridWorld {
+    n: usize,
+    half_m: f64,
+    prop_n: usize,
+    y_range: (f64, f64),
     heights: Vec<f32>,
     splat: Vec<u8>,
     materials: MaterialTable,
     props: Vec<PropRef>,
     cell_start: Vec<u32>,
     cell_items: Vec<u32>,
+    corrugation: Option<Corrugation>,
+    /// Water surface height per node, `NAN` where there is none.
+    water: Option<Vec<f32>>,
 }
 
-impl SpikeWorld {
-    pub fn generate(seed: u64) -> SpikeWorld {
-        let mut heights = vec![0f32; N * N];
-        let mut splat = vec![0u8; N * N];
-        for j in 0..N {
-            for i in 0..N {
-                let (x, z) = (i as f64 - HALF_M, j as f64 - HALF_M);
+fn prop_n_for(half_m: f64) -> usize {
+    ((2.0 * half_m) / PROP_CELL_M).ceil() as usize + 1
+}
+
+impl GridWorld {
+    /// A world from raw baked arrays: `n` x `n` heights and splat ids, centred on the origin (`CELL_M` spacing).
+    pub fn from_arrays(n: usize, heights: Vec<f32>, splat: Vec<u8>, materials: MaterialTable) -> GridWorld {
+        assert!(n >= 2 && heights.len() == n * n && splat.len() == n * n, "grid arrays must be n x n");
+        let half_m = (n - 1) as f64 * CELL_M * 0.5;
+        let prop_n = prop_n_for(half_m);
+        let y_range = heights
+            .iter()
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &v| (lo.min(v as f64), hi.max(v as f64)));
+        GridWorld {
+            n,
+            half_m,
+            prop_n,
+            y_range,
+            heights,
+            splat,
+            materials,
+            props: Vec::new(),
+            cell_start: vec![0; prop_n * prop_n + 1],
+            cell_items: Vec::new(),
+            corrugation: None,
+            water: None,
+        }
+    }
+
+    /// Attach washboard ripples (see `corrugation.rs`).
+    pub fn set_corrugation(&mut self, c: Corrugation) {
+        self.corrugation = Some(c);
+    }
+
+    /// Attach a water surface (`NAN` = no water at that node).
+    pub fn set_water(&mut self, surface: Vec<f32>) {
+        assert_eq!(surface.len(), self.n * self.n);
+        self.water = Some(surface);
+    }
+
+    /// Water surface height at node `(i, j)`, if the node has water.
+    pub fn water_at_node(&self, i: usize, j: usize) -> Option<f64> {
+        self.water.as_ref().map(|w| f64::from(w[j * self.n + i])).filter(|v| v.is_finite())
+    }
+
+    /// Height of the water surface at `(x, z)`, `Some` only where the ground is below it (WORLD-only until CCR W-6 adds it to
+    /// `WorldQuery`). Depth is this minus `height_m`.
+    pub fn water_surface_m(&self, x: f64, z: f64) -> Option<f64> {
+        let w = self.water.as_ref()?;
+        let max = (self.n - 1) as f64; // const-ok: grid extent in cells
+        let i = (((x + self.half_m) / CELL_M).round().clamp(0.0, max)) as usize;
+        let j = (((z + self.half_m) / CELL_M).round().clamp(0.0, max)) as usize;
+        let level = f64::from(w[j * self.n + i]);
+        (level.is_finite() && self.height_m(x, z) < level).then_some(level)
+    }
+
+    /// Hash of the washboard layer (0 when there is none), for determinism checks.
+    pub fn corrugation_hash(&self) -> u64 {
+        let mut h = StateHasher::new();
+        if let Some(c) = &self.corrugation {
+            c.hash_into(&mut h);
+        }
+        if let Some(w) = &self.water {
+            for v in w {
+                h.write_u32(v.to_bits());
+            }
+        }
+        h.finish()
+    }
+
+    /// The 2 km spike terrain (seed-driven fBm, test road stripe, low-ground mud rule, scattered trees and boxes).
+    pub fn generate_spike(seed: u64) -> GridWorld {
+        let n = SPIKE_N;
+        let half = (n - 1) as f64 * 0.5;
+        let mut heights = vec![0f32; n * n];
+        let mut splat = vec![0u8; n * n];
+        for j in 0..n {
+            for i in 0..n {
+                let (x, z) = (i as f64 - half, j as f64 - half);
                 let h = 25.0 * warped_fbm(seed, x, z, 500.0, 120.0, 6); // const-ok: spike amplitude / wavelength
-                heights[j * N + i] = h as f32;
+                heights[j * n + i] = h as f32;
                 let road = (x - 0.3 * z).abs() < 4.0; // const-ok: spike stripe
-                splat[j * N + i] = if road {
+                splat[j * n + i] = if road {
                     2
                 } else if h < MUD_BELOW_M {
                     1
                 } else {
                     0
-                }; // const-ok: spike rule
+                };
             }
         }
-        let mut w = SpikeWorld {
-            heights,
-            splat,
-            materials: MaterialTable::default(),
-            props: Vec::new(),
-            cell_start: Vec::new(),
-            cell_items: Vec::new(),
-        };
+        let mut w = GridWorld::from_arrays(n, heights, splat, MaterialTable::default());
         w.scatter_props(seed);
         w
     }
 
-    /// A prop-free world from a height function (tests and benches).
-    pub fn from_fn(h: impl Fn(f64, f64) -> f64) -> SpikeWorld {
-        let mut heights = vec![0f32; N * N];
-        for j in 0..N {
-            for i in 0..N {
-                heights[j * N + i] = h(i as f64 - HALF_M, j as f64 - HALF_M) as f32;
+    /// A prop-free spike-sized world from a height function (tests and benches).
+    pub fn from_fn(h: impl Fn(f64, f64) -> f64) -> GridWorld {
+        GridWorld::from_fn_sized(SPIKE_N, h)
+    }
+
+    pub fn from_fn_sized(n: usize, h: impl Fn(f64, f64) -> f64) -> GridWorld {
+        let half = (n - 1) as f64 * 0.5;
+        let mut heights = vec![0f32; n * n];
+        for j in 0..n {
+            for i in 0..n {
+                heights[j * n + i] = h(i as f64 - half, j as f64 - half) as f32;
             }
         }
-        SpikeWorld {
-            heights,
-            splat: vec![0; N * N],
-            materials: MaterialTable::default(),
-            props: Vec::new(),
-            cell_start: vec![0; PROP_N * PROP_N + 1],
-            cell_items: Vec::new(),
-        }
+        GridWorld::from_arrays(n, heights, vec![0; n * n], MaterialTable::default())
+    }
+
+    pub fn n(&self) -> usize {
+        self.n
+    }
+
+    pub fn props(&self) -> &[PropRef] {
+        &self.props
+    }
+
+    /// Heights as f64, row-major (z rows), for exporters and plots.
+    pub fn height_at_node(&self, i: usize, j: usize) -> f64 {
+        self.at(i, j)
+    }
+
+    pub fn splat_at_node(&self, i: usize, j: usize) -> u8 {
+        self.splat[j * self.n + i]
+    }
+
+    /// Plan position of grid node (i, j).
+    pub fn node_xz(&self, i: usize, j: usize) -> (f64, f64) {
+        (i as f64 * CELL_M - self.half_m, j as f64 * CELL_M - self.half_m)
     }
 
     pub fn add_prop(&mut self, p: PropRef) {
-        let mut props = std::mem::take(&mut self.props);
-        props.push(p);
+        self.props.push(p);
+        self.rebuild_grid();
+    }
+
+    /// Replace all props at once (one grid rebuild).
+    pub fn set_props(&mut self, props: Vec<PropRef>) {
         self.props = props;
         self.rebuild_grid();
     }
@@ -165,29 +260,34 @@ impl SpikeWorld {
 
     /// CSR build: count, prefix-sum, fill. A prop sits in every grid cell its AABB overlaps.
     fn rebuild_grid(&mut self) {
+        for p in &self.props {
+            self.y_range.1 = self.y_range.1.max(prop_aabb(p).1.y);
+        }
         let props = &self.props;
-        let mut counts = vec![0u32; PROP_N * PROP_N + 1];
+        let mut counts = vec![0u32; self.prop_n * self.prop_n + 1];
         for p in props {
             let (lo, hi) = prop_aabb(p);
-            let ((i0, j0), (i1, j1)) = (prop_cell(lo.x, lo.z), prop_cell(hi.x, hi.z));
+            let ((i0, j0), (i1, j1)) =
+                (prop_cell(self.half_m, self.prop_n, lo.x, lo.z), prop_cell(self.half_m, self.prop_n, hi.x, hi.z));
             for j in j0..=j1 {
                 for i in i0..=i1 {
-                    counts[j * PROP_N + i] += 1;
+                    counts[j * self.prop_n + i] += 1;
                 }
             }
         }
-        let mut start = vec![0u32; PROP_N * PROP_N + 1];
-        for c in 0..PROP_N * PROP_N {
+        let mut start = vec![0u32; self.prop_n * self.prop_n + 1];
+        for c in 0..self.prop_n * self.prop_n {
             start[c + 1] = start[c] + counts[c];
         }
         let mut fill = start.clone();
-        let mut items = vec![0u32; start[PROP_N * PROP_N] as usize];
+        let mut items = vec![0u32; start[self.prop_n * self.prop_n] as usize];
         for (idx, p) in props.iter().enumerate() {
             let (lo, hi) = prop_aabb(p);
-            let ((i0, j0), (i1, j1)) = (prop_cell(lo.x, lo.z), prop_cell(hi.x, hi.z));
+            let ((i0, j0), (i1, j1)) =
+                (prop_cell(self.half_m, self.prop_n, lo.x, lo.z), prop_cell(self.half_m, self.prop_n, hi.x, hi.z));
             for j in j0..=j1 {
                 for i in i0..=i1 {
-                    let c = j * PROP_N + i;
+                    let c = j * self.prop_n + i;
                     items[fill[c] as usize] = idx as u32;
                     fill[c] += 1;
                 }
@@ -212,16 +312,16 @@ impl SpikeWorld {
     }
 
     fn at(&self, i: usize, j: usize) -> f64 {
-        self.heights[j * N + i] as f64
+        self.heights[j * self.n + i] as f64
     }
 
     /// Cell index and local coordinates (u, v in [0, 1]) of a plan position, clamped to the grid.
-    fn locate(x: f64, z: f64) -> (usize, usize, f64, f64) {
-        let max = (N - 1) as f64; // const-ok: grid extent in cells
-        let fx = ((x + HALF_M) / CELL_M).clamp(0.0, max);
-        let fz = ((z + HALF_M) / CELL_M).clamp(0.0, max);
-        let i = (fx.floor() as usize).min(N - 2);
-        let j = (fz.floor() as usize).min(N - 2);
+    fn locate(&self, x: f64, z: f64) -> (usize, usize, f64, f64) {
+        let max = (self.n - 1) as f64; // const-ok: grid extent in cells
+        let fx = ((x + self.half_m) / CELL_M).clamp(0.0, max);
+        let fz = ((z + self.half_m) / CELL_M).clamp(0.0, max);
+        let i = (fx.floor() as usize).min(self.n - 2);
+        let j = (fz.floor() as usize).min(self.n - 2);
         (i, j, fx - i as f64, fz - j as f64)
     }
 
@@ -238,11 +338,13 @@ impl SpikeWorld {
             return Some((0.0, self.normal(o.x, o.z)));
         }
         let mut result = None;
-        grid_walk(o, d, max_m, CELL_M, -HALF_M, N - 1, &mut |i, j, t_in, t_out| {
+        grid_walk(o, d, max_m, CELL_M, -self.half_m, self.n - 1, &mut |i, j, t_in, t_out| {
             let t_in = t_in.max(0.0);
             let (a, b, c, dd) = self.patch(i, j);
-            let (u0, v0) =
-                ((o.x + d.x * t_in + HALF_M) / CELL_M - i as f64, (o.z + d.z * t_in + HALF_M) / CELL_M - j as f64);
+            let (u0, v0) = (
+                (o.x + d.x * t_in + self.half_m) / CELL_M - i as f64,
+                (o.z + d.z * t_in + self.half_m) / CELL_M - j as f64,
+            );
             let (ux, vz) = (d.x / CELL_M, d.z / CELL_M);
             let y0 = o.y + d.y * t_in;
             let qa = dd * ux * vz;
@@ -259,7 +361,7 @@ impl SpikeWorld {
     }
 
     fn in_plan(&self, x: f64, z: f64) -> bool {
-        x.abs() <= HALF_M && z.abs() <= HALF_M
+        x.abs() <= self.half_m && z.abs() <= self.half_m
     }
 }
 
@@ -358,8 +460,8 @@ fn grid_walk(
     }
 }
 
-fn prop_cell(x: f64, z: f64) -> (usize, usize) {
-    let c = |v: f64| (((v + HALF_M) / PROP_CELL_M).floor().max(0.0) as usize).min(PROP_N - 1);
+fn prop_cell(half_m: f64, prop_n: usize, x: f64, z: f64) -> (usize, usize) {
+    let c = |v: f64| (((v + half_m) / PROP_CELL_M).floor().max(0.0) as usize).min(prop_n - 1);
     (c(x), c(z))
 }
 
@@ -451,25 +553,34 @@ fn ray_prop(p: &PropRef, o: Vec3, d: Vec3, max_m: f64) -> Option<(f64, Vec3)> {
     }
 }
 
-impl WorldQuery for SpikeWorld {
+impl WorldQuery for GridWorld {
     fn height_m(&self, x: f64, z: f64) -> f64 {
-        let (i, j, u, v) = Self::locate(x, z);
+        let (i, j, u, v) = self.locate(x, z);
         let (a, b, c, d) = self.patch(i, j);
-        a + b * u + c * v + d * u * v
+        let base = a + b * u + c * v + d * u * v;
+        match &self.corrugation {
+            Some(r) => base + r.eval(self.n, i, j, u, v).0,
+            None => base,
+        }
     }
 
     fn normal(&self, x: f64, z: f64) -> Vec3 {
-        let (i, j, u, v) = Self::locate(x, z);
+        let (i, j, u, v) = self.locate(x, z);
         let (_, b, c, d) = self.patch(i, j);
-        let (gx, gz) = ((b + d * v) / CELL_M, (c + d * u) / CELL_M);
+        let (mut gx, mut gz) = ((b + d * v) / CELL_M, (c + d * u) / CELL_M);
+        if let Some(r) = &self.corrugation {
+            let (_, rx, rz) = r.eval(self.n, i, j, u, v);
+            gx += rx;
+            gz += rz;
+        }
         Vec3::new(-gx, 1.0, -gz).normalized_or_zero()
     }
 
     fn material_id_at(&self, x: f64, z: f64) -> MaterialId {
-        let max = (N - 1) as f64; // const-ok: grid extent in cells
-        let i = (((x + HALF_M) / CELL_M).round().clamp(0.0, max)) as usize;
-        let j = (((z + HALF_M) / CELL_M).round().clamp(0.0, max)) as usize;
-        MaterialId(self.splat[j * N + i] as u16)
+        let max = (self.n - 1) as f64; // const-ok: grid extent in cells
+        let i = (((x + self.half_m) / CELL_M).round().clamp(0.0, max)) as usize;
+        let j = (((z + self.half_m) / CELL_M).round().clamp(0.0, max)) as usize;
+        MaterialId(self.splat[j * self.n + i] as u16)
     }
 
     fn materials(&self) -> &MaterialTable {
@@ -480,8 +591,8 @@ impl WorldQuery for SpikeWorld {
         let terrain = self.raycast_terrain(origin, dir, max_m);
         let limit = terrain.map_or(max_m, |(t, _)| t);
         let mut best: Option<(f64, Vec3, PropId)> = None;
-        grid_walk(origin, dir, limit, PROP_CELL_M, -HALF_M, PROP_N, &mut |i, j, _, t_out| {
-            let c = j * PROP_N + i;
+        grid_walk(origin, dir, limit, PROP_CELL_M, -self.half_m, self.prop_n, &mut |i, j, _, t_out| {
+            let c = j * self.prop_n + i;
             for &idx in &self.cell_items[self.cell_start[c] as usize..self.cell_start[c + 1] as usize] {
                 let p = &self.props[idx as usize];
                 if let Some((t, n)) = ray_prop(p, origin, dir, limit) {
@@ -503,15 +614,16 @@ impl WorldQuery for SpikeWorld {
     }
 
     fn props_in_aabb(&self, min: Vec3, max: Vec3, out: &mut Vec<PropRef>) {
-        let ((i0, j0), (i1, j1)) = (prop_cell(min.x, min.z), prop_cell(max.x, max.z));
+        let ((i0, j0), (i1, j1)) =
+            (prop_cell(self.half_m, self.prop_n, min.x, min.z), prop_cell(self.half_m, self.prop_n, max.x, max.z));
         for j in j0..=j1 {
             for i in i0..=i1 {
-                let c = j * PROP_N + i;
+                let c = j * self.prop_n + i;
                 for &idx in &self.cell_items[self.cell_start[c] as usize..self.cell_start[c + 1] as usize] {
                     let p = &self.props[idx as usize];
                     let (lo, hi) = prop_aabb(p);
                     // Report a prop from the first query cell it shares, so a prop spanning cells appears once.
-                    let (pi, pj) = prop_cell(lo.x, lo.z);
+                    let (pi, pj) = prop_cell(self.half_m, self.prop_n, lo.x, lo.z);
                     if pi.max(i0) != i || pj.max(j0) != j {
                         continue;
                     }
@@ -530,7 +642,8 @@ impl WorldQuery for SpikeWorld {
     }
 
     fn bounds(&self) -> (Vec3, Vec3) {
-        (Vec3::new(-HALF_M, -100.0, -HALF_M), Vec3::new(HALF_M, 100.0, HALF_M)) // const-ok: spike vertical extent
+        // The y range is the lowest terrain to the highest terrain or prop top (CCR W-4 asks to write this into the contract).
+        (Vec3::new(-self.half_m, self.y_range.0, -self.half_m), Vec3::new(self.half_m, self.y_range.1, self.half_m))
     }
 }
 
@@ -540,14 +653,14 @@ mod tests {
     use super::*;
     use std::sync::OnceLock;
 
-    fn world() -> &'static SpikeWorld {
-        static W: OnceLock<SpikeWorld> = OnceLock::new();
-        W.get_or_init(|| SpikeWorld::generate(7))
+    fn world() -> &'static GridWorld {
+        static W: OnceLock<GridWorld> = OnceLock::new();
+        W.get_or_init(|| GridWorld::generate_spike(7))
     }
 
     #[test]
     fn flat_heightfield_returns_the_constant_height() {
-        let w = SpikeWorld::from_fn(|_, _| 3.5);
+        let w = GridWorld::from_fn(|_, _| 3.5);
         for (x, z) in [(0.0, 0.0), (123.4, -567.8), (-1000.0, 1000.0), (2000.0, 0.0)] {
             assert_eq!(w.height_m(x, z), 3.5);
             assert!((w.normal(x, z) - Vec3::Y).length() < 1e-15);
@@ -581,7 +694,7 @@ mod tests {
 
     #[test]
     fn planar_ramp_has_exactly_its_slope() {
-        let w = SpikeWorld::from_fn(|x, _| 0.25 * x);
+        let w = GridWorld::from_fn(|x, _| 0.25 * x);
         let n = w.normal(10.3, -40.7);
         assert!((n.x / n.y + 0.25).abs() < 1e-6 && n.z.abs() < 1e-12);
         assert!((w.height_m(100.25, 5.0) - 25.0625).abs() < 1e-5);
@@ -589,7 +702,7 @@ mod tests {
 
     #[test]
     fn raycast_hits_the_analytic_plane_at_the_expected_distance() {
-        let w = SpikeWorld::from_fn(|x, _| 0.25 * x); // plane y = 0.25 x
+        let w = GridWorld::from_fn(|x, _| 0.25 * x); // plane y = 0.25 x
         let o = Vec3::new(-300.0, 50.0, 20.0);
         let d = Vec3::new(0.6, -0.8, 0.0);
         // o.y + d.y t = 0.25 (o.x + d.x t)  =>  t = (o.y - 0.25 o.x) / (0.25 d.x - d.y)
@@ -615,7 +728,7 @@ mod tests {
 
     #[test]
     fn raycast_through_a_box_prop_hits_the_face() {
-        let mut w = SpikeWorld::from_fn(|_, _| 0.0);
+        let mut w = GridWorld::from_fn(|_, _| 0.0);
         w.add_prop(PropRef {
             id: PropId(1),
             kind: PropKind::Building,
@@ -634,8 +747,11 @@ mod tests {
 
     #[test]
     fn generator_is_deterministic_for_a_seed() {
-        let (a, b, c) =
-            (SpikeWorld::generate(7).content_hash(), world().content_hash(), SpikeWorld::generate(8).content_hash());
+        let (a, b, c) = (
+            GridWorld::generate_spike(7).content_hash(),
+            world().content_hash(),
+            GridWorld::generate_spike(8).content_hash(),
+        );
         assert_eq!(a, b);
         assert_ne!(a, c);
         // Bit-identical on every platform: this constant is checked on Linux and Windows CI.
@@ -703,8 +819,8 @@ mod tests {
     fn spike_terrain_statistics() {
         let w = world();
         let (mut max_grade, mut max_dev, mut hist) = (0.0f64, 0.0f64, [0u32; 6]);
-        for j in (0..N - 1).step_by(3) {
-            for i in (0..N - 1).step_by(3) {
+        for j in (0..SPIKE_N - 1).step_by(3) {
+            for i in (0..SPIKE_N - 1).step_by(3) {
                 let (_, b, c, d) = w.patch(i, j);
                 let g = (b * b + c * c).sqrt();
                 max_grade = max_grade.max(g);

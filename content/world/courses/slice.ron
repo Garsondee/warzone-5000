@@ -1,0 +1,74 @@
+#![enable(implicit_some)]
+// The slice course: a 400 m square with rolling hills, one named hill, and a graded road from start to finish.
+// Everything here is a generator parameter (card C-004): change a number, rebuild, look at `w5k world preview`.
+CourseDef(
+    name: "slice",
+    seed: 2026,
+    size_cells: 401,
+    hills: HillsDef(
+        amplitude_m: Param(v: 9.0, prov: Spec, src: "course design: gentle rolling country"),
+        wavelength_m: Param(v: 140.0, prov: Spec, src: "course design"),
+        warp_m: Param(v: 40.0, prov: Spec, src: "course design: domain warp strength"),
+        octaves: 5,
+        max_grade: Param(v: 0.30, prov: Spec, src: "course design: steepest terrain slope (rise/run), about 17 degrees"),
+        feature: Some(HillFeature(
+            x_m: 40.0, z_m: -30.0,
+            radius_m: Param(v: 70.0, prov: Spec, src: "course design"),
+            height_m: Param(v: 14.0, prov: Spec, src: "course design: the named hill the road must deal with"),
+        )),
+    ),
+    road: RoadDef(
+        waypoints: [(-170.0, 150.0), (-60.0, 20.0), (60.0, -40.0), (170.0, -150.0)],
+        width_m: Param(v: 6.0, prov: Spec, src: "course design: two lanes"),
+        shoulder_m: Param(v: 5.0, prov: Spec, src: "course design: blend from road to terrain"),
+        max_grade: Param(v: 0.08, prov: Spec, src: "course design: road grade limit, 8 percent"),
+        surface: "asphalt",
+        washboards: [RoughSectionDef(
+            at_fraction: Param(v: 0.12, prov: Spec, src: "course design: early on the road"),
+            length_m: Param(v: 60.0, prov: Spec, src: "course design"),
+            wavelength_m: Param(v: 0.8, prov: Spec, src: "course design: corrugation on an unsealed road, 0.5 to 1 m"),
+            amplitude_m: Param(v: 0.04, prov: Spec, src: "course design: peak to peak, a few cm"),
+        )],
+        whoops: [RoughSectionDef(
+            at_fraction: Param(v: 0.8, prov: Spec, src: "course design: after the barricade"),
+            length_m: Param(v: 90.0, prov: Spec, src: "course design"),
+            wavelength_m: Param(v: 12.0, prov: Spec, src: "course design: whoops, 8 to 15 m"),
+            amplitude_m: Param(v: 0.3, prov: Spec, src: "course design: peak to peak, 0.2 to 0.4 m"),
+        )],
+        mud_crossings: [MudCrossing(
+            at_fraction: Param(v: 0.35, prov: Spec, src: "course design: a washed-out stretch before the barricade"),
+            length_m: Param(v: 25.0, prov: Spec, src: "course design: long enough for the truck to feel the soil law"),
+        )],
+    ),
+    mud: Some(MudDef(
+        min_drainage_cells: Param(v: 260.0, prov: Spec, src: "course design: upslope cells draining through a cell before it is boggy"),
+        max_slope: Param(v: 0.04, prov: Spec, src: "course design: water only stands on gentle ground"),
+        spread_m: Param(v: 3.5, prov: Spec, src: "course design: how far a wet channel soaks the ground around it"),
+    )),
+    trees: Some(TreesDef(
+        min_spacing_m: Param(v: 7.0, prov: Spec, src: "course design: Poisson-disc spacing between trunks"),
+        density: Param(v: 0.9, prov: Spec, src: "course design: acceptance probability, thins the stands"),
+        max_slope: Param(v: 0.25, prov: Spec, src: "course design: no trees on steep flanks"),
+        road_clearance_m: Param(v: 6.0, prov: Spec, src: "course design: clear verge each side of the road"),
+        stand_wavelength_m: Param(v: 70.0, prov: Spec, src: "course design: clump size of tree stands"),
+        trunk_radius_m: Param(v: 0.3, prov: Spec, src: "course design: a 0.6 m trunk"),
+        height_m: Param(v: 9.0, prov: Spec, src: "course design"),
+        break_impulse_ns: Param(v: 60000.0, prov: Spec, src: "course design placeholder: impulse that snaps a trunk (UNVALIDATED; COMBAT/VALIDATION to source)"),
+    )),
+    barricade: Some(BarricadeDef(
+        at_fraction: Param(v: 0.6, prov: Spec, src: "course design: PROVISIONAL(C-004) hand-placed until chokepoint detection"),
+        gap_m: Param(v: 3.2, prov: Spec, src: "course design: a 2 m wide truck threads it with margin"),
+        block_height_m: Param(v: 1.0, prov: Spec, src: "course design"),
+        block_depth_m: Param(v: 0.8, prov: Spec, src: "course design"),
+    )),
+    rock_fields: [RockFieldDef(
+        x_m: -20.0, z_m: 70.0,
+        radius_m: Param(v: 42.0, prov: Spec, src: "course design: a stone-riddled field beside the road, the cross-country shortcut"),
+        min_spacing_m: Param(v: 3.4, prov: Spec, src: "course design: closest two rock centres"),
+        density: Param(v: 0.85, prov: Spec, src: "course design: acceptance probability"),
+        rock_radius_min_m: Param(v: 0.25, prov: Spec, src: "course design: small stones a wheel rolls over"),
+        rock_radius_max_m: Param(v: 1.3, prov: Spec, src: "course design: boulders a truck must go around (its wheel radius is about 0.4 m)"),
+        road_clearance_m: Param(v: 5.0, prov: Spec, src: "course design: keep the road itself clear"),
+        surface: "gravel",
+    )],
+)

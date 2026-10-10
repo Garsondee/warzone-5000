@@ -1,0 +1,6 @@
+# Keep line endings identical on every platform: goldens, baked JSON and RON are compared byte for byte on Linux and Windows CI.
+* text=auto eol=lf
+*.png binary
+*.glb binary
+*.w5kr binary
+*.mp4 binary

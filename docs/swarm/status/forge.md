@@ -2,14 +2,26 @@
 
 *Update with every PR.*
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/forge/build (then lane/forge/compile) | **Contract pinned:** `contract-v0.1` = commit `f8f5e5d` | **Phase:** building (owner instruction in force: no waiting for review)
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/forge/render | **Contract pinned:** `contract-v0.2` = commit `80adac2` | **Phase:** building (owner instruction in force: no waiting for review)
 
 ## Done
 - Settling round PR (this branch): spike S5 (`crates/w5k_forge/src/s5.rs`, `docs/lanes/forge/spike-s5.md`), design note (`docs/lanes/forge/design-note.md`), `VehicleDef` CCR as text (`docs/swarm/requests/forge-ccr-vehicledef.md`), theory starter (`docs/theory/forge.md`), image `docs/lanes/forge/media/s5-torque-curve.png`.
 
 ## In progress
-- PR A (this branch): `curve.rs` (engine curve through the two peaks, promoted from spike S5), `extras.rs` (PROVISIONAL(CCR-forge) sidecar types), the first truck `content/vehicles/game/mule_4x4.ron` + `.extras.ron` (fictional "Mule 4x4", all ESTIMATE with bands, M998-like archetype, no real figures from memory).
-- PR B (next, stacked on A): `compile.rs` wheeled compile of that truck to `PhysRig` + `RenderRig` for CHASSIS and DRIVE (it is above 400 non-test lines if joined with A, so split; the S5 spike file is removed there).
+- PR A (#18, merged): `curve.rs` (engine curve through the two peaks, promoted from spike S5), `extras.rs` (PROVISIONAL(CCR-forge) sidecar types), the first truck `content/vehicles/game/mule_4x4.ron` + `.extras.ron` (fictional "Mule 4x4", all ESTIMATE with bands, M998-like archetype, no real figures from memory).
+- PR B (this branch `lane/forge/compile`, stacked on A): `compile.rs`, the wheeled compile of the truck to `PhysRig` (validated) with the report; 15 physics-sentence tests incl. determinism and a 1000-def fuzz.
+- PR C (`lane/forge/render`, stacked on B): `render.rs`, the `RenderRig` for the same stations; tests for joint layout and the 1 mm wheel-radius agreement; image `docs/lanes/forge/media/mule-side-view.png` and the compile report `mule-compile-report.txt`.
+- 2026-10-10: merged contract-v0.2 (pin 80adac2); extras sidecar slimmed to what def.rs still cannot state; compile reads W1-W4 from the def (a missing optional is a rejection naming the field) and uses the contract substep rule (4 substeps for the Mule).
+- Next: `w5k forge compile <def> --out DIR` command, then hull mass items and the tracked compile.
+
+## Merge order for ARCH
+#18 is merged; #20 (base lane/forge/build) then #24 (base lane/forge/compile); retarget each base as the one below lands. API: `w5k_forge::compile::{parse_def, parse_extras, compile}` and `w5k_forge::render::render_rig(&c.rig, c.hull_size_m)`; files `content/vehicles/game/mule_4x4{,.extras}.ron`. (A direct message to ARCH was blocked by the lane tool guard, as it should be; this file is the channel.)
+
+## Garage (2026-10-10, ARCH request for three trucks)
+`scout_4x4` (1.3 t, 52 kW petrol, clutch, soft long-travel coils f 1.1/1.2 Hz, zeta 0.25, 0.70 m tyres) and `hauler_4x4` (6.2 t laden, 135 kW diesel, clutch, 5 gears, leaf springs modelled linear f 1.9/2.2 Hz, zeta 0.35, 1.05 m tyres, COM 1.35 m) beside the Mule; same 10-joint layout; `tests/garage.rs`. Their extras sidecars start from the Mule's (brake fade, cooling and converter numbers are generic and still carry the Mule's source text). The engine-curve template became a quartic (the cubic made power a local minimum at the power peak for the scout's and hauler's peaks). A 6x6 compiles in FORGE today with independent axles (tested); tandem and solid-axle linkages are not compiled yet; whether `WheeledChassis` runs three axles is for CHASSIS to say.
+
+## Substep bake
+The compile bakes `integration.substeps` and `f_max_hz` from the stop-engaged wheel hop (incremental stop rate at full bump travel, as CHASSIS PR 59 reads it) and the hull heave; test `declared_substeps_cover_the_stop_engaged_wheel_hop_of_every_station`.
 
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).

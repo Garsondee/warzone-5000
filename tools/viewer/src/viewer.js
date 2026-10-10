@@ -14,20 +14,35 @@ export function buildRig(rig) {
   });
   const root = new THREE.Group();
   nodes.forEach((n, i) => (n.def.parent == null ? root : nodes[n.def.parent].g).add(n.g));
-  const mats = rig.material_slots.map((s, i) => new THREE.MeshStandardMaterial({
-    color: [0x6b7a4a, 0x888888, 0x222222, 0x88aacc, 0x7a6a4a, 0x333333, 0x99cc99][i % 7], roughness: 0.8, metalness: 0.1, flatShading: false,
-  }));
+  // Plain colours per slot kind; LOOK's hook (look.js) replaces the albedo of Paint slots with camo and weathering.
+  const KIND_COLOUR = { Paint: 0x6b7a4a, Metal: 0x888888, Rubber: 0x222222, Glass: 0x88aacc, Canvas: 0x7a6a4a, Track: 0x333333, Optics: 0x99cc99 };
+  const mats = rig.material_slots.map((s) => new THREE.MeshStandardMaterial({ color: KIND_COLOUR[s.kind] ?? 0x808080, roughness: 0.8, metalness: 0.1 }));
+  const paint = rig.material_slots.map((s, i) => (s.kind === 'Paint' ? mats[i] : null)).filter(Boolean);
   let tris = 0;
+  const meshes = [];
   for (const m of rig.meshes) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(m.positions.flat(), 3));
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(m.normals.flat(), 3));
+    const n = m.positions.length;
+    // LOOK's per-vertex flags (contract: edge sharpness and cavity, 0..1); absent flags mean 0.
+    geo.setAttribute('aEdge', new THREE.Float32BufferAttribute(m.edge.length ? m.edge : new Array(n).fill(0), 1));
+    geo.setAttribute('aCavity', new THREE.Float32BufferAttribute(m.cavity.length ? m.cavity : new Array(n).fill(0), 1));
     geo.setIndex(m.indices);
     const mesh = new THREE.Mesh(geo, mats[m.material_slot]);
     nodes[m.node].g.add(mesh);
+    meshes.push(mesh);
     tris += m.indices.length / 3;
   }
-  return { root, nodes, triangles: tris };
+  // Height above the ground in the design pose (every joint at zero): the splash term of the weathering reads it.
+  nodes.forEach((n) => { n.g.position.copy(n.restPos); n.g.quaternion.copy(n.restQuat); });
+  root.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  const ys = meshes.map((mesh) => { const p = mesh.geometry.attributes.position, y = new Float32Array(p.count); for (let i = 0; i < p.count; i++) y[i] = v.fromBufferAttribute(p, i).applyMatrix4(mesh.matrixWorld).y; return y; });
+  const ground = Math.min(...ys.map((y) => y.reduce((a, b) => Math.min(a, b), Infinity)));
+  meshes.forEach((mesh, k) => mesh.geometry.setAttribute('aHeight', new THREE.Float32BufferAttribute(ys[k].map((y) => y - ground), 1)));
+  const box = new THREE.Box3().setFromObject(root);
+  return { root, nodes, triangles: tris, paint, radius: box.getBoundingSphere(new THREE.Sphere()).radius };
 }
 
 // Forward kinematics: rest pose, then the joint coordinate (rotation or translation along the axis in the parent frame).
@@ -60,7 +75,9 @@ export function applyVehicle(built, s, vi = 0) {
   poseRig(built, v0.joints.map((x, k) => x + (v1.joints[k] - x) * a));
 }
 
-export function makeScene(canvas, W, H) {
+import { terrainMesh, propsGroup, roadMesh } from './world.js';
+
+export function makeScene(canvas, W, H, terrain = null) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
   renderer.setSize(W, H, false);
   const scene = new THREE.Scene();
@@ -69,10 +86,23 @@ export function makeScene(canvas, W, H) {
   const sun = new THREE.DirectionalLight(0xffffff, 2.2);
   sun.position.set(30, 60, 20);
   scene.add(sun);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x8a9a6a }));
-  ground.rotation.x = -Math.PI / 2;
-  scene.add(ground);
-  scene.add(new THREE.GridHelper(400, 200, 0x445533, 0x667755));
-  const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 1000);
+  if (terrain) {
+    const t = terrainMesh(terrain);
+    scene.add(t.mesh, propsGroup(terrain));
+    const road = roadMesh(terrain);
+    if (road) scene.add(road);
+    // A broad plane just under the lowest point, so the edge of the sampled strip does not open onto the sky.
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshStandardMaterial({ color: 0x8a9a6a, roughness: 1 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(t.centre[0], t.min - 0.05, t.centre[1]);
+    scene.add(floor);
+  }
+  else {
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x8a9a6a }));
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+    scene.add(new THREE.GridHelper(400, 200, 0x445533, 0x667755));
+  }
+  const camera = new THREE.PerspectiveCamera(45, W / H, 0.3, 3000);
   return { renderer, scene, camera };
 }

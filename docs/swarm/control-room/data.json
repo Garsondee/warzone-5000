@@ -4,14 +4,14 @@
   "strip": [
     {
       "k": "Phase",
-      "v": "Ready for Saturday",
-      "s": "Wave 0 done; your four answers are applied. Rank 1 launches on your go (card C-008), planned for Saturday morning",
-      "state": "wait"
+      "v": "Slice driving",
+      "s": "The Mule 4x4 drives the 520 m course with the real stack on real terrain; clip, forces and plots in the viewer",
+      "state": "run"
     },
     {
       "k": "Contract",
-      "v": "0.1.1",
-      "s": "pinned at f8f5e5d on integration; settles to v0.2 after the first design notes",
+      "v": "0.2.0",
+      "s": "pinned at 80adac2 (CHASSIS, DRIVE, FORGE CCRs applied)",
       "state": "run"
     },
     {
@@ -22,14 +22,14 @@
     },
     {
       "k": "Sessions",
-      "v": "1 of 13",
-      "s": "ARCH only. The rehearsal lane finished ($0.23); no real lane launched",
+      "v": "9 of 13",
+      "s": "ARCH plus CHASSIS, DRIVE, FORGE, WORLD, VIEWER, VALIDATION, GEOMETRY, LOOK; TRACKS, GODOT, COMBAT, AI not launched",
       "state": "run"
     },
     {
       "k": "Usage",
-      "v": "$204+ / 20 h",
-      "s": "meter at the last report; the owner set a floor; weekly reset 10 Oct 02:00 UTC",
+      "v": "lanes about $44",
+      "s": "eight lane sessions this window (CHASSIS 9.4, GEOMETRY 10.1, VIEWER 6.5, WORLD 5.3, FORGE 4.6, DRIVE 3.8, LOOK 2.4, VALIDATION 1.9)",
       "state": "wait"
     }
   ],
@@ -52,66 +52,73 @@
       "name": "ARCH",
       "squad": "platform",
       "rank": 1,
-      "state": "waiting for your go",
+      "state": "building",
       "mission": "Contracts, CI and guardrails, the integration spine, merges, reviews. Writes no feature code.",
-      "last": "Applied your answers (era, garage, courses, models) to the brief, non-goals and five lane briefs; Saturday checklist and launch sheet are in the repo. Idle until you say go."
+      "last": "Running the swarm overnight: merges, contract v0.2, CI fixes; the glue that puts the truck on the course comes next."
     },
     {
       "name": "CHASSIS",
       "squad": "dynamics",
       "rank": 1,
-      "state": "not launched",
+      "state": "building",
       "mission": "A wheeled vehicle that rides, grips and handles: hull, suspension, tyres, steering.",
-      "last": "Rehearsal only: a small session round-tripped its status file through PR 3 (lane guard and CI green, merged, $0.23). The real lane is not launched."
+      "last": "quarter car, suspension, tyre and 6-DoF hull merged; wheeled 4x4 next"
     },
     {
       "name": "DRIVE",
       "squad": "dynamics",
       "rank": 1,
-      "state": "not launched",
-      "mission": "Engine map, converter, gearbox, differentials, brakes with heat, fuel."
+      "state": "building",
+      "mission": "Engine map, converter, gearbox, differentials, brakes with heat, fuel.",
+      "last": "engine, clutch and torque converter merged; gearbox and DrivePort next"
     },
     {
       "name": "WORLD",
       "squad": "world",
       "rank": 1,
-      "state": "not launched",
-      "mission": "The obstacle course: hills, roads, mud, trees, barricades, buildings."
+      "state": "building",
+      "mission": "The obstacle course: hills, roads, mud, trees, barricades, buildings.",
+      "last": "data-driven bump strip merged; the course next"
     },
     {
       "name": "FORGE",
       "squad": "design",
       "rank": 1,
-      "state": "not launched",
-      "mission": "Designer choices to solver parameters; the reference garage starts with the HMMWV."
+      "state": "building",
+      "mission": "Designer choices to solver parameters; the reference garage starts with the HMMWV.",
+      "last": "the Mule 4x4 compiles to a validated PhysRig and RenderRig"
     },
     {
       "name": "VIEWER",
       "squad": "visuals",
       "rank": 1,
-      "state": "not launched",
-      "mission": "Replay format, the browser viewer with forces drawn on, MP4 and chart tools."
+      "state": "building",
+      "mission": "Replay format, the browser viewer with forces drawn on, MP4 and chart tools.",
+      "last": "binary replays, debug draw, HUD, plots and MP4 render merged"
     },
     {
       "name": "VALIDATION",
       "squad": "truth",
       "rank": 1,
-      "state": "not launched",
-      "mission": "Real-vehicle dossiers, the harness, the dashboard and the Design Impact Matrix."
+      "state": "building",
+      "mission": "Real-vehicle dossiers, the harness, the dashboard and the Design Impact Matrix.",
+      "last": "dossier schema and the M998 dossier merged; harness next"
     },
     {
       "name": "GEOMETRY",
       "squad": "design",
       "rank": 2,
-      "state": "not launched",
-      "mission": "Realistic hulls, turrets, wheels and tracks from lofted sections."
+      "state": "building",
+      "mission": "Realistic hulls, turrets, wheels and tracks from lofted sections.",
+      "last": "parametric utility truck with panel detail, glTF export"
     },
     {
       "name": "LOOK",
       "squad": "visuals",
       "rank": 2,
-      "state": "not launched",
-      "mission": "Camouflage, weathering, materials, lighting and dust."
+      "state": "building",
+      "mission": "Camouflage, weathering, materials, lighting and dust.",
+      "last": "three procedural camo schemes and weathering, GLSL chunk"
     },
     {
       "name": "TRACKS",
@@ -188,9 +195,54 @@
   ],
   "pictures": [
     {
-      "lane": "ARCH",
-      "caption": "first light: the whole chain runs on stand-in parts (box truck, S-bend, launch and brake)",
-      "file": "docs/swarm/media/first-light.png"
+      "lane": "VIEWER",
+      "caption": "the truck at the mud crossing on WORLD's real terrain (rear-quarter follow camera)",
+      "file": "docs/lanes/viewer/media/course-mud-quarter.png"
+    },
+    {
+      "lane": "VIEWER",
+      "caption": "the barricade gap, force bars on the wheels, plots tucked in a corner",
+      "file": "docs/lanes/viewer/media/course-barricade-quarter.png"
+    },
+    {
+      "lane": "VIEWER",
+      "caption": "orbit camera around the truck on the course",
+      "file": "docs/lanes/viewer/media/course-orbit.png"
+    },
+    {
+      "lane": "GEOMETRY",
+      "caption": "the new silhouette: framed glass on leaning walls, front window parallel to the windscreen",
+      "file": "docs/lanes/geometry/media/truck-front34-look.png"
+    },
+    {
+      "lane": "GEOMETRY",
+      "caption": "the parametric utility truck (fictional, HMMWV-like archetype): panel lines, tread, mirrors, canvas",
+      "file": "docs/lanes/geometry/media/truck-look.png"
+    },
+    {
+      "lane": "VIEWER",
+      "caption": "the first-light replay playing in the browser viewer, chase camera",
+      "file": "docs/lanes/viewer/media/first-light-chase.png"
+    },
+    {
+      "lane": "VIEWER",
+      "caption": "contact forces drawn on: green bars, orange when slipping",
+      "file": "docs/lanes/viewer/media/truck-forces.png"
+    },
+    {
+      "lane": "LOOK",
+      "caption": "three procedural camouflage schemes on a panel and a sphere",
+      "file": "docs/lanes/look/media/camo_panel_sphere.png"
+    },
+    {
+      "lane": "FORGE",
+      "caption": "the Mule 4x4 as compiled: ride height, centre of mass, tyre sink",
+      "file": "docs/lanes/forge/media/mule-side-view.png"
+    },
+    {
+      "lane": "WORLD",
+      "caption": "spike map of the course generator",
+      "file": "docs/lanes/world/media/spike-w-map.png"
     }
   ],
   "log": [
@@ -218,6 +270,11 @@
       "t": "2026-10-08 19:55",
       "sessions": "1 of 13",
       "note": "Your four answers are applied (C-001 era, C-002 garage, C-003 courses, C-007 models); the page shows each with my reading of it, so please check I read you right. Docs only, about $1 to $1.5 of your remaining $8. Nothing launched."
+    },
+    {
+      "t": "2026-10-10 11:43",
+      "sessions": "9 of 13",
+      "note": "You went to sleep and said run without checking in. Eight lanes launched; 27 lane PRs merged; contract v0.2 applied; integration went red on Windows only (CRLF line endings in baked JSON) and a repo-wide LF fix is in PR 36. Lanes cost about $0.5 to $1.5 each so far."
     }
   ],
   "footer": "Defaults apply to every open card until you answer it."

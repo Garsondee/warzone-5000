@@ -5,5 +5,6 @@
   "description": "Reference three.js viewer for replay v2 (lane VIEWER).",
   "dependencies": {
     "three": "0.170.0"
-  }
+  },
+  "type": "module"
 }

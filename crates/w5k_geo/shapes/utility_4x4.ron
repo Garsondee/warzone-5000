@@ -1,0 +1,83 @@
+// Parametric 4x4 utility truck, a fictional design of the M998 archetype (lane GEOMETRY, card C-004). The hull is ONE shell; everything
+// else is anchored to a surface of it and overlaps it, so nothing floats (a test checks that). Fractions are of the hull box: x of the
+// full width W from the centre line, y of the height H from the box bottom, z of the length L from the front. Sizes with an `_m` suffix
+// are absolute metres (bevels, relief). Provenance ESTIMATE for every number, bands +-15% for fractions and +-50% for the small absolute
+// sizes, reason: an original design in the proportions of the archetype, not a copy of a real vehicle; nothing is quoted from memory.
+// `mirror: true` makes a right part (x >= 0, +X is right) and its left twin.
+//
+// Surface anchors (see truck.rs): x as Upper(a, b) / Lower(a, b) = metres from the upper / lower wall (positive = outside); y as Belt or
+// Top = metres from the belt line / the top line; z as Front or Rear = metres from the front / rear face (positive = towards the rear).
+(
+    body: (
+        // (z, lower half-width, belt height, upper half-width, top height): the lines plan of the shell. The lower body (bottom to belt)
+        // carries the wheel arches and the fender decks; the upper block is the hood, the cab and the bed rail. The cowl widens the
+        // block into the cab between 0.31 and 0.345; the windscreen is the rise of the top line from 0.345 to 0.445.
+        stations: [
+            (z: 0.022, w: 0.84, yb: 0.50, wu: 0.50, yt: 0.515, yo: 0.17),            // nose face: narrow in plan, underside raised (approach ramp)
+            (z: 0.034, w: 0.94, yb: 0.515, wu: 0.62, yt: 0.545, yo: 0.09),
+            (z: 0.048, w: 1.00, yb: 0.52, wu: 0.66, yt: 0.56, yo: 0.02),             // full width as the arch begins
+            (z: 0.075, w: 1.00, yb: 0.53, wu: 0.66, yt: 0.575),
+            (z: 0.285, w: 1.00, yb: 0.55, wu: 0.68, yt: 0.628),                      // hood meets cowl; the block widens to the cab over 6% of the length
+            (z: 0.345, w: 1.00, yb: 0.55, wu: 0.90, yt: 0.64, tilt: 0.10),           // cab front wall, windscreen base
+            (z: 0.410, w: 1.00, yb: 0.55, wu: 0.90, yt: 0.985, tilt: 0.10),          // windscreen top: the ramp rises 0.345 H over 6.5% of L, about 58 degrees
+            (z: 0.700, w: 1.00, yb: 0.55, wu: 0.90, yt: 1.00, tilt: 0.10),           // roof
+            (z: 0.738, w: 1.00, yb: 0.55, wu: 0.90, yt: 0.96, tilt: 0.10),           // roof edge
+            (z: 0.745, w: 1.00, yb: 0.55, wu: 0.90, yt: 0.80, tilt: 0.04),           // cab back wall steps down to the bed rail
+            (z: 0.925, w: 1.00, yb: 0.55, wu: 0.88, yt: 0.80, tilt: 0.04),           // bed
+            (z: 0.945, w: 0.98, yb: 0.54, wu: 0.86, yt: 0.79, tilt: 0.04, yo: 0.06), // departure ramp
+            (z: 0.9565, w: 0.94, yb: 0.53, wu: 0.84, yt: 0.78, tilt: 0.04, yo: 0.15),// tail face
+        ],
+        lip_proud_m: 0.04,
+        lower_chamfer_m: 0.035,
+        sill_chamfer_m: 0.09,
+        upper_chamfer_m: 0.07,
+        arch_gap_m: 0.05,
+        well_gap_m: 0.06,
+        arch_samples: 12,
+        min_wall_m: 0.10,
+        min_notch_m: 0.002,
+    ),
+    parts: [
+        // ---- arch lips, bumpers, load cover
+        (name: "arch_lip", role: Hull, slot: Paint, fitting: false, mirror: false, shape: ArchLip(inner_m: -0.012, width_m: 0.10, embed_m: 0.03, proud_m: 0.04, corner_m: 0.015)),
+        (name: "bumper_front", role: Hull, slot: Metal, fitting: false, mirror: false, shape: Block(x: Frac(-0.47, 0.47), y: Frac(0.12, 0.27), z: Frac(0.0, 0.05), corner_m: 0.02)),
+        (name: "bumper_rear", role: Hull, slot: Metal, fitting: false, mirror: false, shape: Block(x: Frac(-0.47, 0.47), y: Frac(0.12, 0.27), z: Frac(0.95, 1.0), corner_m: 0.02)),
+        (name: "cover", role: Hull, slot: Canvas, fitting: false, mirror: false, shape: Loft(corner_m: 0.10, sections: [
+            (0.738, 0.80, 0.785, 0.95), (0.84, 0.79, 0.785, 0.925), (0.945, 0.74, 0.785, 0.86)])),
+        // ---- panels (relief in the paint: the lines between them read as panel gaps)
+        (name: "hood_panel", role: Hull, slot: Paint, fitting: true, mirror: false, shape: Overlay(z: (0.06, 0.305), inset_m: 0.08, embed_m: 0.015, proud_m: 0.005, corner_m: 0.006)),
+        (name: "door_front", role: Hull, slot: Paint, fitting: true, mirror: true, shape: Block(x: Lower(-0.02, 0.004), y: Frac(0.20, 0.545), z: Frac(0.36, 0.50), corner_m: 0.004)),
+        (name: "door_rear", role: Hull, slot: Paint, fitting: true, mirror: true, shape: Block(x: Lower(-0.02, 0.004), y: Frac(0.20, 0.545), z: Frac(0.51, 0.69), corner_m: 0.004)),
+        (name: "tailgate", role: Hull, slot: Paint, fitting: true, mirror: false, shape: Block(x: Frac(-0.36, 0.36), y: Frac(0.57, 0.78), z: Rear(-0.025, 0.004), corner_m: 0.004)),
+        // ---- glass, set into the upper walls
+        (name: "windscreen", role: Hull, slot: Glass, fitting: true, mirror: false, shape: Windscreen(from_f: 0.345, to_f: 0.41, margin_m: 0.07, inset_m: 0.105, thickness_m: 0.016, proud_m: 0.003, corner_m: 0.03, bezel: Some(Bezel(width_m: 0.035, proud_m: 0.014)))),
+        // the front window's slanted edge is the windscreen ramp moved 11 cm into the cab, so the two lean at exactly the same angle
+        (name: "window_front", role: Hull, slot: Glass, fitting: true, mirror: true, shape: Pane(x: Upper(-0.016, 0.003), front: Pillar(from_f: 0.345, to_f: 0.41, pillar_m: 0.11), rear_f: 0.495, bottom: 0.66, top_offset_m: 0.075, corner_m: 0.025, bezel: Some(Bezel(width_m: 0.03, proud_m: 0.012)))),
+        (name: "window_rear", role: Hull, slot: Glass, fitting: true, mirror: true, shape: Pane(x: Upper(-0.016, 0.003), front: Vertical(0.515), rear_f: 0.685, bottom: 0.66, top_offset_m: 0.075, corner_m: 0.025, bezel: Some(Bezel(width_m: 0.03, proud_m: 0.012)))),
+        // ---- fittings
+        (name: "door_handle", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Lower(-0.01, 0.03), y: Frac(0.46, 0.475), z: Frac(0.375, 0.41), corner_m: 0.004)),
+        (name: "mirror_arm", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Upper(-0.03, 0.17), y: Frac(0.595, 0.612), z: Frac(0.385, 0.40), corner_m: 0.004)),
+        (name: "mirror", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Upper(0.15, 0.215), y: Frac(0.555, 0.652), z: Frac(0.378, 0.41), corner_m: 0.012)),
+        (name: "sill_step", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Lower(-0.03, 0.075), y: Frac(0.145, 0.165), z: Frac(0.36, 0.69), corner_m: 0.008)),
+        (name: "headlamp_bezel", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Cyl(axis: Z, x: Frac(0.24, 0.30), y: Frac(0.40, 0.48), z: Front(-0.022, 0.03), radius_m: 0.09)),
+        (name: "headlamp", role: Hull, slot: Optics, fitting: true, mirror: true, shape: Cyl(axis: Z, x: Frac(0.24, 0.30), y: Frac(0.40, 0.48), z: Front(-0.045, 0.03), radius_m: 0.07)),
+        (name: "grille", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.15, 0.15), y: Frac(0.30, 0.47), z: Front(-0.035, 0.03), corner_m: 0.01)),
+        (name: "grille_slat_1", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.14, 0.14), y: Frac(0.33, 0.342), z: Front(-0.05, -0.01), corner_m: 0.003)),
+        (name: "grille_slat_2", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.14, 0.14), y: Frac(0.37, 0.382), z: Front(-0.05, -0.01), corner_m: 0.003)),
+        (name: "grille_slat_3", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.14, 0.14), y: Frac(0.41, 0.422), z: Front(-0.05, -0.01), corner_m: 0.003)),
+        (name: "grille_slat_4", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.14, 0.14), y: Frac(0.45, 0.462), z: Front(-0.05, -0.01), corner_m: 0.003)),
+        (name: "roof_hatch", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.13, 0.13), y: Top(-0.02, 0.014), z: Frac(0.56, 0.625), corner_m: 0.008)),
+        (name: "antenna", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Y, x: Frac(0.30, 0.30), y: Top(-0.03, 0.55), z: Frac(0.665, 0.665), radius_m: 0.007)),
+        (name: "pintle", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Z, x: Frac(0.0, 0.0), y: Frac(0.135, 0.135), z: Rear(-0.06, 0.15), radius_m: 0.025)),
+        (name: "tow_hook", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Cyl(axis: Z, x: Frac(0.29, 0.31), y: Frac(0.13, 0.15), z: Front(-0.17, 0.05), radius_m: 0.03)),
+        (name: "tail_lamp", role: Hull, slot: Optics, fitting: true, mirror: true, shape: Block(x: Frac(0.34, 0.40), y: Frac(0.58, 0.70), z: Rear(-0.03, 0.02), corner_m: 0.004)),
+        (name: "exhaust", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Z, x: Frac(-0.27, -0.27), y: Frac(0.02, 0.02), z: Rear(-0.55, 0.12), radius_m: 0.045)),
+    ],
+    knuckle_radius_m: 0.09,
+    // Sockets the hull offers besides the wheel stations (which come from the axles): where a module may be mounted. The roof ring sits on
+    // the cab roof over the hatch, 2 cm into the roof so a level collar always touches it (the roof rises 1 degree along its length);
+    // `size_m` is the widest ring the flat roof takes (the roof is 1.5 m long and 1.9 m wide there).
+    sockets: [
+        (name: "roof", kind: Ring, size_m: 0.90, x: Frac(0.0, 0.0), y: Top(-0.02, -0.02), z: Frac(0.59, 0.59), normal: (0.0, 1.0, 0.0), reference: (0.0, 0.0, -1.0)),
+    ],
+)

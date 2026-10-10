@@ -70,3 +70,151 @@ impl Mesh {
         m
     }
 }
+
+impl Mesh {
+    /// Merge vertices that round to the same `tol_m` cell (generated parts repeat the same expression, so equal points are bit-equal
+    /// and this is exact for them), then drop triangles that collapse or whose area is under `min_area_m2`. Returns the number dropped.
+    pub fn weld(&mut self, tol_m: f64, min_area_m2: f64) -> usize {
+        let mut cell: std::collections::BTreeMap<[i64; 3], u32> = std::collections::BTreeMap::new();
+        let mut verts = Vec::new();
+        let remap: Vec<u32> = self
+            .v
+            .iter()
+            .map(|p| {
+                let key = [(p.x / tol_m).round() as i64, (p.y / tol_m).round() as i64, (p.z / tol_m).round() as i64];
+                *cell.entry(key).or_insert_with(|| {
+                    verts.push(*p);
+                    verts.len() as u32 - 1
+                })
+            })
+            .collect();
+        self.v = verts;
+        let before = self.t.len();
+        self.t = self.t.iter().map(|t| t.map(|i| remap[i as usize])).collect();
+        let v = &self.v;
+        self.t.retain(|&[a, b, c]| {
+            a != b
+                && b != c
+                && c != a
+                && (v[b as usize] - v[a as usize]).cross(v[c as usize] - v[a as usize]).length() / 2.0 >= min_area_m2
+        });
+        before - self.t.len()
+    }
+
+    /// The last step of every generated part: weld what coincides to a tenth of a micrometre and face every triangle outward.
+    pub fn finished(mut self) -> Mesh {
+        self.weld(1e-7, 1e-12); // const-ok: weld tolerance, 0.1 micrometre, far below any feature
+        self.orient_outward();
+        self
+    }
+
+    /// Closed and consistently oriented: every directed edge occurs once and its reverse occurs once.
+    pub fn check_closed(&self) -> Result<(), String> {
+        let mut dir: std::collections::BTreeMap<(u32, u32), u32> = std::collections::BTreeMap::new();
+        for &[a, b, c] in &self.t {
+            for e in [(a, b), (b, c), (c, a)] {
+                *dir.entry(e).or_default() += 1;
+            }
+        }
+        for (&(p, q), &n) in &dir {
+            if n != 1 || dir.get(&(q, p)) != Some(&1) {
+                return Err(format!(
+                    "edge {p}-{q} is not shared by exactly two triangles traversed in opposite directions"
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Flip every triangle if the signed volume is negative (valid for a closed, consistently oriented mesh).
+    pub fn orient_outward(&mut self) {
+        if self.signed_volume() < 0.0 {
+            for t in &mut self.t {
+                t.swap(1, 2);
+            }
+        }
+    }
+
+    pub fn append(&mut self, o: &Mesh) {
+        let base = self.v.len() as u32;
+        self.v.extend_from_slice(&o.v);
+        self.t.extend(o.t.iter().map(|t| t.map(|i| i + base)));
+    }
+
+    pub fn transformed(&self, x: &w5k_math::Transform) -> Mesh {
+        Mesh { v: self.v.iter().map(|&p| x.apply_point(p)).collect(), t: self.t.clone() }
+    }
+
+    /// Mirror in the plane x = 0: negates x and reverses the winding so the result still faces outward.
+    pub fn mirrored_x(&self) -> Mesh {
+        Mesh {
+            v: self.v.iter().map(|p| Vec3::new(-p.x, p.y, p.z)).collect(),
+            t: self.t.iter().map(|&[a, b, c]| [a, c, b]).collect(),
+        }
+    }
+
+    pub fn bounds(&self) -> (Vec3, Vec3) {
+        self.v.iter().fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(lo, hi), &p| (lo.min(p), hi.max(p)))
+    }
+
+    /// Area of the cross-section at height `z` (the mesh's z axis) by clipping every triangle against the plane: the 2D divergence theorem
+    /// over the cut segments. A vertex exactly on the plane counts as above it, so a station cut returns the section that was lofted.
+    pub fn slice_area_z(&self, z: f64) -> f64 {
+        let mut twice = 0.0;
+        for k in 0..self.t.len() {
+            let p = self.tri(k);
+            let above = p.map(|v| v.z >= z);
+            let Some(i) = (0..3).find(|&i| above[i] != above[(i + 1) % 3] && above[i] != above[(i + 2) % 3]) else {
+                continue;
+            };
+            let cut = |a: Vec3, b: Vec3| a + (b - a) * ((z - a.z) / (b.z - a.z));
+            let (a, b) = (cut(p[i], p[(i + 1) % 3]), cut(p[(i + 2) % 3], p[i]));
+            let n = self.face_normal(k);
+            // outward in the plane is the segment direction turned by -90 degrees: pick the direction that points that way
+            let d = (b.x - a.x, b.y - a.y);
+            let (s, e) = if d.1 * n.x - d.0 * n.y > 0.0 { (a, b) } else { (b, a) };
+            twice += s.x * e.y - e.x * s.y;
+        }
+        twice / 2.0
+    }
+
+    /// Conforming refinement: split every edge longer than `max_edge_m` at its midpoint (all triangles sharing an edge split it, so the mesh
+    /// stays closed) and repeat until none is longer. The surface does not change; the vertices let a per-vertex flag vary smoothly across
+    /// a large face (spike S-G: a flag can only change where there is a vertex).
+    pub fn subdivided(&self, max_edge_m: f64) -> Mesh {
+        let mut m = self.clone();
+        loop {
+            let mut split: std::collections::BTreeMap<(u32, u32), u32> = std::collections::BTreeMap::new();
+            for &[a, b, c] in &m.t {
+                for (p, q) in [(a, b), (b, c), (c, a)] {
+                    if (m.v[p as usize] - m.v[q as usize]).length() > max_edge_m {
+                        split.insert((p.min(q), p.max(q)), 0);
+                    }
+                }
+            }
+            if split.is_empty() {
+                return m;
+            }
+            let keys: Vec<(u32, u32)> = split.keys().copied().collect();
+            for k in keys {
+                split.insert(k, m.v.len() as u32);
+                m.v.push((m.v[k.0 as usize] + m.v[k.1 as usize]) * 0.5);
+            }
+            let mid = |p: u32, q: u32| split.get(&(p.min(q), p.max(q))).copied();
+            let mut t = Vec::with_capacity(m.t.len() * 2);
+            for &[a, b, c] in &m.t {
+                match (mid(a, b), mid(b, c), mid(c, a)) {
+                    (None, None, None) => t.push([a, b, c]),
+                    (Some(x), None, None) => t.extend([[a, x, c], [x, b, c]]),
+                    (None, Some(y), None) => t.extend([[a, b, y], [a, y, c]]),
+                    (None, None, Some(z)) => t.extend([[a, b, z], [z, b, c]]),
+                    (Some(x), Some(y), None) => t.extend([[x, b, y], [a, x, y], [a, y, c]]),
+                    (None, Some(y), Some(z)) => t.extend([[y, c, z], [a, b, y], [a, y, z]]),
+                    (Some(x), None, Some(z)) => t.extend([[a, x, z], [x, b, c], [x, c, z]]),
+                    (Some(x), Some(y), Some(z)) => t.extend([[a, x, z], [x, b, y], [z, y, c], [x, y, z]]),
+                }
+            }
+            m.t = t;
+        }
+    }
+}

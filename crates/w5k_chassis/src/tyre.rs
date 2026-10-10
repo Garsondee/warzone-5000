@@ -27,15 +27,22 @@ pub struct Tyre {
     /// Patch stretch along the rolling direction and sideways, m.
     stretch_x_m: f64,
     stretch_y_m: f64,
+    /// Rolling resistance included in the last `fx_n` (N, positive = resisting forward motion), kept for the ledger.
+    last_rolling_n: f64,
 }
 
 impl Tyre {
     pub fn new(def: &TyreDef, free_radius_m: f64, tuning: TyreTuning) -> Tyre {
-        Tyre { def: def.clone(), free_radius_m, tuning, stretch_x_m: 0.0, stretch_y_m: 0.0 }
+        Tyre { def: def.clone(), free_radius_m, tuning, stretch_x_m: 0.0, stretch_y_m: 0.0, last_rolling_n: 0.0 }
     }
 
     pub fn stretch_m(&self) -> (f64, f64) {
         (self.stretch_x_m, self.stretch_y_m)
+    }
+
+    /// The rolling-resistance part of the last step's `fx_n` (subtracted from it), N.
+    pub fn last_rolling_n(&self) -> f64 {
+        self.last_rolling_n
     }
 
     pub fn hash_state(&self, h: &mut w5k_math::StateHasher) {
@@ -56,6 +63,7 @@ fn decay_weight(x: f64) -> f64 {
 impl ContactElement for Tyre {
     fn step(&mut self, i: &ContactInput) -> ContactOutput {
         let d = &self.def;
+        self.last_rolling_n = 0.0;
         if i.penetration_m <= 0.0 {
             self.reset();
             return ContactOutput::default();
@@ -98,6 +106,8 @@ impl ContactElement for Tyre {
         let rolling_n = (d.rolling_coeff + i.ground.rolling_coeff)
             * fz
             * scalar::tanh(i.vel_long_m_s / self.tuning.rolling_fade_speed_m_s);
+
+        self.last_rolling_n = rolling_n;
 
         // Pneumatic trail shrinks to zero as the patch saturates.
         let trail_m = if fmax > 0.0 {

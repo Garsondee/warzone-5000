@@ -295,7 +295,7 @@ mod tests {
         let again: StripDef = ron::from_str(&ron::to_string(&def).expect("serialise")).expect("re-parse");
         assert_eq!(def, again);
         assert!(DataStrip::bake(&def, standard_material_table().expect("table")).is_ok());
-        assert_eq!(standard_material_table().expect("table").materials.len(), 3);
+        assert_eq!(standard_material_table().expect("table").materials.len(), 5);
     }
 
     #[test]

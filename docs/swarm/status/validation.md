@@ -1,22 +1,28 @@
 # Status: VALIDATION
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/validation/build | **Contract pinned:** contract-v0.1 | **Phase:** building
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/validation/proving | **Contract pinned:** contract-v0.1 | **Phase:** building
 
 ## Done
 - Spike S9 (`docs/lanes/validation/spike-s9.md`), design note with CCR text (`design-note.md`), theory note stub (`docs/theory/validation.md`).
 
 ## In progress
-- PR #14 (settling) merged. PR #16: dossier loader and M998 dossier (22 entries: 18 scored, all Secondary/UNVERIFIED, 4 Cross).
+- **Reply to ARCH (lane sessions cannot send messages): the proving-ground spec PR is #57.** Runner target: result JSON `w5k.proving.result.v1` (spec section 2); the runner must echo in `inputs` the numbers the sim actually used (mass_kg, mu, track_m, cg_height_m, wheel_radius_m, power_w ...); required keys per test are in the spec and `proving::TESTS`.
+- PROVING-GROUND spec (owner direction via ARCH): `docs/validation/proving-ground.md` plus the result schema `w5k_validate::proving`; next: scorers for (b), (e), (g), then (a), (c), (d), quarter-car oracle for (f), terrain scorer, dashboard grid.
+- PR #14 (settling) and #16 (dossier loader, M998 dossier) merged.
+- Harness v0 PR: verdict classes, replay measurement, scoring, `w5k validation dashboard --out DIR` (self-contained HTML). Image: `docs/lanes/validation/media/dashboard-v0.png`.
 
 ## Blocked
 - Nothing blocking. Primary sources are unreachable from lane sessions (proxy denies army.mil, DTIC, archive.org, Wikipedia, globalsecurity.org).
 
 ## Next
+0. Harness v0 follow-ups: run on CHASSIS's Mule replay when it lands (`--replay FILE --top-speed-run` only for a real top-speed drive); scenario scripts (standing start, braking, gradient bisection).
 1. (done in PR #16) dossier loader plus M998 dossier.
 2. Scenario measurement on the stand-in model; verdicts with the double-power negative control.
 3. M113A3 and M4A3 dossiers (about 14 and 12 quantities reachable: under the 25 target).
 
 ## Cards needed / PROVISIONAL decisions in force
+- **Oracle tolerance class** (ARCH to number): exact analytic oracles (braking `v^2/2mu g`, rigid rollover `atan(t/2h)`) need a class: default green 10%, amber 20%. Work tagged PROVISIONAL(oracle-class card).
+- Published figures unreachable from lane sessions (M998 stopping distance, 0-32 km/h, ISO 8608 class limits, Wong friction table): marked SOURCE NEEDED, lights stay 'not measured'. Same ask as the S9 card.
 - **S9-card (ARCH to number):** may the owner drop manuals in `content/dossier/sources/` or allow `*.army.mil`, `apps.dtic.mil`, `archive.org`? Default: carry on with UNVERIFIED secondary figures, never promoted to verified. Work tagged PROVISIONAL(S9-card).
 
 ## Evidence

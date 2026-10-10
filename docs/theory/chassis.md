@@ -60,3 +60,50 @@ deriving the local one each frame, instead of accumulating error in a value that
 **How the tests know it is right.** Free fall: semi-implicit Euler drops exactly `g dt^2 n(n+1)/2`, which is `g t^2 / 2` plus a small `g t dt / 2` lag (0.2% after 1 s at 240 Hz). Energy: a hull
 on four undamped corner springs, heaving, pitching and rolling, keeps its oscillation energy to 0.1% over a minute. As a check that the test has teeth, swapping to plain (explicit) Euler makes the
 same test fail by a factor of about 3e8.
+
+## Putting it together: the truck
+**Wheels without a constraint solver.** Each wheel slides on its strut axis relative to the hull: its travel is a coordinate with its own mass (the unsprung mass). *Along* the strut, the
+wheel feels the tyre pushing up, the strut pushing down and gravity; that sets how fast the travel changes. *Across* the strut the wheel cannot move relative to the hull, so the hull simply
+receives the tyre's sideways and fore-aft force at the wheel centre (minus what it takes to accelerate the wheel along with it). Graphics analogy: it is a parent-child transform where the
+child has exactly one local degree of freedom (a prismatic joint), and we integrate that one coordinate instead of solving constraints.
+**Load transfer: why a braking truck dives.** Braking forces act at the ground, but the truck's mass sits higher, at the centre of mass (height `h`). That offset is a torque that pitches
+the nose down and moves weight onto the front axle: `delta F_front = m a h / L` (L = wheelbase). The test measures 4.65 kN at 0.96 g against 4.53 kN closed form (3%). The same in a corner, sideways
+over the track width, is what makes a truck roll and can lift its inside wheels. On the Mule run you can see it directly: at launch the rear compresses 30 mm and the front extends 20 mm (squat),
+under braking the front compresses 57 mm and the rear extends 72 mm (dive).
+**Ackermann.** In a turn the inner wheel follows a tighter circle than the outer one, so it must steer further: `tan(delta_inner) = L / (R - t/2)`, `tan(delta_outer) = L / (R + t/2)`, both
+axes meeting at one turn centre on the rear axle line. Then neither tyre scrubs. At low speed the truck's turn radius matches `L / tan(delta) - t/2` to 0.2%.
+**Braking distance.** With every tyre at the friction limit the deceleration is `(mu + Crr) g`, so the stop takes `v^2 / (2 (mu + Crr) g)`. The test gets 21.6 m against 21.2 m: the extra 2% is the brake building up while the wheels slow down before they slide.
+
+![Mule on the data strip: heave and pitch](../lanes/chassis/media/mule_strip_heave_pitch.png)
+![Suspension travel per wheel](../lanes/chassis/media/mule_strip_travel.png)
+
+## How many substeps a truck needs
+Each wheel is a small mass (100 to 200 kg) held between two springs, its suspension and its tyre, so it rings fast: the **wheel hop**, `f = sqrt((k_spring + k_tyre) / m_wheel) / 2 pi`,
+about 10 Hz on the Mule. When a wheel slams into its bump stop, the stop adds a third, much stiffer spring and the ring goes up to about 13 Hz. The integrator needs about 20 samples per
+period of the fastest ring (spike S1), so `substeps = ceil(20 f_max / 60)`. For the Mule that is 5 substeps per 60 Hz tick (300 Hz). `w5k chassis modes <vehicle>` prints this for any vehicle, and the
+chassis always runs at least that many substeps, even if a rig declares fewer, because too few is an explosion waiting for the first hard bump, while one extra costs 20% more time.
+
+## The force ledger: every outcome explainable
+Every force the chassis applies is also written into a ledger, with its *term* (gravity, spring, damper, tyre longitudinal, rolling resistance, aero, ...) and the *body* it acts on (0 is the hull,
+then one body per wheel station). The test `ledger_net_force_equals_mass_times_acceleration` adds up the ledger for each body after every substep and checks it equals mass times acceleration to
+1e-9 (it agrees to about 1e-15). If any force were applied but not booked, or booked but not applied, that test would fail, so when a run surprises us we can trust the ledger to say why.
+Two subtleties. **Internal forces cancel**: the spring pushes the hull up and the wheel down by the same amount, so in the per-term totals the spring adds to zero; only external forces (gravity, the
+tyres, aero) survive the sum, which is Newton's third law at work. **The wheel is booked in the hull's frame**: the wheel's travel is measured relative to the hull, so its bookkeeping includes a
+*frame force* (term `Other`, minus the wheel mass times the hull's acceleration), the same fictitious force that pushes you back into your seat when a car accelerates.
+On the Mule at a steady 20 km/h the replay's ledger summary reads: drive force 566 N against rolling resistance 455 N and aero drag 33 N; under braking the tyres pull 21 kN.
+
+## Proving-ground benches: tilt table and skidpad
+**Tilt table.** Park the truck on a platform and tilt it sideways until the uphill wheels lift. For a rigid block the answer is `tan(theta) = (t/2) / h`, the *static stability factor* (half track over
+centre-of-mass height); trucks sit around 1.0 to 1.4, cars around 1.4 to 1.6. A real truck tips earlier for two reasons the bench shows: the springs let the body lean toward the low side, which
+moves the centre of mass outward (the test checks the uphill load against that compliant statics within 2.5% from 10 to 40 degrees), and once an uphill wheel reaches its **droop stop** the body starts
+lifting it off the ground. The box truck: rigid 54.2 degrees, linear-compliant 52.3, tips at 46.8 (front-left wheel first at 45.3, because the stiffer front anti-roll bar sends more of the load
+transfer to the front axle). The table is tilted by rotating gravity rather than the ground: in the truck's frame the two are the same.
+**Skidpad.** Fix the steering and creep the speed up so every moment is a steady turn. Two numbers come out. The **lateral limit**: with all four tyres at the friction circle, `a_y = mu g`; whichever axle
+saturates first sets the real limit, so a truck that understeers stops a little short (box truck 0.85 g against mu 0.945). The **understeer gradient** `K` in `delta = L / R + K a_y`: the extra steer
+the truck needs per unit of lateral acceleration. The bicycle model predicts `K = (m / L)(b / C_f - a / C_r)`; with this tyre model the cornering stiffness is proportional to load, so a stock truck is
+almost neutral, and halving the front tyres' stiffness gives K = 0.0127 rad per m/s^2 against 0.0128 predicted. Positive K (understeer) is stable: the faster you go the wider the circle. Negative K
+(oversteer) has a critical speed above which the truck spins on its own.
+**Lateral load transfer in a turn.** `delta F = m a_y h / t`, plus the body's lean: our wheels slide on vertical struts and their contact patches sit under the wheel centres, so the body rolls about
+a centre at wheel-centre height and its centre of mass moves outward by `(h_s - h_wheel) phi`. With that term the test agrees to 0.4%.
+**A bug the tilt table found.** A tyre's sideways force acts at the ground, but the chassis applied it at the wheel centre without the moment `dist * F_y` that moving it up needs, so the truck rolled
+too little in a turn and tilted to 59 degrees, past the rigid limit. Physics cannot beat the rigid limit, so the bench caught it.

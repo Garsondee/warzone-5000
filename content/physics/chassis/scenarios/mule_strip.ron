@@ -1,0 +1,15 @@
+#![enable(implicit_some)]
+// The Mule (FORGE's first truck) drives WORLD's standard data strip: accelerate, hold a speed over the hump, washboard, plateau and
+// hole, then brake before the mud. The powertrain is the contract stand-in (constant torque per output) until DRIVE's lands.
+StripRun(
+    vehicle: "content/vehicles/game/mule_4x4.ron",
+    extras: "content/vehicles/game/mule_4x4.extras.ron",
+    target_speed_m_s: Param(v: 5.56, prov: Spec, src: "brief: the truck crosses the speed hump at 20 km/h"),
+    speed_gain_per_m_s: Param(v: 0.5, lo: 0.2, hi: 1.0, prov: Tuned, src: "throttle per m/s of speed error for the scripted driver; settles in about 2 s without overshoot"),
+    brake_at_z_m: Param(v: -185.0, prov: Spec, src: "after the hole (z -170) and before the mud (z -200) of the standard strip"),
+    max_seconds: Param(v: 60.0, prov: Spec, src: "scenario length cap"),
+    wheel_torque_nm: Param(v: 900.0, lo: 500.0, hi: 1500.0, prov: Estimate, src: "stand-in powertrain: about 0.2 g of launch for a 3-4 t truck on 0.45 m wheels"),
+    brake_torque_nm: Param(v: 4000.0, lo: 2000.0, hi: 6000.0, prov: Estimate, src: "stand-in brake per output: enough to lock a wheel at about 1 t of load"),
+    stopped_below_m_s: Param(v: 0.05, prov: Spec, src: "scenario end: the truck counts as stopped below 5 cm/s"),
+    frame_every_ticks: 2,
+)

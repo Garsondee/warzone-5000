@@ -6,3 +6,10 @@
 //! `docs/swarm/lanes/validation.md`. Only lane VALIDATION edits this crate (`docs/swarm/ownership.toml`).
 
 pub mod dossier;
+
+pub mod dashboard;
+pub mod measure;
+pub mod score;
+pub mod verdict;
+
+pub mod proving;
