@@ -58,7 +58,7 @@ impl Powertrain {
         let engine = Engine::new(&def.engine, &tunings.engine)?;
         let peak = def.engine.torque_curve.iter().fold(0.0_f64, |m, &(_, t)| m.max(t));
         let coupling = Coupling::new(&def.coupling, peak, &tunings.coupling)?;
-        let gearbox = Gearbox::new(&def.gearbox, &tunings.shift)?;
+        let gearbox = Gearbox::new(&def.gearbox, def.engine.redline_rpm, &tunings.shift)?;
         let driveline = Driveline::new(def)?;
         let mut brakes = Vec::new();
         for (i, b) in def.brakes.iter().enumerate() {

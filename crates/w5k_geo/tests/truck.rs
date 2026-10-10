@@ -5,10 +5,16 @@ use std::collections::BTreeSet;
 use w5k_contract::render::NodeRole;
 use w5k_contract::rig::Side;
 use w5k_contract::testing::rigs::box_truck;
+use w5k_geo::export::render_rig;
+use w5k_geo::flags::FlagParams;
+use w5k_geo::gear::wheel_module;
 use w5k_geo::mesh::Mesh;
+use w5k_geo::module::{Assembly, SocketKind};
+use w5k_geo::mount::{ring_mount, RingMountDims};
 use w5k_geo::part::Part;
-use w5k_geo::truck::{utility_4x4, UtilityDims};
-use w5k_math::{scalar, Pcg32, StateHasher, Vec3};
+use w5k_geo::truck::{utility_4x4, utility_assembly, utility_hull, utility_truck, UtilityDims};
+use w5k_geo::weapon::{gun_module, GunDims};
+use w5k_math::{scalar, Pcg32, Quat, StateHasher, Vec3};
 
 fn dims_in_range(r: &mut Pcg32) -> UtilityDims {
     let mut d = UtilityDims::placeholder();
@@ -330,6 +336,232 @@ fn wheels_clear_the_shell_and_the_arches_open_over_every_tyre() {
         }
     }
     assert!(checked > 500);
+}
+
+// ---- hull and running gear are separate modules
+
+#[test]
+fn the_hull_publishes_one_station_socket_per_wheel_position_and_each_wheel_sits_exactly_on_its_socket() {
+    let d = UtilityDims::placeholder();
+    let hull = utility_hull(&d, &[-d.wheelbase_m / 2.0, d.wheelbase_m / 2.0], 0);
+    assert!(
+        hull.mount.is_none() && hull.parts.iter().all(|p| p.role == NodeRole::Hull),
+        "the hull module has no wheels"
+    );
+    let stations: Vec<_> = hull.sockets.iter().filter(|s| s.kind == SocketKind::Station).collect();
+    let names: Vec<_> = stations.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["station.0.r", "station.0.l", "station.1.r", "station.1.l"]);
+    let parts = utility_4x4(&d, 0);
+    for s in stations {
+        let (sx, tag) = if s.side == Side::Right { (1.0, "r") } else { (-1.0, "l") };
+        assert_eq!(s.kind, SocketKind::Station);
+        assert!(
+            (s.pose.pos.x - sx * d.track_m / 2.0).abs() < 1e-12 && (s.size_m - d.wheel.outer_radius_m).abs() < 1e-12
+        );
+        assert!(
+            (s.pose.apply_dir(Vec3::Y) - Vec3::new(sx, 0.0, 0.0)).length() < 1e-12,
+            "the normal points out of the hull"
+        );
+        assert!((s.pose.apply_dir(-Vec3::Z) + Vec3::Z).length() < 1e-12, "the reference points forward");
+        assert!(
+            s.hint("well_x_m").is_some_and(|x| x > 0.0 && x < d.track_m / 2.0)
+                && s.hint("max_width_m") == Some(d.wheel.width_m)
+        );
+        let rim = parts.iter().find(|p| p.name == format!("rim.{}.{tag}", s.station.unwrap())).unwrap();
+        assert_eq!(rim.pose.pos, s.pose.pos, "the hub is the socket");
+        assert_eq!(rim.pose.rot, Quat::IDENTITY, "a wheel on an axis-aligned socket is placed with no rotation at all");
+        assert_eq!((rim.station, rim.side), (s.station, s.side));
+    }
+}
+
+#[test]
+fn a_wheel_bigger_than_the_station_it_was_cut_for_is_refused_and_a_smaller_one_fits() {
+    let d = UtilityDims::placeholder();
+    let mut asm = Assembly::new(utility_hull(&d, &[-d.wheelbase_m / 2.0, d.wheelbase_m / 2.0], 0));
+    let mut big = d.wheel;
+    big.outer_radius_m += 0.05;
+    let err = asm.attach("station.0.r", &wheel_module(&big, 24, None), 0.0, "0.r").unwrap_err();
+    assert!(err.reason.contains("needs"), "{err}");
+    let mut small = d.wheel;
+    small.outer_radius_m -= 0.05;
+    small.rim_radius_m -= 0.05;
+    assert!(asm.attach("station.0.r", &wheel_module(&small, 24, None), 0.0, "0.r").is_ok());
+}
+
+#[test]
+fn three_axles_cut_three_arches_take_six_wheels_and_two_knuckles_and_the_wheels_clear_the_shell() {
+    let d = UtilityDims::placeholder();
+    let parts = utility_truck(&d, &[-d.wheelbase_m / 2.0, 0.1, d.wheelbase_m / 2.0], &[true, false, false], 0);
+    check_parts(&parts);
+    let count = |prefix: &str| parts.iter().filter(|p| p.name.starts_with(prefix)).count();
+    assert_eq!((count("tyre."), count("rim."), count("arch_lip."), count("knuckle.")), (6, 6, 6, 2));
+    let shell = parts.iter().find(|p| p.name == "shell").unwrap().in_hull_frame();
+    for p in parts.iter().filter(|p| p.role == NodeRole::Wheel) {
+        for &v in p.in_hull_frame().v.iter().step_by(5) {
+            assert!(!inside(&shell, v), "{} reaches into the shell at {:?}", p.name, v);
+        }
+    }
+    let hubs: BTreeSet<i64> =
+        parts.iter().filter(|p| p.name.starts_with("rim.")).map(|p| (p.pose.pos.z * 1000.0).round() as i64).collect();
+    assert_eq!(hubs.len(), 3, "three axles");
+}
+
+// ---- weapon mount and weapons are separate modules
+
+/// The vertices of a mesh and the midpoints of its edges: enough sample points to see a thin pin pass through a box.
+fn samples(m: &Mesh) -> Vec<Vec3> {
+    let mut s = m.v.clone();
+    for t in &m.t {
+        for (a, b) in [(0, 1), (1, 2), (2, 0)] {
+            s.push((m.v[t[a] as usize] + m.v[t[b] as usize]) * 0.5);
+        }
+    }
+    s
+}
+
+/// The two solids share volume: a sample point of one lies inside the other.
+fn overlap(a: &Mesh, b: &Mesh) -> bool {
+    let ((alo, ahi), (blo, bhi)) = (a.bounds(), b.bounds());
+    let apart = alo.x > bhi.x || blo.x > ahi.x || alo.y > bhi.y || blo.y > ahi.y || alo.z > bhi.z || blo.z > ahi.z;
+    !apart && (samples(a).iter().any(|&v| inside(b, v)) || samples(b).iter().any(|&v| inside(a, v)))
+}
+
+/// The 4x4 with the standard ring mount on its roof socket.
+fn mounted() -> Vec<Part> {
+    let d = UtilityDims::placeholder();
+    let z = d.wheelbase_m / 2.0;
+    let mut asm = utility_assembly(&d, &[-z, z], &[true, false], 1);
+    asm.attach("roof", &ring_mount(&RingMountDims::standard(), 1), 0.0, "ring").unwrap();
+    asm.parts
+}
+
+#[test]
+fn the_roof_socket_sits_two_centimetres_into_the_cab_roof_over_the_hatch_and_faces_up() {
+    let d = UtilityDims::placeholder();
+    let hull = utility_hull(&d, &[-d.wheelbase_m / 2.0, d.wheelbase_m / 2.0], 0);
+    let roof = hull.sockets.iter().find(|s| s.name == "roof").unwrap();
+    let shell = hull.parts.iter().find(|p| p.name == "shell").unwrap().in_hull_frame();
+    let down = crossings(&shell, Vec3::new(0.0, 3.0, roof.pose.pos.z), -Vec3::Y);
+    assert!((roof.pose.pos.y - (3.0 - down[0] - 0.02)).abs() < 1e-3, "2 cm below the roof surface at the socket");
+    assert_eq!((roof.kind, roof.size_m), (SocketKind::Ring, 0.90));
+    assert!(
+        (roof.pose.apply_dir(Vec3::Y) - Vec3::Y).length() < 1e-12
+            && (roof.pose.apply_dir(-Vec3::Z) + Vec3::Z).length() < 1e-12
+    );
+    let (lo, hi) = hull.parts.iter().find(|p| p.name == "roof_hatch").unwrap().in_hull_frame().bounds();
+    assert!(roof.pose.pos.z > lo.z && roof.pose.pos.z < hi.z && roof.pose.pos.x.abs() < 1e-9, "over the roof hatch");
+}
+
+#[test]
+fn nothing_on_the_mounted_truck_floats_the_mount_clears_the_hull_and_the_budget_holds() {
+    let parts = mounted();
+    let mut attached: Vec<Mesh> = parts
+        .iter()
+        .filter(|p| p.role == NodeRole::Hull && !p.name.ends_with(".ring"))
+        .map(Part::in_hull_frame)
+        .collect();
+    let mut pending: Vec<&Part> = parts.iter().filter(|p| p.name.ends_with(".ring")).collect();
+    loop {
+        let before = pending.len();
+        let mut keep = Vec::new();
+        for p in pending {
+            let m = p.in_hull_frame();
+            if attached.iter().any(|h| overlap(&m, h)) {
+                attached.push(m);
+            } else {
+                keep.push(p);
+            }
+        }
+        pending = keep;
+        if pending.is_empty() || pending.len() == before {
+            break;
+        }
+    }
+    let floating: Vec<&str> = pending.iter().map(|p| p.name.as_str()).collect();
+    assert!(floating.is_empty(), "floating {floating:?}");
+    // the moving parts (turntable, uprights, shield wings) stand clear of the shell
+    let shell = parts.iter().find(|p| p.name == "shell").unwrap().in_hull_frame();
+    for p in parts.iter().filter(|p| p.role == NodeRole::Turret) {
+        for &v in p.in_hull_frame().v.iter().step_by(3) {
+            assert!(!inside(&shell, v), "{} reaches into the shell at {v:?}", p.name);
+        }
+    }
+    check_parts(&parts);
+    let rig = render_rig("mounted_utility", &parts, &FlagParams::default_params());
+    println!("truck with the ring mount in the rig: {} triangles", rig.triangle_count());
+    assert!(rig.triangle_count() < 40_000, "{} triangles, budget 40,000 (wheeled)", rig.triangle_count());
+}
+
+/// The 4x4 with the standard ring mount on its roof socket and the named gun on the mount's trunnion.
+fn armed(gun: &str) -> Vec<Part> {
+    let d = UtilityDims::placeholder();
+    let z = d.wheelbase_m / 2.0;
+    let mut asm = utility_assembly(&d, &[-z, z], &[true, false], 1);
+    asm.attach("roof", &ring_mount(&RingMountDims::standard(), 1), 0.0, "ring").unwrap();
+    let cradle = asm.socket("trunnion.ring").unwrap().hint("cradle_w_m").unwrap();
+    asm.attach("trunnion.ring", &gun_module(&GunDims::preset(gun).unwrap(), cradle, 1), 0.0, "gun").unwrap();
+    asm.parts
+}
+
+#[test]
+fn nothing_on_the_armed_truck_floats_and_the_gun_clears_the_hull() {
+    for gun in ["machine_gun_12_7", "autocannon_25"] {
+        let parts = armed(gun);
+        let mut attached: Vec<Mesh> = parts
+            .iter()
+            .filter(|p| p.role == NodeRole::Hull && !p.name.ends_with(".ring"))
+            .map(Part::in_hull_frame)
+            .collect();
+        let mut pending: Vec<&Part> =
+            parts.iter().filter(|p| p.name.ends_with(".ring") || p.name.ends_with(".gun")).collect();
+        loop {
+            let before = pending.len();
+            let mut keep = Vec::new();
+            for p in pending {
+                let m = p.in_hull_frame();
+                if attached.iter().any(|h| overlap(&m, h)) {
+                    attached.push(m);
+                } else {
+                    keep.push(p);
+                }
+            }
+            pending = keep;
+            if pending.is_empty() || pending.len() == before {
+                break;
+            }
+        }
+        let floating: Vec<&str> = pending.iter().map(|p| p.name.as_str()).collect();
+        assert!(floating.is_empty(), "{gun}: floating {floating:?}");
+        // the gun (receiver, boxes, grips, barrel, muzzle) stands clear of the shell: the barrel clears the windscreen
+        let shell = parts.iter().find(|p| p.name == "shell").unwrap().in_hull_frame();
+        for p in parts.iter().filter(|p| matches!(p.role, NodeRole::GunPitch | NodeRole::Recoil)) {
+            for &v in p.in_hull_frame().v.iter().step_by(3) {
+                assert!(!inside(&shell, v), "{gun}: {} reaches into the shell at {v:?}", p.name);
+            }
+        }
+    }
+}
+
+#[test]
+fn swapping_the_gun_changes_only_the_gun_parts_and_the_armed_truck_stays_inside_the_budget() {
+    let (mg, ac) = (armed("machine_gun_12_7"), armed("autocannon_25"));
+    let key = |p: &Part| {
+        let bits = p.mesh.v.iter().flat_map(|v| v.as_array().map(f64::to_bits)).collect::<Vec<_>>();
+        (p.name.clone(), bits, p.mesh.t.clone(), p.pose.pos.as_array().map(f64::to_bits))
+    };
+    let rest = |parts: &[Part]| parts.iter().filter(|p| !p.name.ends_with(".gun")).map(key).collect::<Vec<_>>();
+    assert_eq!(rest(&mg), rest(&ac), "hull, wheels and mount are bit-identical whichever gun is on them");
+    assert_ne!(
+        mg.iter().filter(|p| p.name.ends_with(".gun")).count(),
+        ac.iter().filter(|p| p.name.ends_with(".gun")).count()
+    );
+    check_parts(&mg);
+    check_parts(&ac);
+    assert_eq!(fingerprint(&mg), fingerprint(&armed("machine_gun_12_7")), "same recipe, same bytes");
+    // the heavier gun, as exported (flags baked, so parts are subdivided): inside the wheeled budget
+    let rig = render_rig("armed_utility", &ac, &FlagParams::default_params());
+    println!("armed truck (autocannon) in the rig: {} triangles", rig.triangle_count());
+    assert!(rig.triangle_count() < 40_000, "{} triangles, budget 40,000 (wheeled)", rig.triangle_count());
 }
 
 // ---- the glazing lines up

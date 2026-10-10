@@ -74,4 +74,10 @@
         (name: "exhaust", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Z, x: Frac(-0.27, -0.27), y: Frac(0.02, 0.02), z: Rear(-0.55, 0.12), radius_m: 0.045)),
     ],
     knuckle_radius_m: 0.09,
+    // Sockets the hull offers besides the wheel stations (which come from the axles): where a module may be mounted. The roof ring sits on
+    // the cab roof over the hatch, 2 cm into the roof so a level collar always touches it (the roof rises 1 degree along its length);
+    // `size_m` is the widest ring the flat roof takes (the roof is 1.5 m long and 1.9 m wide there).
+    sockets: [
+        (name: "roof", kind: Ring, size_m: 0.90, x: Frac(0.0, 0.0), y: Top(-0.02, -0.02), z: Frac(0.59, 0.59), normal: (0.0, 1.0, 0.0), reference: (0.0, 0.0, -1.0)),
+    ],
 )
