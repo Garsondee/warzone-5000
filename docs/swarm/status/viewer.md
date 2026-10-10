@@ -1,6 +1,6 @@
 # Status: VIEWER
 
-**Last updated:** 2026-10-10 22:43 UTC | **Branch:** lane/viewer/workshop-server | **Contract pinned:** contract-v0.3 (commit 0982843) | **Phase:** slice 2 stage C (Workshop) step 1 in progress; then the tracked carrier when FORGE T3 lands
+**Last updated:** 2026-10-10 22:46 UTC | **Branch:** lane/viewer/workshop-page | **Contract pinned:** contract-v0.3 (commit 0982843) | **Phase:** slice 2 stage C (Workshop) step 1 in progress; then the tracked carrier when FORGE T3 lands
 
 ## Done
 - Spike S-V passes (WebGL 2 under SwiftShader, 46 ms/frame, 10 s clip = 72 KB): `docs/lanes/viewer/spike-v.md`.
@@ -43,6 +43,8 @@
 - **Workshop stage C, PR 1 (this PR, `lane/viewer/workshop-1`): `w5k viewer design`.** Levers in (FORGE `apply_both`), compiled design, skin (`FlagParams::preview()`), proving scoreboard against the base, timings out; `.skin` files accepted by `--skin`; 6 new tests (lever parsing, wheelbase factor reaches the skin's axles exactly, a refused lever says why, the board's change and direction, every board row is a benchmark the impact runner measures, a `.skin` file in place of a skin id). Picture `docs/lanes/viewer/media/workshop-design-hauler.jpg`. Decisions made (in the design note, "Step 1 as built"): own `w5k viewer workshop` server and DRIVE as a child `w5k drive`, so no change to ARCH's files. Next: PR 2 the server and page (sliders, three layers of answer, scoreboard), PR 3 DRIVE and the end-to-end test.
 
 - **Workshop stage C, PR 2 (`lane/viewer/workshop-server`): `w5k viewer workshop`, the design server.** `GET /api/bases`, `/api/base/<id>`, `POST /api/design`, `GET /api/skin/<id>`, static files; designs built once per base, levers and quality; 422 with FORGE's reason for a refused lever; nothing served outside the page folder; 4 new tests (garage and six sliders with their base numbers, a design built once and its skin unpacks, refusals, files). Picture `docs/lanes/viewer/media/workshop-wheelbase.jpg`: the three skins the server returned for wheelbase x0.75, x1, x1.3 (drawn by the page of PR 3). **PR 1 (#167) merged.** Next: PR 3 the page (sliders, the body on a turntable, quick then final detail, latest answer wins) with `workshop-smoke.mjs`; PR 4 the scoreboard endpoint and DRIVE. FORGE's tracked render rig (#164) has landed, so job 2 (the carrier in the viewer) is unblocked after the Workshop.
+
+- **Workshop stage C, PR 3 (`lane/viewer/workshop-page`, stacked on PR 2 #169): the page.** `workshop.html` and `workshop.js` (sliders with base numbers and percent changes, the body on a turntable, quick then final detail, latest answer wins, a refusal shown in words), `build.mjs --workshop`, the committed `dist/workshop.html` with a test that it calls the server's endpoints, and `workshop-smoke.mjs` (9 checks in headless Chromium against a real server: six sliders, the body grows by exactly the wheelbase change, quick body inside the 10 s budget, two quick moves end on the second, final detail replaces quick, reset, no console errors). Picture `docs/lanes/viewer/media/workshop-page.jpg`. Next: PR 4 the scoreboard endpoint, the scoreboard in the page and DRIVE.
 
 ## In progress
 - Nothing. Waiting for ARCH's stage B (track animation, sinkage and ground-pressure overlay) and for the real impact and ladder files; the charts then read them instead of the stubs.

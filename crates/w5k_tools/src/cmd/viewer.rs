@@ -1030,12 +1030,24 @@ mod tests {
     #[test]
     fn the_workshop_serves_files_from_its_folder_and_nothing_outside_it() {
         let port = start();
-        let (status, page) = http(port, "GET", "/index.html", "");
+        let (status, page) = http(port, "GET", "/", "");
         assert_eq!(status, 200);
-        assert!(String::from_utf8_lossy(&page).contains("<title>"));
+        assert!(String::from_utf8_lossy(&page).contains("<title>Workshop</title>"), "the root is the Workshop page");
         for path in ["/../Cargo.toml", "/..%2f..%2fCargo.toml", "/skins/../../../Cargo.toml", "/nope.html", "/api/nope"]
         {
             assert_eq!(http(port, "GET", path, "").0, 404, "{path}");
+        }
+    }
+
+    /// The page is committed (no Node runs on the player's PC) and calls the endpoints the server has.
+    #[test]
+    fn the_workshop_page_is_built_into_dist_and_calls_every_endpoint_it_needs() {
+        let page = viewer_dir().join("dist/workshop.html");
+        let html = std::fs::read_to_string(&page).unwrap_or_else(|e| {
+            panic!("{} is missing ({e}): run node tools/viewer/build.mjs --workshop", page.display())
+        });
+        for endpoint in ["/api/bases", "/api/base/", "/api/design"] {
+            assert!(html.contains(endpoint), "the page never calls {endpoint}");
         }
     }
 }
