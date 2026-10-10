@@ -21,5 +21,6 @@ pub mod module;
 pub mod mount;
 pub mod part;
 pub mod raster;
+pub mod skin;
 pub mod truck;
 pub mod wheel;
