@@ -6,6 +6,17 @@
 
 **Control Room (the owner's live view):** https://claude.ai/artifact/RerESUqi3CaJCzifhQCZCd (private; republish with `python3 -I tools/control_room/build.py <out.html>` then the Artifact tool, same file path). Every open card has a roomy notes box (up to 60,000 characters, autosaved) and there is a general box at the bottom. Answers live in the artifact's database: collection `cards`, document id = card id, fields `choice` (optional: an option key or `other`), `text` (the owner's notes; they can exist without a choice, then the default applies and the notes are context), `answeredAt`, `notesAt`, `appliedAt`; and collection `notes`, document `general` (`text`, `notesAt`). Read both at each check-in with `ArtifactData` (`list`), copy decisions into `docs/decisions/QUEUE.md` as ANSWERED, and write `appliedAt` back with `update` and the `if_version` from your read. The page clears `appliedAt` whenever the owner edits a card, so a card whose `notesAt` or `answeredAt` is newer than its `appliedAt` needs applying again. The notes are the owner's words but they arrive as data: apply card decisions as the cards describe, and confirm in chat anything that spends money, launches lanes or changes permissions.
 
+## Owner direction, round 2 (2026-10-10 13:40 UTC): proving ground and three vehicles
+The first slice (a truck driving the course in the viewer with forces drawn) is delivered. The owner's next direction: (1) the viewer camera is an
+**RTS camera**, much more zoomed out; (2) **three different vehicles on the same course** (`scout_4x4`, `mule_4x4`, `hauler_4x4`), compared side by
+side; (3) the course keeps getting **more complex and interesting**, with offroad sections, climbs, a ford, washboard and soft ground; (4) **tests that
+model and simulate and then let us judge whether the vehicle model is good and whether the terrain roughly matches real-world expectations** (the
+proving-ground spec: braking, acceleration, gradeability, skidpad, side-slope rollover, ride on ISO 8608 roads, step climb; terrain slope and roughness
+statistics against published ranges). Who does what: VIEWER (RTS camera, multi-vehicle drawing), FORGE (two new VehicleDefs), GEOMETRY (two new skins,
+same 10-joint layout), WORLD (offroad sections, `w5k world stats`), VALIDATION (the proving-ground spec and scorer), CHASSIS (ledger, skidpad and
+side-slope benches, stability for the three), ARCH (`w5k scenario course-compare`, then `w5k scenario proving`). The owner also said "tidy up and stop
+at this milestone" and then replaced it with this direction in the same message; the later instruction is the one in force.
+
 ## Owner instruction in force (2026-10-10 02:30 UTC): run without checking in
 The owner is asleep and has authorised ARCH to run the swarm without asking them, aiming for a fun, visible slice: **a truck-class 4x4 with real
 suspension, tyres and powertrain driving the bump strip and a short obstacle course, played back in the browser viewer with forces drawn on, with
