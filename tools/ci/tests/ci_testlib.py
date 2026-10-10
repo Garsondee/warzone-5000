@@ -9,9 +9,11 @@ import contextlib
 import io
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 sys.dont_write_bytecode = True  # keep tools/ci free of __pycache__
@@ -38,6 +40,11 @@ class TempRepo:
         self.path = Path(self._tmp.name)
         self.git("init", "-q", "-b", "main")
         self.git("config", "commit.gpgsign", "false")
+        # No background housekeeping: `git commit` can start `git maintenance`/`gc` detached, and it may still be writing to .git
+        # when the test ends, which made the temp-directory cleanup fail now and then ("Directory not empty: .../.git") on CI.
+        self.git("config", "gc.auto", "0")
+        self.git("config", "gc.autoDetach", "false")
+        self.git("config", "maintenance.auto", "false")
 
     def git(self, *args: str) -> str:
         proc = subprocess.run(["git", "-C", str(self.path), *args], capture_output=True, text=True)
@@ -72,7 +79,14 @@ class TempRepo:
         self.git("checkout", "-q", name)
 
     def cleanup(self) -> None:
-        self._tmp.cleanup()
+        # Retry: a straggling git process can still be writing into .git for a moment; the directory is only a scratch copy.
+        for attempt in range(5):  # const-ok: retry count for a flaky filesystem race, not a physical constant
+            try:
+                self._tmp.cleanup()
+                return
+            except OSError:
+                time.sleep(0.2 * (attempt + 1))  # const-ok: back-off seconds
+        shutil.rmtree(self._tmp.name, ignore_errors=True)
 
 
 def run_main(main, argv, env: dict | None = None) -> tuple[int, str, str]:
