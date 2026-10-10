@@ -70,10 +70,16 @@ pub fn loft(sections: &[Section], max_step_m: f64) -> Mesh {
             m.t.push([a, b + n, a + n]);
         }
     }
+    // End caps: a fan from the ring's centroid (a fan from a ring vertex would be degenerate on the collinear points of a side)
     let top = (rings.len() as u32 - 1) * n;
-    for i in 1..n - 1 {
-        m.t.push([0, i + 1, i]);
-        m.t.push([top, top + i, top + i + 1]);
+    for (first, flip) in [(0, true), (top, false)] {
+        let c = m.v[first as usize..(first + n) as usize].iter().fold(Vec3::ZERO, |a, &p| a + p) * (1.0 / f64::from(n));
+        m.v.push(c);
+        let centre = m.v.len() as u32 - 1;
+        for i in 0..n {
+            let (a, b) = (first + i, first + (i + 1) % n);
+            m.t.push(if flip { [centre, b, a] } else { [centre, a, b] });
+        }
     }
     m.orient_outward();
     m

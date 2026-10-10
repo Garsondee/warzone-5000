@@ -118,3 +118,20 @@ fn bevel_rings_loft_to_a_closed_part_with_the_right_volume_loss() {
     // the ring is a rectangle minus four corner triangles of legs 0.05: area 0.6 - 4 x 0.05^2 / 2
     assert!(close(a.signed_volume(), 2.0 * (0.6 - 4.0 * 0.05 * 0.05 / 2.0), 1e-12));
 }
+
+#[test]
+fn subdivision_keeps_the_mesh_closed_and_its_volume_and_caps_the_edge_length() {
+    let b = loft(
+        &[
+            Section { z_m: 0.0, ring: bevel_ring(1.0, 0.6, 0.0, 0.05, 0.05) },
+            Section { z_m: 2.0, ring: bevel_ring(1.0, 0.6, 0.0, 0.05, 0.05) },
+        ],
+        10.0,
+    );
+    let s = b.subdivided(0.2);
+    assert!(s.check_closed().is_ok() && close(s.signed_volume(), b.signed_volume(), 1e-12));
+    assert!(s.t.iter().all(|&[a, b, c]| [(a, b), (b, c), (c, a)]
+        .iter()
+        .all(|&(p, q)| (s.v[p as usize] - s.v[q as usize]).length() <= 0.2)));
+    assert!(s.t.len() > b.t.len());
+}
