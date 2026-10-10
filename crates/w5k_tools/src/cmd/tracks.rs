@@ -35,6 +35,7 @@ fn plate(args: &[String]) -> Result<(), String> {
         for m in &soils {
             let s = m.soil.ok_or("reference soil without soil data")?;
             csv += &format!(",{:.2}", soil::sinkage_m(&s, b_m, f64::from(kpa) * 1e3) * 1e3);
+            // const-ok: kPa in, mm out (display edge)
         }
         csv.push('\n');
     }
