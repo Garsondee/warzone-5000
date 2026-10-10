@@ -2,7 +2,7 @@
 
 use w5k_contract::def::{RunningGearDef, VehicleDef};
 use w5k_contract::param::Param;
-use w5k_contract::rig::*;
+use w5k_contract::rig::*; // also TICK_HZ and SAMPLES_PER_PERIOD
 use w5k_forge::compile::{compile, parse_def, parse_extras, Compiled};
 use w5k_forge::curve::rpm_to_rad_s;
 use w5k_forge::extras::Extras;
@@ -295,4 +295,20 @@ fn redraw(d: &mut VehicleDef, rng: &mut Lcg) {
     ] {
         set(p);
     }
+}
+
+#[test]
+fn substeps_cover_twenty_samples_per_period_of_the_stiffest_mode() {
+    let (_, _, c) = built();
+    let f_max = c.rig.integration.f_max_hz.expect("the compile records the mode it baked from");
+    assert!(f64::from(c.rig.integration.substeps) * TICK_HZ >= SAMPLES_PER_PERIOD * f_max);
+    assert!(c.rig.integration.substeps <= 8);
+}
+
+#[test]
+fn an_incomplete_design_is_rejected_naming_the_missing_field() {
+    let (mut d, x) = load();
+    d.suspension.rebound_to_bump = None;
+    let e = compile(&d, &x).err().expect("rejected");
+    assert!(e.iter().any(|r| r.reason.contains("suspension.rebound_to_bump is missing")), "{e:?}");
 }

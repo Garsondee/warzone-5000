@@ -5,6 +5,7 @@ use std::fmt;
 
 use w5k_contract::combat::CombatDef;
 use w5k_contract::def::{CouplingSliders, RunningGearDef, SuspensionKind, VehicleDef, WheeledDef};
+use w5k_contract::param::Param;
 use w5k_contract::rig::*;
 use w5k_math::{scalar, Mat3, Transform, Vec3};
 
@@ -13,7 +14,7 @@ use crate::extras::Extras;
 
 /// The design tripwire: a rig that needs more substeps than this is a numerically unstable design.
 const MAX_SUBSTEPS: u32 = 8; // const-ok: lane tripwire from the CHASSIS and DRIVE briefs
-const TICK_S: f64 = 1.0 / 60.0; // const-ok: the fixed simulation tick (contract: one 60 Hz tick)
+const RAD_PER_DEG: f64 = scalar::PI / 180.0; // const-ok: unit conversion
 const J_PER_KJ: f64 = 1e3; // const-ok: unit conversion
 
 #[derive(Clone, Debug, PartialEq)]
@@ -26,6 +27,13 @@ impl fmt::Display for Rejection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}: {}", self.field, self.reason)
     }
+}
+
+/// A slider that contract 0.2 made optional: absent means the design is incomplete, which is a rejection with the field's name.
+fn need(p: &Option<Param>, field: &str) -> Result<f64, String> {
+    p.as_ref()
+        .map(|p| p.v)
+        .ok_or_else(|| format!("{field} is missing: the compile derives nothing for it, state it in the def"))
 }
 
 fn rej(field: &str, reason: impl Into<String>) -> Vec<Rejection> {
@@ -96,7 +104,15 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
 
     // ---- stations, tyres, springs
     let r = 0.5 * ty.outer_diameter_m.v;
-    let (k_t, e) = (ex.tyre.vertical_stiffness_n_m.v, &ex.susp);
+    let tyre_k = need(&ty.vertical_stiffness_n_m, "running_gear.tyre.vertical_stiffness_n_m")?;
+    let tyre_c = need(&ty.vertical_damping_ns_m, "running_gear.tyre.vertical_damping_ns_m")?;
+    let slip_k = need(&ty.slip_stiffness, "running_gear.tyre.slip_stiffness")?;
+    let relax = need(&ty.relaxation_length_m, "running_gear.tyre.relaxation_length_m")?;
+    let wheel_j = need(&ty.wheel_inertia_kg_m2, "running_gear.tyre.wheel_inertia_kg_m2")?;
+    let rebound = need(&su.rebound_to_bump, "suspension.rebound_to_bump")?;
+    let engage = need(&su.bump_stop_engage_frac, "suspension.bump_stop_engage_frac")?;
+    let stop_rate = need(&su.bump_stop_rate_n_m, "suspension.bump_stop_rate_n_m")?;
+    let (k_t, e) = (tyre_k, &ex.susp);
     let mut stations = Vec::new();
     let mut anti_roll = Vec::new();
     let mut omega_max: f64 = 0.0;
@@ -112,19 +128,25 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
         }
         let k_spring = k_ride * k_t / (k_t - k_ride);
         let c_mean = 2.0 * su.damping_ratio.v * scalar::sqrt(k_ride * m_corner); // mean of bump and rebound (D2)
-        let rr = e.rebound_to_bump.v;
+        let rr = rebound;
         let (c_bump, c_reb) = (2.0 * c_mean / (1.0 + rr), 2.0 * c_mean * rr / (1.0 + rr));
         let load = (m_corner + ty.unsprung_mass_kg.v) * g;
         let deflection = load / k_t;
         let patch = load / (ty.inflation_pa.v * ty.section_width_m.v); // contact area = load / pressure
         let centre_above_ground = r - deflection;
         let half_track = 0.5 * axle.track_width_m.v;
-        let (stop_rate, m_u) = (e.bump_stop_rate_n_m.v, ty.unsprung_mass_kg.v);
+        let m_u = ty.unsprung_mass_kg.v;
+        // The stiffest mode: the unsprung mass on the tyre in parallel with the strut and the engaged bump stop (the slip mode is excluded).
         let hop = scalar::sqrt((k_t + k_spring + stop_rate) / m_u);
-        let slip = scalar::sqrt(
-            ex.tyre.slip_stiffness.v * load * r * r / (ex.tyre.relaxation_length_m.v * ex.tyre.wheel_inertia_kg_m2.v),
-        );
-        omega_max = omega_max.max(hop).max(slip);
+        omega_max = omega_max.max(hop);
+        let steer = if axle.steered {
+            let deg = need(&axle.max_steer_deg, &format!("running_gear.axles[{ai}].max_steer_deg"))?;
+            let ackermann = need(&axle.ackermann, &format!("running_gear.axles[{ai}].ackermann"))?;
+            Some(SteerDef { max_angle_rad: deg * RAD_PER_DEG, ackermann })
+        // const-ok: degrees to radians
+        } else {
+            None
+        };
         let names = ["l", "r"];
         for (k, side) in [Side::Left, Side::Right].into_iter().enumerate() {
             let x = if side == Side::Left { -half_track } else { half_track };
@@ -148,7 +170,7 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
                         friction_n: 0.0,
                     },
                     bump_stop: BumpStopDef {
-                        engage_m: e.bump_stop_engage_frac.v * su.bump_travel_m.v,
+                        engage_m: engage * su.bump_travel_m.v,
                         rate_n_m: stop_rate,
                         progression: e.bump_stop_progression.v,
                         damping_ns_m: e.bump_stop_damping_ns_m.v,
@@ -156,24 +178,26 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
                         restitution: 0.0,
                     },
                 },
-                steer: axle
-                    .steered
-                    .then_some(SteerDef { max_angle_rad: ex.steer.max_steer_rad.v, ackermann: ex.steer.ackermann.v }),
+                steer: steer.clone(),
                 wheel: WheelDef {
                     kind: WheelKind::Tyre,
                     radius_m: r,
                     width_m: ty.section_width_m.v,
-                    inertia_kg_m2: ex.tyre.wheel_inertia_kg_m2.v,
+                    inertia_kg_m2: wheel_j,
                     tyre: Some(TyreDef {
                         vertical_stiffness_n_m: k_t,
-                        vertical_damping_ns_m: ex.tyre.vertical_damping_ns_m.v,
+                        vertical_damping_ns_m: tyre_c,
                         mu_scale: ty.mu_peak_ref.v / ex.ref_surface_mu_peak.v,
-                        slip_stiffness: ex.tyre.slip_stiffness.v,
+                        slip_stiffness: slip_k,
                         cornering_stiffness_per_rad: ty.cornering_stiffness_per_rad.v,
-                        relaxation_length_m: ex.tyre.relaxation_length_m.v,
+                        relaxation_length_m: relax,
                         rolling_coeff: ty.rolling_coeff.v,
                         inflation_pa: ty.inflation_pa.v,
                         patch_length_m: patch,
+                        speed_floor_m_s: 0.0,
+                        aligning_trail_frac: 0.0,
+                        kappa_peak: 0.0,
+                        alpha_peak_rad: 0.0,
                     }),
                     patches_x_m: vec![],
                 },
@@ -192,11 +216,15 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
             patch * 1e3       // const-ok: m to mm for display
         ));
     }
-    let substeps = ((omega_max * TICK_S / ex.substep_omega_dt_limit.v).ceil() as u32).max(1);
+    let f_max_hz = omega_max / scalar::TAU;
+    // The contract's rule: `substeps * TICK_HZ >= SAMPLES_PER_PERIOD * f_max`.
+    let substeps = ((SAMPLES_PER_PERIOD * f_max_hz / TICK_HZ).ceil() as u32).max(1);
     if substeps > MAX_SUBSTEPS {
-        return Err(format!("numerically unstable design: the stiffest mode ({omega_max:.0} rad/s) needs {substeps} substeps per tick, above {MAX_SUBSTEPS}"));
+        return Err(format!("numerically unstable design: the stiffest mode ({f_max_hz:.1} Hz) needs {substeps} substeps per tick, above {MAX_SUBSTEPS}"));
     }
-    report.push(format!("stiffest mode {omega_max:.0} rad/s -> {substeps} substeps per tick"));
+    report.push(format!(
+        "stiffest mode {f_max_hz:.1} Hz (wheel hop with the bump stop engaged) -> {substeps} substeps per tick"
+    ));
 
     // ---- hull mass properties: a uniform box moved to the COM (parallel-axis theorem)
     let size = Vec3::new(h.width_m.v, h.height_m.v, h.length_m.v);
@@ -220,7 +248,7 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
         en.peak_power_rpm.v,
         en.idle_rpm.v,
         en.redline_rpm.v,
-        ex.engine.idle_torque_frac.v,
+        need(&en.idle_torque_frac, "powertrain.engine.idle_torque_frac")?,
     )?;
     let engine = EngineDef {
         kind: en.kind,
@@ -228,8 +256,8 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
         idle_rpm: en.idle_rpm.v,
         redline_rpm: en.redline_rpm.v,
         inertia_kg_m2: en.inertia_kg_m2.v,
-        drag_const_nm: ex.engine.drag_const_nm.v,
-        drag_per_rpm_nm: ex.engine.drag_per_rpm_nm.v,
+        drag_const_nm: need(&en.drag_const_nm, "powertrain.engine.drag_const_nm")?,
+        drag_per_rpm_nm: need(&en.drag_per_rpm_nm, "powertrain.engine.drag_per_rpm_nm")?,
         bsfc_best_g_kwh: en.bsfc_best_g_kwh.v,
         free_output: false,
         response_time_s: 0.0,
@@ -378,7 +406,7 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
         }],
         muzzles: vec![],
         combat: CombatDef::default(),
-        integration: IntegrationDef { substeps },
+        integration: IntegrationDef { substeps, f_max_hz: Some(f_max_hz) },
     };
     rig.validate().map_err(|e| format!("the compiled rig fails PhysRig::validate(): {e:?}"))?;
     Ok(Compiled { rig, report, hull_size_m: size })
