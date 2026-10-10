@@ -12,3 +12,5 @@ workspace = true
 [dependencies]
 w5k_math.workspace = true
 w5k_contract.workspace = true
+serde.workspace = true
+ron.workspace = true

@@ -94,7 +94,8 @@ pub struct Skidpad {
     /// Samples before this time are the start transient and are dropped, s.
     pub warmup_s: f64,
     pub max_s: f64,
-    /// The run ends when the lateral acceleration falls below this fraction of the best so far (the truck has slid out).
+    /// The run ends when the lateral acceleration falls below this fraction of the best so far (the truck has slid out). Both are
+    /// moving averages over `tuning.skidpad_window_s`, so a gear shift's lurch or a roll wobble is not mistaken for a slide.
     pub slide_out_frac: f64,
 }
 
@@ -109,11 +110,14 @@ pub struct SkidpadPoint {
     pub lateral_transfer_n: f64,
     /// Body roll toward the outside of the turn, rad (positive = leaning out).
     pub roll_out_rad: f64,
+    /// The lightest wheel load, N: at 0 an inside wheel has lifted (the onset of rollover; a limit that moves with track / COM height).
+    pub min_wheel_load_n: f64,
 }
 
 #[derive(Clone, Debug)]
 pub struct SkidpadResult {
     pub points: Vec<SkidpadPoint>,
+    /// The best moving average of `a_y` over `tuning.skidpad_window_s`, m/s^2.
     pub max_lateral_acc_m_s2: f64,
     /// `K` in `delta = L / R + K a_y` (rad per m/s^2), fitted over the linear range (a_y below half the limit). Positive = understeer.
     pub understeer_gradient_rad_per_m_s2: f64,
@@ -138,7 +142,9 @@ pub fn skidpad(
     let z_ref = unsteered_z.iter().sum::<f64>() / unsteered_z.len().max(1) as f64;
     let wheelbase_m = steered.iter().map(|&i| (z_ref - rig.stations[i].rest_pos_m.z).abs()).sum::<f64>()
         / steered.len().max(1) as f64;
-    let (mut points, mut best) = (Vec::new(), 0.0_f64);
+    let (mut points, mut best, mut best_at) = (Vec::new(), 0.0_f64, 0usize);
+    let window = ((tuning.skidpad_window_s.v * TICK_HZ) as usize).max(1);
+    let mut sum_window = 0.0;
     let mut t = 0.0;
     while t < s.max_s {
         let target = s.start_speed_m_s + s.ramp_m_s2 * t;
@@ -170,15 +176,31 @@ pub fn skidpad(
             steer_angle_rad: delta,
             lateral_transfer_n: transfer,
             roll_out_rad: c.hull.rot.to_ypr().2 * outer_sign, // positive roll lowers the right side: leaning out of a left turn
+            min_wheel_load_n: c.stations.iter().map(|st| st.report.contact.fz_n).fold(f64::MAX, f64::min),
         });
-        best = best.max(ay);
-        if ay < s.slide_out_frac * best || !c.is_finite() {
+        // a moving average of a_y over the window: the limit and the slide-out test see the turn, not a lurch inside it
+        sum_window += ay;
+        if points.len() > window {
+            sum_window -= points[points.len() - 1 - window].lateral_acc_m_s2;
+        }
+        if points.len() >= window {
+            let mean = sum_window / window as f64;
+            if mean > best {
+                best = mean;
+                best_at = points.len();
+            }
+            if mean < s.slide_out_frac * best {
+                break;
+            }
+        }
+        if !c.is_finite() {
             break;
         }
     }
     // least squares of L/R = delta - K a_y over the linear range
+    // (only the climb to the best: after it the truck may slide wide and fall back through low a_y at a large steer margin)
     let lin: Vec<&SkidpadPoint> =
-        points.iter().filter(|p| p.lateral_acc_m_s2 < 0.5 * best && p.speed_m_s > 0.0).collect();
+        points[..best_at].iter().filter(|p| p.lateral_acc_m_s2 < 0.5 * best && p.speed_m_s > 0.0).collect();
     let n = lin.len() as f64;
     let (mut sx, mut sy, mut sxx, mut sxy) = (0.0, 0.0, 0.0, 0.0);
     for p in &lin {
