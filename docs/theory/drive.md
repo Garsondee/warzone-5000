@@ -53,8 +53,10 @@ it is solved as "the torque that leaves the shaft stopped, clamped to capacity" 
 ## Why tracked vehicles need a steering unit and cars do not
 A car steers by turning wheels and lets an open differential absorb the speed difference between the inside and outside wheels. A tracked vehicle cannot turn its tracks;
 it must drive one side slower than the other, so it needs a mechanism that deliberately creates that difference. Four families, and what each one fixes:
-- **Controlled differential** (brake steering): an open differential feeds both tracks equal torque; braking the inside track makes it slow and, because the differential
-  keeps the *sum* of the two speeds, the outside track speeds up. The turn radius is whatever the brake gives you, and the brake pays in heat.
+- **Controlled differential** (brake-controlled): the steering brake holds a reaction in a differential so that torque moves from the slow track to the fast one. Pure
+  brake steering, an open differential with a brake on the inside track, throws the inside track's power away and can only give the outside track half the torque, so a heavy
+  vehicle at part throttle stalls instead of turning (the first model here did exactly that: yaw rate 0.03 rad/s at full stick on a 20 t carrier). The controlled differential
+  is regenerative and, in the model, a servo on the track speed difference like the double differential.
 - **Clutch-brake** (Sherman, T-34): both tracks are driven straight through. A little stick disengages the inside clutch (the track coasts, the tank drifts wide); more stick
   brakes it (a tight turn). It wastes the power it brakes away, and a stuck-on clutch makes it a tank that cannot go straight.
 - **Double differential** (Tiger II, Merritt-Brown): a second differential adds a speed difference proportional to the demand, so each gear has a fixed turn radius
