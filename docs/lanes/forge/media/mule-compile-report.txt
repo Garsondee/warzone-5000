@@ -1,0 +1,6 @@
+datum: hull box centre; ride height 1.275 m; COM 0.800 m above the ground, 2.350 m from the front
+axle 0: load 12986 N; sprung 662 kg/wheel; f 1.4 Hz -> ride rate 51233, spring 65917 N/m (tyre 230000); zeta 0.3 -> damper 2796 bump / 4194 rebound N s/m; tyre deflection 31.6 mm, patch 110 mm
+axle 1: load 9569 N; sprung 488 kg/wheel; f 1.5 Hz -> ride rate 43337, spring 53398 N/m (tyre 230000); zeta 0.3 -> damper 2207 bump / 3311 rebound N s/m; tyre deflection 24.2 mm, patch 84 mm
+stiffest mode 138 rad/s -> 3 substeps per tick
+brakes: 0.8 g on 2620 kg -> 20555 N total, front share 0.65; peak 2739 N m at the front wheels
+engine: curve through 380 N m at 1900 rpm and 110 kW at 3400 rpm; 4 forward gears
