@@ -1,0 +1,11 @@
+#![enable(implicit_some)]
+// `w5k drive`, the live test-drive server (ARCH). Numbers of the live loop and of the kid assists; none of them belongs to a vehicle
+// (a vehicle's own numbers live in its RON). Provenance as everywhere: SPEC = a rule we chose, ESTIMATE/TUNED = by feel, with the reasoning.
+DriveAssist(
+    chassis_tuning: "content/physics/chassis/tuning.ron",
+    publish_every_ticks: 2,
+    max_ticks_per_wake: 4,
+    input_timeout_s: Param(v: 0.5, lo: 0.2, hi: 2.0, prov: Spec, src: "protocol: the pedals count as released when no input has arrived for this long (a page that lost focus must not leave the throttle pinned)"),
+    idle_finish_s: Param(v: 10.0, lo: 2.0, hi: 60.0, prov: Spec, src: "protocol: the recording is written when the last stream client has been gone this long"),
+    road_probe_m: Param(v: 4.0, lo: 2.0, hi: 10.0, prov: Tuned, src: "placement: the heading at a road point is taken towards the point this far further along the road (about one wheelbase)"),
+)
