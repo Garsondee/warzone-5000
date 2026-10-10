@@ -61,6 +61,21 @@ jobs:
           path: out/first-light
           if-no-files-found: warn
 
+      # The test-drive package (owner's goal: a five-year-old can drive a vehicle). Windows only; it needs the committed browser page
+      # (tools/viewer/dist/index.html, built by lane VIEWER), so the steps are skipped until that file exists. Open the run on GitHub,
+      # look under "Artifacts", download Warzone5000-TestDrive-windows, unzip it anywhere and double-click START.bat.
+      - name: Test-drive package (Windows)
+        if: ${{ matrix.os == 'windows-latest' && hashFiles('tools/viewer/dist/index.html') != '' }}
+        run: python tools/ci/package_testdrive.py --exe target/release/w5k.exe --content content --page tools/viewer/dist/index.html --out out/Warzone5000-TestDrive-windows.zip --os windows
+
+      - name: Keep the test-drive package
+        if: ${{ matrix.os == 'windows-latest' && hashFiles('tools/viewer/dist/index.html') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Warzone5000-TestDrive-windows
+          path: out/Warzone5000-TestDrive-windows.zip
+          if-no-files-found: error
+
       # TODO(lane GODOT): build the Windows package here and upload it as an artifact. This step is only a placeholder:
       # it runs only on the Windows runner and only once game/project.godot exists. The real commands (Godot export
       # preset, the w5k_godot library, the artifact upload) are lane GODOT's to specify. Because .github/** belongs to
