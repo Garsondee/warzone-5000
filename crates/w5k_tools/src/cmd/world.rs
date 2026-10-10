@@ -3,6 +3,9 @@
 //! `w5k world stats <course.ron> --out DIR` writes `stats.json` and a one-page `stats.png` for VALIDATION: slope shares, road grade
 //! distributions, roughness spectra against the ISO 8608 classes and the material numbers beside their published ranges.
 //!
+//! `w5k world view <course.ron> --out DIR [--step N] [--size WxH]` writes `view-road.png` and `view-overview.png`: perspective pictures
+//! from the software renderer (`w5k_world::render`), flat-shaded with fog and a sky.
+//!
 //! `w5k world mobility <course.ron> --out DIR [--vehicle spec.ron ...]` writes `mobility.json` and `mobility.png`: for each vehicle
 //! a go / slow / no-go map of the course and the quickest route from the start of the main road to its end (the answer key for a
 //! route-choosing AI). Without `--vehicle` it uses the three placeholder specs in `content/world/mobility/`.
@@ -50,9 +53,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some("preview") => preview(&args[1..]),
         Some("export") => export(&args[1..]),
         Some("stats") => stats(&args[1..]),
+        Some("view") => view(&args[1..]),
         Some("fixtures") => fixtures(&args[1..]),
         Some("mobility") => mobility(&args[1..]),
-        _ => Err("usage: w5k world preview|export|stats|mobility <course.ron> --out DIR [--step N] [--vehicle spec.ron] | w5k world fixtures --out DIR"
+        _ => Err("usage: w5k world preview|export|stats|view|mobility <course.ron> --out DIR [--step N] [--size WxH] [--vehicle spec.ron] | w5k world fixtures --out DIR"
             .to_string()),
     }
 }
@@ -135,6 +139,45 @@ fn export(args: &[String]) -> Result<(), String> {
     );
     Ok(())
 }
+
+fn view(args: &[String]) -> Result<(), String> {
+    let (mut file, mut out, mut step, mut size) = (None, None, None, (960usize, 540usize));
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--out" => out = it.next().map(PathBuf::from),
+            "--step" => step = Some(it.next().and_then(|v| v.parse().ok()).ok_or("--step needs a whole number")?),
+            "--size" => {
+                let v = it
+                    .next()
+                    .and_then(|v| v.split_once('x'))
+                    .and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?)));
+                size = v.ok_or("--size needs WxH, e.g. 960x540")?;
+            }
+            _ => file = Some(a.clone()),
+        }
+    }
+    let (file, out) = (file.ok_or("missing <course.ron>")?, out.ok_or("missing --out DIR")?);
+    let def = CourseDef::from_ron(&std::fs::read_to_string(&file).map_err(|e| format!("{file}: {e}"))?)?;
+    let course = generate(&def)?;
+    std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    let step = step.unwrap_or_else(|| (course.world.n() / VIEW_NODES_ACROSS).max(1));
+    for (name, cam) in w5k_world::render::stock_cameras(&course) {
+        let cv = w5k_world::render::render(&course, &cam, size.0, size.1, step);
+        let path = out.join(format!("view-{name}.png"));
+        let f = std::fs::File::create(&path).map_err(|e| e.to_string())?;
+        let mut enc = png::Encoder::new(std::io::BufWriter::new(f), cv.w as u32, cv.h as u32);
+        enc.set_compression(png::Compression::High);
+        enc.set_filter(png::Filter::Adaptive);
+        enc.set_color(png::ColorType::Rgb);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.write_header().map_err(|e| e.to_string())?.write_image_data(&cv.rgb).map_err(|e| e.to_string())?;
+        println!("wrote {} ({} x {} px, mesh step {step})", path.display(), cv.w, cv.h);
+    }
+    Ok(())
+}
+/// Mesh resolution of `view`: about this many nodes across the course.
+const VIEW_NODES_ACROSS: usize = 200; // const-ok: display detail
 
 fn preview(args: &[String]) -> Result<(), String> {
     let (mut file, mut out) = (None, None);
@@ -864,6 +907,28 @@ mod tests {
         let (i, j) = (37usize, 91usize);
         let h = doc["heights_m"][j * nx + i].as_f64().expect("h");
         assert!((h - w.height_at_node(i * 4, j * 4)).abs() < 1e-3);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn view_writes_a_road_and_an_overview_picture_of_the_requested_size() {
+        let dir = std::env::temp_dir().join(format!("w5k-world-view-{}", std::process::id()));
+        let course = format!("{}/../../content/world/courses/slice.ron", env!("CARGO_MANIFEST_DIR"));
+        let args = [
+            course,
+            "--out".into(),
+            dir.to_str().expect("utf8").into(),
+            "--size".into(),
+            "320x180".into(),
+            "--step".into(),
+            "4".into(),
+        ];
+        view(&args).expect("view");
+        for name in ["view-road.png", "view-overview.png"] {
+            let dec = png::Decoder::new(std::io::BufReader::new(std::fs::File::open(dir.join(name)).expect(name)));
+            let info = dec.read_info().expect("png").info().clone();
+            assert_eq!((info.width, info.height), (320, 180), "{name}");
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
