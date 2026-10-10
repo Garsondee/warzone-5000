@@ -4,8 +4,6 @@
 use std::collections::BTreeMap;
 
 use serde::Serialize;
-use w5k_contract::def::{RunningGearDef, VehicleDef};
-use w5k_contract::Param;
 
 /// A relative change smaller than this counts as "no change" (`~0`).
 pub const EPS: f64 = 0.005; // const-ok: resolution below which a change is not a sign
@@ -47,76 +45,28 @@ pub const BENCHES: &[Bench] = &[
     Bench { id: "B12", test: "skidpad", key: "max_lat_accel_g" },
 ];
 
-/// A design lever: `row` is how the table names it; `apply` scales it by `factor` in a `VehicleDef`.
+/// A design lever: `forge` is the name in FORGE's lever API (`w5k_forge::levers::apply_both`), `row` how the table names it.
 pub struct Lever {
     pub id: &'static str,
+    pub forge: &'static str,
     pub row: &'static str,
-    pub apply: fn(&mut VehicleDef, f64),
-}
-
-fn scale(p: &mut Param, f: f64) {
-    p.v *= f;
-    p.lo = p.lo.map(|x| x * f);
-    p.hi = p.hi.map(|x| x * f);
-}
-
-fn each_axle(d: &mut VehicleDef, mut f: impl FnMut(&mut w5k_contract::def::AxleDef)) {
-    if let RunningGearDef::Wheeled(w) = &mut d.running_gear {
-        w.axles.iter_mut().for_each(&mut f);
-    }
 }
 
 pub fn levers() -> Vec<Lever> {
+    let l = |id, forge, row| Lever { id, forge, row };
     vec![
-        Lever {
-            id: "engine_power",
-            row: "Engine peak power",
-            apply: |d, f| {
-                scale(&mut d.powertrain.engine.peak_power_w, f);
-                scale(&mut d.powertrain.engine.peak_torque_nm, f); // a bigger engine: power and torque together
-            },
-        },
-        Lever {
-            id: "first_gear",
-            row: "First-gear ratio",
-            apply: |d, f| d.powertrain.gearbox.forward_ratios.iter_mut().take(1).for_each(|p| scale(p, f)),
-        },
-        Lever {
-            id: "final_drive",
-            row: "Final-drive ratio",
-            apply: |d, f| scale(&mut d.powertrain.final_drive_ratio, f),
-        },
-        Lever {
-            id: "brake_capacity",
-            row: "Brake torque capacity",
-            apply: |d, f| scale(&mut d.brakes.service_decel_g, f),
-        },
-        Lever { id: "mass", row: "Vehicle mass", apply: |d, f| scale(&mut d.hull.mass_kg, f) },
-        Lever { id: "com_height", row: "Centre-of-mass height", apply: |d, f| scale(&mut d.hull.com_height_m, f) },
-        Lever { id: "track_gauge", row: "Track gauge", apply: |d, f| each_axle(d, |a| scale(&mut a.track_width_m, f)) },
-        Lever {
-            id: "ground_clearance",
-            row: "Ground clearance",
-            apply: |d, f| scale(&mut d.hull.ground_clearance_m, f),
-        },
-        Lever {
-            id: "ride_frequency",
-            row: "Ride frequency",
-            apply: |d, f| {
-                scale(&mut d.suspension.front_ride_frequency_hz, f);
-                scale(&mut d.suspension.rear_ride_frequency_hz, f);
-            },
-        },
-        Lever {
-            id: "tyre_mu",
-            row: "Tyre peak friction",
-            apply: |d, f| {
-                if let RunningGearDef::Wheeled(w) = &mut d.running_gear {
-                    scale(&mut w.tyre.mu_peak_ref, f);
-                }
-                each_axle(d, |a| a.tyre.iter_mut().for_each(|t| scale(&mut t.mu_peak_ref, f)));
-            },
-        },
+        l("engine_power", "engine_peak_power", "Engine peak power"),
+        l("first_gear", "first_gear", "First-gear ratio"),
+        l("final_drive", "final_drive", "Final-drive ratio"),
+        l("brake_capacity", "brake_torque", "Brake torque capacity"),
+        l("mass", "mass", "Vehicle mass"),
+        l("com_height", "com_height", "Centre-of-mass height"),
+        l("track_gauge", "track_gauge", "Track gauge"),
+        l("ground_clearance", "ground_clearance", "Ground clearance"),
+        l("ride_frequency", "ride_frequency", "Ride frequency"),
+        l("tyre_mu", "tyre_friction", "Tyre peak friction"),
+        // not a +10% scaling: the centre differential goes from open to limited slip (the bias is PROVISIONAL, see the tools command)
+        l("centre_diff_limited_slip", "centre_diff_limited_slip", "Centre differential"),
     ]
 }
 
@@ -461,21 +411,5 @@ mod tests {
         let mut quiet = obs(&[("brake_capacity", "B4", 0.0)]);
         quiet.regimes.insert("t".into(), Regime::TyreLimited);
         assert_eq!(evaluate(&table(), &levers(), &quiet).right, 1);
-    }
-
-    #[test]
-    fn every_lever_changes_the_vehicle_def_and_keeps_its_params_valid() {
-        let text = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content/vehicles/game/mule_4x4.ron"),
-        )
-        .expect("mule");
-        let base: VehicleDef = ron::from_str(&text).expect("parse");
-        for l in levers() {
-            let mut d = base.clone();
-            (l.apply)(&mut d, 1.1);
-            assert_ne!(d, base, "lever {} edits nothing", l.id);
-            let again: VehicleDef = ron::from_str(&ron::to_string(&d).expect("ser")).expect("round trip");
-            assert_eq!(again, d);
-        }
     }
 }
