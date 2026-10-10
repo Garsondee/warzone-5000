@@ -9,8 +9,9 @@ CourseDef(
         amplitude_m: Param(v: 9.0, prov: Spec, src: "course design: gentle rolling country"),
         wavelength_m: Param(v: 140.0, prov: Spec, src: "course design"),
         warp_m: Param(v: 40.0, prov: Spec, src: "course design: domain warp strength"),
-        octaves: 5,
+        octaves: 4,
         max_grade: Param(v: 0.30, prov: Spec, src: "course design: steepest terrain slope (rise/run), about 17 degrees"),
+        detail_gd_n0_m3: Some(Param(v: 0.03, prov: Spec, src: "course design: ISO 8608 level of the ground detail")),
         feature: Some(HillFeature(
             x_m: 40.0, z_m: -30.0,
             radius_m: Param(v: 70.0, prov: Spec, src: "course design"),
@@ -23,6 +24,7 @@ CourseDef(
         shoulder_m: Param(v: 5.0, prov: Spec, src: "course design: blend from road to terrain"),
         max_grade: Param(v: 0.08, prov: Spec, src: "course design: road grade limit, 8 percent"),
         surface: "asphalt",
+        roughness_gd_n0_m3: Some(Param(v: 0.0003, prov: Spec, src: "course design: ISO 8608 class C, an average road")),
         washboards: [RoughSectionDef(
             at_fraction: Param(v: 0.12, prov: Spec, src: "course design: early on the road"),
             length_m: Param(v: 60.0, prov: Spec, src: "course design"),

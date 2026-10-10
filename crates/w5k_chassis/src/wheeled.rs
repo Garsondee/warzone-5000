@@ -125,7 +125,9 @@ impl WheeledChassis {
             stations.push(Station {
                 name: s.name.clone(),
                 susp: Suspension::new(&s.suspension, s.bump_travel_m, tuning.suspension()),
-                tyre: Tyre::new(tyre_def, s.wheel.radius_m, tuning.tyre()),
+                // the tyre's static load: the spring's preload (the sprung share) plus the wheel's own weight
+                tyre: Tyre::new(tyre_def, s.wheel.radius_m, tuning.tyre())
+                    .with_nominal_load(s.suspension.preload_n + s.unsprung_mass_kg * scalar::G),
                 rest_body_m: s.rest_pos_m - com,
                 bump_dir: s.bump_dir.normalized_or_zero(),
                 droop_travel_m: s.droop_travel_m,

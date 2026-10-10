@@ -12,6 +12,7 @@ pub mod measure;
 pub mod score;
 pub mod verdict;
 
+pub mod impact;
 pub mod oracle;
 pub mod proving;
 pub mod terrain;
