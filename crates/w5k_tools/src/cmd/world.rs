@@ -311,14 +311,16 @@ fn stats(args: &[String]) -> Result<(), String> {
     for (k, r) in course.extra_roads.iter().enumerate() {
         roads.push((format!("track {}", k + 1), r));
     }
-    // The scored roughness lines come from the course *without* its deliberate washboard and whoops (they are features, not roughness:
-    // a 12 m whoop is a spike in the spectrum by design), which are analysed and reported separately.
+    // The scored roughness lines come from the course *without* its deliberate washboard, whoops and mud-pit dips (they are features, not roughness:
+    // a 12 m whoop or a 25 m pit is a spike in the spectrum by design), which are analysed and reported separately.
     let mut base_def = def.clone();
     base_def.road.whoops.clear();
     base_def.road.washboards.clear();
+    base_def.road.mud_crossings.clear();
     base_def.extra_roads.iter_mut().for_each(|r| {
         r.whoops.clear();
         r.washboards.clear();
+        r.mud_crossings.clear();
     });
     let has_features = base_def != def;
     let base = generate(&base_def)?;

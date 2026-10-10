@@ -295,7 +295,7 @@ mod tests {
         let again: StripDef = ron::from_str(&ron::to_string(&def).expect("serialise")).expect("re-parse");
         assert_eq!(def, again);
         assert!(DataStrip::bake(&def, standard_material_table().expect("table")).is_ok());
-        assert_eq!(standard_material_table().expect("table").materials.len(), 7);
+        assert_eq!(standard_material_table().expect("table").materials.len(), 8);
     }
 
     #[test]
@@ -349,5 +349,33 @@ mod tests {
             assert!(m.mu_peak <= 1.0 && m.mu_slide <= m.mu_peak, "{}: friction ordering", m.name);
         }
         assert!(soft >= 2, "at least mud and sand");
+    }
+
+    /// The clay and sandy-loam rows of the Bekker-Wong set as reproduced in arXiv:2603.28965 Table 2 (a secondary source: the original
+    /// table in Wong's book is still to be verified). The test pins our numbers to that row, unit conversion included.
+    #[test]
+    fn mud_and_sandy_loam_carry_the_published_bekker_wong_rows() {
+        let table = standard_material_table().expect("table");
+        let row = |name: &str, n: f64, kc_kn: f64, kphi_kn: f64, c_kpa: f64, phi_rad: f64, k_m: f64| {
+            let s = table.materials[table.id_of(name).expect(name).0 as usize].soil.expect("soft");
+            assert!((s.n - n).abs() < 1e-12, "{name} n");
+            assert!((s.kc_pa_m_n1 - kc_kn * 1000.0).abs() < 1e-6, "{name} kc");
+            assert!((s.kphi_pa_m_n - kphi_kn * 1000.0).abs() < 1e-6, "{name} kphi");
+            assert!((s.cohesion_pa - c_kpa * 1000.0).abs() < 1e-6, "{name} cohesion");
+            assert!((s.friction_angle_rad - phi_rad).abs() < 1e-4, "{name} friction angle (0.2269 rad is 13 degrees)");
+            assert!((s.shear_k_m - k_m).abs() < 1e-12, "{name} K");
+        };
+        row("mud", 0.5, 13.19, 692.15, 4.14, 0.2269, 0.01);
+        row("sandy_loam", 0.7, 5.27, 1515.04, 1.72, 0.5061, 0.025);
+        let defs: Vec<MaterialDef> =
+            ron::from_str(include_str!("../../../content/world/materials.ron")).expect("parse");
+        for name in ["mud", "sandy_loam"] {
+            let d = defs.iter().find(|d| d.name == name).expect(name);
+            let s = d.soil.as_ref().expect("soft");
+            assert!(
+                s.n.src.contains("2603.28965") && s.kphi_pa_m_n.src.contains("2603.28965"),
+                "{name} cites its source"
+            );
+        }
     }
 }
