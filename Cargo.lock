@@ -229,6 +229,7 @@ dependencies = [
  "serde",
  "w5k_contract",
  "w5k_math",
+ "w5k_terramech",
 ]
 
 [[package]]
