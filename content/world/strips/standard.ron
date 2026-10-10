@@ -1,0 +1,14 @@
+#![enable(implicit_some)]
+// The standard bump strip: the first-light test course. Drive toward -Z; features are uniform across X.
+// Same four features and numbers as the contract stand-in `BumpStrip::standard()`; this file is the data-driven replacement.
+StripDef(
+    name: "standard",
+    features: [
+        Bump(z_m: Param(v: -40.0, prov: Spec, src: "test-course layout"), length_m: Param(v: 0.8, prov: Spec, src: "test-course layout"), height_m: Param(v: 0.10, prov: Spec, src: "test-course layout; a speed hump")),
+        Washboard(z_m: Param(v: -70.0, prov: Spec, src: "test-course layout"), wavelength_m: Param(v: 1.5, prov: Spec, src: "test-course layout"), height_m: Param(v: 0.03, prov: Spec, src: "test-course layout"), count: 12),
+        Plateau(z_m: Param(v: -120.0, prov: Spec, src: "test-course layout"), ramp_m: Param(v: 3.0, prov: Spec, src: "test-course layout"), hold_m: Param(v: 20.0, prov: Spec, src: "test-course layout"), height_m: Param(v: 0.2, prov: Spec, src: "test-course layout")),
+        Hole(z_m: Param(v: -170.0, prov: Spec, src: "test-course layout"), length_m: Param(v: 1.5, prov: Spec, src: "test-course layout"), depth_m: Param(v: 0.12, prov: Spec, src: "test-course layout")),
+    ],
+    mud_start_z_m: Param(v: -200.0, prov: Spec, src: "test-course layout"),
+    mud_end_z_m: Param(v: -240.0, prov: Spec, src: "test-course layout"),
+)
