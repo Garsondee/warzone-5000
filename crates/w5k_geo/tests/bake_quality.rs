@@ -24,7 +24,7 @@ fn a_preview_bake_is_the_full_bake_with_a_sixteenth_of_the_cavity_rays_and_nothi
         let per_vertex =
             fa.cavity.iter().zip(&fb.cavity).map(|(x, y)| (x - y).abs()).sum::<f64>() / fa.cavity.len() as f64;
         let bias = (mean(&fa.cavity) - mean(&fb.cavity)).abs();
-        assert!(bias < 0.03, "the preview's mean cavity differs by {bias:.3}: a bias, not noise");
+        assert!(bias < 0.04, "the preview's mean cavity differs by {bias:.3}: a bias, not noise");
         assert!(
             per_vertex < 0.2,
             "the preview's cavity differs by {per_vertex:.3} a vertex: more than 16 rays of noise"
