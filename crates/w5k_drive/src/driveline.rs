@@ -87,6 +87,7 @@ pub struct Driveline {
     driving: bool,
     lsd_ramp_rad_s: f64,
     steer: Option<Steer>,
+    steer_power_w: f64,
     default_diff_ratio: f64,
     dead_band: f64,
 }
@@ -278,6 +279,7 @@ impl Driveline {
             driving: true,
             lsd_ramp_rad_s: tuning.lsd_full_bias_speed_rad_s.v,
             steer,
+            steer_power_w: 0.0,
             default_diff_ratio: tuning.default_steer_diff_ratio.v,
             dead_band: tuning.steer_dead_band.v,
         })
@@ -374,7 +376,12 @@ impl Driveline {
                 link.apply(dt, shafts, out, self.lsd_ramp_rad_s);
             }
         }
-        self.apply_steer(dt, shafts, steer, gear, out);
+        self.steer_power_w = self.apply_steer(dt, shafts, steer, gear, out);
+    }
+
+    /// Power the steering unit put into the sprockets in the last step, W (the engine must supply it: see `Powertrain`).
+    pub fn steer_power_w(&self) -> f64 {
+        self.steer_power_w
     }
 
     /// The steering demand after the dead band and the unit's detents: signed, +1 = full right.
@@ -387,14 +394,12 @@ impl Driveline {
         a * steer.signum()
     }
 
-    /// The `[left, right]` demand (0..1) the steering brakes should follow, for units that steer by braking: a controlled differential brakes
-    /// the inner output in proportion to the demand; a clutch-brake unit first frees the inner clutch (half the stick) and then brakes it.
-    /// `None` for a vehicle without such a unit.
+    /// The `[left, right]` demand (0..1) the steering brakes should follow: only a clutch-brake unit steers through its brakes (it first frees
+    /// the inner clutch, over half the stick, and then brakes it). `None` for a vehicle without a steering unit.
     pub fn steer_brake_demand(&self, steer: f64) -> Option<[f64; 2]> {
         let st = self.steer.as_ref()?;
         let s = self.demand(st, steer);
         let level = match st.kind {
-            SteerUnitKind::ControlledDifferential => s.abs(),
             SteerUnitKind::ClutchBrake => clamp(2.0 * s.abs() - 1.0, 0.0, 1.0),
             _ => 0.0,
         };
@@ -411,21 +416,23 @@ impl Driveline {
         self.steer.as_ref().map(|st| [st.left, st.right])
     }
 
-    fn apply_steer(&self, dt: f64, sh: &[Downstream], steer: f64, gear: i8, out: &mut [f64]) {
-        let Some(st) = &self.steer else { return };
+    /// Returns the power the unit adds to the sprockets, W: the torque pair times the speed difference it works across. A servo unit moves
+    /// torque from the slow track to the fast one, and the difference in power has to come from the engine.
+    fn apply_steer(&self, dt: f64, sh: &[Downstream], steer: f64, gear: i8, out: &mut [f64]) -> f64 {
+        let Some(st) = &self.steer else { return 0.0 };
         let s = self.demand(st, steer);
         match st.kind {
-            SteerUnitKind::ControlledDifferential => {} // steers through its brakes (`steer_brake_demand`)
             SteerUnitKind::ClutchBrake => {
                 // the inner clutch slips open as the stick passes half way: its drive torque falls to zero and the outer side carries it all
                 let (inner, outer) = if s > 0.0 { (st.right, st.left) } else { (st.left, st.right) };
                 let moved = out[inner] * (1.0 - clamp(1.0 - 2.0 * s.abs(), 0.0, 1.0));
                 out[inner] -= moved;
                 out[outer] += moved;
+                0.0
             }
-            SteerUnitKind::DoubleDifferential | SteerUnitKind::Hydrostatic => {
+            SteerUnitKind::ControlledDifferential | SteerUnitKind::DoubleDifferential | SteerUnitKind::Hydrostatic => {
                 if gear == 0 && !st.law.works_in_neutral {
-                    return; // a unit fed from the gearbox output cannot steer with the gearbox in neutral
+                    return 0.0; // a unit fed from the gearbox output cannot steer with the gearbox in neutral
                 }
                 let (l, r) = (&sh[st.left], &sh[st.right]);
                 let target = match st.law.diff_speed_rad_s {
@@ -452,6 +459,7 @@ impl Driveline {
                 }
                 out[st.left] += lambda;
                 out[st.right] -= lambda;
+                lambda * (l.omega_rad_s - r.omega_rad_s)
             }
         }
     }
@@ -633,5 +641,28 @@ mod tests {
             }
         }
         assert!(Driveline::new(&def, &tuning()).is_err());
+    }
+
+    #[test]
+    fn a_servo_steering_unit_reports_the_power_it_adds_at_the_sprockets() {
+        // moving torque to the faster track adds power at the sprockets, torque pair times the speed difference; the powertrain charges it to the engine
+        use w5k_contract::rig::{SteerLaw, SteerUnitKind};
+        let law = SteerLaw { diff_ratio_by_gear: vec![0.3], max_steer_torque_nm: 5_000.0, ..Default::default() };
+        let mut def = box_tank().0.drivetrain;
+        if let DriveNode::SteerUnit { kind, law: l, .. } = &mut def.driveline {
+            *kind = SteerUnitKind::ControlledDifferential;
+            *l = law;
+        }
+        let mut d = Driveline::new(&def, &tuning()).unwrap();
+        let mut out = vec![0.0; 2];
+        let sh = shafts(&[13.0, 10.0], &[0.0, 0.0]);
+        d.distribute(DT, 100.0, &sh, 0.0, 2, &mut out);
+        // straight ahead the unit pulls the faster track back toward the slower one: it takes power out of the sprockets, never adds it
+        assert!(d.steer_power_w() <= 0.0, "{}", d.steer_power_w());
+        d.distribute(DT, 100.0, &sh, 0.8, 2, &mut out);
+        // the servo wants (0.3 x 0.8 x 23) rad/s of difference against the 3 there is; the pair that closes the gap in one step on two 2 kg m^2
+        // shafts is (gap / dt) / (1/2 + 1/2); the power is that pair times the 3 rad/s it works across
+        let lambda = (0.3 * 0.8 * 23.0 - 3.0) / DT;
+        assert!((d.steer_power_w() - lambda * 3.0).abs() < 1.0, "{} W, expected {}", d.steer_power_w(), lambda * 3.0);
     }
 }
