@@ -57,5 +57,5 @@ transfer never costs an axle any grip. Real tyres are load sensitive, and that i
 `s = 1` at the static load (static results unchanged); above it the force `s * Fz` rises ever more slowly and tends to `Fz0 / k`, so it never falls. `k` in 0..1.
 **Contract change (additive, `#[serde(default)]`, 0 = off):** `TyreDef.mu_load_sensitivity: f64`, `TyreDef.stiffness_load_sensitivity: f64`, and optionally
 `TyreDef.nominal_load_n: f64` (0 = the solver uses the static load from the rig, preload plus unsprung weight). FORGE compiles them from the tyre archetype.
-**Until the CCR lands:** one shared value per coefficient in `content/physics/chassis/tuning.ron` (`tyre_mu_load_sensitivity` 0.15, `tyre_stiffness_load_sensitivity` 0.3,
+**Landed in contract 0.3.0 (`0982843`)**; CHASSIS reads the `TyreDef` fields and the shared stand-in is gone. *Before it landed:* one shared value per coefficient in `content/physics/chassis/tuning.ron` (`tyre_mu_load_sensitivity` 0.15, `tyre_stiffness_load_sensitivity` 0.3,
 ESTIMATE from Pacejka ch. 4), tagged PROVISIONAL(CCR-chassis-4).
