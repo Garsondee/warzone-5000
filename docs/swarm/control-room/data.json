@@ -1,11 +1,11 @@
 {
  "subtitle": "warzone-5000: a realistic ground-vehicle simulator, built by thirteen domain agents working in parallel. This page is the coordinator's view.",
- "updated": "2026-10-10 16:40 UTC",
+ "updated": "2026-10-10 17:20 UTC",
  "strip": [
   {
    "k": "Phase",
-   "v": "Slice 1 delivered; slice 2 proposed",
-   "s": "three wheeled vehicles drive the whole course; browser viewer; kid test-drive mode in a Windows zip. Slice 2 ('The Design Loop') waits for your word (card C-016)",
+   "v": "Slice 2 under way",
+   "s": "The Design Loop: tracked carrier, mud that decides who passes, the Impact Matrix running, a Workshop page. Slice 1 (three trucks, kid test drive) delivered and packaged",
    "state": "run"
   },
   {
@@ -22,14 +22,14 @@
   },
   {
    "k": "Sessions",
-   "v": "9 of 13",
-   "s": "ARCH plus eight lanes; TRACKS, GODOT, COMBAT and AI not launched (slice 2 would launch TRACKS, and COMBAT for one spike)",
+   "v": "11 of 13",
+   "s": "ARCH plus CHASSIS, DRIVE, FORGE, WORLD, VIEWER, VALIDATION, GEOMETRY, LOOK, TRACKS and COMBAT (new); GODOT and AI parked",
    "state": "run"
   },
   {
    "k": "Usage",
-   "v": "lanes about $80",
-   "s": "by my last tally, over about 14 hours (GEOMETRY and CHASSIS the largest); slice 2 is estimated at about two five-hour windows",
+   "v": "lanes about $122 before slice 2",
+   "s": "read from list_sessions (GEOMETRY 45.5, CHASSIS 20.9, WORLD 16.4, VIEWER 14.0, DRIVE 9.7, FORGE 8.5, VALIDATION 4.0, LOOK 3.1); slice 2 is planned at about two five-hour windows",
    "state": "wait"
   }
  ],
@@ -110,7 +110,7 @@
    "rank": 2,
    "state": "building",
    "mission": "Realistic hulls, turrets, wheels and tracks from lofted sections.",
-   "last": "modular vehicles: hull, wheel and weapon modules on sockets, N axles, scout and hauler skins, 50k triangle budget; hauler detail PR in merge"
+   "last": "modular vehicles, scout and hauler skins, 50k budget all merged; the tracked carrier (M113 archetype) is next"
   },
   {
    "name": "LOOK",
@@ -124,9 +124,9 @@
    "name": "TRACKS",
    "squad": "dynamics",
    "rank": 2,
-   "state": "not launched",
+   "state": "building",
    "mission": "Tracked running gear and soft ground: floats where tyres bog, turns by skidding.",
-   "last": "not launched; slice 2 proposal would launch it (card C-016)"
+   "last": "launched 17:13 UTC for slice 2: spikes S3 (skid-steer) and S4 (soil), then soil laws, track contact, the mud ladder"
   },
   {
    "name": "GODOT",
@@ -140,9 +140,9 @@
    "name": "COMBAT",
    "squad": "behaviour",
    "rank": 2,
-   "state": "not launched",
+   "state": "building",
    "mission": "Ballistics, penetration, damage, targets, turret and gun servos, recoil.",
-   "last": "not launched; slice 2 proposal would launch it (card C-016)"
+   "last": "launched 17:13 UTC, bounded: spike S6 (turret and recoil) and the ballistics kernel only"
   },
   {
    "name": "AI",
@@ -175,7 +175,7 @@
   {
    "id": "S2",
    "name": "Slice 2: The Design Loop",
-   "state": "proposed (waits for your go)",
+   "state": "under way",
    "criteria": "A tracked carrier, mud that decides who passes, the Impact Matrix running, a Workshop page where a design change moves measured numbers and can be driven. See docs/swarm/SLICE-2.md and card C-016."
   },
   {
@@ -295,6 +295,11 @@
    "t": "2026-10-10 16:35",
    "sessions": "9 of 13",
    "note": "You ran the Windows package and liked it. START.bat now has no speed limiter; START-KID.bat keeps the 25 km/h cap. Slice 2 proposed (The Design Loop); three new cards: C-016 (slice 2), C-017 (where real published figures come from), C-018 (oracle tolerance class). Nothing new launches without your go."
+  },
+  {
+   "t": "2026-10-10 17:15",
+   "sessions": "11 of 13",
+   "note": "You said go: slice 2 is on. TRACKS and COMBAT launched; the other lanes have their stage A jobs (tyre load sensitivity, terrain spectrum fix, lever API, Impact Matrix runner, charts, tracked carrier). Slice 1 package unchanged: run 38069793130."
   }
  ],
  "footer": "Defaults apply to every open card until you answer it."

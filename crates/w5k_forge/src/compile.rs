@@ -102,6 +102,20 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
         h.com_height_m.v, h.com_from_front_m.v
     ));
 
+    // ---- geometry of obstacles: what ground clearance changes (the hull proxy's underside is exactly `ground_clearance_m` above the ground)
+    let (a_first, a_last) = (w.axles[0].from_front_m.v, w.axles[w.axles.len() - 1].from_front_m.v);
+    let tyre_r = 0.5 * w.tyre.outer_diameter_m.v;
+    let clear = h.ground_clearance_m.v;
+    let to_deg = 180.0 / scalar::PI; // const-ok: radians to degrees for display
+    let angle = |overhang: f64| if overhang <= 0.0 { 90.0 } else { scalar::atan2(clear, overhang) * to_deg }; // const-ok: tyre-limited
+    let wheelbase = a_last - a_first;
+    report.push(format!(
+        "obstacle geometry from the {clear:.2} m clearance: approach {:.0} deg, departure {:.0} deg (90 = the tyre limits), ramp breakover {:.0} deg",
+        angle(a_first - tyre_r),
+        angle(h.length_m.v - a_last - tyre_r),
+        2.0 * scalar::atan2(2.0 * clear, wheelbase) * to_deg
+    ));
+
     // ---- stations, tyres, springs
     let r = 0.5 * ty.outer_diameter_m.v;
     let tyre_k = need(&ty.vertical_stiffness_n_m, "running_gear.tyre.vertical_stiffness_n_m")?;

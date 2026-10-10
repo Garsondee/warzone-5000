@@ -2,5 +2,6 @@
 //!
 //! Ballistics, penetration, damage, targets, turret and gun servos, recoil.
 //!
-//! Status: SKELETON, created by the Launch Kit. Read your lane brief first:
-//! `docs/swarm/lanes/combat.md`. Only lane COMBAT edits this crate (`docs/swarm/ownership.toml`).
+//! Status: `ballistics` is built (slice 2). The rest waits for a later slice; see `docs/swarm/status/combat.md` and `docs/lanes/combat/design-note.md`.
+
+pub mod ballistics;
