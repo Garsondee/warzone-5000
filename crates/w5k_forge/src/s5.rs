@@ -183,6 +183,10 @@ pub fn compile(def: &VehicleDef, ex: &Extras) -> Result<Compiled, String> {
             rolling_coeff: ty.rolling_coeff.v,
             inflation_pa: ty.inflation_pa.v,
             patch_length_m: patch,
+            speed_floor_m_s: 0.0,
+            aligning_trail_frac: 0.0,
+            kappa_peak: 0.0,
+            alpha_peak_rad: 0.0,
         });
         report.push(format!(
             "{}: sprung {m_corner:.1} kg, f {f_hz} Hz -> ride rate {k_ride:.0}, spring {k_spring:.0} N/m, zeta {} -> {c_bump:.0}/{c_reb:.0} N s/m, tyre deflection {:.1} mm, patch {:.0} mm",
@@ -371,9 +375,9 @@ mod tests {
     }
 
     #[test]
-    fn the_contract_stand_in_def_has_inconsistent_engine_peaks_and_is_rejected() {
-        let err = compile(&dummy_vehicle_def(), &extras()).err().expect("rejected");
-        assert!(err.contains("peak power"), "{err}");
+    fn the_contract_stand_in_def_compiles_now_that_its_engine_peaks_are_consistent() {
+        // Contract 0.2 fixed the stand-in (95 kW at 3500 rpm with a 300 N m peak at 2500 rpm); 0.1 had 110 kW and was rejected here.
+        compile(&dummy_vehicle_def(), &extras()).unwrap_or_else(|e| panic!("{e}"));
     }
 
     #[test]

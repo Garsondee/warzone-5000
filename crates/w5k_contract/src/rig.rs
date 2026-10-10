@@ -26,6 +26,11 @@ use crate::combat::CombatDef;
 /// needs more than 8 stops and writes it up, and spike S1 settles the budget for heavy tracked vehicles).
 pub const MAX_SUBSTEPS: u32 = 16;
 
+/// The fixed simulation tick the substep rule counts against, Hz.
+pub const TICK_HZ: f64 = 60.0; // const-ok: the fixed time step of the simulation (DETERMINISM.md)
+/// The substep rule: at least this many samples per period of the stiffest mode, `substeps * TICK_HZ >= SAMPLES_PER_PERIOD * f_max_hz`.
+pub const SAMPLES_PER_PERIOD: f64 = 20.0; // const-ok: numerical-stability margin of the substep rule (CONTRACTS.md)
+
 fn one() -> f64 {
     1.0
 }
@@ -162,6 +167,25 @@ pub struct TyreDef {
     pub inflation_pa: f64,
     /// Contact patch length at the load that gives the static deflection of this rig, m.
     pub patch_length_m: f64,
+    /// Contract 0.2 (CHASSIS CCR-1). Ground speed below which the relaxation update uses this speed instead, so a stretched tyre holds
+    /// its slip state at rest instead of creeping (m/s). 0 = no floor (the 0.1 behaviour).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub speed_floor_m_s: f64,
+    /// Contract 0.2. Pneumatic trail as a fraction of `patch_length_m`: the self-aligning moment is `lateral force * trail_frac * patch_length_m`.
+    /// 0 = no self-aligning moment (the 0.1 behaviour).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub aligning_trail_frac: f64,
+    /// Contract 0.2. Slip ratio at which the longitudinal force peaks (dimensionless), so the curve shape is data. 0 = the solver's built-in shape.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub kappa_peak: f64,
+    /// Contract 0.2. Slip angle at which the lateral force peaks, rad. 0 = the solver's built-in shape.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub alpha_peak_rad: f64,
+}
+
+/// `skip_serializing_if` helper: new defaulted fields stay out of the serialised rig while they are 0, so `rig_hash()` of a 0.1 rig is unchanged.
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0 // const-ok: exact zero is the "unset" sentinel
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -806,6 +830,10 @@ pub enum FireCycle {
 pub struct IntegrationDef {
     /// Substeps per 60 Hz tick, set when the rig is baked from its stiffest mode (the rule is spike S1's to settle; see CONTRACTS.md).
     pub substeps: u32,
+    /// Contract 0.2 (CHASSIS CCR-3). The stiffest mechanical mode the rig was baked from, Hz (diagnostic; see the substep rule in
+    /// `CONTRACTS.md`). `None` = not recorded. When present, `validate()` checks that `substeps` covers it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub f_max_hz: Option<f64>,
 }
 
 /// Optional rig features that a solver must implement or refuse: see [`PhysRig::required_features`].
