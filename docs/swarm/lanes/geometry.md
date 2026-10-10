@@ -51,6 +51,7 @@ A mesh not closed in CI (never weaken the test); a dimension or vertex typed in 
 ## Owner's answers that apply to you (2026-10-08, card C-002)
 - The aim is original hull designs built on real hull-shape logic (glacis and slope angles, sponsons, turret-ring and track-envelope proportions), not copies of real silhouettes. Matching a dossier's dimensions within 3% is for the validation builds; keep the generators parametric enough to produce new hulls.
 - The world is fiction: no real insignia, nameplates or national markings in geometry.
+- Card C-004 (2026-10-09): parametric models only, built by us, never hand-modelled. The prototype's medium tank showed the approach can look convincing; go further with surface detail (panel lines in logical places, hatches and fittings), better tracks and side skirts. Every part of a vehicle stays parametric because the game designs vehicles from parts.
 
 ## Done
 M1 acceptance passes in CI, theory note and README written, images in `media/`, status file has the handoff note, you have idled.
