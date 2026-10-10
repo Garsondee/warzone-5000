@@ -21,20 +21,27 @@ FOLDER = "Warzone5000-TestDrive"
 VEHICLE = "content/vehicles/game/mule_4x4.ron"
 COURSE = "content/world/courses/slice.ron"
 
-START_BAT = (
-    "@echo off\r\n"
-    'cd /d "%~dp0"\r\n'
-    "echo Starting the Warzone 5000 test drive. A browser window will open.\r\n"
-    "echo Leave this window open while you drive. Close it to stop.\r\n"
-    f"w5k.exe drive --vehicle {VEHICLE.replace('/', chr(92))} --course {COURSE.replace('/', chr(92))} --web viewer --open\r\n"
-    "pause\r\n"
-)
+def _bat(extra: str, who: str) -> str:
+    drive = f"w5k.exe drive --vehicle {VEHICLE.replace('/', chr(92))} --course {COURSE.replace('/', chr(92))} --web viewer --open{extra}"
+    return (
+        "@echo off\r\n"
+        'cd /d "%~dp0"\r\n'
+        f"echo Starting the Warzone 5000 test drive ({who}). A browser window will open.\r\n"
+        "echo Leave this window open while you drive. Close it to stop.\r\n"
+        f"{drive}\r\n"
+        "pause\r\n"
+    )
+
+
+# START.bat: no speed limit (the other helpers stay). START-KID.bat: the 25 km/h cap for a small driver.
+START_BAT = _bat(" --no-speed-limit", "full speed")
+START_KID_BAT = _bat("", "kid mode, speed limited")
 
 START_SH = (
     "#!/bin/sh\n"
     'cd "$(dirname "$0")" || exit 1\n'
     "echo 'Starting the Warzone 5000 test drive. A browser window will open.'\n"
-    f"./w5k drive --vehicle {VEHICLE} --course {COURSE} --web viewer --open\n"
+    f"./w5k drive --vehicle {VEHICLE} --course {COURSE} --web viewer --open --no-speed-limit\n"
 )
 
 README = """WARZONE 5000 - TEST DRIVE
@@ -42,6 +49,8 @@ README = """WARZONE 5000 - TEST DRIVE
 
 To start:  double-click START.bat   (on Linux or Mac: run ./start.sh)
 A black window opens (leave it open) and your web browser opens the driving page.
+For your child, double-click START-KID.bat instead: the same game with a top speed of 25 km/h.
+(w5k.exe is the engine; it does nothing when double-clicked on its own. Always start from a START file.)
 
 To drive:
   - Arrow keys or W A S D: go, brake, turn left, turn right.
@@ -50,8 +59,9 @@ To drive:
   - Tipped over or stuck? The game puts the vehicle back on the road by itself, or press the big RESET button.
   - C changes the camera between close-up and far away.
 
-The game helps small drivers: the top speed is limited, steering is gentle, and the vehicle slows down by itself
-when you let go of the keys. Grown-ups can switch the helpers off by adding   --no-assist   to the line in START.bat.
+The game helps small drivers: steering is gentle at speed and the vehicle slows down by itself when you let go of the
+keys. START-KID.bat also limits the top speed to 25 km/h; START.bat does not. Grown-ups can switch all the helpers
+off by adding   --no-assist   to the line in a START file.
 
 To stop: close the black window.
 
@@ -87,6 +97,7 @@ def build(exe: Path, content: Path, page: Path, out: Path, target_os: str, skins
                 add(z, p, f"viewer/skins/{p.name}")
         if windows:
             add(z, None, "START.bat", START_BAT)
+            add(z, None, "START-KID.bat", START_KID_BAT)
         else:
             add(z, None, "start.sh", START_SH, executable=True)
         add(z, None, "README.txt", README)

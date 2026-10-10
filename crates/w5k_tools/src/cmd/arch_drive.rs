@@ -1,4 +1,4 @@
-//! `w5k drive --vehicle FILE.ron --course FILE.ron [--vehicles-dir DIR] [--web DIR] [--port N] [--open] [--no-assist] [--record DIR]`:
+//! `w5k drive --vehicle FILE.ron --course FILE.ron [--vehicles-dir DIR] [--web DIR] [--port N] [--open] [--no-assist] [--no-speed-limit] [--record DIR]`:
 //! the live test-drive server (ARCH). The real simulation (FORGE rig, DRIVE powertrain, CHASSIS vehicle, WORLD course) runs in real time on
 //! its own thread; a tiny loopback HTTP server serves a prebuilt page and a small JSON API (`docs/swarm/requests/arch-drive-protocol.md`).
 //! A five-year-old drives with arrow keys, a gamepad or big buttons; the kid assists live in `content/physics/arch/drive_assist.ron`.
@@ -19,7 +19,7 @@ use std::sync::Arc;
 use live::{Recorder, Runner, Shared};
 use session::{Car, Scene};
 
-const USAGE: &str = "usage: w5k drive --vehicle FILE.ron --course FILE.ron [--vehicles-dir DIR] [--web DIR] [--port N] [--open] [--no-assist] [--record DIR]";
+const USAGE: &str = "usage: w5k drive --vehicle FILE.ron --course FILE.ron [--vehicles-dir DIR] [--web DIR] [--port N] [--open] [--no-assist] [--no-speed-limit] [--record DIR]";
 const TUNING: &str = "content/physics/arch/drive_assist.ron";
 const DEFAULT_VEHICLES_DIR: &str = "content/vehicles/game";
 const DEFAULT_PORT: u16 = 8787; // const-ok: the default port of the local page
@@ -34,6 +34,8 @@ pub(crate) struct Opts {
     pub port: u16,
     pub open: bool,
     pub assist: bool,
+    /// `--no-speed-limit`: keep the other kid assists but let the vehicle go as fast as it can.
+    pub no_speed_limit: bool,
     pub record: Option<PathBuf>,
     pub root: PathBuf,
 }
@@ -51,6 +53,7 @@ impl Opts {
             port,
             open: args.iter().any(|a| a == "--open"),
             assist: !args.iter().any(|a| a == "--no-assist"),
+            no_speed_limit: args.iter().any(|a| a == "--no-speed-limit"),
             record: opt("--record").map(PathBuf::from),
             root: PathBuf::from("."),
         })
@@ -81,7 +84,9 @@ pub(crate) struct Started {
 
 /// Load everything, start the simulation thread and the accept thread, return once the port is bound.
 pub(crate) fn start(o: &Opts) -> Result<Started, String> {
-    let scene = Arc::new(Scene::load(&o.root, TUNING, &o.course)?);
+    let mut scene = Scene::load(&o.root, TUNING, &o.course)?;
+    scene.assist_tuning.assist.no_speed_limit = o.no_speed_limit;
+    let scene = Arc::new(scene);
     let mut garage = Car::load_dir(&o.root, &scene, &o.vehicles_dir)?;
     let mut first_id = None;
     if let Some(file) = &o.vehicle {
@@ -171,6 +176,7 @@ mod tests {
             port: 0,
             open: false,
             assist: true,
+            no_speed_limit: false,
             record,
             root: root(),
         };

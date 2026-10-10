@@ -51,6 +51,16 @@ class PackageTestDrive(unittest.TestCase):
         self.assertNotIn("\n\n", bat.replace("\r\n", "\n"))  # CRLF line ends: Windows batch files need them
         self.assertTrue(bat.endswith("\r\n"))
 
+    def test_start_bat_has_no_speed_limit_and_start_kid_bat_keeps_it(self):
+        out, _ = self.build()
+        with zipfile.ZipFile(out) as z:
+            full = z.read(f"{pkg.FOLDER}/START.bat").decode()
+            kid = z.read(f"{pkg.FOLDER}/START-KID.bat").decode()
+        self.assertIn("--no-speed-limit", full)
+        self.assertNotIn("--no-speed-limit", kid)
+        self.assertNotIn("--no-assist", full + kid)
+        self.assertTrue(kid.endswith("\r\n"))
+
     def test_the_linux_package_gets_a_shell_start_file_and_an_executable_program(self):
         out, _ = self.build("linux.zip", "linux")
         with zipfile.ZipFile(out) as z:
