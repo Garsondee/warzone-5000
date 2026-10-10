@@ -149,7 +149,7 @@ impl Walk<'_> {
                     .iter()
                     .filter_map(|c| if let DriveNode::Output(i) = c { Some(*i) } else { None })
                     .collect();
-                if !(*r > 0.0) || outs.len() != 2 || children.len() != 2 || self.steer.is_some() {
+                if r.is_nan() || *r <= 0.0 || outs.len() != 2 || children.len() != 2 || self.steer.is_some() {
                     return Err("a steering unit needs ratio > 0 and exactly two Output children [left, right], and there can be only one".into());
                 }
                 let start = self.leaves.len();
