@@ -122,6 +122,7 @@ impl DrivePort for Powertrain {
         let carrier = self.driveline.reflect(&outs);
         let input_side = self.gearbox.reflect(&carrier);
 
+        self.gearbox.note_brake(dt, inputs.brake);
         let shift = self.gearbox.update(dt, inputs.gear, inputs.throttle, carrier.omega_rad_s, speed);
         let throttle = if inputs.engine_on { inputs.throttle } else { 0.0 };
         let c = self.coupling.step(dt, &mut self.engine, throttle, inputs.clutch, shift.capacity_scale, &input_side);
