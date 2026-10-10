@@ -13,7 +13,7 @@
   powertrain), writes replay + CSV; plots and a clip frame in `docs/lanes/chassis/media/`.
 
 ## In progress
-- #59 merged (modes + ledger). This PR: `bench` (tilt table, skidpad) + the steady-turn load-transfer test + a fix: the tyre's lateral
+- #59 merged (modes + ledger). #69: `bench` (tilt table, skidpad) + the steady-turn load-transfer test + a fix: the tyre's lateral
   force now carries its patch-to-hub moment (rolled too little before; the tilt table caught it). Next: ARCH's call (Scout/Hauler when FORGE lands them).
 - **Parameters I would not trust yet:** tyre curve linear to the friction-circle cap (no slide drop: `mu_slide`, `kappa_peak`, `alpha_peak_rad` unused),
   so locked braking and the cornering limit read high; no tyre load sensitivity; roll centre fixed at wheel-centre height by the sliding-strut
