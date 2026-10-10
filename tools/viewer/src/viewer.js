@@ -75,27 +75,7 @@ export function applyVehicle(built, s, vi = 0) {
   poseRig(built, v0.joints.map((x, k) => x + (v1.joints[k] - x) * a));
 }
 
-// Ground colour by surface name (the world's material table); anything else is grass.
-const GROUND = { asphalt: 0x4a4a4c, dirt: 0x8b7355, mud: 0x4b3a28, gravel: 0x8a8a84, sand: 0xc2b280 };
-
-// A heightfield (rows of constant z, from `w5k viewer render --strip`) as a vertex-coloured mesh.
-export function terrainMesh(t) {
-  const pos = new Float32Array(t.nx * t.nz * 3), col = new Float32Array(t.nx * t.nz * 3), c = new THREE.Color();
-  for (let j = 0; j < t.nz; j++) for (let i = 0; i < t.nx; i++) {
-    const k = j * t.nx + i;
-    pos.set([t.x0 + i * t.step, t.h[k], t.z0 + j * t.step], k * 3);
-    c.setHex(GROUND[t.materials[t.mat[k]]] ?? 0x8a9a6a);
-    col.set([c.r, c.g, c.b], k * 3);
-  }
-  const idx = [];
-  for (let j = 0; j < t.nz - 1; j++) for (let i = 0; i < t.nx - 1; i++) { const a = j * t.nx + i, b = a + 1, d = a + t.nx, e = d + 1; idx.push(a, d, b, b, d, e); }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  g.setIndex(idx);
-  g.computeVertexNormals();
-  return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }));
-}
+import { terrainMesh, propsGroup, roadMesh } from './world.js';
 
 export function makeScene(canvas, W, H, terrain = null) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
@@ -107,11 +87,14 @@ export function makeScene(canvas, W, H, terrain = null) {
   sun.position.set(30, 60, 20);
   scene.add(sun);
   if (terrain) {
-    scene.add(terrainMesh(terrain));
+    const t = terrainMesh(terrain);
+    scene.add(t.mesh, propsGroup(terrain));
+    const road = roadMesh(terrain);
+    if (road) scene.add(road);
     // A broad plane just under the lowest point, so the edge of the sampled strip does not open onto the sky.
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshStandardMaterial({ color: 0x8a9a6a, roughness: 1 }));
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(terrain.x0 + (terrain.nx * terrain.step) / 2, Math.min(...terrain.h) - 0.05, terrain.z0 + (terrain.nz * terrain.step) / 2);
+    floor.position.set(t.centre[0], t.min - 0.05, t.centre[1]);
     scene.add(floor);
   }
   else {
