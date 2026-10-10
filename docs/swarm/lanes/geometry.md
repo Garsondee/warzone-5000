@@ -53,5 +53,8 @@ A mesh not closed in CI (never weaken the test); a dimension or vertex typed in 
 - The world is fiction: no real insignia, nameplates or national markings in geometry.
 - Card C-004 (2026-10-09): parametric models only, built by us, never hand-modelled. The prototype's medium tank showed the approach can look convincing; go further with surface detail (panel lines in logical places, hatches and fittings), better tracks and side skirts. Every part of a vehicle stays parametric because the game designs vehicles from parts.
 
+## Owner's direction 2026-10-10 (card C-020, `docs/architecture/DESIGN-MODEL.md`)
+- Armour and structure mass will come from your lofts: expose per-facing surface areas, enclosed volumes and component volumes and positions (engine bay, fuel, ammunition stowage, crew) so FORGE can sum mass and COMBAT can compute exposure; mark where openings (cooling, vision, mantlet) must be.
+
 ## Done
 M1 acceptance passes in CI, theory note and README written, images in `media/`, status file has the handoff note, you have idled.

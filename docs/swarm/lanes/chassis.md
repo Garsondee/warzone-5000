@@ -47,5 +47,8 @@ Needs: DRIVE's `DrivePort`; WORLD's `WorldQuery`; FORGE's HMMWV rig; VIEWER's pl
 ## Tripwires specific to this lane
 A rig needing more than 8 substeps (stop, write it up: this is spike S1's kill criterion); any constant tuned to one vehicle; any banned maths call; modelling something listed in `NOT-MODELLED.md`; a result you cannot explain from the ledger.
 
+## Owner's direction 2026-10-10 (card C-020, `docs/architecture/DESIGN-MODEL.md`)
+- Expose the checks FORGE's audit needs from your side: tyre load against rating per wheel at rest and in a turn, static suspension margin, static stability factor, and the skidpad limiter (grip, wheel lift, traction).
+
 ## Done
 M1 acceptance passes in CI, the theory note is written, the status file has the handoff note, and you have idled. Anything further (the tracked version, ABS, the substep rule revisited for a 70 t rig) is a follow-up task from ARCH.

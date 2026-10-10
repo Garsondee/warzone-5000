@@ -47,5 +47,8 @@ Needs: nothing from CHASSIS at build time (wheel and sprocket inertia are in the
 ## Tripwires specific to this lane
 A coupling that needs more than 8 substeps; a torque that reverses a stopped shaft; an efficiency or ratio written as a bare number; tuning anything to a single vehicle; modelling the NOT-MODELLED list.
 
+## Owner's direction 2026-10-10 (card C-020, `docs/architecture/DESIGN-MODEL.md`)
+- Engine rating above 100% is a design choice with a price (heat, durability, apertures); when you next touch the engine model, expose the rated power, the heat rejected (roughly shaft power x (1/efficiency - 1)) and a stress-against-rating number so FORGE's audit can show the cooling margin and driveline torque margin.
+
 ## Done
 M1 acceptance passes in CI, the theory note is written, the status file has the handoff note, you have idled.

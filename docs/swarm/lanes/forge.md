@@ -47,5 +47,8 @@ A slider that has no effect on any rig field (a dead lever: report it); a rig fi
 - The reference garage spans every role (recon, personnel carrier, light, medium, heavy and main battle tank, assault gun or tank destroyer, self-propelled artillery, recovery, utility truck) and eras from very late WW2 onward; the purpose is to exercise the designer-level sliders and the compile, not to copy vehicles.
 - Exotic materials, propulsion and weapons come later: new components and materials must enter as data (catalogue entries and `Param`s), never as special cases in the compile.
 
+## Owner's direction 2026-10-10 (card C-020, `docs/architecture/DESIGN-MODEL.md`)
+- Mass is a consequence: build a **component mass budget** (engine, transmission, fuel, then crew, armour, weapon) whose total is the hull mass, with the centre of mass and inertia from the parts' positions. The three trucks keep their design-point mass and centre of mass; the `engine power` slider then moves mass, axle loads and ground pressure. Export a **design audit** (derived numbers with units, provenance and a because-line, plus envelope flags) as JSON for the Workshop. Reject only what the solver cannot represent; warn on the rest.
+
 ## Done
 M1 acceptance passes in CI, the theory note is written, the status file has the handoff note, you have idled.
