@@ -140,9 +140,9 @@ fn proving_results(vehicle: &Path, out: &Path) -> Result<BTreeMap<String, Provin
 fn impact(args: &[String]) -> Result<(), String> {
     let out = PathBuf::from(flag(args, "--out").ok_or("--out DIR is required")?);
     let list = flag(args, "--vehicles").unwrap_or(IMPACT_VEHICLES);
-    let table = impact::parse_table(
-        &std::fs::read_to_string(root().join("docs/validation/IMPACT-MATRIX.md")).map_err(|e| e.to_string())?,
-    );
+    let matrix = std::fs::read_to_string(root().join("docs/validation/IMPACT-MATRIX.md")).map_err(|e| e.to_string())?;
+    let table = impact::parse_table(&matrix);
+    let all_benchmarks = impact::parse_benchmarks(&matrix);
     let levers = impact::levers();
     let mut obs = impact::Observations { pairs: BTreeMap::new(), regimes: BTreeMap::new(), labels: BTreeMap::new() };
     for path in list.split(',').filter(|v| !v.is_empty()) {
@@ -209,7 +209,7 @@ fn impact(args: &[String]) -> Result<(), String> {
             }
         }
     }
-    let report = impact::evaluate(&table, &levers, &obs);
+    let report = impact::evaluate_full(&table, &levers, &obs, &all_benchmarks);
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     std::fs::write(out.join("impact.json"), serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?)
         .map_err(|e| e.to_string())?;

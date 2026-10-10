@@ -16,9 +16,14 @@ pub enum Sign {
 }
 
 pub fn classify(delta: f64) -> Sign {
-    if delta < -EPS {
+    classify_with(EPS, delta)
+}
+
+/// `classify` with another no-change threshold (the report states the count at 1% as well, never choosing one to reach a bar).
+pub fn classify_with(eps: f64, delta: f64) -> Sign {
+    if delta < -eps {
         Sign::Minus
-    } else if delta > EPS {
+    } else if delta > eps {
         Sign::Plus
     } else {
         Sign::Zero
@@ -153,13 +158,12 @@ pub struct Observations {
 }
 
 /// Where the table's sign depends on the regime, what the lever must do **in that regime** (IMPACT-MATRIX.md, "Regimes"):
-/// a vehicle that slides before it tips does not care about centre-of-mass height or track (B7); one limited by power on the
-/// skidpad does not care about chassis levers (B12).
+/// a vehicle that slides before it tips does not care about centre-of-mass height or track (B7). A power-limited skidpad (B12) is
+/// deliberately **not** an override: cornering drag couples the chassis levers to the power limit, so the table's signs apply.
 fn regime_override(bench: &str, lever: &str, label: &str) -> Option<Vec<Sign>> {
     let l = label.to_lowercase();
     let zero = match bench {
         "B7" => l.contains("slide") && ["com_height", "track_gauge", "ground_clearance"].contains(&lever),
-        "B12" => l.contains("power") && ["com_height", "track_gauge", "ride_frequency", "tyre_mu"].contains(&lever),
         _ => false,
     };
     zero.then(|| vec![Sign::Zero])
@@ -177,7 +181,21 @@ const PERTURB_PCT: f64 = 10.0; // const-ok: the +10% perturbation of IMPACT-MATR
 const ACCEPTANCE_PCT: f64 = 80.0; // const-ok: ARCH's target for right signs
 
 #[derive(Debug, Serialize)]
+pub struct Untested {
+    pub lever: String,
+    pub bench: String,
+    pub reason: &'static str,
+}
+
+#[derive(Debug, Serialize)]
 pub struct Report {
+    /// Scored entries that agree with the table when the no-change threshold is 1% instead of 0.5% (reported next to the headline).
+    pub right_at_1pct: usize,
+    pub table_rows: usize,
+    pub table_rows_tested: usize,
+    /// Table rows that no run could test today, with the reason, and the benchmarks that have no runner.
+    pub untested_rows: Vec<Untested>,
+    pub not_run_benchmarks: Vec<Named>,
     pub benchmarks: Vec<Named>,
     pub levers: Vec<Named>,
     pub perturb_pct: f64,
@@ -200,6 +218,24 @@ impl Report {
 }
 
 pub fn evaluate(table: &[Expected], levers: &[Lever], obs: &Observations) -> Report {
+    evaluate_full(table, levers, obs, &[])
+}
+
+/// The benchmark ids and names of the table's first section (`| B1 | 0-32 km/h time (s) | ... |`).
+pub fn parse_benchmarks(md: &str) -> Vec<Named> {
+    md.lines()
+        .filter(|l| l.starts_with("| B"))
+        .filter_map(|l| {
+            let c: Vec<&str> = l.split('|').map(str::trim).collect();
+            (c.len() > 3 && c[3] != "Sign" && c[1][1..].chars().all(|x| x.is_ascii_digit()) && !c[1].contains(' '))
+                .then(|| Named { id: c[1].into(), name: c[2].into() })
+        })
+        .collect()
+}
+
+/// `evaluate`, plus which benchmarks have no runner and which table rows were therefore not tested (`all_benchmarks` from
+/// [`parse_benchmarks`]).
+pub fn evaluate_full(table: &[Expected], levers: &[Lever], obs: &Observations, all_benchmarks: &[Named]) -> Report {
     let mut entries = Vec::new();
     for ((vehicle, lever_id, bench), (base, pert)) in &obs.pairs {
         let Some(lever) = levers.iter().find(|l| l.id == lever_id) else { continue };
@@ -261,9 +297,38 @@ pub fn evaluate(table: &[Expected], levers: &[Lever], obs: &Observations) -> Rep
         })
         .map(String::from)
         .collect();
+    let right_at_1pct = entries
+        .iter()
+        .filter(|e| !e.allowed.is_empty() && e.allowed.contains(&classify_with(2.0 * EPS, e.delta)))
+        .count();
+    let mut untested_rows = Vec::new();
+    for e in table {
+        let lever = levers.iter().find(|l| e.lever.starts_with(l.row));
+        let reason = match lever {
+            None => Some("no lever in the runner (no lever API entry or no vehicle field)"),
+            Some(_) if !BENCHES.iter().any(|b| b.id == e.bench) => Some("benchmark has no runner yet"),
+            Some(l) if !obs.pairs.keys().any(|(_, lv, b)| lv == l.id && *b == e.bench) => {
+                Some("no run produced a value")
+            }
+            Some(_) => None,
+        };
+        if let Some(reason) = reason {
+            untested_rows.push(Untested { lever: e.lever.clone(), bench: e.bench.clone(), reason });
+        }
+    }
+    let not_run_benchmarks = all_benchmarks
+        .iter()
+        .filter(|b| !BENCHES.iter().any(|r| r.id == b.id))
+        .map(|b| Named { id: b.id.clone(), name: b.name.clone() })
+        .collect();
     let benchmarks = BENCHES.iter().map(|b| Named { id: b.id.into(), name: b.name.into() }).collect();
     let levers = levers.iter().map(|l| Named { id: l.id.into(), name: l.row.into() }).collect();
     Report {
+        right_at_1pct,
+        table_rows: table.len(),
+        table_rows_tested: table.len() - untested_rows.len(),
+        untested_rows,
+        not_run_benchmarks,
         benchmarks,
         levers,
         perturb_pct: PERTURB_PCT,
@@ -325,7 +390,26 @@ pub fn render_markdown(r: &Report) -> String {
         }
         s += "\n";
     }
-    s += &format!("**Right signs: {} of {} scored ({:.0}%).**\n\n", r.right, r.scored, PERCENT * r.right_fraction());
+    s += &format!(
+        "**Right signs: {} of {} scored ({:.0}%) at the 0.5% no-change threshold; {} of {} ({:.0}%) at 1%.** Both are reported; the threshold is never chosen to reach a bar.\n\n",
+        r.right,
+        r.scored,
+        PERCENT * r.right_fraction(),
+        r.right_at_1pct,
+        r.scored,
+        PERCENT * r.right_at_1pct as f64 / r.scored.max(1) as f64
+    );
+    s += &format!(
+        "**Tested today: {} of {} table rows.** Benchmarks with no runner: {}.\n\nUntested rows ({}):\n",
+        r.table_rows_tested,
+        r.table_rows,
+        r.not_run_benchmarks.iter().map(|b| format!("{} ({})", b.id, b.name)).collect::<Vec<_>>().join(", "),
+        r.untested_rows.len()
+    );
+    for u in &r.untested_rows {
+        s += &format!("- {} x {}: {}\n", u.lever, u.bench, u.reason);
+    }
+    s += "\n";
     s += &format!(
         "Dead levers (moved no runnable benchmark): {:?}\n\nOrphan benchmarks (no lever moved them): {:?}\n",
         r.dead_levers, r.orphan_benchmarks
@@ -442,5 +526,51 @@ mod tests {
         let mut quiet = obs(&[("brake_capacity", "B4", 0.0)]);
         quiet.regimes.insert("t".into(), Regime::TyreLimited);
         assert_eq!(evaluate(&table(), &levers(), &quiet).right, 1);
+    }
+
+    fn matrix() -> String {
+        std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/validation/IMPACT-MATRIX.md"),
+        )
+        .expect("matrix")
+    }
+
+    #[test]
+    fn the_report_lists_benchmarks_with_no_runner_and_the_rows_that_cannot_be_tested() {
+        let o = obs(&[("engine_power", "B1", -0.08)]);
+        let r = evaluate_full(&table(), &levers(), &o, &parse_benchmarks(&matrix()));
+        assert!(
+            r.not_run_benchmarks.iter().any(|b| b.id == "B2") && !r.not_run_benchmarks.iter().any(|b| b.id == "B1")
+        );
+        assert!(r.untested_rows.iter().any(|u| u.lever.starts_with("Engine peak power") && u.bench == "B2"));
+        assert!(r.untested_rows.iter().any(|u| u.lever.starts_with("Turret mass")), "levers with no runner are listed");
+        assert_eq!(r.table_rows_tested + r.untested_rows.len(), r.table_rows);
+        assert!(render_markdown(&r).contains("Benchmarks with no runner"));
+    }
+
+    #[test]
+    fn the_count_at_one_percent_is_reported_beside_the_headline_and_never_replaces_it() {
+        // a slide-limited vehicle whose side-slope angle moves by 0.7% when the centre of mass is raised: wrong at 0.5%, right at 1%
+        let mut o = obs(&[("com_height", "B7", -0.007)]);
+        o.labels.insert(("t".into(), "B7".into()), "slide".into());
+        let r = evaluate(&table(), &levers(), &o);
+        assert_eq!((r.right, r.right_at_1pct, r.scored), (0, 1, 1));
+        let md = render_markdown(&r);
+        assert!(md.contains("0 of 1 scored") && md.contains("1 of 1") && md.contains("at 1%"), "{md}");
+    }
+
+    #[test]
+    fn a_power_limited_skidpad_follows_the_table_signs_because_cornering_drag_couples() {
+        let mut o = obs(&[("com_height", "B12", -0.09)]);
+        o.labels.insert(("t".into(), "B12".into()), "power (speed stopped rising below the grip limit)".into());
+        assert_eq!(evaluate(&table(), &levers(), &o).right, 1);
+    }
+
+    #[test]
+    fn step_climb_rows_for_torque_levers_allow_a_gain_or_no_change_but_not_a_loss() {
+        let ok = evaluate(&table(), &levers(), &obs(&[("engine_power", "B11", 0.2), ("final_drive", "B11", 0.0)]));
+        assert_eq!((ok.right, ok.scored), (2, 2));
+        let bad = evaluate(&table(), &levers(), &obs(&[("engine_power", "B11", -0.3)]));
+        assert_eq!((bad.right, bad.scored), (0, 1));
     }
 }
