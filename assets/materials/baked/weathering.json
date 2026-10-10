@@ -1,0 +1,41 @@
+{
+  "bare_linear": [
+    0.14702726649759498,
+    0.14412847085805777,
+    0.13286832155381798
+  ],
+  "dirt_base": 0.6,
+  "dirt_freq": 5.0,
+  "dirt_linear": [
+    0.042311410620809675,
+    0.027320891639074897,
+    0.01599629336550963
+  ],
+  "dirt_max": 0.85,
+  "dirt_var": 0.8,
+  "dust_freq": 3.0,
+  "dust_hi": 0.9,
+  "dust_linear": [
+    0.27467731206038465,
+    0.2232279573168085,
+    0.13843161503245183
+  ],
+  "dust_lo": 0.3,
+  "dust_max": 0.45,
+  "dust_mod_base": 0.7,
+  "dust_mod_var": 0.6,
+  "splash_freq": 8.0,
+  "splash_height_m": 0.45,
+  "splash_linear": [
+    0.06847816984440017,
+    0.043735029256973465,
+    0.02315336617811041
+  ],
+  "splash_max": 0.7,
+  "splash_noise_m": 0.2,
+  "wear_bias": 0.45,
+  "wear_edge_gain": 1.2,
+  "wear_freq": 14.0,
+  "wear_noise_amp": 0.6,
+  "wear_soft": 0.04
+}
