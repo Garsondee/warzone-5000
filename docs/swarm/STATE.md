@@ -37,14 +37,14 @@ pictures and a clip.** For every lane this means:
 | Lane | Rank | Session | Branch | State | Last check-in | Burn so far |
 |---|---|---|---|---|---|---|
 | ARCH | 1 | this session (ARCH works one thing at a time and keeps spend small until the reset) | `claude/sharp-babbage-d702f7` | Wave 0 done; Saturday prep done; idle until the owner's go | 2026-10-08 | owner reported $8 left on the evening of 2026-10-08; ARCH planned about $1.5 for the Saturday prep |
-| CHASSIS | 1 | `session_01XM5mBbvTKALXsmmYDsXWPb` (launched 2026-10-10 02:17 UTC) | `lane/chassis/settling` | settling round | 2026-10-10 | - |
-| DRIVE | 1 | - | - | not launched | - | - |
-| WORLD | 1 | - | - | not launched | - | - |
-| FORGE | 1 | - | - | not launched | - | - |
-| VIEWER | 1 | - | - | not launched | - | - |
-| VALIDATION | 1 | - | - | not launched | - | - |
-| GEOMETRY | 2 | - | - | not launched | - | - |
-| LOOK | 2 | - | - | not launched | - | - |
+| CHASSIS | 1 | `session_01XM5mBbvTKALXsmmYDsXWPb` (launched 2026-10-10 02:17 UTC) | `lane/chassis/strip` | wheeled assembly, Ackermann steering and strip merged; ledger next | 2026-10-10 13:28 | $9.43 |
+| DRIVE | 1 | `session_01TdNQzDAmB9474QZgKrRqJk` (02:18) | `lane/drive/build` | gearbox, brakes, Powertrain, calm shift map merged; diffs and bench left | 2026-10-10 13:28 | $4.73 |
+| WORLD | 1 | `session_017uza2dP2h1uH55XYRiM5x9` (10:33) | `lane/world/rocks` | course generator, mud, trees, barricade, terrain export, rock fields merged; river, cliffs, bridges planned | 2026-10-10 13:28 | $5.33 |
+| FORGE | 1 | `session_01SSPL2gMKDaa4tzGcsU74vP` (02:19) | `lane/forge/render` | compile and render_rig merged (Mule 4x4) | 2026-10-10 13:28 | $4.61 |
+| VIEWER | 1 | `session_01BHwQYQhC6JtyZVDpdJkp8r` (10:33) | `lane/viewer/front-cam` | terrain, road, props, plot layouts, follow camera merged; front camera and steer readout in progress | 2026-10-10 13:28 | $6.52 |
+| VALIDATION | 1 | `session_01TBBxTxyT1moXwGWjRx6YWx` (10:33) | `lane/validation/harness` | harness v0 and dashboard merged; scoring the Mule replay next | 2026-10-10 13:28 | $1.86 |
+| GEOMETRY | 2 | `session_01Wrh5HHcDHQFnFuNE1iqJNv` (10:33, effort max) | `lane/geometry/modules` | loft kernel, truck shell, silhouette and glazing merged; costliest lane | 2026-10-10 13:28 | $15.99 |
+| LOOK | 2 | `session_01QXtWzjyYsNM1xnhBwd8MRk` (10:33) | `lane/look/weathering` | camouflage and weathering merged; idle | 2026-10-10 13:28 | $2.35 |
 | TRACKS | 2 | - | - | not launched | - | - |
 | GODOT | 2 | - | - | not launched | - | - |
 | COMBAT | 2 | - | - | not launched | - | - |
@@ -73,6 +73,7 @@ See `docs/decisions/QUEUE.md` (C-001, C-002, C-003 and C-007 answered on 2026-10
 | 2026-10-08 16:00 | 1 (this session) | meter ~ $204 after ~20 h |
 | 2026-10-08 18:05 | 1 (this session) | owner warned of about $20 of credit left; ARCH stopped new work and left the tree green; no lanes launched, no background agents running |
 | 2026-10-10 02:17 | 2 (ARCH, CHASSIS) | owner said go; preflight green (integration and nightly CI); CHASSIS launched with the lane model passed explicitly; overnight card answers recorded (C-004 parametric everything; C-005, C-006, C-008, C-010 to C-012 as (a); C-013 and C-014 done by the owner). Wave A = CHASSIS, DRIVE, FORGE; Wave B = WORLD, VIEWER, VALIDATION after the first measured hour |
+| 2026-10-10 13:28 | 9 (ARCH + 8 lanes) | lanes total about $50.8 this window (CHASSIS 9.4, GEOMETRY 16.0, VIEWER 6.5, WORLD 5.3, DRIVE 4.7, FORGE 4.6, LOOK 2.4, VALIDATION 1.9); under the $60 stop line, so no further lane is launched but none is paused. The truck drives the 520 m course (WORLD terrain, DRIVE powertrain, CHASSIS suspension and Ackermann steering, GEOMETRY skin, VIEWER render); clips and Control Room v9 sent. TRACKS, GODOT, COMBAT, AI not launched. |
 | 2026-10-08 19:55 | 1 (this session) | the owner's notes are in (four cards answered); answers applied to `BRIEF.md`, `NON-GOALS.md`, `QUEUE.md`, five lane briefs and `LAUNCH.md`; Saturday checklist and launch sheet written; docs-only, about $1 to $1.5 of the owner's remaining $8 |
 | 2026-10-08 19:35 | 1 (this session) | Control Room version 5: a roomy, autosaving notes box on every card (60,000 characters) and a general box; the owner is filling in the cards; nothing launched (25 behaviour checks pass on a stubbed database; see `tools/control_room/template.html`) |
 | 2026-10-08 18:54 | 1 (this session); rehearsal finished | rehearsal `session_01QY832txWp3L6YN6PWKQxxR` (CHASSIS, branch `lane/chassis/rehearsal`): about 8 tool calls, $0.23, 76k tokens of context at the end. Lane guard, `guards` and `rust` all green on PR 3, squash-merged (5609bcc). One refused action (amend plus force-push), as designed. Findings and fixes are in `LAUNCH.md` ("What the rehearsal taught"). Rule of thumb for planning: a small lane session costs well under $1 for a few calls; the real cost driver will be long missions, so the first rank-1 hour is the measurement. |
