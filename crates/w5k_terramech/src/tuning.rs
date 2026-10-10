@@ -14,6 +14,8 @@ pub struct TracksTuning {
     pub gravity_m_s2: Param,
     pub direction_speed_m_s: Param,
     pub belly_ramp_m: Param,
+    pub bog_pull_fraction: Param,
+    pub belly_stiffness_n_m: Param,
 }
 
 /// The plain numbers the contact code reads every substep.
@@ -27,6 +29,8 @@ pub struct Tuning {
     pub gravity_m_s2: f64,
     pub direction_speed_m_s: f64,
     pub belly_ramp_m: f64,
+    pub bog_pull_fraction: f64,
+    pub belly_stiffness_n_m: f64,
 }
 
 impl TracksTuning {
@@ -44,6 +48,8 @@ impl TracksTuning {
             gravity_m_s2: self.gravity_m_s2.v,
             direction_speed_m_s: self.direction_speed_m_s.v,
             belly_ramp_m: self.belly_ramp_m.v,
+            bog_pull_fraction: self.bog_pull_fraction.v,
+            belly_stiffness_n_m: self.belly_stiffness_n_m.v,
         }
     }
 }
@@ -73,6 +79,8 @@ mod tests {
             &t.gravity_m_s2,
             &t.direction_speed_m_s,
             &t.belly_ramp_m,
+            &t.bog_pull_fraction,
+            &t.belly_stiffness_n_m,
         ] {
             let (lo, hi) = p.band();
             assert!(p.v >= lo && p.v <= hi && !p.src.is_empty());

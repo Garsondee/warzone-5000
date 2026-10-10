@@ -18,4 +18,8 @@ TracksTuning(
         src: "Speed scale of the smooth sign v/(|v|+u0) that switches compaction resistance to the direction of travel; a parked tank gets none"),
     belly_ramp_m: Param(v: 0.03, lo: 0.01, hi: 0.08, prov: Estimate,
         src: "Belly drag grows with a smoothstep over this much sinkage beyond the ground clearance, never a cliff"),
+    bog_pull_fraction: Param(v: 0.1, lo: 0.0, hi: 0.3, prov: Estimate,
+        src: "PROVISIONAL(TRACKS-D1). A vehicle whose net drawbar pull at 50% slip is below this share of its weight is called bogged: it cannot climb a 6% grade (about 3.4 degrees) in that ground. 0 would be Wong's zero-drawbar-pull definition, which the reference tank never reaches"),
+    belly_stiffness_n_m: Param(v: 20000000.0, lo: 5000000.0, hi: 100000000.0, prov: Estimate,
+        src: "UNVALIDATED. Vertical stiffness of the hull underside against hard ground (a skid plate on rock); on soft ground the soil law in series dominates it"),
 )
