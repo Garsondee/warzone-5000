@@ -1,0 +1,12 @@
+#![enable(implicit_some)]
+// Gradeability: a ramp of constant grade. The runner bisects `grade` (rise over run) for the steepest slope a vehicle can start on and hold.
+// Drive toward -Z; the ramp starts at z = 0 after a flat run-in.
+FixtureDef(
+    name: "ramp",
+    kind: Ramp(
+        grade: Param(v: 0.3, lo: 0.01, hi: 1.5, prov: Spec, src: "proving-ground default; the runner bisects it (docs/validation/proving-ground.md, gradeability)"),
+        length_m: Param(v: 60.0, prov: Spec, src: "course design: long enough to start on and hold for 5 s"),
+        ease_m: Param(v: 6.0, prov: Spec, src: "course design: the ramp eases in over this distance so the slope is continuous"),
+    ),
+    surface: "asphalt",
+)

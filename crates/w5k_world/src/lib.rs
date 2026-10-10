@@ -11,6 +11,7 @@ pub mod corrugation;
 pub mod course;
 pub mod detail;
 pub mod features;
+pub mod fixture;
 pub mod grid;
 pub mod mobility;
 pub mod plot;
