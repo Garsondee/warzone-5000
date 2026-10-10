@@ -1,0 +1,14 @@
+#![enable(implicit_some)]
+// Camo scheme nato_three_tone: procedural, node-local, no UVs. Spec: docs/art/CAMO-ALGORITHM.md. Names describe the look, not an army (card C-002).
+// Colour values are ESTIMATE: hand-read from published scheme descriptions, to be checked against colour-standard chips (docs/art/ART-DIRECTION.md).
+(
+    id: "nato_three_tone",
+    pattern: Blob(octaves: 3, lacunarity: 2.0, gain: 0.5),
+    scale_m: Param(v: 0.5, lo: 0.5, hi: 1.6, prov: Tuned, src: "blob size read off the character of the scheme; the owner can retune by eye"),
+    seed_salt: 7,
+    colours: [
+        (name: "green", srgb: "#46512F", coverage: Param(v: 0.45, lo: 0.40, hi: 0.50, prov: Estimate, src: "typical share of the scheme by area, from published descriptions"), prov: Estimate, band_de: 6.0, src: "dark olive green of NATO three-tone vehicles (FS 34000-series family), hand-read"),
+        (name: "brown", srgb: "#5B4631", coverage: Param(v: 0.35, lo: 0.30, hi: 0.40, prov: Estimate, src: "typical share of the scheme by area, from published descriptions"), prov: Estimate, band_de: 6.0, src: "chocolate brown of the same family, hand-read"),
+        (name: "black", srgb: "#202220", coverage: Param(v: 0.20, lo: 0.15, hi: 0.25, prov: Estimate, src: "typical share of the scheme by area, from published descriptions"), prov: Estimate, band_de: 6.0, src: "near-black, never pure black: 0.03 linear floor on real paint"),
+    ],
+)
