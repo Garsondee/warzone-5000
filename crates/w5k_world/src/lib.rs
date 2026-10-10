@@ -13,6 +13,7 @@ pub mod detail;
 pub mod features;
 pub mod fixture;
 pub mod grid;
+pub mod mesh;
 pub mod mobility;
 pub mod plot;
 pub mod render;
