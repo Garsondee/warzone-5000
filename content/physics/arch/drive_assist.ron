@@ -1,0 +1,34 @@
+#![enable(implicit_some)]
+// `w5k drive`, the live test-drive server (ARCH). Numbers of the live loop and of the kid assists; none of them belongs to a vehicle
+// (a vehicle's own numbers live in its RON). Provenance as everywhere: SPEC = a rule we chose, ESTIMATE/TUNED = by feel, with the reasoning.
+DriveAssist(
+    chassis_tuning: "content/physics/chassis/tuning.ron",
+    publish_every_ticks: 2,
+    max_ticks_per_wake: 4,
+    input_timeout_s: Param(v: 0.5, lo: 0.2, hi: 2.0, prov: Spec, src: "protocol: the pedals count as released when no input has arrived for this long (a page that lost focus must not leave the throttle pinned)"),
+    idle_finish_s: Param(v: 10.0, lo: 2.0, hi: 60.0, prov: Spec, src: "protocol: the recording is written when the last stream client has been gone this long"),
+    road_probe_m: Param(v: 4.0, lo: 2.0, hi: 10.0, prov: Tuned, src: "placement: the heading at a road point is taken towards the point this far further along the road (about one wheelbase)"),
+    assist: AssistTuning(
+        speed_cap_m_s: Param(v: 6.94, lo: 2.8, hi: 13.9, prov: Spec, src: "owner's brief: 25 km/h for a five-year-old driver (25 / 3.6 = 6.94 m/s); an adult raises it or uses --no-assist"),
+        cap_soft_start: Param(v: 0.7, lo: 0.4, hi: 0.95, prov: Tuned, src: "throttle eases off from this fraction of the cap to zero at the cap (smoothstep), so the cap is a gentle ceiling and not a wall"),
+        cap_brake_per_m_s: Param(v: 0.4, lo: 0.1, hi: 1.0, prov: Tuned, src: "brake pedal per m/s above the cap (a downhill run past the cap is slowed gently)"),
+        throttle_rise_per_s: Param(v: 1.2, lo: 0.4, hi: 3.0, prov: Tuned, src: "throttle ramp: full pedal takes about 0.8 s, so a thumped key cannot jerk the vehicle"),
+        throttle_fall_per_s: Param(v: 4.0, lo: 1.0, hi: 10.0, prov: Tuned, src: "throttle ramp when lifting: quick, so letting go feels like letting go"),
+        brake_rise_per_s: Param(v: 3.0, lo: 1.0, hi: 10.0, prov: Tuned, src: "brake ramp: full pedal in a third of a second, no grab"),
+        brake_fall_per_s: Param(v: 8.0, lo: 2.0, hi: 20.0, prov: Tuned, src: "brake release: nearly immediate, so pressing the throttle from a standstill is not fought by the hold brake"),
+        steer_full_authority_m_s: Param(v: 1.5, lo: 0.5, hi: 4.0, prov: Tuned, src: "steering authority is 1 up to walking pace, then shrinks towards the cap speed"),
+        steer_min_authority: Param(v: 0.35, lo: 0.15, hi: 0.8, prov: Estimate, src: "at the speed cap the wheel turns at most this fraction of full lock: 25 km/h on full lock of a 4x4 is a roll risk"),
+        steer_rate_slow_per_s: Param(v: 3.0, lo: 1.0, hi: 6.0, prov: Tuned, src: "steering slew at standstill (lock to lock in under a second, parking feels direct)"),
+        steer_rate_fast_per_s: Param(v: 1.0, lo: 0.3, hi: 3.0, prov: Tuned, src: "steering slew at the speed cap: a tap on a key moves the wheel gradually instead of snapping the nose round"),
+        idle_brake: Param(v: 0.25, lo: 0.05, hi: 0.6, prov: Tuned, src: "no pedal pressed: gentle automatic braking, stops from walking pace in a few metres, never a skid"),
+        hold_brake: Param(v: 0.7, lo: 0.3, hi: 1.0, prov: Tuned, src: "no pedal and nearly stopped: holds the vehicle so the torque converter cannot creep it forwards"),
+        hold_speed_m_s: Param(v: 0.8, lo: 0.2, hi: 2.0, prov: Tuned, src: "below this speed with no pedal the hold brake takes over from the gentle brake"),
+        roll_limit_rad: Param(v: 1.05, lo: 0.8, hi: 1.4, prov: Estimate, src: "hull tilted past 60 degrees from upright is on its side or roof; a 4x4 on a 25 km/h course should never get there on purpose"),
+        roll_dwell_s: Param(v: 1.0, lo: 0.3, hi: 3.0, prov: Spec, src: "owner's brief: rolled for 1 s, so a bounce over a kerb is not a recovery"),
+        stuck_speed_m_s: Param(v: 0.3, lo: 0.1, hi: 1.0, prov: Spec, src: "owner's brief: stuck means slower than 0.3 m/s ..."),
+        stuck_throttle: Param(v: 0.3, lo: 0.1, hi: 0.9, prov: Spec, src: "owner's brief: ... while the throttle is held above 0.3 ..."),
+        stuck_dwell_s: Param(v: 3.0, lo: 1.0, hi: 10.0, prov: Spec, src: "owner's brief: ... for 3 s"),
+        bounds_margin_m: Param(v: 2.0, lo: 0.0, hi: 10.0, prov: Tuned, src: "leaving the terrain means this far inside the edge of the heightfield, where the world query still answers sensibly"),
+        fall_depth_m: Param(v: 5.0, lo: 1.0, hi: 50.0, prov: Tuned, src: "below the lowest terrain by this much the vehicle has fallen through the world"),
+    ),
+)

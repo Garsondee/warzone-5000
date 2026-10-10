@@ -45,7 +45,7 @@ The first time, also read the first launched lane's early events (`list_events`,
 - The round trip works: clone, branch, status file, `cargo test -p w5k_math` (29 pass), push, PR into `integration`, `guards` and `rust` green, squash merge.
 - A lane that tries `git commit --amend` plus a force-push is refused by the deny list (correct): the prompt now says "make a new commit".
 - The platform tells a lane to end commits with a model name; CLAUDE.md says not to. The prompt above now states which wins. ARCH squash-merges lane PRs with a clean message, so a stray trailer never reaches `integration`.
-- A lane sees every `mcp__` tool, including `create_session`, `send_message`, `send_later`, `create_trigger` and the GitHub merge and push tools; only the hook stands between it and calling them.
+- A lane sees every `mcp__` tool, including `create_session`, `send_message`, `send_later`, `create_trigger` and the GitHub merge and push tools; only the hook stands between it and calling them (a lane may message ARCH's own session; update `.claude/hooks/arch-session-id` if ARCH's session ever changes).
 - Briefs said "pin the tag"; there is no remote tag (the proxy refuses them), so the pin is the commit under "Contract pin" in `STATE.md`.
 
 ## Pausing, redirecting, relaunching

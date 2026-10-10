@@ -10,4 +10,4 @@ PLACEHOLDER dimensions, PROVISIONAL(C-002): generated against the numbers the pa
 | wheel diameter (over the tread) | 0.821 | 0.820 | +0.11% |
 | ground clearance (box bottom to ground) | 0.420 | 0.420 | -0.00% |
 
-Triangles in the rig: 35938 (budget 40,000 for a wheeled vehicle).
+Triangles in the rig: 35938 (budget 50,000 for a wheeled vehicle).

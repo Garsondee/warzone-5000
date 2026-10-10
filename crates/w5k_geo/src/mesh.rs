@@ -101,6 +101,13 @@ impl Mesh {
         before - self.t.len()
     }
 
+    /// The last step of every generated part: weld what coincides to a tenth of a micrometre and face every triangle outward.
+    pub fn finished(mut self) -> Mesh {
+        self.weld(1e-7, 1e-12); // const-ok: weld tolerance, 0.1 micrometre, far below any feature
+        self.orient_outward();
+        self
+    }
+
     /// Closed and consistently oriented: every directed edge occurs once and its reverse occurs once.
     pub fn check_closed(&self) -> Result<(), String> {
         let mut dir: std::collections::BTreeMap<(u32, u32), u32> = std::collections::BTreeMap::new();

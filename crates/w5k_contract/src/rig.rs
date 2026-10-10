@@ -463,7 +463,8 @@ pub enum DiffKind {
     Open,
     /// Forces its children to one speed.
     Locked,
-    /// Torque-sensing / limited slip: the faster side may carry at most `bias` times the torque of the slower one.
+    /// Torque-sensing / limited slip: the side with more grip (the slower one) may carry at most `bias` times the torque of the side that is
+    /// slipping (the faster one); `bias` = 1 is an open diff, a large `bias` approaches a locked one.
     LimitedSlip,
 }
 

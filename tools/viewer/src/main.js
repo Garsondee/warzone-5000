@@ -1,32 +1,47 @@
 import { buildRig, applyVehicle, poseRig, sample, makeScene } from './viewer.js';
 import { decodeReplay } from './replay.js';
-import { makeDebug, updateHud } from './debug.js';
+import { makeDebug, updateHud, updateFleet } from './debug.js';
 import { makeScope } from './scope.js';
 import { makeLook } from './look.js';
 import * as THREE from 'three';
 
-const { rig, replay: b64, look: lookData, terrain } = JSON.parse(document.getElementById('data').textContent);
+const { rigs, replay: b64, look: lookData, terrain } = JSON.parse(document.getElementById('data').textContent);
+const rig = rigs[0];
 const replay = decodeReplay(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
 const canvas = document.getElementById('c');
 const W = canvas.clientWidth || innerWidth, H = canvas.clientHeight || innerHeight;
 const { renderer, scene, camera } = makeScene(canvas, W, H, terrain);
 camera.setViewOffset(W, H, 0, 110, W, H); // lift the picture above the scope panel
-const built = buildRig(rig);
-scene.add(built.root);
-// Camo: the livery in the replay header (scheme id, seed) if there is one, else the first scheme.
+// One rig (and its own camo uniforms, debug glyphs and accent) per vehicle in the header; `rigs` maps by vehicle index, the last one repeats.
+const ACCENTS = ['#ff8c1a', '#1ec8ff', '#e040fb', '#c8ff3a']; // plain accents (LOOK has no palette tokens yet); fictional names only
+const ACCENT_MIX = 0.3;
 const livery = replay.header.vehicles[0].livery;
-const camo = makeLook(lookData, built.paint);
-camo.set({ scheme: livery && camo.schemes.includes(livery.camo) ? livery.camo : camo.schemes.includes('woodland') ? 'woodland' : camo.schemes[0], seed: livery ? Number(BigInt.asUintN(32, BigInt(livery.seed))) : 1 });
+const baseScheme = livery && Object.keys(lookData.schemes).includes(livery.camo) ? livery.camo : Object.keys(lookData.schemes).includes('woodland') ? 'woodland' : Object.keys(lookData.schemes)[0];
+const baseSeed = livery ? Number(BigInt.asUintN(32, BigInt(livery.seed))) : 1;
+const multi = replay.header.vehicles.length > 1;
+const fleet = replay.header.vehicles.map((hv, i) => {
+  const b = buildRig(rigs[Math.min(i, rigs.length - 1)]);
+  scene.add(b.root);
+  const accent = new THREE.Color(ACCENTS[i % ACCENTS.length]);
+  const c = makeLook(lookData, b.paint);
+  c.set({ scheme: baseScheme, seed: baseSeed + i * 7919, tint: multi ? [accent.r, accent.g, accent.b] : [0, 0, 0], tintMix: multi ? ACCENT_MIX : 0 });
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.textContent = hv.name;
+  label.style.color = ACCENTS[i % ACCENTS.length];
+  if (multi) document.getElementById('labels').appendChild(label);
+  return { built: b, camo: c, debug: makeDebug(scene, b, replay.header, i), label, accent: ACCENTS[i % ACCENTS.length], name: hv.name };
+});
+const built = fleet[0].built, camo = fleet[0].camo, debug = fleet[0].debug;
 const schemeEl = document.getElementById('scheme'), seedEl = document.getElementById('seed'), camoEl = document.getElementById('t_camo');
 camo.schemes.forEach((s) => schemeEl.add(new Option(s, s)));
-schemeEl.value = camo.state.scheme; seedEl.value = camo.state.seed;
-const relook = () => { camo.set({ scheme: schemeEl.value, seed: Number(seedEl.value) || 0, on: camoEl.checked }); renderAt(t); };
+schemeEl.value = baseScheme; seedEl.value = baseSeed;
+const relook = () => { fleet.forEach((f, i) => f.camo.set({ scheme: schemeEl.value, seed: (Number(seedEl.value) || 0) + i * 7919, on: camoEl.checked })); renderAt(t); };
 schemeEl.onchange = seedEl.onchange = camoEl.onchange = relook;
 // Steered wheels: joints named "<station>.steer"; the station name ends in l or r for the side.
 const steerJoints = replay.header.vehicles[0].joint_names.map((n, i) => ({ n, i })).filter((j) => j.n.endsWith('.steer')).map((j) => ({ i: j.i, side: /l\.steer$/.test(j.n) ? 'L' : /r\.steer$/.test(j.n) ? 'R' : '?' }));
-const debug = makeDebug(scene, built, replay.header);
-const scope = makeScope(document.getElementById('scope'), replay, (tt) => { t = tt; renderAt(t); });
-for (const k of Object.keys(debug.flags)) document.getElementById('t_' + k).onchange = (e) => { debug.flags[k] = e.target.checked; renderAt(t); };
+const scope = makeScope(document.getElementById('scope'), replay, (tt) => { t = tt; renderAt(t); }, fleet.map((f) => f.accent));
+for (const k of Object.keys(debug.flags)) document.getElementById('t_' + k).onchange = (e) => { fleet.forEach((f) => { f.debug.flags[k] = e.target.checked; }); renderAt(t); };
 const duration = (replay.frames.length - 1) * replay.header.frame_dt_s;
 
 // Camera state: orbit (drag to turn, wheel to zoom) around the vehicle, or chase (behind the hull, follows its heading).
@@ -85,14 +100,30 @@ function placeCamera() {
   camera.lookAt(look);
 }
 
+// Distance driven so far by each vehicle (path length of the replay positions): the leader is whoever has driven furthest.
+const driven = replay.header.vehicles.map((_, vi) => { const d = new Float64Array(replay.frames.length); for (let k = 1; k < d.length; k++) { const a = replay.frames[k - 1].vehicles[vi].pos_m, b = replay.frames[k].vehicles[vi].pos_m; d[k] = d[k - 1] + Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z); } return d; });
+const tmp = new THREE.Vector3();
 function renderAt(t) {
   clockT = t;
   const s = sample(replay, Math.min(Math.max(t, 0), duration));
-  applyVehicle(built, s);
+  const frame = s.a < 0.5 ? s.f0 : s.f1, fi = Math.min(replay.frames.length - 1, Math.round(Math.min(Math.max(t, 0), duration) / replay.header.frame_dt_s));
+  fleet.forEach((f, vi) => { applyVehicle(f.built, s, vi); f.built.root.visible = !(freeze && vi > 0); });
   if (freeze) { built.root.position.set(0, 0, 0); built.root.quaternion.identity(); }
   placeCamera();
-  debug.update(s.a < 0.5 ? s.f0 : s.f1);
-  updateHud(document.getElementById('hud'), document.getElementById('ledger'), s.a < 0.5 ? s.f0 : s.f1, t, steerJoints);
+  camera.updateMatrixWorld(true);
+  fleet.forEach((f, vi) => f.debug.update(frame, vi));
+  let lead = 0; // the HUD line and the ledger panel follow the leader (the furthest driven); one vehicle: that one
+  driven.forEach((d, i) => { if (d[fi] > driven[lead][fi]) lead = i; });
+  updateHud(document.getElementById('hud'), document.getElementById('ledger'), frame, t, steerJoints, lead);
+  if (multi) {
+    updateFleet(document.getElementById('fleet'), frame, fleet, replay.header, driven, fi);
+    fleet.forEach((f) => { // name label above each truck, projected to the screen
+      tmp.copy(f.built.root.position).add({ x: 0, y: 3, z: 0 }).project(camera);
+      f.label.style.display = tmp.z < 1 ? 'block' : 'none';
+      f.label.style.left = `${((tmp.x + 1) / 2) * W}px`;
+      f.label.style.top = `${((1 - tmp.y) / 2) * H}px`;
+    });
+  }
   scope.draw(t);
   renderer.render(scene, camera);
 }
@@ -106,7 +137,7 @@ ui('cam').onchange = (e) => { cam.mode = e.target.value; };
 const setLayout = (mode) => {
   document.body.className = mode === 'full' ? '' : mode;
   ui('layout').value = mode;
-  if (mode !== 'full') { debug.flags.com = false; ui('t_com').checked = false; } // recordings: no datum marker over the paint
+  if (mode !== 'full') { fleet.forEach((f) => { f.debug.flags.com = false; }); ui('t_com').checked = false; } // recordings: no datum marker over the paint
 };
 ui('layout').onchange = (e) => setLayout(e.target.value);
 let drag = null;
@@ -159,10 +190,11 @@ function worldShift(name, delta) {
 const jointAt = (name, t) => { const j = built.nodes.find((n) => n.def.name === name).def.joint; const s = sample(replay, t); return s.f0.vehicles[0].joints[j.index]; };
 window.__v = {
   setLayout,
-  setLook: (o) => { camo.set(o); renderAt(t); }, schemes: camo.schemes,
-  setDebug: (on) => { debug.group.visible = on; }, only, jointPixels, worldShift, meshCount, jointAt, setFreeze: (f) => { freeze = f; },
+  setLook: (o) => { fleet.forEach((f) => f.camo.set(o)); renderAt(t); }, schemes: camo.schemes,
+  setDebug: (on) => { fleet.forEach((f) => { f.debug.group.visible = on; }); }, only, jointPixels, worldShift, meshCount, jointAt, setFreeze: (f) => { freeze = f; },
   renderAt, duration, poseOf, setCamera: (m) => { if (m.mode === 'front' && m.dist === undefined) Object.assign(cam, { dist: 7, pitch: 0.22 }); Object.assign(cam, m); if (m.mode) ui('cam').value = m.mode; },
   nodeNames: built.nodes.map((n) => n.def.name),
+  fleet: fleet.map((f) => ({ name: f.name, accent: f.accent })),
   triangles: built.triangles, expectedTriangles: rig.meshes.reduce((s, m) => s + m.indices.length / 3, 0),
   renderer: gl.getParameter(gl.VERSION), frames: replay.frames.length,
   pause: () => { playing = false; },

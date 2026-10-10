@@ -23,6 +23,7 @@ ROOT = ci_testlib.ROOT
 HOOK = ROOT / ".claude/hooks/lane-tool-guard.sh"
 SETTINGS = ROOT / ".claude/settings.json"
 
+SEND = "mcp__claude-code-remote__send_message"
 BLOCKED_GITHUB = ["merge_pull_request", "enable_pr_auto_merge", "disable_pr_auto_merge", "push_files", "create_or_update_file", "delete_file"]
 BLOCKED = [f"mcp__github__{t}" for t in BLOCKED_GITHUB] + [
     f"mcp__claude-code-remote__{t}" for t in
@@ -107,6 +108,41 @@ class LaneToolGuard(unittest.TestCase):
             with self.subTest(tool=tool):
                 proc = self.run_hook(payload(tool), self.repo("lane/drive/engine-map"))
                 self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    # ---- the one exception: a lane may message ARCH's own session and nobody else ---------------------------------------------
+    ARCH_ID = "session_01ArchArchArchArchArchArc"
+
+    def test_a_lane_may_send_a_message_to_arch_and_to_no_other_session(self):
+        env = {"W5K_ARCH_SESSION": self.ARCH_ID}
+        ok = self.run_hook(payload(SEND, session_id=self.ARCH_ID, message="blocked on X"), env=env)
+        self.assertEqual((ok.returncode, ok.stderr), (0, ""))
+        for target in ("session_01SomeOtherLane", "", "@parent", None):
+            with self.subTest(target=target):
+                kwargs = {"message": "hi"} if target is None else {"session_id": target, "message": "hi"}
+                proc = self.run_hook(payload(SEND, **kwargs), env=env)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+                self.assertIn("ARCH", proc.stderr)
+
+    def test_the_arch_session_id_can_come_from_the_tracked_file_and_a_missing_id_blocks_everyone(self):
+        repo = self.repo("lane/world/messaging-file")
+        hooks = repo / ".claude" / "hooks"
+        hooks.mkdir(parents=True, exist_ok=True)
+        (hooks / "arch-session-id").write_text(self.ARCH_ID + "\n")
+        self.assertEqual(self.run_hook(payload(SEND, session_id=self.ARCH_ID), repo).returncode, 0)
+        self.assertEqual(self.run_hook(payload(SEND, session_id="session_01Other"), repo).returncode, 2)
+        (hooks / "arch-session-id").write_text("\n")  # an empty file means there is no ARCH to talk to
+        self.assertEqual(self.run_hook(payload(SEND, session_id=self.ARCH_ID), repo).returncode, 2)
+        (hooks / "arch-session-id").unlink()
+        self.assertEqual(self.run_hook(payload(SEND, session_id=self.ARCH_ID), repo).returncode, 2)
+
+    def test_the_messaging_exception_opens_no_other_tool(self):
+        env = {"W5K_ARCH_SESSION": self.ARCH_ID}
+        for tool in BLOCKED:
+            if tool == SEND:
+                continue
+            with self.subTest(tool=tool):
+                proc = self.run_hook(payload(tool, session_id=self.ARCH_ID), env=env)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
 
     def test_arch_claude_and_integration_branches_are_never_blocked(self):
         for branch in ("arch/guard-update", "arch/a/b", "claude/sharp-babbage-d702f7", "integration", "main"):
@@ -246,6 +282,8 @@ class Registration(unittest.TestCase):
         for tool in ALLOWED_GITHUB:
             self.assertIn(f"mcp__github__{tool}", allow)
         for tool in BLOCKED:
+            if tool == SEND:
+                continue  # allowed by the owner's instruction (2026-10-10): the hook still limits its target to ARCH's session
             self.assertNotIn(tool, allow)
         for broad in ("mcp__github", "mcp__claude-code-remote", "mcp__github__*", "mcp__*"):
             self.assertNotIn(broad, allow)

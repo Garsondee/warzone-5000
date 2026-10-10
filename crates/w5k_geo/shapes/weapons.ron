@@ -1,0 +1,47 @@
+// Guns (lane GEOMETRY, card C-004), original designs in the proportions of the classes they are named for; nothing is quoted from memory.
+// Metres. Frame of a gun: the trunnion axis through the origin, the bore along -Z, +Y up. Provenance ESTIMATE for every number, bands +-25%.
+//   receiver_m      width (x), height (y), length (z) of the receiver box, centred on the bore
+//   pivot_back_frac the share of the receiver length that lies behind the trunnion axis
+//   barrel_len_m    from the receiver's front face to the muzzle device
+//   jacket          (length, radius) of the thicker shroud over the root of the barrel
+//   muzzle_m        (length, radius) of the muzzle device (flash hider or brake)
+//   ammo            boxes: size (x, y, z), centre (x, y, z) of the right-hand one, and whether it has a left-hand twin
+//   grips           a cross-bar behind the receiver (radius, half span) with a handle at each end (x, radius, drop below the bar)
+//   sight           size of an optics block on the roof of the receiver, its z from the trunnion axis
+//   overlap_m       parts that join overlap by this much, so nothing floats
+[
+    (
+        name: "machine_gun_12_7",
+        receiver_m: (0.15, 0.17, 0.55),
+        pivot_back_frac: 0.55,
+        barrel_radius_m: 0.0165,
+        barrel_len_m: 0.75,
+        jacket: Some((0.32, 0.026)),
+        muzzle_m: (0.08, 0.021),
+        pin_radius_m: 0.02,
+        ammo: [(size: (0.20, 0.17, 0.30), at: (-0.17, -0.05, 0.25), mirror: false)],
+        grips: Some((bar_radius_m: 0.012, half_span_m: 0.11, handle_x_m: 0.10, handle_radius_m: 0.014, handle_drop_m: 0.10)),
+        sight: None,
+        sight_z_m: 0.0,
+        overlap_m: 0.01,
+        corner_m: 0.006,
+        band_m: 0.015,
+    ),
+    (
+        name: "autocannon_25",
+        receiver_m: (0.24, 0.26, 0.85),
+        pivot_back_frac: 0.50,
+        barrel_radius_m: 0.022,
+        barrel_len_m: 1.10,
+        jacket: Some((0.45, 0.032)),
+        muzzle_m: (0.12, 0.036),
+        pin_radius_m: 0.025,
+        ammo: [(size: (0.20, 0.22, 0.32), at: (0.20, -0.06, 0.28), mirror: true)],
+        grips: None,
+        sight: Some((0.07, 0.07, 0.14)),
+        sight_z_m: -0.15,
+        overlap_m: 0.01,
+        corner_m: 0.008,
+        band_m: 0.02,
+    ),
+]

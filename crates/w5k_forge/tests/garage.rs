@@ -67,10 +67,15 @@ fn the_three_designs_differ_where_the_archetypes_differ() {
     assert!(dm.powertrain.engine.peak_power_w.v < dh.powertrain.engine.peak_power_w.v);
     let radius = |c: &Compiled| c.rig.stations[0].wheel.radius_m;
     assert!(radius(&cs) < radius(&cm) && radius(&cm) < radius(&ch));
-    // The scout rides softest and with the least damping ratio; the hauler stiffest.
+    // The scout rides softest; the hauler stiffest.
     assert!(ds.suspension.front_ride_frequency_hz.v < dm.suspension.front_ride_frequency_hz.v);
     assert!(dm.suspension.front_ride_frequency_hz.v < dh.suspension.front_ride_frequency_hz.v);
-    assert!(ds.suspension.damping_ratio.v < dm.suspension.damping_ratio.v);
+    // The scout's damping is not left light: CHASSIS' slice-course check found its bump-side ratio (what the whoops excite) must be
+    // about 0.25 to 0.35. Bump-side zeta = 2 zeta / (1 + rebound_to_bump).
+    let bump_zeta =
+        |d: &VehicleDef| 2.0 * d.suspension.damping_ratio.v / (1.0 + d.suspension.rebound_to_bump.as_ref().unwrap().v);
+    assert!((0.25..=0.35).contains(&bump_zeta(&ds)), "scout bump-side zeta {}", bump_zeta(&ds));
+    assert!(ds.suspension.damping_ratio.v <= dm.suspension.damping_ratio.v);
     // The hauler is the least stable: static stability factor (half track over COM height) is lowest.
     let ssf = |d: &VehicleDef| {
         let RunningGearDef::Wheeled(w) = &d.running_gear else { panic!() };
@@ -104,4 +109,24 @@ fn a_three_axle_independent_layout_compiles_today() {
     assert_eq!(c.rig.stations.len(), 6);
     assert_eq!(c.rig.joint_names().len(), 6 + 2 + 6);
     c.rig.validate().unwrap();
+}
+
+#[test]
+fn declared_substeps_cover_the_stop_engaged_wheel_hop_of_every_station() {
+    for id in IDS {
+        let (_, c) = build(id);
+        let rig = &c.rig;
+        let mut worst: f64 = 0.0;
+        for s in &rig.stations {
+            let SpringKind::Linear { rate_n_m: k_s } = s.suspension.spring else { panic!("linear") };
+            let b = &s.suspension.bump_stop;
+            let pen = s.bump_travel_m - b.engage_m;
+            let k_stop = b.rate_n_m * (1.0 + 2.0 * b.progression * pen / b.engage_m);
+            let k_t = s.wheel.tyre.as_ref().unwrap().vertical_stiffness_n_m;
+            worst = worst.max(scalar::sqrt((k_s + k_t + k_stop) / s.unsprung_mass_kg) / scalar::TAU);
+        }
+        let f_max = rig.integration.f_max_hz.unwrap();
+        assert!(f_max >= worst - 1e-9, "{id}: recorded {f_max} Hz below the stop-engaged hop {worst} Hz");
+        assert!(f64::from(rig.integration.substeps) * TICK_HZ >= SAMPLES_PER_PERIOD * worst, "{id}");
+    }
 }
