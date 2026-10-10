@@ -1,6 +1,6 @@
 # Status: VIEWER
 
-**Last updated:** 2026-10-10 11:30 UTC | **Branch:** lane/viewer/debug | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
+**Last updated:** 2026-10-10 11:30 UTC | **Branch:** lane/viewer/render | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
 
 ## Done
 - Spike S-V passes (WebGL 2 under SwiftShader, 46 ms/frame, 10 s clip = 72 KB): `docs/lanes/viewer/spike-v.md`.
@@ -13,8 +13,10 @@
 
 - Step 3 (PR on `lane/viewer/debug`): debug draw (normal-force bars coloured by slip/bottoming, datum marker, velocity arrow, toggles), HUD, force-ledger panel, scope plots with synced cursor.
 
+- Steps 5 and 6 (PR on `lane/viewer/render`): `w5k viewer render|page|plot`; the first-light replay plays (clip 14 s, 0.57 MB; frame `docs/lanes/viewer/media/first-light-chase.png`). README `docs/lanes/viewer/README.md`.
+
 ## In progress
-- Step 5: `w5k viewer render` (MP4) and `w5k viewer plot` (PNG); then step 6, the first-light replay.
+- M1 acceptance review: CI on Windows, a tank screenshot with the gun fired, theory note parts 2-4.
 
 ## Blocked
 - Nothing.
