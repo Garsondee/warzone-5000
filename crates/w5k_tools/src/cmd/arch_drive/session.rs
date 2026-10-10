@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 use w5k_chassis::tuning::ChassisTuning;
-use w5k_chassis::wheeled::WheeledChassis;
 use w5k_contract::rig::{PhysRig, TICK_HZ};
 use w5k_contract::{DrivePort, Param, VehicleFrame, WorldQuery};
 use w5k_drive::powertrain::{Powertrain, Tunings};
@@ -15,7 +14,8 @@ use w5k_math::{scalar, Quat, StateHasher, Vec3};
 use w5k_world::grid::GridWorld;
 
 use super::assist::{Assist, AssistTuning, Obs, Raw, Recovery};
-use crate::cmd::arch_course::{read, vehicle_frame};
+use crate::cmd::arch_chassis::AnyChassis;
+use crate::cmd::arch_course::read;
 
 /// Wording of the one-shot event after a recovery (a reset or an auto-recover).
 pub(crate) const BACK_ON_ROAD: &str = "back on the road";
@@ -153,18 +153,24 @@ impl Car {
             rig.stations.iter().filter(|s| s.steer.is_some() == steered).map(|s| s.rest_pos_m.z).collect()
         };
         let (rear, front) = (z_of(false), z_of(true));
-        if rear.is_empty() || front.is_empty() {
+        let tracked = !rig.tracks.is_empty();
+        if !tracked && (rear.is_empty() || front.is_empty()) {
             return Err(format!("{file}: a drivable vehicle needs steered and unsteered axles"));
         }
         let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
-        let (z_ref_m, z_front) = (mean(&rear), mean(&front));
-        WheeledChassis::new(&rig, &scene.tuning, &scene.world, 0.0, 0.0, 0.0).map_err(|r| format!("{file}: {r:?}"))?;
+        // A tracked vehicle has no steered axle: the road point is placed under the hull datum and its "wheelbase" is the ground run of a belt.
+        let (z_ref_m, wheelbase_m) = if tracked {
+            (0.0, rig.tracks.iter().map(|t| t.contact_length_m).fold(0.0, f64::max))
+        } else {
+            (mean(&rear), mean(&rear) - mean(&front))
+        };
+        AnyChassis::new(&rig, &scene.tuning, &scene.world, 0.0, 0.0, 0.0).map_err(|r| format!("{file}: {r}"))?;
         let render = w5k_forge::render::render_rig(&rig, c.hull_size_m);
         Ok(Car {
             id: e.def.id,
             name: e.def.name,
             mass_kg: rig.hull.mass_kg + rig.stations.iter().map(|s| s.unsprung_mass_kg).sum::<f64>(),
-            wheelbase_m: z_ref_m - z_front,
+            wheelbase_m,
             render_json: serde_json::to_string(&render).map_err(|e| e.to_string())?,
             rig,
             z_ref_m,
@@ -194,7 +200,7 @@ impl Car {
 pub(crate) struct Session {
     pub car: Arc<Car>,
     scene: Arc<Scene>,
-    chassis: WheeledChassis,
+    chassis: AnyChassis,
     drive: Powertrain,
     pub assist: Assist,
     /// Ticks since the vehicle was selected (survives recoveries); time is `ticks / TICK_HZ`.
@@ -221,11 +227,10 @@ impl Session {
     }
 
     /// A fresh chassis and powertrain standing on road point `idx`, rear axle on the point, facing along the road.
-    fn build(scene: &Scene, car: &Car, idx: usize) -> Result<(WheeledChassis, Powertrain), String> {
+    fn build(scene: &Scene, car: &Car, idx: usize) -> Result<(AnyChassis, Powertrain), String> {
         let (x, z, yaw) = scene.road.pose(idx, scene.assist_tuning.road_probe_m.v);
         let off = Quat::from_yaw(yaw).rotate(Vec3::new(0.0, 0.0, car.z_ref_m));
-        let chassis = WheeledChassis::new(&car.rig, &scene.tuning, &scene.world, x - off.x, z - off.z, yaw)
-            .map_err(|e| format!("CHASSIS refused {}: {e:?}", car.id))?;
+        let chassis = AnyChassis::new(&car.rig, &scene.tuning, &scene.world, x - off.x, z - off.z, yaw)?;
         let drive = Powertrain::new(&car.rig.drivetrain, &Tunings::shipped())
             .map_err(|e| format!("DRIVE refused the drivetrain of {}: {e}", car.id))?;
         Ok((chassis, drive))
@@ -255,7 +260,7 @@ impl Session {
     /// What the assists look at.
     fn obs(&self) -> Obs {
         let t = &self.scene.assist_tuning.assist;
-        let up = self.chassis.hull.rot.rotate(Vec3::UP);
+        let up = self.chassis.hull().rot.rotate(Vec3::UP);
         let (p, (lo, hi)) = (self.chassis.datum_m(), self.scene.world.bounds());
         let m = t.bounds_margin_m.v;
         let inside =
@@ -282,7 +287,7 @@ impl Session {
     }
 
     pub(crate) fn frame(&self) -> VehicleFrame {
-        vehicle_frame(&self.chassis, &self.car.rig, &self.drive.telemetry())
+        self.chassis.frame(&self.car.rig, &self.drive.telemetry())
     }
 
     /// Hash of the whole simulated state (the replay's per-second chain).
@@ -295,7 +300,7 @@ impl Session {
 
     /// The stream frame (see `docs/swarm/requests/arch-drive-protocol.md`); the event is taken, so it is sent once.
     pub(crate) fn stream_json(&mut self) -> String {
-        let (f, q) = (self.frame(), self.chassis.hull.rot);
+        let (f, q) = (self.frame(), self.chassis.hull().rot);
         let r = |x: f64| (x * JSON_DIGITS).round() / JSON_DIGITS + 0.0; // + 0.0 turns -0.0 into 0.0
         let contacts: Vec<_> = self
             .car
@@ -411,6 +416,25 @@ mod tests {
     }
 
     #[test]
+    fn the_tracked_carrier_is_drivable_steers_with_the_wheel_and_keeps_moving_through_the_turn() {
+        for (steer, sign) in [(0.6, -1.0), (-0.6, 1.0)] {
+            // +1 = right, and a right turn is a negative yaw rate (UNITS-AND-FRAMES.md)
+            let mut s = session("carrier_tracked", true, |_| ());
+            run(&mut s, Raw { throttle: 0.5, ..Raw::default() }, 6.0);
+            let mut yaw_peak = 0.0_f64;
+            let mut slowest = f64::MAX;
+            for _ in 0..(6.0 * TICK_HZ) as u32 {
+                s.step(&Raw { throttle: 0.5, steer, ..Raw::default() });
+                yaw_peak = yaw_peak.max(sign * s.chassis.hull().omega_rad_s().y);
+                slowest = slowest.min(s.speed_m_s());
+            }
+            assert!(yaw_peak > 0.1, "steer {steer}: peak yaw rate {yaw_peak} rad/s in the commanded direction"); // const-ok: a tracked turn is several tenths of a rad/s
+            assert!(slowest > 0.3, "steer {steer}: the carrier stopped (slowest {slowest} m/s) instead of turning"); // const-ok: it must keep rolling
+            assert!(s.last_recovery.is_none(), "the assists had to recover a carrier doing a plain turn");
+        }
+    }
+
+    #[test]
     fn without_assists_full_throttle_goes_past_the_kid_cap() {
         let mut s = session("scout_4x4", false, |_| ());
         run(&mut s, full_throttle(), 12.0);
@@ -442,7 +466,7 @@ mod tests {
     fn a_rolled_hull_is_back_on_the_road_upright_within_two_seconds() {
         let mut s = session("scout_4x4", true, |_| ());
         run(&mut s, Raw::default(), 1.0);
-        s.chassis.hull.rot = Quat::from_roll(2.0); // 115 degrees: on its side and then some
+        s.chassis.hull_mut().rot = Quat::from_roll(2.0); // 115 degrees: on its side and then some
         let started = s.ticks;
         let mut done = None;
         for _ in 0..(2.0 * TICK_HZ) as u32 {
@@ -455,7 +479,7 @@ mod tests {
         let n = done.expect("not recovered within 2 s");
         assert_eq!(s.last_recovery, Some(Recovery::RolledOver));
         assert!(n as f64 / TICK_HZ >= 0.99, "recovered after only {n} ticks: the dwell is 1 s");
-        let up = s.chassis.hull.rot.rotate(Vec3::UP);
+        let up = s.chassis.hull().rot.rotate(Vec3::UP);
         assert!(up.y > 0.99, "not upright: {up:?}");
         assert!(s.chassis.datum_m().x.abs() < 1.0, "not on the road (the line x = 0): {:?}", s.chassis.datum_m());
     }
@@ -486,19 +510,19 @@ mod tests {
     fn leaving_the_terrain_puts_the_vehicle_back_on_the_nearest_road_point_facing_along_it() {
         let mut s = session("mule_4x4", true, |_| ());
         run(&mut s, Raw::default(), 1.0);
-        s.chassis.hull.pos_m = Vec3::new(500.0, 1.0, -20.0); // far outside the 400 m world
+        s.chassis.hull_mut().pos_m = Vec3::new(500.0, 1.0, -20.0); // far outside the 400 m world
         s.step(&Raw::default());
         assert_eq!(s.last_recovery, Some(Recovery::OffMap));
         let p = s.chassis.datum_m();
         assert!(p.x.abs() < 1.0 && (p.z + 20.0).abs() < 6.0, "put back at {p:?}, the nearest road point is at z = -20");
-        let fwd = s.chassis.hull.rot.rotate(Vec3::FORWARD);
+        let fwd = s.chassis.hull().rot.rotate(Vec3::FORWARD);
         assert!(fwd.z < -0.99, "not facing along the road (down -Z): {fwd:?}");
     }
 
     #[test]
     fn a_reset_recovers_even_with_assists_off() {
         let mut s = session("scout_4x4", false, |_| ());
-        s.chassis.hull.pos_m = Vec3::new(30.0, 1.0, 0.0); // 30 m off the road
+        s.chassis.hull_mut().pos_m = Vec3::new(30.0, 1.0, 0.0); // 30 m off the road
         s.recover();
         assert_eq!(s.event, Some(BACK_ON_ROAD));
         assert!(s.chassis.datum_m().x.abs() < 1.0);
