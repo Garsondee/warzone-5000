@@ -17,7 +17,7 @@ use crate::cliff::{switchback_path, CliffDef, SwitchbackDef};
 use crate::corrugation::{Corrugation, Ripple};
 use crate::features::{
     barricade_blocks, cell_slope, dilate, mud_mask, poisson_disc, poisson_disc_in, BarricadeDef, MudDef, RockFieldDef,
-    TreesDef,
+    SoftPatchDef, TreesDef,
 };
 use crate::grid::{warped_fbm, GridWorld, CELL_M};
 use crate::river::{carve, RiverDef};
@@ -113,6 +113,8 @@ pub struct CourseDef {
     pub barricade: Option<BarricadeDef>,
     #[serde(default)]
     pub rock_fields: Vec<RockFieldDef>,
+    #[serde(default)]
+    pub soft_patches: Vec<SoftPatchDef>,
     #[serde(default)]
     pub cliffs: Vec<CliffDef>,
     #[serde(default)]
@@ -768,6 +770,23 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
             }
         }
     }
+    // Soft patches: sand or deep mud laid over plain ground (never over road, water or mud already there).
+    for (k, sp) in def.soft_patches.iter().enumerate() {
+        sp.radius_m.check(&format!("{}.soft_patches[{k}].radius_m", def.name))?;
+        let mat = materials.id_of(&sp.surface).ok_or_else(|| format!("unknown soft patch surface `{}`", sp.surface))?;
+        if materials.get(mat).soil.is_none() {
+            return Err(format!(
+                "{}.soft_patches[{k}]: `{}` has no soil parameters, so it is not soft ground",
+                def.name, sp.surface
+            ));
+        }
+        for (c, cell) in splat.iter_mut().enumerate() {
+            let (x, z) = xz(c % n, c / n);
+            if *cell == ground.0 as u8 && scalar::hypot(x - sp.x_m, z - sp.z_m) <= sp.radius_m.v {
+                *cell = mat.0 as u8;
+            }
+        }
+    }
     // Rock fields: the ground under a field becomes gravel (never over road or mud).
     for (k, r) in def.rock_fields.iter().enumerate() {
         for (l, p) in [
@@ -919,7 +938,7 @@ mod tests {
     const GOLDEN_CROSSING_HASH: u64 = 0x2f47_a346_14ba_26ea;
     const GOLDEN_RIVER_HASH: u64 = 0x33d8_29c2_7af5_f0f9;
     const GOLDEN_RIDGE_HASH: u64 = 0xb275_51a9_3685_9f48;
-    const GOLDEN_SLICE_HASH: u64 = 0xcf18_752c_43dd_a432;
+    const GOLDEN_SLICE_HASH: u64 = 0x1513_2fd9_e808_824a;
 
     fn hash(c: &Course) -> u64 {
         let mut s = StateHasher::new();
@@ -1757,5 +1776,39 @@ mod tests {
         let mut d = crossing();
         d.road.bridges[0].river = 3;
         assert!(generate(&d).err().expect("refused").contains("does not exist"));
+    }
+
+    #[test]
+    fn soft_patch_is_sand_inside_its_disc_only_and_never_on_the_road() {
+        let d = def();
+        let c = generate(&d).expect("course");
+        let sp = &d.soft_patches[0];
+        let (mut sand, mut inside) = (0, 0);
+        for k in 0..c.world.n() * c.world.n() {
+            let (i, j) = (k % c.world.n(), k / c.world.n());
+            let (x, z) = c.world.node_xz(i, j);
+            let is_sand =
+                c.world.materials().get(MaterialId(u16::from(c.world.splat_at_node(i, j)))).name == sp.surface;
+            let in_disc = scalar::hypot(x - sp.x_m, z - sp.z_m) <= sp.radius_m.v;
+            if is_sand {
+                sand += 1;
+                assert!(in_disc, "sand outside the patch at ({x}, {z})");
+                assert!(c.world.material_at(x, z).soil.is_some(), "sand carries soil parameters");
+            }
+            if in_disc {
+                inside += 1;
+            }
+        }
+        assert!(sand > inside / 2, "the patch should be mostly sand ({sand} of {inside} cells)");
+        for &(x, z, _) in &c.road {
+            assert_ne!(c.world.material_at(x, z).name, sp.surface, "sand on the road");
+        }
+    }
+
+    #[test]
+    fn a_soft_patch_of_hard_ground_is_refused() {
+        let mut d = def();
+        d.soft_patches[0].surface = "gravel".into();
+        assert!(generate(&d).err().expect("refused").contains("not soft ground"));
     }
 }

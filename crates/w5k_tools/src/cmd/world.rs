@@ -19,6 +19,7 @@ const WATER_DEEP_RGB: [f64; 3] = [15.0, 40.0, 100.0]; // const-ok: display colou
 const WATER_DEPTH_FULL_M: f64 = 2.5; // const-ok: depth at which the water colour is darkest
 const PLANKS_RGB: [f64; 3] = [120.0, 90.0, 55.0]; // const-ok: display colour
 const TRACK_RGB: [u8; 3] = [200, 170, 110]; // const-ok: display colour of a track's centreline
+const SAND_RGB: [f64; 3] = [215.0, 190.0, 125.0]; // const-ok: display colour
 const MUD_RGB: [f64; 3] = [105.0, 80.0, 52.0]; // const-ok: display colour
 const GROUND_RGB: [f64; 3] = [95.0, 135.0, 78.0]; // const-ok: display colour
 const HEIGHT_TINT_PER_M: f64 = 5.0; // const-ok: display colour ramp
@@ -155,6 +156,7 @@ fn preview(args: &[String]) -> Result<(), String> {
                     "mud" => MUD_RGB,
                     "gravel" => GRAVEL_RGB,
                     "planks" => PLANKS_RGB,
+                    "sand" => SAND_RGB,
                     _ => [GROUND_RGB[0] + (w.height_m(x, z) - lo.y) * HEIGHT_TINT_PER_M, GROUND_RGB[1], GROUND_RGB[2]],
                 }
             };
