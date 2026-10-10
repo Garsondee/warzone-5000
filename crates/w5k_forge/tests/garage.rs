@@ -67,10 +67,15 @@ fn the_three_designs_differ_where_the_archetypes_differ() {
     assert!(dm.powertrain.engine.peak_power_w.v < dh.powertrain.engine.peak_power_w.v);
     let radius = |c: &Compiled| c.rig.stations[0].wheel.radius_m;
     assert!(radius(&cs) < radius(&cm) && radius(&cm) < radius(&ch));
-    // The scout rides softest and with the least damping ratio; the hauler stiffest.
+    // The scout rides softest; the hauler stiffest.
     assert!(ds.suspension.front_ride_frequency_hz.v < dm.suspension.front_ride_frequency_hz.v);
     assert!(dm.suspension.front_ride_frequency_hz.v < dh.suspension.front_ride_frequency_hz.v);
-    assert!(ds.suspension.damping_ratio.v < dm.suspension.damping_ratio.v);
+    // The scout's damping is not left light: CHASSIS' slice-course check found its bump-side ratio (what the whoops excite) must be
+    // about 0.25 to 0.35. Bump-side zeta = 2 zeta / (1 + rebound_to_bump).
+    let bump_zeta =
+        |d: &VehicleDef| 2.0 * d.suspension.damping_ratio.v / (1.0 + d.suspension.rebound_to_bump.as_ref().unwrap().v);
+    assert!((0.25..=0.35).contains(&bump_zeta(&ds)), "scout bump-side zeta {}", bump_zeta(&ds));
+    assert!(ds.suspension.damping_ratio.v <= dm.suspension.damping_ratio.v);
     // The hauler is the least stable: static stability factor (half track over COM height) is lowest.
     let ssf = |d: &VehicleDef| {
         let RunningGearDef::Wheeled(w) = &d.running_gear else { panic!() };
