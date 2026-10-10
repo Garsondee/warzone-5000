@@ -91,6 +91,10 @@ pub struct MudCrossing {
     /// Position along the road, 0 = start, 1 = finish.
     pub at_fraction: Param,
     pub length_m: Param,
+    /// A pit: the road dips this deep (m) over the crossing, with eased walls, so the mud lies in a hollow a vehicle must drive down
+    /// into and climb out of. Absent: a flat stretch of mud.
+    #[serde(default)]
+    pub pit_depth_m: Option<Param>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -167,6 +171,12 @@ const ROUGH_MIN_FADE_M: f64 = 2.0; // const-ok: ends of a rough section
 
 /// Cells this close beyond a deck's edge are exempt from the grade limits (the drop into the water), m.
 const DECK_LIMIT_MARGIN_M: f64 = 2.0; // const-ok: width of the drop beside a deck
+
+/// Steepest slope of `smoothstep` relative to its mean: 3/2 (so a drop `D` eased over `L` has a slope of at most `1.5 D / L`).
+const SMOOTHSTEP_PEAK: f64 = 1.5; // const-ok: d/dx of 3x^2 - 2x^3 at x = 1/2
+
+/// Longest wall of a mud pit, m.
+const PIT_WALL_M: f64 = 6.0; // const-ok: how gently the pit's walls are eased
 
 /// The profile is graded to this fraction of the stated road grade; sampled bilinearly the road can add a sliver of slope.
 const PROFILE_MARGIN: f64 = 0.9; // const-ok: safety factor on the stated grade
@@ -738,6 +748,29 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
             }
         }
     }
+    // Mud pits: the road dips over a stated crossing. Added after the clamp, like whoops; the walls are eased over a third of the
+    // crossing at most PIT_WALL_M, so their slope is bounded and counted in the cells' grade limits.
+    for (rd, lr) in road_defs.iter().zip(&laid) {
+        for (k, m) in rd.mud_crossings.iter().enumerate() {
+            let Some(depth) = &rd.mud_crossings[k].pit_depth_m else { continue };
+            depth.check(&format!("{}.road.mud_crossings[{k}].pit_depth_m", def.name))?;
+            let (a, b) = (
+                m.at_fraction.v * lr.total_arc - m.length_m.v * 0.5,
+                m.at_fraction.v * lr.total_arc + m.length_m.v * 0.5,
+            );
+            let wall = (m.length_m.v / 3.0).min(PIT_WALL_M);
+            for c in 0..n * n {
+                if lr.best_d[c] >= lr.w2 + ROUGH_EDGE_M || lr.arc[c] < a || lr.arc[c] > b {
+                    continue;
+                }
+                let lateral = 1.0 - scalar::smoothstep(lr.w2, lr.w2 + ROUGH_EDGE_M, lr.best_d[c]);
+                let along =
+                    scalar::smoothstep(a, a + wall, lr.arc[c]) * (1.0 - scalar::smoothstep(b - wall, b, lr.arc[c]));
+                h[c] -= depth.v * along * lateral;
+                grade_limit[c] += SMOOTHSTEP_PEAK * depth.v * (1.0 / wall + 1.0 / ROUGH_EDGE_M);
+            }
+        }
+    }
     let centrelines: Vec<Vec<(f64, f64, f64)>> = laid
         .iter()
         .map(|lr| lr.pts.iter().zip(&lr.y).map(|(&(i, j), &yy)| (i * CELL_M - half, j * CELL_M - half, yy)).collect())
@@ -938,7 +971,7 @@ mod tests {
     const GOLDEN_CROSSING_HASH: u64 = 0x2f47_a346_14ba_26ea;
     const GOLDEN_RIVER_HASH: u64 = 0x33d8_29c2_7af5_f0f9;
     const GOLDEN_RIDGE_HASH: u64 = 0xb275_51a9_3685_9f48;
-    const GOLDEN_SLICE_HASH: u64 = 0x1513_2fd9_e808_824a;
+    const GOLDEN_SLICE_HASH: u64 = 0x530e_27f4_3147_527a;
 
     fn hash(c: &Course) -> u64 {
         let mut s = StateHasher::new();
@@ -1371,6 +1404,7 @@ mod tests {
         let mut d = def();
         d.road.whoops.clear();
         d.road.washboards.clear();
+        d.road.mud_crossings.iter_mut().for_each(|m| m.pit_depth_m = None);
         generate(&d).expect("smooth slice")
     }
 
@@ -1810,5 +1844,34 @@ mod tests {
         let mut d = def();
         d.soft_patches[0].surface = "gravel".into();
         assert!(generate(&d).err().expect("refused").contains("not soft ground"));
+    }
+
+    #[test]
+    fn mud_pit_is_as_deep_as_stated_in_the_middle_and_leaves_the_road_alone_outside() {
+        let d = def();
+        let (with, without) = (generate(&d).expect("slice"), smooth_slice());
+        let m = &d.road.mud_crossings[0];
+        let depth = m.pit_depth_m.as_ref().expect("the slice has a pit").v;
+        let total = road_length(&with);
+        let diff = |s: f64| {
+            let (p, _) = road_at(&with, s);
+            without.world.height_m(p.0, p.1) - with.world.height_m(p.0, p.1)
+        };
+        let mid = m.at_fraction.v * total;
+        assert!((diff(mid) - depth).abs() < 0.08, "the pit is {} m deep in the middle, stated {depth}", diff(mid));
+        assert!(diff(mid - m.length_m.v * 0.5 - 4.0).abs() < 0.02, "no dip before the pit");
+        assert!(diff(mid + m.length_m.v * 0.5 + 4.0).abs() < 0.02, "no dip after the pit");
+        // The walls are eased: no steeper than the bound the cells' limits were given.
+        let wall = (m.length_m.v / 3.0).min(PIT_WALL_M);
+        let mut worst = 0.0f64;
+        for k in 0..400 {
+            let s = mid - m.length_m.v * 0.5 + k as f64 * m.length_m.v / 400.0;
+            worst = worst.max((diff(s + 0.5) - diff(s)).abs() / 0.5);
+        }
+        assert!(worst <= depth * SMOOTHSTEP_PEAK / wall * 1.1, "pit wall slope {worst}");
+        assert!(
+            with.world.material_at(road_at(&with, mid).0 .0, road_at(&with, mid).0 .1).soil.is_some(),
+            "the pit is filled with mud"
+        );
     }
 }

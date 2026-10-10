@@ -33,6 +33,8 @@
 
 - Owner's visual target (4 reference images, 2026-10-10): `docs/lanes/world/visual-target.md` (observations, what it implies per lane, plan V0 to V8: perspective preview, decimated flat-shaded terrain mesh, rule-based material painting, procedural rocks, road dressing, decor, compound generator, lakes, diorama preset). Next: V0.
 
+- (2) mud pit [`lane/world/mudpit`]: the `mud` material is now the **clay row of the Bekker-Wong set** (n 0.5, kc 13.19 kN/m^(n+1), kphi 692.15 kN/m^(n+2), c 4.14 kPa, phi 13 deg, K 0.01 m) from arXiv:2603.28965 Table 2 (a SECONDARY source; Wong's book itself unopened; VALIDATION to verify the primary page and table), plus a `sandy_loam` row (n 0.7, 5.27, 1515.04, 1.72 kPa, 29 deg, 0.025 m). Note: the old stand-in had n 0.8 and K 0.025, so TRACKS' mud numbers change. `MudCrossing.pit_depth_m` makes the slice crossing a 0.4 m hollow. Mu/rolling/roughness numbers are still UNVALIDATED stand-ins. Web search worked, direct fetch of arXiv is blocked from here.
+
 ## Blocked
 - Nothing.
 

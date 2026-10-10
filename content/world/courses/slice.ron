@@ -38,6 +38,7 @@ CourseDef(
         mud_crossings: [MudCrossing(
             at_fraction: Param(v: 0.35, prov: Spec, src: "course design: a washed-out stretch before the barricade"),
             length_m: Param(v: 25.0, prov: Spec, src: "course design: long enough for the truck to feel the soil law"),
+            pit_depth_m: Some(Param(v: 0.4, prov: Spec, src: "course design: the mud lies in a hollow 0.4 m deep with eased walls: the clay row of the Bekker-Wong set (arXiv:2603.28965 Table 2)")),
         )],
     ),
     mud: Some(MudDef(
