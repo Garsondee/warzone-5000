@@ -13,6 +13,7 @@ use w5k_world::grid::CELL_M;
 
 // Display-only colours and lighting for the preview (never feed the simulation).
 const ASPHALT_RGB: [f64; 3] = [150.0, 150.0, 156.0]; // const-ok: display colour
+const GRAVEL_RGB: [f64; 3] = [140.0, 132.0, 118.0]; // const-ok: display colour
 const MUD_RGB: [f64; 3] = [105.0, 80.0, 52.0]; // const-ok: display colour
 const GROUND_RGB: [f64; 3] = [95.0, 135.0, 78.0]; // const-ok: display colour
 const HEIGHT_TINT_PER_M: f64 = 5.0; // const-ok: display colour ramp
@@ -133,6 +134,7 @@ fn preview(args: &[String]) -> Result<(), String> {
             let base = match name.as_str() {
                 "asphalt" => ASPHALT_RGB,
                 "mud" => MUD_RGB,
+                "gravel" => GRAVEL_RGB,
                 _ => [GROUND_RGB[0] + (w.height_m(x, z) - lo.y) * HEIGHT_TINT_PER_M, GROUND_RGB[1], GROUND_RGB[2]],
             };
             for k in 0..3 {
