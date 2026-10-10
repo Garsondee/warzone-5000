@@ -65,6 +65,21 @@ class PackageTestDrive(unittest.TestCase):
         b, _ = self.build("b.zip")
         self.assertEqual(a.read_bytes(), b.read_bytes())
 
+    def test_the_truck_skins_the_page_loads_go_into_viewer_skins_and_a_missing_folder_is_not_an_error(self):
+        skins = self.root / "skins"
+        skins.mkdir()
+        (skins / "scout_4x4.skin").write_bytes(b"skin-a")
+        (skins / "notes.txt").write_text("ignored")
+        out = self.root / "with.zip"
+        pkg.build(self.root / "w5k.exe", self.root / "content", self.root / "index.html", out, "windows", skins)
+        with zipfile.ZipFile(out) as z:
+            names = set(z.namelist())
+        self.assertIn(f"{pkg.FOLDER}/viewer/skins/scout_4x4.skin", names)
+        self.assertNotIn(f"{pkg.FOLDER}/viewer/skins/notes.txt", names)
+        out2 = self.root / "without.zip"
+        pkg.build(self.root / "w5k.exe", self.root / "content", self.root / "index.html", out2, "windows", self.root / "no-such-folder")
+        self.assertTrue(out2.is_file())
+
     def test_a_missing_input_is_refused_with_its_name(self):
         (self.root / "index.html").unlink()
         with self.assertRaises(SystemExit) as cm:

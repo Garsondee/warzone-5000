@@ -66,7 +66,7 @@ jobs:
       # look under "Artifacts", download Warzone5000-TestDrive-windows, unzip it anywhere and double-click START.bat.
       - name: Test-drive package (Windows)
         if: ${{ matrix.os == 'windows-latest' && hashFiles('tools/viewer/dist/index.html') != '' }}
-        run: python tools/ci/package_testdrive.py --exe target/release/w5k.exe --content content --page tools/viewer/dist/index.html --out out/Warzone5000-TestDrive-windows.zip --os windows
+        run: python tools/ci/package_testdrive.py --exe target/release/w5k.exe --content content --page tools/viewer/dist/index.html --skins tools/viewer/dist/skins --out out/Warzone5000-TestDrive-windows.zip --os windows
 
       - name: Keep the test-drive package
         if: ${{ matrix.os == 'windows-latest' && hashFiles('tools/viewer/dist/index.html') != '' }}
