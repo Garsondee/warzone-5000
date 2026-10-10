@@ -25,7 +25,6 @@
 
 ## Blocked
 - Nothing.
-
 ## Next
 - Carrier: `TrackedChassis` accepts the features it or DRIVE implements; FORGE's `carrier_tracked` rests at its ride height (0.8 mm). Idle after this, per ARCH. Open on ARCH's call: tank replay frames, FORGE's T2 rig in the tank tests, linkages (6x6 walking beams), tyre slide drop.
 
