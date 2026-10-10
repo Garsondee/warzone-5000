@@ -24,6 +24,8 @@ pub struct Hull {
     torque_nm: Vec3,
     /// Acceleration of the centre of mass over the last step, m/s^2 (for the articulation port and the ledger).
     pub acc_m_s2: Vec3,
+    /// Torque about the centre of mass integrated in the last step, N m (for the ledger check).
+    pub last_torque_nm: Vec3,
 }
 
 /// Why a body was refused.
@@ -50,6 +52,7 @@ impl Hull {
             force_n: Vec3::ZERO,
             torque_nm: Vec3::ZERO,
             acc_m_s2: Vec3::ZERO,
+            last_torque_nm: Vec3::ZERO,
         })
     }
 
@@ -108,6 +111,7 @@ impl Hull {
         self.vel_m_s += self.acc_m_s2 * dt_s;
         self.pos_m += self.vel_m_s * dt_s;
         self.ang_mom += self.torque_nm * dt_s;
+        self.last_torque_nm = self.torque_nm;
         // the orientation advances with the angular velocity the new momentum has in the current pose
         self.rot = self.rot.integrate_world(self.omega_rad_s(), dt_s);
         self.force_n = Vec3::ZERO;
