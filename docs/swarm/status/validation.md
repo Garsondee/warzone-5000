@@ -1,11 +1,12 @@
 # Status: VALIDATION
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/validation/harness | **Contract pinned:** contract-v0.1 | **Phase:** building
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/validation/proving | **Contract pinned:** contract-v0.1 | **Phase:** building
 
 ## Done
 - Spike S9 (`docs/lanes/validation/spike-s9.md`), design note with CCR text (`design-note.md`), theory note stub (`docs/theory/validation.md`).
 
 ## In progress
+- PROVING-GROUND spec (owner direction via ARCH): `docs/validation/proving-ground.md` plus the result schema `w5k_validate::proving`; next: scorers for (b), (e), (g), then (a), (c), (d), quarter-car oracle for (f), terrain scorer, dashboard grid.
 - PR #14 (settling) and #16 (dossier loader, M998 dossier) merged.
 - Harness v0 PR: verdict classes, replay measurement, scoring, `w5k validation dashboard --out DIR` (self-contained HTML). Image: `docs/lanes/validation/media/dashboard-v0.png`.
 
