@@ -3,17 +3,21 @@
 use w5k_contract::testing::{box_tank, standard_materials};
 use w5k_contract::{Material, MaterialId};
 use w5k_terramech::gear::GearConfig;
+use w5k_terramech::ladder::{ladder_row, LadderTank};
 use w5k_terramech::plan::PlanVehicle;
 use w5k_terramech::reference::reference_soils;
 use w5k_terramech::{soil, Tuning};
 
 const PA_PER_KPA: f64 = 1e3; // const-ok: unit conversion at the display edge
 const MM_PER_M: f64 = 1e3; // const-ok: unit conversion at the display edge
-const USAGE: &str = "usage: w5k tracks bench <plate|thrust|pivot> --out DIR [--mass-t T]   (CSV of plate sinkage, drawbar pull against slip, or pivot-turn response)";
+const USAGE: &str = "usage: w5k tracks bench <plate|thrust|pivot|ladder> --out DIR [--mass-t T] [--soil NAME]   (CSV of plate sinkage, drawbar pull against slip, or pivot-turn response)";
 const GRAVITY_M_S2: f64 = 9.80665; // const-ok: standard gravity, SPEC; the same value as content/physics/tracks/tuning.ron
 const DT_S: f64 = 0.001; // const-ok: bench time step, 1 kHz
 const SLIP_STEP: f64 = 0.025; // const-ok: slip axis step of the thrust bench
 const DEFAULT_MASS_T: f64 = 15.0; // const-ok: bench default mass, light enough that all three reference soils carry it
+const LADDER_RUNGS: u32 = 30; // const-ok: rungs of the ladder
+const LADDER_STEP_T: f64 = 5.0; // const-ok: tonnes per rung
+const LADDER_MAX_SINKAGE_M: f64 = 1.0; // const-ok: search bound for the equilibrium sinkage
 const KG_PER_TONNE: f64 = 1e3; // const-ok: unit conversion at the input edge
 const N_PER_KN: f64 = 1e3; // const-ok: unit conversion at the display edge
 
@@ -23,6 +27,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         (Some("bench"), Some("plate")) => plate(&args[2..]),
         (Some("bench"), Some("thrust")) => thrust(&args[2..]),
         (Some("bench"), Some("pivot")) => pivot(&args[2..]),
+        (Some("bench"), Some("ladder")) => ladder(&args[2..]),
         _ => Err(USAGE.to_string()),
     }
 }
@@ -137,4 +142,35 @@ fn pivot(args: &[String]) -> Result<(), String> {
         }
     }
     write(&dir, "pivot_response.csv", csv)
+}
+
+/// The ladder: the reference tank from 5 t upward on one reference soil (`--soil`, default `snow`): sinkage against the soil theory, the
+/// clearance, the net drawbar pull and the pull below which the tank counts as bogged.
+fn ladder(args: &[String]) -> Result<(), String> {
+    let dir = out_dir(args)?;
+    let name = args.iter().position(|a| a == "--soil").and_then(|i| args.get(i + 1)).map_or("snow", String::as_str);
+    let ground = reference_soils()
+        .into_iter()
+        .find(|m| m.name == name)
+        .ok_or_else(|| format!("no reference soil called {name}"))?;
+    let (rig, _) = box_tank();
+    let (tuning, cfg) = (Tuning::shipped(), GearConfig::from_rig(&rig, 0));
+    let belly = LadderTank::shipped().belly(&tuning);
+    let gauge_m = (rig.stations[0].rest_pos_m.x - rig.stations[rig.stations.len() - 1].rest_pos_m.x).abs();
+    let mut csv = String::from("mass_t,theory_mm,sinkage_mm,clearance_mm,net_pull_kn,bog_limit_kn\n");
+    for step in 1..=LADDER_RUNGS {
+        let mass_kg = f64::from(step) * LADDER_STEP_T * KG_PER_TONNE;
+        let r = ladder_row(&cfg, belly, gauge_m, tuning, &ground, mass_kg, LADDER_MAX_SINKAGE_M);
+        let limit = tuning.bog_pull_fraction * mass_kg * tuning.gravity_m_s2;
+        csv += &format!(
+            "{:.0},{:.1},{:.1},{:.1},{:.2},{:.2}\n",
+            mass_kg / KG_PER_TONNE,
+            r.predicted_sinkage_m * MM_PER_M,
+            r.sinkage_m * MM_PER_M,
+            belly.clearance_m * MM_PER_M,
+            r.net_pull_n / N_PER_KN,
+            limit / N_PER_KN
+        );
+    }
+    write(&dir, &format!("ladder_{name}.csv"), csv)
 }
