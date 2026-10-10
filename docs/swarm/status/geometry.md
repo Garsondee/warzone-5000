@@ -1,6 +1,6 @@
 # Status: GEOMETRY
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/geometry/export (stacked: truck PR 34 > build PR 32 > settling PR 25) | **Contract pinned:** `contract-v0.1` = commit `f8f5e5d` | **Phase:** settling round, continuing into the build (owner instruction in force: do not wait for review)
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/geometry/hull (from integration; settling #25, build #32, truck #34 and export #35 are merged) | **Contract pinned:** `contract-v0.1` = commit `f8f5e5d` | **Phase:** settling round, continuing into the build (owner instruction in force: do not wait for review)
 
 ## Done
 - Settling PR: spike S-G (kernel in `crates/w5k_geo/src/{mesh,edge,bvh,cavity}.rs`, tests `tests/spike_g.rs`, report `docs/lanes/geometry/spike-g.md`, image `media/s-g.png`), design note, CCR text (`docs/swarm/requests/geometry-ccr-shapes-and-tracks.md`), theory starter.
@@ -11,6 +11,8 @@
 - Truck PR (this branch): `part`, `truck` (data-driven part list `shapes/utility_4x4.ron`), subdivision before baking, panel plates and fittings (C-004), tests A4 (200 random in-range sets), A5 (golden hash `tests/golden/utility_4x4.hash`), A9 (against `box_truck()`), dimension and budget check (placeholder, 19.5k triangles of 40k). Pictures `media/truck-look.png`, `truck-edge.png`.
 
 - Export PR (this branch): `export.rs` (RenderRig in the stand-in layout, normals smoothed within 40 degrees and split beyond, f32 once; binary glTF with `COLOR_0` = edge, cavity, 0), `w5k geometry export truck`, dimension table, tests (rig validates, flags in 0..1, 28.9k triangles of 40k, wheel meshes centred on their hubs, GLB chunks). Subdivision edge 0.3 m and 48-gon wheels at detail 1 (0.2 m gave 46k triangles); golden re-blessed for that.
+
+- Hull PR (this branch), owner feedback "windows, mirrors and bumper float; mud guards are slabs": the hull is ONE lofted shell with the wheel arches cut into the section and a swept lip around each arch; every fitting is anchored to a surface of the shell and overlaps it (new tests: `every_fitting_is_embedded_in_the_hull_or_in_a_fitting_that_is`, `plates_and_glass_hug_the_shell_within_3_cm`, `wheels_clear_the_shell_and_the_arches_open_over_every_tyre`); `loft_beveled` (chamfered ends, vertex rows beside hard edges), `polygon_ring`, `sweep_arc`, `triangulate_ring` (non-convex caps); trapezoid side panes that follow the A-pillar; grille slats, bezels, sill steps, roof hatch, antenna, pintle. 34.1k triangles of 40k. Pictures `media/truck-*-look.png`; `--view` and `--size` options on `sheet`. Golden re-blessed (new hull).
 
 ## In progress
 - Nothing blocking: M113 next (sloped hull, road wheels, sprocket, idler, track run and link: A10 A11), after FORGE/ARCH answer on the CCRs.
@@ -29,4 +31,6 @@
 - fmt, clippy `-D warnings`, constants lint, line budget (223 of 8000), deps lint: clean. Not run: Windows, goldens (none touched), impact matrix (no contract touched).
 - Wheel sheet: `docs/lanes/geometry/media/wheel-look.png` (`w5k geometry sheet wheel --out DIR`, 0.5 s). A8 passes at the reference detail (128 segments, sag 0.12 mm).
 - Kill criterion "wear over 25% more triangles": hood alone +36%, nominal breach; the whole-vehicle test is at build step 6.
+- Hull rebuild findings: edge wear smeared as clouds across large faces until every hard edge had a vertex row `band` beside it, including the perpendicular ends and the crease stations (the spike's rule applied along the length); a 0.2 m cavity subdivision gave 46k triangles, 0.4 m gives 34k; a fan cap from a ring vertex was degenerate on collinear points, a centroid fan or ear clipping is not.
 - Found while building the truck: the loft's end caps were fans from a ring vertex, degenerate on the collinear loop points (a sliver filter then opened holes); caps are now centroid fans. Flags need vertices where they vary: parts are subdivided to 0.2 m before baking (`flags.ron`), which is what keeps cavity from smearing across large faces.
+- Tripwire note (RULES section 8): the hull PR is a rewrite of `truck.rs` (about 470 changed non-test lines, over 400). The kernel (#44) and the tool options (#45) were split out first; the rewrite replaces one module and has no working intermediate state, so it ships as one PR, stacked on those two.
