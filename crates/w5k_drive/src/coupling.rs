@@ -183,7 +183,7 @@ impl Coupling {
                 );
                 if self.lock_fraction > 0.0 {
                     // the lock-up clutch ramps in alongside the converter, which carries the rest: no torque hole while it applies
-                    let conv = 1.0 - self.lock_fraction;
+                    let conv = (1.0 - self.lock_fraction) * scale;
                     let tp = conv * (we / k_rad) * (we / k_rad);
                     let slope = 2.0 * tp / we.max(f64::EPSILON); // const-ok: guard against dividing by a stopped pump
                     let tt = tp * self.torque_ratio(sr);
@@ -199,12 +199,12 @@ impl Coupling {
                     };
                 } else {
                     // pump load linearised about the current speed: T_p(w + dw) = T_p + (2 T_p / w) dw, solved with the engine step
-                    let tp = (we / k_rad) * (we / k_rad);
+                    let tp = (we / k_rad) * (we / k_rad) * scale; // a shift unloads the pump too: the engine flares, as a real automatic does
                     let slope = 2.0 * tp / we.max(f64::EPSILON); // const-ok: guard against dividing by a stopped pump
                     let before = engine.omega_rad_s();
                     engine.advance(dt, &prep, tp, slope);
                     let tp_eff = tp + slope * (engine.omega_rad_s() - before);
-                    let out = tp_eff * self.torque_ratio(sr) * scale;
+                    let out = tp_eff * self.torque_ratio(sr);
                     return CouplingOut { torque_nm: out, slip_rad_s: we - ds.omega_rad_s, heat_j: 0.0 };
                 }
             }
