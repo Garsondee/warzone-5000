@@ -5,11 +5,13 @@
 
 pub mod coupling;
 pub mod engine;
+pub mod gearbox;
 
 #[cfg(test)]
 mod testkit {
     use crate::coupling::CouplingTuning;
     use crate::engine::{Engine, EngineTuning};
+    use crate::gearbox::ShiftTuning;
     use w5k_contract::rig::{EngineDef, EngineKind};
 
     pub fn engine_tuning() -> EngineTuning {
@@ -20,6 +22,10 @@ mod testkit {
     pub fn coupling_tuning() -> CouplingTuning {
         ron::from_str(include_str!("../../../content/physics/drive/coupling_tuning.ron"))
             .expect("coupling_tuning.ron parses")
+    }
+
+    pub fn shift_tuning() -> ShiftTuning {
+        ron::from_str(include_str!("../../../content/physics/drive/shift_tuning.ron")).expect("shift_tuning.ron parses")
     }
 
     fn def(curve: Vec<(f64, f64)>) -> EngineDef {
