@@ -13,6 +13,9 @@
 - PR C (`lane/forge/render`, stacked on B): `render.rs`, the `RenderRig` for the same stations; tests for joint layout and the 1 mm wheel-radius agreement; image `docs/lanes/forge/media/mule-side-view.png` and the compile report `mule-compile-report.txt`.
 - Next: `w5k forge compile <def> --out DIR` command, then hull mass items and the tracked compile.
 
+## Merge order for ARCH
+#18 (base integration) then #20 (base lane/forge/build) then #24 (base lane/forge/compile); retarget each base as the one below lands. API: `w5k_forge::compile::{parse_def, parse_extras, compile}` and `w5k_forge::render::render_rig(&c.rig, c.hull_size_m)`; files `content/vehicles/game/mule_4x4{,.extras}.ron`. (A direct message to ARCH was blocked by the lane tool guard, as it should be; this file is the channel.)
+
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).
 
