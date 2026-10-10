@@ -2,38 +2,40 @@
 
 *Update with every PR. Keep it under 40 lines. ARCH reads this file at every check-in instead of your whole session.*
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/chassis/load-sensitivity | **Contract pinned:** 0.3.0 (`0982843`) | **Phase:** slice 2, stage A
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/chassis/hauler-skid | **Contract pinned:** 0.3.0 (`0982843`) | **Phase:** slice 2, stage A
 
 ## Done
-- S1 + design note (#7); steps 1-4 (#13, #30); wheeled assembly + Ackermann (#42); Mule strip run (#43); modes + ledger (#59);
-  tilt-table and skidpad benches + patch-moment fix (#69); Scout whoops check: a real resonance, not a bug (#76). Contract 0.2.0.
+- S1, design note, quarter car, suspension, tyre, hull, wheeled assembly, Mule strip, modes, ledger, benches (#7-#76); slice 2 stage A (below).
 
 ## In progress
-- Slice 2 stage A (ARCH 17:13Z: owner approved; C-016 still OPEN in QUEUE.md): tyre load sensitivity PR #118 (CCR-chassis-4 text in the design
-- **Tracked hull**: part 1 merged (#148). Part 2: `TrackedChassis` stepping box_tank with TRACKS' gear (rest, accel, ledger 1e-15). **Tripwire:**
-  464 non-test lines (one integrator; a split leaves dead code); ARCH to decide. Two fixes inside: soil forces in the ground frame; spin implicit in the slip.
-  note, shared PROVISIONAL Params) + skidpad bench fix (a gear-shift lurch read as slide-out: the Scout's -34% impact row; now +0.4%).
-  Hauler skidpad is at rollover onset (lightest wheel 0.6 kN of ~15 kN static), not power: `min_wheel_load_n` added. Tracked/sinkage note #123
-  (ARCH: terramech soil dep + RunningGear seam approved). Sinking tyre (rigid-wheel Bekker, UNVALIDATED): #126. Tyre reads contract 0.3 fields
-  (stand-in dropped; FORGE asked to fill them: `requests/chassis-forge-tyre-load-sensitivity.md`). Next: tracked hull.
-- **Not trusted yet:** tyre curve linear to the cap (no slide drop; locked braking reads high); roll centre at wheel-centre height (sliding struts);
-  single-ray contact; `relaxation_length_m`, `slip_damping_time_s` are estimates.
-- **6x6:** expressible today with independent axles; walking beams / inboard leaves (`LinkageDef`) are refused until linkages land (about one PR).
+- Merged: load sensitivity (#118), tracked note (#123), sinking tyre (#126), 0.3 tyre fields (#138), tracked hull (#148, #153).
+- **Hauler skidpad "power" at 0.59 g (ARCH 21:25Z): not mine, not power: traction through open diffs once the inner wheels unload.** Probe
+  (`spikes/chassis/skid_probe`): from about 0.58 g the inner wheels carry 0-1 kN (one lifts), they saturate and spin, and the open centre and axle
+  diffs send equal torque to them: total tyre drive force falls to -1..+6 kN at full throttle, speed stalls near 7 m/s. Load transfer (COM height,
+  track) sets when that starts, hence the rollover levers. Label: "traction (inner wheel unloaded)". DRIVE: the box hunts 4<->5 at 7 m/s here.
+- **Tracked assembly recipe (for ARCH's glue):** `w5k_chassis::tracked::TrackedChassis::new(&rig, &ChassisTuning (content/physics/chassis/
+  tuning.ron), w5k_terramech::Tuning::shipped(), BellyGeom::from_rig(&rig, &tracks_tuning) (None = no belly), &world, x, z, yaw) -> Result<_,
+  ChassisRefusal>`; per tick `tick(dt, &DriveInputs, &world, &mut dyn DrivePort)` (one shaft per sprocket output; skid steer comes from DRIVE's
+  per-sprocket torques). Read: `hull` (pose, velocity), `datum_m()`, `wheels[i].travel_m`, `tracks[k].sprocket_angle_rad`/`_omega_rad_s`,
+  `gear` (samples, totals, belly), `ledger` (switch on), `hash_state`. The rig needs: `tracks` whose road wheels are `RoadWheel` stations with
+  suspension and unsprung mass, a sprocket station with `drive_output`, `wheel_contact` stiffness; preloads from statics; `ride_height_m` should
+  include the belt's static penetration (about 13 mm on box_tank); `required_features` only "track running resistance".
+- **Not trusted yet:** tyre curve linear to the cap (no slide drop); roll centre at wheel-centre height; single-ray contact; the sprocket `dR/dw`
+  estimate (TRACKS asked: `requests/chassis-tracks-shaft-reaction-rate.md`).
 
 ## Blocked
 - Nothing.
 
 ## Next
-- suspension, tyre (rolling-resistance speed scale as a Param, not a const-ok literal), hull, wheeled assembly on the bump strip, ledger, glue API.
+- Idle after this, per ARCH. Open on ARCH's call: tank replay frames, FORGE's T2 rig in the tank tests, linkages (6x6 walking beams), tyre slide drop.
 
 ## Cards needed / PROVISIONAL decisions in force
-- None.
+- PROVISIONAL: sprocket `dR/dw` estimate (TRACKS to report it); private Bekker pressure in `soil_wheel.rs` (until terramech's soil module).
 
 ## Evidence
-- `python3 -I spikes/chassis/s1/s1.py` output in `spikes/chassis/s1/output.txt`. No Rust changed.
+- `cargo test -p w5k_chassis --release`: every oracle test passes (wheeled, benches, soil, tracked); PR bodies carry the numbers.
 
 ## Owner instructions received
-- 2026-10-10 (owner, in chat): "go ahead with the hull".
-- ARCH (2026-10-10): CCR-1..3 landed in contract-v0.2 (applied); rolling-resistance fade speed is a `Param` (done).
+- Owner in chat (2026-10-10): "go ahead with the hull"; "try again" (resume after a worker restart).
 ## Handoff note (fill in when you stop)
 - (fill in at M1)
