@@ -15,6 +15,8 @@
 
 - Steps 5 and 6 (PR on `lane/viewer/render`): `w5k viewer render|page|plot`; the first-light replay plays (clip 14 s, 0.57 MB; frame `docs/lanes/viewer/media/first-light-chase.png`). README `docs/lanes/viewer/README.md`.
 
+- Real truck (PR on `lane/viewer/real-truck`): GEOMETRY's `utility_4x4` rig plays (built-in rig id for `w5k viewer render|page`), LOOK's camo and weathering through the hook `tools/viewer/src/look.js` (answer: `docs/swarm/requests/viewer-look-hook.md`), page modules generalised in `build.mjs`.
+
 ## In progress
 - Nothing: PRs #15, #22, #26, #28, #33 (stacked, merge in that order) await ARCH. Idle.
 

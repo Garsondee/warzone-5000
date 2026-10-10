@@ -1,0 +1,27 @@
+#![enable(implicit_some)]
+// The slice course: a 400 m square with rolling hills, one named hill, and a graded road from start to finish.
+// Everything here is a generator parameter (card C-004): change a number, rebuild, look at `w5k world preview`.
+CourseDef(
+    name: "slice",
+    seed: 2026,
+    size_cells: 401,
+    hills: HillsDef(
+        amplitude_m: Param(v: 9.0, prov: Spec, src: "course design: gentle rolling country"),
+        wavelength_m: Param(v: 140.0, prov: Spec, src: "course design"),
+        warp_m: Param(v: 40.0, prov: Spec, src: "course design: domain warp strength"),
+        octaves: 5,
+        max_grade: Param(v: 0.30, prov: Spec, src: "course design: steepest terrain slope (rise/run), about 17 degrees"),
+        feature: Some(HillFeature(
+            x_m: 40.0, z_m: -30.0,
+            radius_m: Param(v: 70.0, prov: Spec, src: "course design"),
+            height_m: Param(v: 14.0, prov: Spec, src: "course design: the named hill the road must deal with"),
+        )),
+    ),
+    road: RoadDef(
+        waypoints: [(-170.0, 150.0), (-60.0, 20.0), (60.0, -40.0), (170.0, -150.0)],
+        width_m: Param(v: 6.0, prov: Spec, src: "course design: two lanes"),
+        shoulder_m: Param(v: 5.0, prov: Spec, src: "course design: blend from road to terrain"),
+        max_grade: Param(v: 0.08, prov: Spec, src: "course design: road grade limit, 8 percent"),
+        surface: "asphalt",
+    ),
+)
