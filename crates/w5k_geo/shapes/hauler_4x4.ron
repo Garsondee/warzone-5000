@@ -36,19 +36,28 @@
         // ---- arch lips, the front bumper
         (name: "arch_lip", role: Hull, slot: Paint, fitting: false, mirror: false, shape: ArchLip(inner_m: -0.012, width_m: 0.12, embed_m: 0.04, proud_m: 0.05, corner_m: 0.02)),
         (name: "bumper_front", role: Hull, slot: Metal, fitting: false, mirror: false, shape: Block(x: Frac(-0.49, 0.49), y: Frac(0.07, 0.17), z: Frac(0.0, 0.015), corner_m: 0.03)),
+        (name: "bumper_rear", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.47, 0.47), y: Frac(0.13, 0.22), z: Rear(-0.14, 0.08), corner_m: 0.03)),
         // ---- the cab: glass, doors, steps, mirrors
         (name: "windscreen", role: Hull, slot: Glass, fitting: true, mirror: false, shape: Windscreen(from_f: 0.034, to_f: 0.065, margin_m: 0.12, inset_m: 0.14, thickness_m: 0.02, proud_m: 0.004, corner_m: 0.05, bezel: Some(Bezel(width_m: 0.05, proud_m: 0.02)))),
         (name: "door", role: Hull, slot: Paint, fitting: true, mirror: true, shape: Block(x: Upper(-0.02, 0.006), y: Frac(0.40, 0.90), z: Frac(0.085, 0.215), corner_m: 0.006)),
+        (name: "door_handle", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Upper(-0.01, 0.035), y: Frac(0.60, 0.615), z: Frac(0.19, 0.205), corner_m: 0.005)),
         (name: "window", role: Hull, slot: Glass, fitting: true, mirror: true, shape: Pane(x: Upper(-0.02, 0.012), front: Vertical(0.095), rear_f: 0.205, bottom: 0.66, top_offset_m: 0.14, corner_m: 0.04, bezel: Some(Bezel(width_m: 0.045, proud_m: 0.018)))),
         (name: "cab_step", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Lower(-0.05, 0.16), y: Frac(0.20, 0.215), z: Frac(0.095, 0.205), corner_m: 0.01)),
         (name: "mirror_arm", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Upper(-0.04, 0.30), y: Frac(0.80, 0.815), z: Frac(0.058, 0.07), corner_m: 0.006)),
         (name: "mirror", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Upper(0.28, 0.36), y: Frac(0.64, 0.86), z: Frac(0.052, 0.078), corner_m: 0.02)),
         // ---- the front: grille, lamps
         (name: "grille", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.28, 0.28), y: Frac(0.20, 0.42), z: Front(-0.04, 0.04), corner_m: 0.015)),
+        (name: "grille_slat_1", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.26, 0.26), y: Frac(0.245, 0.257), z: Front(-0.06, -0.01), corner_m: 0.004)),
+        (name: "grille_slat_2", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.26, 0.26), y: Frac(0.285, 0.297), z: Front(-0.06, -0.01), corner_m: 0.004)),
+        (name: "grille_slat_3", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.26, 0.26), y: Frac(0.325, 0.337), z: Front(-0.06, -0.01), corner_m: 0.004)),
+        (name: "grille_slat_4", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.26, 0.26), y: Frac(0.365, 0.377), z: Front(-0.06, -0.01), corner_m: 0.004)),
+        (name: "roof_lamp", role: Hull, slot: Optics, fitting: true, mirror: true, shape: Cyl(axis: Z, x: Frac(0.14, 0.19), y: Top(-0.03, 0.10), z: Frac(0.062, 0.088), radius_m: 0.07)),
         (name: "headlamp", role: Hull, slot: Optics, fitting: true, mirror: true, shape: Cyl(axis: Z, x: Frac(0.36, 0.44), y: Frac(0.28, 0.36), z: Front(-0.05, 0.035), radius_m: 0.11)),
         // ---- the flat bed: headboard, side boards, a load, the exhaust stack, fuel tanks (the tail is open: a drop-side flatbed)
         (name: "headboard", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.47, 0.47), y: Top(-0.01, 0.60), z: Frac(0.276, 0.288), corner_m: 0.012)),
         (name: "side_board", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Upper(-0.06, 0.0), y: Top(-0.01, 0.32), z: Frac(0.290, 0.975), corner_m: 0.012)),
+        (name: "cargo_a", role: Hull, slot: Paint, fitting: true, mirror: false, shape: Block(x: Frac(-0.42, -0.06), y: Top(-0.02, 0.80), z: Frac(0.70, 0.90), corner_m: 0.03)),
+        (name: "tailgate", role: Hull, slot: Paint, fitting: true, mirror: false, shape: Block(x: Frac(-0.47, 0.47), y: Top(-0.01, 0.30), z: Frac(0.962, 0.975), corner_m: 0.012)),
         (name: "cargo_b", role: Hull, slot: Paint, fitting: true, mirror: false, shape: Block(x: Frac(0.04, 0.40), y: Top(-0.02, 1.10), z: Frac(0.50, 0.66), corner_m: 0.03)),
         (name: "exhaust_stack", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Y, x: Frac(0.44, 0.44), y: Top(-0.02, 1.55), z: Frac(0.296, 0.296), radius_m: 0.07)),
         (name: "fuel_tank", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Cyl(axis: Z, x: Lower(0.15, 0.15), y: Frac(0.20, 0.20), z: Frac(0.40, 0.62), radius_m: 0.27)),
