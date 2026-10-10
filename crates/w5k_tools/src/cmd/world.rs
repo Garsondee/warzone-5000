@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use w5k_contract::world::{PropKind, PropShape, WorldQuery};
 use w5k_math::{scalar, Vec3};
 use w5k_world::course::{generate, CourseDef};
+use w5k_world::fixture::{Fixture, FixtureKind};
 use w5k_world::grid::CELL_M;
 use w5k_world::plot::{Canvas, CHAR_W, LINE_H};
 use w5k_world::stats::{
@@ -43,7 +44,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some("preview") => preview(&args[1..]),
         Some("export") => export(&args[1..]),
         Some("stats") => stats(&args[1..]),
-        _ => Err("usage: w5k world preview|export|stats <course.ron> --out DIR [--step N]".to_string()),
+        Some("fixtures") => fixtures(&args[1..]),
+        _ => Err(
+            "usage: w5k world preview|export|stats <course.ron> --out DIR [--step N] | w5k world fixtures --out DIR"
+                .to_string(),
+        ),
     }
 }
 
@@ -481,6 +486,95 @@ fn stats(args: &[String]) -> Result<(), String> {
 const PAGE_W: usize = 1280; // const-ok: page size, px
 const PAGE_H: usize = 1180; // const-ok: page size, px
 
+/// `w5k world fixtures --out DIR`: a side view of the four proving-ground fixtures (`fixtures.png`) and their parameters (`fixtures.json`).
+fn fixtures(args: &[String]) -> Result<(), String> {
+    let out = match args {
+        [flag, dir] if flag == "--out" => PathBuf::from(dir),
+        _ => return Err("usage: w5k world fixtures --out DIR".to_string()),
+    };
+    let all = [Fixture::ramp(), Fixture::side_slope(), Fixture::step(), Fixture::trench()];
+    let (cell_w, cell_h) = (FIXTURE_PANEL_W, FIXTURE_PANEL_H);
+    let mut cv = Canvas::new(cell_w * 2, cell_h * 2, [250, 250, 250]); // const-ok: display colour
+    let ink = [30, 30, 40]; // const-ok: display colour
+    let mut json = Vec::new();
+    for (k, f) in all.iter().enumerate() {
+        let (ox, oy) = ((k % 2) as i64 * cell_w as i64, (k / 2) as i64 * cell_h as i64);
+        let len = f.feature_length_m();
+        let (s0, s1) = (-FIXTURE_MARGIN_M, len + FIXTURE_MARGIN_M);
+        // Side view (height against distance driven) of a line along the track; for the side slope, a cross-section instead.
+        let across = matches!(f.def().kind, FixtureKind::SideSlope { .. });
+        let samples: Vec<(f64, f64)> = (0..=FIXTURE_SAMPLES)
+            .map(|i| {
+                let t = i as f64 / FIXTURE_SAMPLES as f64;
+                if across {
+                    let x = -FIXTURE_HALF_X_M + 2.0 * FIXTURE_HALF_X_M * t;
+                    (x, f.height_m(x, -0.5 * len))
+                } else {
+                    let s = s0 + (s1 - s0) * t;
+                    (s, f.height_m(0.0, -s))
+                }
+            })
+            .collect();
+        let (xa, xb) = (samples[0].0, samples[samples.len() - 1].0);
+        let (ymin, ymax) =
+            samples.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), p| (a.min(p.1), b.max(p.1)));
+        let span = (ymax - ymin).max(FIXTURE_MIN_SPAN_M);
+        let (pw, ph) = (cell_w as i64 - 60, cell_h as i64 - 90); // const-ok: panel margins, px
+        let px = |x: f64| ox + 30 + (((x - xa) / (xb - xa)) * pw as f64) as i64; // const-ok: panel margin, px
+        let py = |y: f64| oy + 60 + ph - (((y - ymin) / span) * ph as f64 * 0.9) as i64; // const-ok: panel margin, px
+        cv.rect(ox + 30, oy + 60, pw, ph, [255, 255, 255]); // const-ok: display colour
+        for w in samples.windows(2) {
+            for off in 0..2 {
+                // const-ok: line thickness
+                cv.line(px(w[0].0), py(w[0].1) + off, px(w[1].0), py(w[1].1) + off, [30, 90, 190]);
+                // const-ok: display colour
+            }
+        }
+        let primary = match f.def().kind {
+            FixtureKind::Ramp { .. } => {
+                format!("GRADE {:.2} ({:.1} DEG)", f.primary(), scalar::rad_to_deg(scalar::atan(f.primary())))
+            }
+            FixtureKind::SideSlope { .. } => {
+                format!("CROSS GRADE {:.2} ({:.1} DEG)", f.primary(), scalar::rad_to_deg(scalar::atan(f.primary())))
+            }
+            FixtureKind::Step { .. } => format!("STEP {:.2} M", f.primary()),
+            FixtureKind::Trench { .. } => format!("TRENCH {:.2} M WIDE", f.primary()),
+        };
+        cv.text(ox + 30, oy + 14, &f.def().name.to_uppercase(), 3, ink);
+        cv.text(
+            ox + 30,
+            oy + 40,
+            &format!("{primary}  VIEW: {}", if across { "ACROSS THE TRACK" } else { "ALONG THE DRIVE" }),
+            2,
+            ink,
+        );
+        json.push(serde_json::json!({"name": f.def().name, "primary": f.primary(), "surface": f.def().surface, "feature_length_m": len}));
+    }
+    std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    std::fs::write(out.join("fixtures.json"), serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+    let path = out.join("fixtures.png");
+    let file = std::fs::File::create(&path).map_err(|e| e.to_string())?;
+    let mut enc = png::Encoder::new(std::io::BufWriter::new(file), cv.w as u32, cv.h as u32);
+    enc.set_compression(png::Compression::High);
+    enc.set_color(png::ColorType::Rgb);
+    enc.set_depth(png::BitDepth::Eight);
+    let mut wr = enc.write_header().map_err(|e| e.to_string())?;
+    wr.write_image_data(&cv.rgb).map_err(|e| e.to_string())?;
+    println!("wrote {} and fixtures.json", path.display());
+    Ok(())
+}
+
+const FIXTURE_PANEL_W: usize = 560; // const-ok: panel size, px
+const FIXTURE_PANEL_H: usize = 340; // const-ok: panel size, px
+const FIXTURE_SAMPLES: usize = 400; // const-ok: points per profile
+/// Distance shown before and after each feature in its panel, m.
+const FIXTURE_MARGIN_M: f64 = 5.0; // const-ok: context around the feature
+/// Half width of the cross-section shown for the side slope, m.
+const FIXTURE_HALF_X_M: f64 = 10.0; // const-ok: context around the track
+/// Smallest vertical span of a panel, m (so a tiny step is not stretched to the full panel).
+const FIXTURE_MIN_SPAN_M: f64 = 0.5; // const-ok: keeps the vertical scale honest
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -538,6 +632,19 @@ mod tests {
         assert!(doc["materials"].as_array().expect("materials").iter().all(|m| m["status"] == "Unverified"));
         let png = std::fs::metadata(dir.join("stats.png")).expect("png").len();
         assert!(png > 10_000, "a real picture ({png} bytes)");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fixtures_command_writes_a_picture_and_the_four_parameters() {
+        let dir = std::env::temp_dir().join(format!("w5k-world-fixtures-{}", std::process::id()));
+        fixtures(&["--out".into(), dir.to_str().expect("utf8").into()]).expect("fixtures");
+        let doc: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("fixtures.json")).expect("read")).expect("json");
+        let names: Vec<_> =
+            doc.as_array().expect("array").iter().map(|f| f["name"].as_str().expect("name").to_string()).collect();
+        assert_eq!(names, ["ramp", "side_slope", "step", "trench"]);
+        assert!(std::fs::metadata(dir.join("fixtures.png")).expect("png").len() > 2_000);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

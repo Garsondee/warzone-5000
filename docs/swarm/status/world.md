@@ -33,6 +33,8 @@
 
 - Owner's visual target (4 reference images, 2026-10-10): `docs/lanes/world/visual-target.md` (observations, what it implies per lane, plan V0 to V8: perspective preview, decimated flat-shaded terrain mesh, rule-based material painting, procedural rocks, road dressing, decor, compound generator, lakes, diorama preset). Next: V0.
 
+- (3) proving-ground fixtures [`lane/world/fixtures`]: `w5k_world::fixture::Fixture::{ramp, side_slope, step, trench}` (closed-form `WorldQuery`s, content in `content/world/fixtures/*.ron`); `set_primary(v)` lets the runner bisect the grade / cross-grade / step height / trench width; `w5k world fixtures --out DIR` draws them. Frame: drive toward -Z, feature starts at z = 0 after a 50 m flat run-in; the side slope falls toward +X. Heightfield limits stated: a step face and trench walls are eased (5 cm; depth / wall_grade).
+
 ## Blocked
 - Nothing.
 

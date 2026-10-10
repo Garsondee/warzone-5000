@@ -10,6 +10,7 @@ pub mod cliff;
 pub mod corrugation;
 pub mod course;
 pub mod features;
+pub mod fixture;
 pub mod grid;
 pub mod plot;
 pub mod river;

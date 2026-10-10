@@ -1,0 +1,10 @@
+#![enable(implicit_some)]
+// Step climb: a step up of `height_m`. The runner bisects `height_m` for the highest step cleared at walking pace.
+FixtureDef(
+    name: "step",
+    kind: Step(
+        height_m: Param(v: 0.3, lo: 0.01, hi: 1.5, prov: Spec, src: "proving-ground default; the runner bisects it (docs/validation/proving-ground.md, step_climb)"),
+        edge_run_m: Param(v: 0.05, prov: Spec, src: "a heightfield cannot be vertical: the face is eased over 5 cm, so a 0.3 m step has a face about 80 degrees steep"),
+    ),
+    surface: "asphalt",
+)
