@@ -1,6 +1,6 @@
 # Status: WORLD
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/world/stats | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/world/spectrum | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
 
 ## Done
 - PR 17 settling (merged): spike S-W, design note, CCR text. PR 21 data-driven bump strip (merged).
@@ -32,6 +32,8 @@
 - (5) `w5k world stats` [`lane/world/stats`, stacked on #72]: slope shares (>5, >10, >20, >30 deg), road grade distributions, roughness PSD (Welch, Hann, detrended) with the ISO 8608 class A to H and waviness exponent for each road and five cross-country lines, material numbers beside `content/world/published_ranges.ron` (all UNVERIFIED), `stats.json` + one-page `stats.png`. Reports for the four courses in `docs/lanes/world/media/stats-*/`. Theory note `docs/theory/world.md` written. Findings for VALIDATION: mud `soil.n` 0.8 is OUT of the (unverified) clay range 0.1 to 0.7; the slice course is hilly (about half of the ground over 5 deg, 14.5% over 10) and its main road reads class F at n0 because the 12 m whoops sit at the ISO reference frequency.
 
 - Owner's visual target (4 reference images, 2026-10-10): `docs/lanes/world/visual-target.md` (observations, what it implies per lane, plan V0 to V8: perspective preview, decimated flat-shaded terrain mesh, rule-based material painting, procedural rocks, road dressing, decor, compound generator, lakes, diorama preset). Next: V0.
+
+- SLICE-2 order from ARCH (owner approved): (1) ISO 8608 spectrum fix [this PR `lane/world/spectrum`: fit band 0.06-0.2 cycles/m, ground detail layer with a stated G(n0), roads carry their stated condition, washboard phase ring fix]; (2) mud pit with cited Bekker-Wong parameters; (3) proving-ground fixtures (ramp, side slope, step, trench); (4) `w5k world mobility` (go / slow / no-go map per vehicle); then visual-target V0 onward. NOTE for CHASSIS: `Material.roughness_rms_m` is read by WORLD as the resolved-band (2.5-20 m) roughness of a surface and baked into heights wherever a course has ground detail; a vehicle model must not add that same roughness again.
 
 ## Blocked
 - Nothing.
