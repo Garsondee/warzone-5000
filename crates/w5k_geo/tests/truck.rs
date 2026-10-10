@@ -5,10 +5,12 @@ use std::collections::BTreeSet;
 use w5k_contract::render::NodeRole;
 use w5k_contract::rig::Side;
 use w5k_contract::testing::rigs::box_truck;
+use w5k_geo::gear::wheel_module;
 use w5k_geo::mesh::Mesh;
+use w5k_geo::module::{Assembly, SocketKind};
 use w5k_geo::part::Part;
-use w5k_geo::truck::{utility_4x4, UtilityDims};
-use w5k_math::{scalar, Pcg32, StateHasher, Vec3};
+use w5k_geo::truck::{utility_4x4, utility_hull, utility_truck, UtilityDims};
+use w5k_math::{scalar, Pcg32, Quat, StateHasher, Vec3};
 
 fn dims_in_range(r: &mut Pcg32) -> UtilityDims {
     let mut d = UtilityDims::placeholder();
@@ -330,6 +332,73 @@ fn wheels_clear_the_shell_and_the_arches_open_over_every_tyre() {
         }
     }
     assert!(checked > 500);
+}
+
+// ---- hull and running gear are separate modules
+
+#[test]
+fn the_hull_publishes_one_station_socket_per_wheel_position_and_each_wheel_sits_exactly_on_its_socket() {
+    let d = UtilityDims::placeholder();
+    let hull = utility_hull(&d, &[-d.wheelbase_m / 2.0, d.wheelbase_m / 2.0], 0);
+    assert!(
+        hull.mount.is_none() && hull.parts.iter().all(|p| p.role == NodeRole::Hull),
+        "the hull module has no wheels"
+    );
+    let names: Vec<_> = hull.sockets.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["station.0.r", "station.0.l", "station.1.r", "station.1.l"]);
+    let parts = utility_4x4(&d, 0);
+    for s in &hull.sockets {
+        let (sx, tag) = if s.side == Side::Right { (1.0, "r") } else { (-1.0, "l") };
+        assert_eq!(s.kind, SocketKind::Station);
+        assert!(
+            (s.pose.pos.x - sx * d.track_m / 2.0).abs() < 1e-12 && (s.size_m - d.wheel.outer_radius_m).abs() < 1e-12
+        );
+        assert!(
+            (s.pose.apply_dir(Vec3::Y) - Vec3::new(sx, 0.0, 0.0)).length() < 1e-12,
+            "the normal points out of the hull"
+        );
+        assert!((s.pose.apply_dir(-Vec3::Z) + Vec3::Z).length() < 1e-12, "the reference points forward");
+        assert!(
+            s.hint("well_x_m").is_some_and(|x| x > 0.0 && x < d.track_m / 2.0)
+                && s.hint("max_width_m") == Some(d.wheel.width_m)
+        );
+        let rim = parts.iter().find(|p| p.name == format!("rim.{}.{tag}", s.station.unwrap())).unwrap();
+        assert_eq!(rim.pose.pos, s.pose.pos, "the hub is the socket");
+        assert_eq!(rim.pose.rot, Quat::IDENTITY, "a wheel on an axis-aligned socket is placed with no rotation at all");
+        assert_eq!((rim.station, rim.side), (s.station, s.side));
+    }
+}
+
+#[test]
+fn a_wheel_bigger_than_the_station_it_was_cut_for_is_refused_and_a_smaller_one_fits() {
+    let d = UtilityDims::placeholder();
+    let mut asm = Assembly::new(utility_hull(&d, &[-d.wheelbase_m / 2.0, d.wheelbase_m / 2.0], 0));
+    let mut big = d.wheel;
+    big.outer_radius_m += 0.05;
+    let err = asm.attach("station.0.r", &wheel_module(&big, 24, None), 0.0, "0.r").unwrap_err();
+    assert!(err.reason.contains("needs"), "{err}");
+    let mut small = d.wheel;
+    small.outer_radius_m -= 0.05;
+    small.rim_radius_m -= 0.05;
+    assert!(asm.attach("station.0.r", &wheel_module(&small, 24, None), 0.0, "0.r").is_ok());
+}
+
+#[test]
+fn three_axles_cut_three_arches_take_six_wheels_and_two_knuckles_and_the_wheels_clear_the_shell() {
+    let d = UtilityDims::placeholder();
+    let parts = utility_truck(&d, &[-d.wheelbase_m / 2.0, 0.1, d.wheelbase_m / 2.0], &[true, false, false], 0);
+    check_parts(&parts);
+    let count = |prefix: &str| parts.iter().filter(|p| p.name.starts_with(prefix)).count();
+    assert_eq!((count("tyre."), count("rim."), count("arch_lip."), count("knuckle.")), (6, 6, 6, 2));
+    let shell = parts.iter().find(|p| p.name == "shell").unwrap().in_hull_frame();
+    for p in parts.iter().filter(|p| p.role == NodeRole::Wheel) {
+        for &v in p.in_hull_frame().v.iter().step_by(5) {
+            assert!(!inside(&shell, v), "{} reaches into the shell at {:?}", p.name, v);
+        }
+    }
+    let hubs: BTreeSet<i64> =
+        parts.iter().filter(|p| p.name.starts_with("rim.")).map(|p| (p.pose.pos.z * 1000.0).round() as i64).collect();
+    assert_eq!(hubs.len(), 3, "three axles");
 }
 
 // ---- the glazing lines up

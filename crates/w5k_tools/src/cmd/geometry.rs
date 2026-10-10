@@ -6,12 +6,12 @@ use w5k_geo::flags::{bake, FlagParams};
 use w5k_geo::mesh::Mesh;
 use w5k_geo::part::Part;
 use w5k_geo::raster::{render, Camera, Item, Mode};
-use w5k_geo::truck::{utility_4x4, UtilityDims};
+use w5k_geo::truck::{utility_4x4, utility_hull, utility_truck, UtilityDims};
 use w5k_geo::wheel::{segments_for, wheel, WheelDims};
 use w5k_math::Vec3;
 
 const USAGE: &str =
-    "usage: w5k geometry sheet <wheel|truck> --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close] [--size WxH]";
+    "usage: w5k geometry sheet <wheel|truck|hull|truck6>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close] [--size WxH]";
 
 /// Entry point for `w5k geometry <args>`.
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -27,7 +27,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 Some(m) => return Err(format!("unknown mode {m}; {USAGE}")),
             };
             let detail: u8 = get("--detail").map_or(Ok(1), |d| d.parse()).map_err(|_| USAGE.to_string())?;
-            let parts = subject(what, detail)?;
+            let subjects: Vec<&str> = what.split(',').collect();
             std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
             let mode_name = get("--mode").unwrap_or_else(|| "look".into());
             let view = get("--view");
@@ -38,13 +38,18 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 None if views.len() == 1 => (1400, 900), // const-ok: picture size in pixels
                 None => (600, 400),                      // const-ok: picture size in pixels
             };
+            let what = what.replace(',', "+");
             let path = match &view {
                 Some(v) if views.len() == 1 => format!("{out}/{what}-{v}-{mode_name}.png"),
                 _ => format!("{out}/{what}-{mode_name}.png"),
             };
             let cols = if views.len() == 1 { 1 } else { 2 };
-            let (pw, ph) = (cols * w, views.len().div_ceil(cols) * h);
-            write_png(&path, pw as u32, ph as u32, &sheet(&parts, mode, &views, w, h)?)?;
+            let (pw, ph) = (cols * w, subjects.len() * views.len().div_ceil(cols) * h);
+            let mut pixels = Vec::new();
+            for name in &subjects {
+                pixels.extend(sheet(&subject(name, detail)?, mode, &views, w, h)?);
+            }
+            write_png(&path, pw as u32, ph as u32, &pixels)?;
             println!("wrote {path}");
             Ok(())
         }
@@ -115,8 +120,15 @@ fn subject(what: &str, detail: u8) -> Result<Vec<(Mesh, [f64; 3], bool)>, String
                 (w.nuts, [0.7, 0.7, 0.7], true),    // const-ok: picture colours and camera framing
             ])
         }
-        "truck" => {
-            let parts = utility_4x4(&UtilityDims::placeholder(), detail);
+        "truck" | "hull" | "truck6" => {
+            let d = UtilityDims::placeholder();
+            let z = d.wheelbase_m / 2.0;
+            let parts = match what {
+                "hull" => utility_hull(&d, &[-z, z], detail).parts,
+                // front steer axle and a rear tandem 1.2 m apart
+                "truck6" => utility_truck(&d, &[-z, z - 1.2, z], &[true, false, false], detail), // const-ok: tandem spacing for the picture
+                _ => utility_4x4(&d, detail),
+            };
             Ok(parts.iter().map(|p| (p.in_hull_frame(), slot_colour(p.slot), p.name != "antenna")).collect())
         }
         _ => Err(format!("unknown subject {what}; {USAGE}")),

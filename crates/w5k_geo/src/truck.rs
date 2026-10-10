@@ -2,16 +2,20 @@
 //! lower body with a narrower hood, cab or bed block on top (the upper walls lean inward, the tumblehome), the underside rises towards the
 //! nose and tail (approach and departure ramps), and the wheel arches are openings whose height follows the wheel circle, cut into the
 //! section along the loft. Everything else in the part list is anchored to a surface of that shell (its walls, its roof line, its front
-//! and rear faces) and overlaps it, so nothing floats; glass is a panel set into the wall with a raised frame around it. Wheels sit at the
-//! four stations in their node frames.
+//! and rear faces) and overlaps it, so nothing floats; glass is a panel set into the wall with a raised frame around it.
+//!
+//! The hull is a module (`utility_hull`): it is cut for the axles it is given and publishes one `Station` socket per wheel position. The
+//! wheels are gear modules (`gear.rs`) that `utility_truck` attaches to those sockets, so the same hull takes two axles or three.
 //!
 //! Hull frame: origin at the hull box centre, +Y up, -Z forward, +X right; the ground is `ride_height_m` below the origin.
 
 use crate::flags::FlagParams;
+use crate::gear::{wheel_module, Knuckle};
 use crate::loft::{bevel_ring, chamfer_polygon, loft_beveled, polygon_ring, sweep_arc, sweep_loop, Section};
 use crate::mesh::Mesh;
+use crate::module::{frame as socket_frame, Assembly, Module, ModuleKind, Socket, SocketKind};
 use crate::part::{Part, Side};
-use crate::wheel::{cylinder_x, segments_for, wheel, WheelDims};
+use crate::wheel::{cylinder_x, segments_for, WheelDims};
 use serde::Deserialize;
 use w5k_contract::render::{NodeRole, SlotKind};
 use w5k_math::{scalar, Transform, Vec3};
@@ -362,12 +366,12 @@ struct Arches {
     y_c: f64,
     r_a: f64,
     phi_m: f64,
-    axle_z: [f64; 2],
+    axle_z: Vec<f64>,
     x_n: f64,
 }
 
 impl Arches {
-    fn new(d: &UtilityDims, b: &BodySpec) -> Arches {
+    fn new(d: &UtilityDims, b: &BodySpec, axles_z: &[f64]) -> Arches {
         let r_a = d.wheel.outer_radius_m + b.arch_gap_m;
         let y_c = -d.ride_height_m() + d.wheel.outer_radius_m;
         let dy = -d.height_m / 2.0 - y_c;
@@ -376,7 +380,7 @@ impl Arches {
             y_c,
             r_a,
             phi_m: scalar::asin((half_chord / r_a).min(1.0)),
-            axle_z: [-d.wheelbase_m / 2.0, d.wheelbase_m / 2.0],
+            axle_z: axles_z.to_vec(),
             x_n: d.track_m / 2.0 - d.wheel.width_m / 2.0 - b.well_gap_m,
         }
     }
@@ -400,7 +404,7 @@ impl Arches {
 /// The shell: a loft of T-shaped sections, each with a notch cut from its lower outer corners where a wheel arch is.
 fn shell(f: &Frame, b: &BodySpec, a: &Arches, band: f64) -> Mesh {
     let mut zs: Vec<f64> = f.st.iter().map(|s| s.z).collect();
-    for zc in a.axle_z {
+    for &zc in &a.axle_z {
         for k in 0..=b.arch_samples {
             let phi = a.phi_m * (2.0 * f64::from(k) / f64::from(b.arch_samples) - 1.0);
             zs.push(zc + a.r_a * scalar::sin(phi));
@@ -438,19 +442,46 @@ fn shell(f: &Frame, b: &BodySpec, a: &Arches, band: f64) -> Mesh {
     loft_beveled(&sections, b.lower_chamfer_m, band, &creases, 0.5) // const-ok: a vertex at least every half metre along a hard edge (spike S-G)
 }
 
+fn template() -> Template {
+    ron::from_str(include_str!("../shapes/utility_4x4.ron")).expect("utility_4x4.ron parses")
+}
+
+/// The 4x4: the utility hull cut for two axles, a steered front axle and a fixed rear one.
 pub fn utility_4x4(d: &UtilityDims, detail: u8) -> Vec<Part> {
-    let tpl: Template = ron::from_str(include_str!("../shapes/utility_4x4.ron")).expect("utility_4x4.ron parses");
+    utility_truck(d, &[-d.wheelbase_m / 2.0, d.wheelbase_m / 2.0], &[true, false], detail)
+}
+
+/// The utility hull on any number of axles (`axles_z`: the z of each in the hull frame, front first; `steered[i]` fits axle `i` with a
+/// steering knuckle): the hull module with a wheel module attached to every `Station` socket it published.
+pub fn utility_truck(d: &UtilityDims, axles_z: &[f64], steered: &[bool], detail: u8) -> Vec<Part> {
+    let mut asm = Assembly::new(utility_hull(d, axles_z, detail));
+    let stations: Vec<Socket> = asm.open_sockets(SocketKind::Station).into_iter().cloned().collect();
+    for s in &stations {
+        let axle = s.station.unwrap_or(0);
+        let tag = if s.side == Side::Right { "r" } else { "l" };
+        let knuckle = steered.get(usize::from(axle)).copied().unwrap_or(false).then(|| Knuckle {
+            radius_m: template().knuckle_radius_m,
+            // the stub from the hub to the wheel well's inner wall, which it overlaps by 2 cm
+            reach_m: s.pose.pos.x.abs() - s.hint("well_x_m").unwrap_or(0.0) + 0.02, // const-ok: overlap with the well wall
+        });
+        let wheel = wheel_module(&d.wheel, segments_for(detail), knuckle);
+        asm.attach(&s.name, &wheel, 0.0, &format!("{axle}.{tag}")).expect("the wheel was cut for exactly this station");
+    }
+    asm.parts
+}
+
+/// The hull module: the shell with an arch cut for every axle, every anchored fitting and the arch lips, and one `Station` socket per wheel
+/// position (named `station.<axle>.<r|l>`, at the hub, normal outward, sized for the wheel the arch was cut for; hints `well_x_m`, the x of
+/// the wheel well's inner wall, and `max_width_m`, the widest tyre it takes).
+pub fn utility_hull(d: &UtilityDims, axles_z: &[f64], detail: u8) -> Module {
+    let tpl = template();
     let band = FlagParams::default_params().edge_band_m;
     let frame = Frame::new(d, &tpl.body);
-    let arches = Arches::new(d, &tpl.body);
+    let arches = Arches::new(d, &tpl.body, axles_z);
     let (w, h, l) = (d.width_m, d.height_m, d.length_m);
     let (fx, fy, fz) = (|f: f64| f * w, |f: f64| (f - 0.5) * h, |f: f64| (f - 0.5) * l);
     let sides = |mirror: bool| if mirror { vec![Side::Right, Side::Left] } else { vec![Side::Centre] };
-    let finish = |mut m: Mesh| {
-        m.weld(1e-7, 1e-12); // const-ok: weld tolerance, 0.1 micrometre, far below any feature
-        m.orient_outward();
-        m
-    };
+    let finish = Mesh::finished;
     let mut parts: Vec<Part> = Vec::new();
     parts.push(Part {
         name: "shell".into(),
@@ -655,44 +686,22 @@ pub fn utility_4x4(d: &UtilityDims, detail: u8) -> Vec<Part> {
             }
         }
     }
-    // wheels and knuckles at the four stations, in their node frames
-    let seg = segments_for(detail);
-    let base = wheel(&d.wheel, seg);
-    let wheel_y = arches.y_c;
-    for (axle, z) in arches.axle_z.iter().enumerate() {
-        let axle = axle as u8;
+    // one Station socket per wheel position: at the hub, normal outward, sized for the wheel the arch was cut for
+    let mut sockets = Vec::new();
+    for (axle, &z) in arches.axle_z.iter().enumerate() {
         for side in [Side::Right, Side::Left] {
             let sx = if side == Side::Right { 1.0 } else { -1.0 };
-            let (wh, tag) = if side == Side::Right { (wheel(&d.wheel, seg), "r") } else { (base.mirrored_x(), "l") };
-            let pose = Transform::from_pos(Vec3::new(sx * d.track_m / 2.0, wheel_y, *z));
-            let mut push = |what: &str, role: NodeRole, slot: SlotKind, mesh: Mesh| {
-                parts.push(Part {
-                    name: format!("{what}.{axle}.{tag}"),
-                    role,
-                    station: Some(axle),
-                    side,
-                    slot,
-                    fitting: false,
-                    mesh: finish(mesh),
-                    pose,
-                });
-            };
-            push("tyre", NodeRole::Wheel, SlotKind::Rubber, wh.tyre);
-            push("tread", NodeRole::Wheel, SlotKind::Rubber, wh.lugs);
-            push("rim", NodeRole::Wheel, SlotKind::Metal, wh.rim);
-            push("nuts", NodeRole::Wheel, SlotKind::Metal, wh.nuts);
-            if axle == 0 {
-                // the stub from the hub to the wheel well's inner wall, which it overlaps by 2 cm
-                let reach = d.track_m / 2.0 - arches.x_n + 0.02; // const-ok: overlap with the well wall
-                let k = cylinder_x(tpl.knuckle_radius_m, -reach, 0.0, 16); // const-ok: 16 sides
-                push(
-                    "knuckle",
-                    NodeRole::SteerKnuckle,
-                    SlotKind::Metal,
-                    if side == Side::Right { k } else { k.mirrored_x() },
-                );
-            }
+            let hub = Vec3::new(sx * d.track_m / 2.0, arches.y_c, z);
+            sockets.push(Socket {
+                name: format!("station.{axle}.{}", if side == Side::Right { "r" } else { "l" }),
+                kind: SocketKind::Station,
+                side,
+                pose: socket_frame(hub, Vec3::new(sx, 0.0, 0.0), -Vec3::Z),
+                size_m: d.wheel.outer_radius_m,
+                station: Some(axle as u8),
+                hints: vec![("well_x_m".into(), arches.x_n), ("max_width_m".into(), d.wheel.width_m)],
+            });
         }
     }
-    parts
+    Module { name: "utility_hull".into(), kind: ModuleKind::Hull, parts, sockets, mount: None, symmetric: true }
 }
