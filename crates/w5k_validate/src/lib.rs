@@ -11,3 +11,5 @@ pub mod dashboard;
 pub mod measure;
 pub mod score;
 pub mod verdict;
+
+pub mod proving;

@@ -217,3 +217,75 @@ fn truck_crosses_the_speed_hump_at_20kmh_without_bottoming_out() {
     assert!(c.datum_m().z <= -55.0, "the truck did not get over the hump");
     assert!(!hit_limit && max_travel.iter().zip(&allowed).all(|(m, a)| m < a));
 }
+
+#[test]
+fn ledger_net_force_equals_mass_times_acceleration() {
+    use w5k_contract::testing::BumpStrip;
+    use w5k_contract::ForceLedger;
+    let (r, w) = (rig(), BumpStrip::standard());
+    let mut c = WheeledChassis::new(&r, &tuning(), &w, 0.0, -30.0, 0.0).unwrap();
+    c.ledger = ForceLedger::on();
+    let mut d = drive(&r);
+    c.set_forward_speed(8.0);
+    let h = 1.0 / TICK_HZ / f64::from(c.substeps());
+    let mut worst: f64 = 0.0;
+    // over the hump, steering, then braking: every term is busy
+    for n in 0..(4.0 * TICK_HZ) as usize {
+        let inp = if n < 120 {
+            DriveInputs { gear: GearRequest::Auto, throttle: 0.4, steer: 0.3, ..DriveInputs::default() }
+        } else {
+            DriveInputs { gear: GearRequest::Neutral, brake: 1.0, steer: -0.2, ..DriveInputs::default() }
+        };
+        for _ in 0..c.substeps() {
+            c.substep(h, &inp, &w, &mut d);
+            let scale = r.hull.mass_kg * scalar::G;
+            // hull: the ledger's net force is m a, its net torque is the torque the hull integrated
+            let f_err = (c.ledger.net_force_on(0) - c.hull.acc_m_s2 * r.hull.mass_kg).length() / scale;
+            let torque_total = c.ledger.totals().iter().fold(w5k_math::Vec3::ZERO, |a, t| a + t.1);
+            let t_err = (torque_total - c.hull.last_torque_nm).length() / scale;
+            worst = worst.max(f_err).max(t_err);
+            // stations: net force m_u x travel acceleration along the strut (booked in the hull's frame)
+            for (i, (s, def)) in c.stations.iter().zip(&r.stations).enumerate() {
+                let expect = s.report.strut_dir * (def.unsprung_mass_kg * c.travel_acc_m_s2[i]);
+                worst = worst.max((c.ledger.net_force_on(1 + i as u16) - expect).length() / scale);
+            }
+        }
+    }
+    println!("worst relative ledger error {worst:e} over {} rows per substep", c.ledger.len());
+    assert!(worst < 1e-9);
+    // every external term is active; internal ones (strut, anti-roll, the frame force) cancel between hull and wheel in the totals
+    let t = c.ledger.totals();
+    for term in [
+        w5k_contract::ForceTerm::Gravity,
+        w5k_contract::ForceTerm::TyreNormal,
+        w5k_contract::ForceTerm::TyreLongitudinal,
+        w5k_contract::ForceTerm::TyreLateral,
+    ] {
+        assert!(t[term as usize].0.length() > 0.0, "{term:?} is empty");
+    }
+    assert!(t[w5k_contract::ForceTerm::SuspensionSpring as usize].0.length() < 1e-9 * r.hull.mass_kg * scalar::G);
+}
+
+#[test]
+fn switching_the_ledger_on_does_not_change_the_motion() {
+    let hash = |on: bool| {
+        let (r, w) = (rig(), FlatPlane::new());
+        let mut c = WheeledChassis::new(&r, &tuning(), &w, 0.0, 0.0, 0.0).unwrap();
+        if on {
+            c.ledger = w5k_contract::ForceLedger::on();
+        }
+        let mut d = drive(&r);
+        c.set_forward_speed(10.0);
+        run(
+            &mut c,
+            &w,
+            &mut d,
+            &DriveInputs { gear: GearRequest::Auto, throttle: 0.3, steer: 0.2, ..DriveInputs::default() },
+            2.0,
+        );
+        let mut h = w5k_math::StateHasher::new();
+        c.hash_state(&mut h);
+        h.finish()
+    };
+    assert_eq!(hash(false), hash(true));
+}

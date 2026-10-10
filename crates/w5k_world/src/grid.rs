@@ -4,6 +4,7 @@
 //! heights of each 1 m cell, its normal is the analytic gradient of that same patch, the material is a u8 splat map read
 //! at the nearest cell, and props live in a uniform grid (CSR layout, no allocation on query).
 
+use crate::corrugation::Corrugation;
 use w5k_contract::world::{MaterialId, MaterialTable, PropId, PropKind, PropRef, PropShape, RayHit, WorldQuery};
 use w5k_math::{Pcg32, Quat, StateHasher, Transform, Vec3};
 
@@ -78,6 +79,9 @@ pub struct GridWorld {
     props: Vec<PropRef>,
     cell_start: Vec<u32>,
     cell_items: Vec<u32>,
+    corrugation: Option<Corrugation>,
+    /// Water surface height per node, `NAN` where there is none.
+    water: Option<Vec<f32>>,
 }
 
 fn prop_n_for(half_m: f64) -> usize {
@@ -104,7 +108,50 @@ impl GridWorld {
             props: Vec::new(),
             cell_start: vec![0; prop_n * prop_n + 1],
             cell_items: Vec::new(),
+            corrugation: None,
+            water: None,
         }
+    }
+
+    /// Attach washboard ripples (see `corrugation.rs`).
+    pub fn set_corrugation(&mut self, c: Corrugation) {
+        self.corrugation = Some(c);
+    }
+
+    /// Attach a water surface (`NAN` = no water at that node).
+    pub fn set_water(&mut self, surface: Vec<f32>) {
+        assert_eq!(surface.len(), self.n * self.n);
+        self.water = Some(surface);
+    }
+
+    /// Water surface height at node `(i, j)`, if the node has water.
+    pub fn water_at_node(&self, i: usize, j: usize) -> Option<f64> {
+        self.water.as_ref().map(|w| f64::from(w[j * self.n + i])).filter(|v| v.is_finite())
+    }
+
+    /// Height of the water surface at `(x, z)`, `Some` only where the ground is below it (WORLD-only until CCR W-6 adds it to
+    /// `WorldQuery`). Depth is this minus `height_m`.
+    pub fn water_surface_m(&self, x: f64, z: f64) -> Option<f64> {
+        let w = self.water.as_ref()?;
+        let max = (self.n - 1) as f64; // const-ok: grid extent in cells
+        let i = (((x + self.half_m) / CELL_M).round().clamp(0.0, max)) as usize;
+        let j = (((z + self.half_m) / CELL_M).round().clamp(0.0, max)) as usize;
+        let level = f64::from(w[j * self.n + i]);
+        (level.is_finite() && self.height_m(x, z) < level).then_some(level)
+    }
+
+    /// Hash of the washboard layer (0 when there is none), for determinism checks.
+    pub fn corrugation_hash(&self) -> u64 {
+        let mut h = StateHasher::new();
+        if let Some(c) = &self.corrugation {
+            c.hash_into(&mut h);
+        }
+        if let Some(w) = &self.water {
+            for v in w {
+                h.write_u32(v.to_bits());
+            }
+        }
+        h.finish()
     }
 
     /// The 2 km spike terrain (seed-driven fBm, test road stripe, low-ground mud rule, scattered trees and boxes).
@@ -510,13 +557,22 @@ impl WorldQuery for GridWorld {
     fn height_m(&self, x: f64, z: f64) -> f64 {
         let (i, j, u, v) = self.locate(x, z);
         let (a, b, c, d) = self.patch(i, j);
-        a + b * u + c * v + d * u * v
+        let base = a + b * u + c * v + d * u * v;
+        match &self.corrugation {
+            Some(r) => base + r.eval(self.n, i, j, u, v).0,
+            None => base,
+        }
     }
 
     fn normal(&self, x: f64, z: f64) -> Vec3 {
         let (i, j, u, v) = self.locate(x, z);
         let (_, b, c, d) = self.patch(i, j);
-        let (gx, gz) = ((b + d * v) / CELL_M, (c + d * u) / CELL_M);
+        let (mut gx, mut gz) = ((b + d * v) / CELL_M, (c + d * u) / CELL_M);
+        if let Some(r) = &self.corrugation {
+            let (_, rx, rz) = r.eval(self.n, i, j, u, v);
+            gx += rx;
+            gz += rz;
+        }
         Vec3::new(-gx, 1.0, -gz).normalized_or_zero()
     }
 

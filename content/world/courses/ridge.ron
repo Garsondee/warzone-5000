@@ -1,0 +1,46 @@
+#![enable(implicit_some)]
+// The ridge course: a 20 m scarp across the way with three ways up. Drive toward -Z (north) from the bottom of the map.
+//   1. the switchback road (long, gentle, safe),
+//   2. the chute straight up the face (short, steep, loose gravel: a traction and power test),
+//   3. round the end of the scarp (cross-country, longest).
+// Everything is a generator parameter; nothing is hand-placed except the start, the finish and where the cliff stands.
+CourseDef(
+    name: "ridge",
+    seed: 77,
+    size_cells: 401,
+    hills: HillsDef(
+        amplitude_m: Param(v: 2.5, prov: Spec, src: "course design: gentle undulation so the scarp dominates"),
+        wavelength_m: Param(v: 120.0, prov: Spec, src: "course design"),
+        warp_m: Param(v: 30.0, prov: Spec, src: "course design"),
+        octaves: 4,
+        max_grade: Param(v: 0.15, prov: Spec, src: "course design: steepest ordinary terrain; cliffs carry their own limit"),
+    ),
+    road: RoadDef(
+        waypoints: [(-120.0, 170.0), (-105.0, 85.0), (-30.0, -150.0)],
+        width_m: Param(v: 6.0, prov: Spec, src: "course design: two lanes"),
+        shoulder_m: Param(v: 4.0, prov: Spec, src: "course design: blend from road to terrain"),
+        max_grade: Param(v: 0.08, prov: Spec, src: "course design: road grade limit, 8 percent"),
+        surface: "asphalt",
+        switchbacks: [SwitchbackDef(
+            after_waypoint: 1,
+            cliff: 0,
+            t_centre_m: -30.0,
+            hairpin_radius_m: Param(v: 7.0, prov: Spec, src: "course design: wider than a truck turns in (curb-to-curb radius of a 4x4 truck is about 6 m)"),
+            span_m: Param(v: 150.0, prov: Spec, src: "course design: leg length along the face; two legs, 15 m between lanes, hairpins a truck can turn"),
+        )],
+    ),
+    cliffs: [CliffDef(
+        x_m: 0.0, z_m: 40.0,
+        rise_dir_deg: Param(v: 0.0, prov: Spec, src: "course design: the face rises toward -Z, the driving direction"),
+        height_m: Param(v: 20.0, prov: Spec, src: "course design: PROVISIONAL(route-cliff) 15 to 25 m"),
+        face_grade: Param(v: 1.0, prov: Spec, src: "course design: PROVISIONAL(route-cliff) 45 degrees, steeper than any vehicle climbs"),
+        length_m: Param(v: 240.0, prov: Spec, src: "course design: full-height face"),
+        end_taper_m: Param(v: 80.0, prov: Spec, src: "course design: the long way round, a 25 percent ramp"),
+        chute: Some(ChuteDef(
+            t_m: 75.0,
+            width_m: Param(v: 14.0, prov: Spec, src: "course design: room for a truck"),
+            grade: Param(v: 0.45, prov: Spec, src: "course design: about 24 degrees; to be graded against traction (Mule yes, heavy hauler no)"),
+            surface: "gravel",
+        )),
+    )],
+)

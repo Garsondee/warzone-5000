@@ -29,6 +29,8 @@ pub struct ShiftTuning {
     /// Kept low so a pedal swing at one road speed can never turn an upshift into a downshift: that is what makes a box hunt.
     pub downshift_pedal_influence: Param,
     pub reverse_engage_max_speed_m_s: Param,
+    /// The upshift point is capped at this fraction of the engine's redline, so a schedule written for another engine cannot pin the box.
+    pub upshift_max_fraction_of_redline: Param,
 }
 
 impl ShiftTuning {
@@ -39,7 +41,8 @@ impl ShiftTuning {
         self.min_gear_dwell_s.check("min_gear_dwell_s")?;
         self.pedal_filter_s.check("pedal_filter_s")?;
         self.downshift_pedal_influence.check("downshift_pedal_influence")?;
-        self.reverse_engage_max_speed_m_s.check("reverse_engage_max_speed_m_s")
+        self.reverse_engage_max_speed_m_s.check("reverse_engage_max_speed_m_s")?;
+        self.upshift_max_fraction_of_redline.check("upshift_max_fraction_of_redline")
     }
 }
 
@@ -64,7 +67,6 @@ pub struct Gearbox {
     reverse: Vec<f64>,
     efficiency: f64,
     inertia: f64,
-    automatic: bool,
     up_rpm: f64,
     down_rpm: f64,
     shift_time_s: f64,
@@ -85,7 +87,7 @@ pub struct Gearbox {
 }
 
 impl Gearbox {
-    pub fn new(def: &GearboxDef, tuning: &ShiftTuning) -> Result<Gearbox, String> {
+    pub fn new(def: &GearboxDef, redline_rpm: f64, tuning: &ShiftTuning) -> Result<Gearbox, String> {
         tuning.check()?;
         if def.forward_ratios.is_empty()
             || def.forward_ratios.iter().chain(&def.reverse_ratios).any(|r| r.is_nan() || *r <= 0.0)
@@ -107,8 +109,8 @@ impl Gearbox {
             reverse: def.reverse_ratios.clone(),
             efficiency: def.efficiency,
             inertia: def.inertia_kg_m2,
-            automatic: s.automatic,
-            up_rpm: s.upshift_rpm,
+            // the schedule is data per vehicle, but an upshift point the engine can never reach would pin the box in a low gear
+            up_rpm: s.upshift_rpm.min(tuning.upshift_max_fraction_of_redline.v * redline_rpm),
             down_rpm: s.downshift_rpm,
             shift_time_s: s.shift_time_s.max(0.0),
             light_scale: tuning.light_throttle_shift_scale.v,
@@ -216,7 +218,8 @@ impl Gearbox {
                 if self.gear <= 0 {
                     return slow.then_some(1);
                 }
-                if !self.automatic || self.dwell_s < self.dwell_min_s {
+                // a manual box under `Auto` is shifted by the driver model: the same schedule, with the clutch opened for the shift time
+                if self.dwell_s < self.dwell_min_s {
                     return None;
                 }
                 let g = self.gear;
@@ -309,7 +312,7 @@ mod tests {
     }
 
     fn gb() -> Gearbox {
-        Gearbox::new(&def(), &shift_tuning()).unwrap()
+        Gearbox::new(&def(), 4000.0, &shift_tuning()).unwrap()
     }
 
     #[test]
@@ -427,7 +430,7 @@ mod tests {
         def.shift.upshift_rpm = 3500.0;
         def.shift.downshift_rpm = 1400.0;
         def.shift.shift_time_s = 0.35;
-        let mut g = Gearbox::new(&def, &shift_tuning()).unwrap();
+        let mut g = Gearbox::new(&def, 4000.0, &shift_tuning()).unwrap();
         g.gear = 2;
         let (dt, wheel_r, final_drive) = (0.01, 0.4, 5.13);
         let (mut v, mut shifts, mut last) = (target_kmh / 3.6, 0, 2);
@@ -458,7 +461,7 @@ mod tests {
         def.forward_ratios = vec![2.48, 1.48, 1.0, 0.75];
         def.shift.upshift_rpm = 3500.0;
         def.shift.downshift_rpm = 1400.0;
-        let g = Gearbox::new(&def, &shift_tuning()).unwrap();
+        let g = Gearbox::new(&def, 4000.0, &shift_tuning()).unwrap();
         for gear in 1..=3_i8 {
             for k in 0..4000 {
                 let w = f64::from(k) * 0.1; // output shaft speed, 0 to 400 rad/s
@@ -481,7 +484,7 @@ mod tests {
     fn a_short_pedal_blip_does_not_kick_down() {
         let mut def = def();
         def.forward_ratios = vec![2.48, 1.48, 1.0, 0.75];
-        let mut g = Gearbox::new(&def, &shift_tuning()).unwrap();
+        let mut g = Gearbox::new(&def, 4000.0, &shift_tuning()).unwrap();
         g.gear = 3;
         let w_out = 1300.0 * RPM; // input 1300 rpm in third: comfortably above the downshift point
         for _ in 0..500 {
