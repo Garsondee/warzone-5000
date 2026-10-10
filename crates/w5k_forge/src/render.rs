@@ -34,6 +34,7 @@ pub fn render_rig(rig: &PhysRig, hull_size: Vec3) -> RenderRig {
             MaterialSlot { name: "rim".into(), kind: SlotKind::Metal },
         ],
         joint_count: rig.joint_names().len(),
+        track_runs: Vec::new(),
     };
     let half = 0.5 * hull_size;
     rr.meshes.push(box_mesh("hull", 0, 0, Vec3::ZERO, half));

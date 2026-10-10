@@ -19,6 +19,13 @@ use w5k_contract::rig::{PhysRig, Side, WheelKind};
 /// Every wheeled skin id, smallest vehicle first (`carrier_tracked` is the tracked skin and has the joint layout of its own rig).
 pub const IDS: [&str; 3] = ["scout_4x4", "utility_4x4", "hauler_4x4"];
 
+/// How far a tracked rig may differ from what is drawn before `Skin::from_rig` refuses it (the sprocket radius against the pitch radius of its
+/// teeth) or notes it (belt length, straight ground run, ride height).
+const SPROCKET_RADIUS_TOL: f64 = 0.02; // const-ok: 2%, rounding in an authored sprocket radius
+const BELT_LENGTH_TOL: f64 = 0.03; // const-ok: 3%, the chordal action and an authored belt length
+const CONTACT_LENGTH_TOL: f64 = 0.05; // const-ok: 5%, the straight ground run against the rig's contact length
+const RIDE_HEIGHT_TOL_M: f64 = 0.01; // const-ok: 1 cm between the definition's hull box and the rig's ride height
+
 /// A hull family with its dimensions and the axles it is cut for (z in the hull frame, front first).
 #[derive(Clone, Debug)]
 pub struct Skin {
@@ -187,7 +194,7 @@ impl Skin {
             return Err(format!("{}: the belt needs a thickness, a pitch and a sprocket tooth count", tr.name));
         }
         let pitch_radius = pitch_radius_m(tr.pitch_m, u32::from(tr.sprocket_teeth));
-        if (sprocket.radius_m / pitch_radius - 1.0).abs() > 0.02 {
+        if (sprocket.radius_m / pitch_radius - 1.0).abs() > SPROCKET_RADIUS_TOL {
             // const-ok: the contract says the sprocket's radius is its pitch radius; 2% for rounding in an authored number
             return Err(format!(
                 "the sprocket's radius {} m is not the pitch radius {pitch_radius:.4} m of {} teeth of pitch {} m",
@@ -217,7 +224,7 @@ impl Skin {
         };
         let belt = Belt::round(&run.circles())?;
         let mut notes = Vec::new();
-        if tr.belt_length_m > 0.0 && (belt.length_m / tr.belt_length_m - 1.0).abs() > 0.03 {
+        if tr.belt_length_m > 0.0 && (belt.length_m / tr.belt_length_m - 1.0).abs() > BELT_LENGTH_TOL {
             // const-ok: 3%, the chordal action and an authored length
             notes.push(format!(
                 "the belt round the wheels is {:.2} m, the rig's belt_length_m is {:.2} m",
@@ -229,7 +236,7 @@ impl Skin {
             .iter()
             .filter(|w| w.kind == WheelKind::RoadWheel)
             .fold((f64::MAX, f64::MIN), |(a, b), w| (a.min(w.z_m), b.max(w.z_m)));
-        if tr.contact_length_m > 0.0 && ((z1 - z0) / tr.contact_length_m - 1.0).abs() > 0.05 {
+        if tr.contact_length_m > 0.0 && ((z1 - z0) / tr.contact_length_m - 1.0).abs() > CONTACT_LENGTH_TOL {
             // const-ok: 5%, the straight ground run between the first and last road wheel against the rig's contact length
             notes.push(format!(
                 "the straight ground run is {:.2} m, the rig's contact_length_m is {:.2} m",
@@ -256,7 +263,7 @@ impl Skin {
             },
             regions_m: None,
         };
-        if (rig.ride_height_m - dims.ride_height_m()).abs() > 0.01 {
+        if (rig.ride_height_m - dims.ride_height_m()).abs() > RIDE_HEIGHT_TOL_M {
             // const-ok: 1 cm between the definition's hull box and the rig's ride height
             notes.push(format!(
                 "the definition's ride height is {:.3} m, the rig's is {:.3} m",

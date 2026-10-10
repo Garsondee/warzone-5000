@@ -35,6 +35,9 @@ Ground clearance: compile report prints approach, departure and ramp breakover a
 ## Differentials and brake torque (DRIVE request)
 Provisional extras now carry centre and axle differential kind and bias and the authored axle brake torque; `apply_both` and `set_diff` expose them as levers; the CCR text for `def.rs` is in `forge-levers.md`. Authored torque makes mass lengthen stops.
 
+## Tracked compile (slice 2 stage B)
+Design note: `docs/lanes/forge/tracked-design-note.md` (stations and loop order, belt, steer unit, belly proxy, extras, test list, PR plan T1 to T3). Contract pin v0.3 = 0982843.
+
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).
 

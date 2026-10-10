@@ -226,6 +226,10 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
                         aligning_trail_frac: 0.0,
                         kappa_peak: 0.0,
                         alpha_peak_rad: 0.0,
+                        // 0.3: the load sensitivity is not authored yet (CHASSIS carries a provisional shared value in its tuning).
+                        mu_load_sensitivity: 0.0,
+                        stiffness_load_sensitivity: 0.0,
+                        nominal_load_n: 0.0,
                     }),
                     patches_x_m: vec![],
                 },
