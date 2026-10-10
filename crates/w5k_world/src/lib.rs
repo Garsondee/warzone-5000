@@ -10,4 +10,5 @@ pub mod corrugation;
 pub mod course;
 pub mod features;
 pub mod grid;
+pub mod river;
 pub mod strip;
