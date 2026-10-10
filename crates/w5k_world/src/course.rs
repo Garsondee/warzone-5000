@@ -13,11 +13,13 @@ use w5k_contract::world::{MaterialId, PropId, PropKind, PropRef, PropShape, Worl
 use w5k_math::{scalar, Pcg32, Transform, Vec3};
 
 use crate::cliff::{switchback_path, CliffDef, SwitchbackDef};
+use crate::corrugation::{Corrugation, Ripple};
 use crate::features::{
     barricade_blocks, cell_slope, dilate, mud_mask, poisson_disc, poisson_disc_in, BarricadeDef, MudDef, RockFieldDef,
     TreesDef,
 };
 use crate::grid::{warped_fbm, GridWorld, CELL_M};
+use crate::river::{carve, RiverDef};
 use crate::strip::standard_material_table;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -59,6 +61,24 @@ pub struct RoadDef {
     /// Zig-zag climbs up cliffs, spliced into the waypoint list.
     #[serde(default)]
     pub switchbacks: Vec<SwitchbackDef>,
+    /// Corrugation (wavelength 0.2 to 2 m, a few cm deep).
+    #[serde(default)]
+    pub washboards: Vec<RoughSectionDef>,
+    /// Whoops (wavelength 4 m or more, tenths of a metre deep).
+    #[serde(default)]
+    pub whoops: Vec<RoughSectionDef>,
+}
+
+/// A rough stretch of the road: washboard (ripples shorter than 2 m, finer than the grid, done as a query-time formula) or whoops
+/// (long swells baked into the heightfield). `amplitude_m` is peak to peak.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoughSectionDef {
+    /// Centre of the section along the road, 0 = start, 1 = finish.
+    pub at_fraction: Param,
+    pub length_m: Param,
+    pub wavelength_m: Param,
+    pub amplitude_m: Param,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -88,6 +108,8 @@ pub struct CourseDef {
     pub rock_fields: Vec<RockFieldDef>,
     #[serde(default)]
     pub cliffs: Vec<CliffDef>,
+    #[serde(default)]
+    pub rivers: Vec<RiverDef>,
 }
 
 impl CourseDef {
@@ -119,6 +141,16 @@ const CLIFF_LIMIT_SLACK: f64 = 1.1; // const-ok: margin so the clamp never shave
 
 /// Run-in and run-out of a switchback beyond the foot and the lip of the face, m.
 const SWITCHBACK_APPROACH_M: f64 = 8.0; // const-ok: where the zig-zag meets the ordinary road
+
+/// Shortest whoop wavelength the 1 m grid can hold (four cells), m.
+const MIN_WHOOP_WAVELENGTH_M: f64 = 4.0; // const-ok: four cells per wave is the least a bilinear grid draws as a wave
+/// Washboard wavelengths handled as a formula, m.
+const MIN_WASHBOARD_WAVELENGTH_M: f64 = 0.2; // const-ok: below this a wheel does not follow the ripples
+const MAX_WASHBOARD_WAVELENGTH_M: f64 = 2.0; // const-ok: the grid's Nyquist limit
+/// Width over which rough sections fade out beyond the road edge, m.
+const ROUGH_EDGE_M: f64 = 1.5; // const-ok: shoulder of a rough section
+/// Shortest fade at the ends of a rough section, m.
+const ROUGH_MIN_FADE_M: f64 = 2.0; // const-ok: ends of a rough section
 
 /// The profile is graded to this fraction of the stated road grade; sampled bilinearly the road can add a sliver of slope.
 const PROFILE_MARGIN: f64 = 0.9; // const-ok: safety factor on the stated grade
@@ -185,9 +217,25 @@ pub fn limit_grades(h: &mut [f64], n: usize, axis_limit_m: &[f64], anchors: &[bo
     sweep(h, n, axis_limit_m, false);
 }
 
+/// Headroom on a river bank's axis limit over its stated grade.
+const RIVER_LIMIT_SLACK: f64 = 1.1; // const-ok: margin so the clamp never shaves the bank it is told to allow
+
+/// A node counts as water only if its ground is at least this far below the surface, m (stops a hairline of one-node puddles).
+const WATER_EPS_M: f64 = 0.01; // const-ok: keeps numerical dust from drawing water
+
+/// Extra cost of a road step through water, m of road: high enough that A* goes round whenever it can.
+const WET_STEP_COST_M: f64 = 200.0; // const-ok: a road never wades if there is any way round
+
 /// Slope-cost A* over the 8-neighbour grid between two nodes. The cost of a step is `length * (1 + (slope / g)^2)`, so flat routes win
 /// and the road looks for the saddle, but nothing is forbidden: the profile stage grades whatever path comes out.
-fn astar(h: &[f64], n: usize, from: (usize, usize), to: (usize, usize), g: f64) -> Option<Vec<(usize, usize)>> {
+fn astar(
+    h: &[f64],
+    n: usize,
+    from: (usize, usize),
+    to: (usize, usize),
+    g: f64,
+    wet: &[bool],
+) -> Option<Vec<(usize, usize)>> {
     let scale = 1000.0; // const-ok: fixed-point scale so the heap key is an integer (a total order)
     let idx = |i: usize, j: usize| j * n + i;
     let mut best = vec![u64::MAX; n * n];
@@ -226,7 +274,8 @@ fn astar(h: &[f64], n: usize, from: (usize, usize), to: (usize, usize), g: f64) 
                 let (ni, nj) = (ni as usize, nj as usize);
                 let len = scalar::hypot(di as f64, dj as f64) * CELL_M;
                 let slope = (h[idx(ni, nj)] - h[at as usize]).abs() / len;
-                let step = (len * (1.0 + (slope / g) * (slope / g)) * scale) as u64;
+                let wet_cost = if wet[idx(ni, nj)] { WET_STEP_COST_M } else { 0.0 };
+                let step = ((len * (1.0 + (slope / g) * (slope / g)) + wet_cost) * scale) as u64;
                 let c = cost + step;
                 if c < best[idx(ni, nj)] {
                     best[idx(ni, nj)] = c;
@@ -332,6 +381,24 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
         }
     }
 
+    // River: valley, channel and banks, cut into the clamped hills before the road is laid (the road goes round the water).
+    let mut river_surface = vec![f64::NAN; n * n];
+    for (k, r) in def.rivers.iter().enumerate() {
+        r.check(&format!("{}.rivers[{k}]", def.name))?;
+        let carved = carve(r, def.seed.wrapping_add(k as u64), &mut h, n);
+        let axis_bank = r.bank_grade.v * CELL_M * RIVER_LIMIT_SLACK;
+        for c in 0..n * n {
+            if carved.bank_zone[c] {
+                axis_limit[c] = axis_limit[c].max(axis_bank);
+                grade_limit[c] = grade_limit[c].max(axis_bank * std::f64::consts::SQRT_2 / CELL_M);
+            }
+            if !carved.surface[c].is_nan() {
+                river_surface[c] = carved.surface[c];
+            }
+        }
+    }
+    let river_wet: Vec<bool> = (0..n * n).map(|c| !river_surface[c].is_nan() && h[c] < river_surface[c]).collect();
+
     // 2. Road path, profile, stamp.
     let snap = |p: (f64, f64)| -> Result<(usize, usize), String> {
         let (i, j) = (((p.0 + half) / CELL_M).round(), ((p.1 + half) / CELL_M).round());
@@ -350,7 +417,8 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
             None => path.push(((b.0 as f64, b.1 as f64), false)),
             Some(&(last, _)) => {
                 let a = (last.0.round() as usize, last.1.round() as usize);
-                let leg = astar(&h, n, a, b, def.road.max_grade.v).ok_or("no road path between waypoints")?;
+                let leg =
+                    astar(&h, n, a, b, def.road.max_grade.v, &river_wet).ok_or("no road path between waypoints")?;
                 path.extend(leg[1..].iter().map(|&(i, j)| ((i as f64, j as f64), false)));
             }
         }
@@ -465,6 +533,75 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
     }
     // The centreline cells are exactly the profile (they have weight 1); keep the shoulders inside the terrain grade limit.
     limit_grades(&mut h, n, &axis_limit, &frozen);
+    // Water: wherever the final ground is below the river's surface. The bed is its own material.
+    let wet_final: Vec<bool> =
+        (0..n * n).map(|c| !river_surface[c].is_nan() && h[c] < river_surface[c] - WATER_EPS_M).collect();
+    let riverbed = materials.id_of("riverbed").ok_or("material table has no `riverbed`")?;
+    for c in 0..n * n {
+        if wet_final[c] && !frozen[c] {
+            splat[c] = riverbed.0 as u8;
+        }
+    }
+    let water: Option<Vec<f32>> = def
+        .rivers
+        .first()
+        .map(|_| (0..n * n).map(|c| if wet_final[c] { river_surface[c] as f32 } else { f32::NAN }).collect());
+    // Rough sections. Whoops are long enough for the grid and are added to the heights (after the clamp: they are roughness on top of
+    // the graded road, not part of its stated grade, so the cells' limits grow by their slope). Washboard is finer than the grid and
+    // becomes a phase and weight layer evaluated per query (see `corrugation.rs`).
+    let lateral = |d: f64| 1.0 - scalar::smoothstep(w2, w2 + ROUGH_EDGE_M, d);
+    let mut corr: Option<Corrugation> = None;
+    for (kind, list) in [("whoops", &def.road.whoops), ("washboards", &def.road.washboards)] {
+        for (k, r) in list.iter().enumerate() {
+            let tag = format!("{}.road.{kind}[{k}]", def.name);
+            for (l, p) in [
+                ("at_fraction", &r.at_fraction),
+                ("length_m", &r.length_m),
+                ("wavelength_m", &r.wavelength_m),
+                ("amplitude_m", &r.amplitude_m),
+            ] {
+                p.check(&format!("{tag}.{l}"))?;
+            }
+            let lam = r.wavelength_m.v;
+            if kind == "whoops" && lam < MIN_WHOOP_WAVELENGTH_M {
+                return Err(format!("{tag}: wavelength {lam} m is below {MIN_WHOOP_WAVELENGTH_M} m, too short for the 1 m grid: use a washboard"));
+            }
+            if kind == "washboards" && !(MIN_WASHBOARD_WAVELENGTH_M..=MAX_WASHBOARD_WAVELENGTH_M).contains(&lam) {
+                return Err(format!("{tag}: wavelength {lam} m is outside {MIN_WASHBOARD_WAVELENGTH_M} to {MAX_WASHBOARD_WAVELENGTH_M} m: use whoops for longer swells"));
+            }
+            let (a, b) =
+                (r.at_fraction.v * total_arc - r.length_m.v * 0.5, r.at_fraction.v * total_arc + r.length_m.v * 0.5);
+            let fade = lam.max(ROUGH_MIN_FADE_M); // ripples fade in and out over a wavelength
+            if kind == "washboards" && corr.is_none() {
+                corr = Some(Corrugation::new(n, Vec::new()));
+            }
+            let region = corr.as_ref().map_or(0, |c| c.ripples.len()) as u8;
+            if kind == "washboards" {
+                if let Some(c) = corr.as_mut() {
+                    c.ripples.push(Ripple { wavelength_m: lam, amplitude_m: r.amplitude_m.v });
+                }
+            }
+            for c in 0..n * n {
+                if best_d[c] >= w2 + ROUGH_EDGE_M || arc[c] < a || arc[c] > b {
+                    continue;
+                }
+                let wgt = lateral(best_d[c])
+                    * scalar::smoothstep(a, a + fade, arc[c])
+                    * (1.0 - scalar::smoothstep(b - fade, b, arc[c]));
+                if wgt <= 0.0 {
+                    continue;
+                }
+                if kind == "whoops" {
+                    h[c] += wgt * r.amplitude_m.v * 0.5 * (1.0 - scalar::cos(scalar::TAU * (arc[c] - a) / lam));
+                    grade_limit[c] += r.amplitude_m.v * scalar::PI / lam;
+                } else if let Some(cc) = corr.as_mut() {
+                    cc.set(c, region, arc[c] - a, wgt);
+                    // The phase is interpolated between nodes whose road distances may differ by up to a diagonal step.
+                    grade_limit[c] += r.amplitude_m.v * scalar::PI / lam * std::f64::consts::SQRT_2;
+                }
+            }
+        }
+    }
     let road: Vec<(f64, f64, f64)> =
         pts.iter().zip(&y).map(|(&(i, j), &yy)| (i * CELL_M - half, j * CELL_M - half, yy)).collect();
 
@@ -519,6 +656,12 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
     }
     let heights: Vec<f32> = h.iter().map(|&v| v as f32).collect();
     let mut world = GridWorld::from_arrays(n, heights, splat.clone(), materials);
+    if let Some(c) = corr {
+        world.set_corrugation(c);
+    }
+    if let Some(w) = water {
+        world.set_water(w);
+    }
 
     // 3. Props.
     let mut props: Vec<PropRef> = Vec::new();
@@ -623,8 +766,9 @@ mod tests {
         CourseDef::from_ron(include_str!("../../../content/world/courses/slice.ron")).expect("slice.ron parses")
     }
 
-    const GOLDEN_RIDGE_HASH: u64 = 0xd12f_8246_c76a_0341;
-    const GOLDEN_SLICE_HASH: u64 = 0xf30c_bc94_ccbc_4e71;
+    const GOLDEN_RIVER_HASH: u64 = 0x33d8_29c2_7af5_f0f9;
+    const GOLDEN_RIDGE_HASH: u64 = 0xb275_51a9_3685_9f48;
+    const GOLDEN_SLICE_HASH: u64 = 0xcf18_752c_43dd_a432;
 
     fn hash(c: &Course) -> u64 {
         let mut s = StateHasher::new();
@@ -635,6 +779,7 @@ mod tests {
                 s.write_u8(w.splat_at_node(i, j));
             }
         }
+        s.write_u64(w.corrugation_hash());
         for p in w.props() {
             s.write_u32(p.id.0);
             s.write_vec3(p.transform.pos);
@@ -699,7 +844,7 @@ mod tests {
     #[test]
     fn road_cells_are_road_material_and_start_and_finish_are_where_the_waypoints_say() {
         let d = def();
-        let c = generate(&d).expect("course");
+        let c = smooth_slice(); // the profile is the graded road; rough sections ride on top of it
         for &(x, z, y) in &c.road {
             let m = c.world.material_id_at(x, z);
             assert!(
@@ -1049,5 +1194,276 @@ mod tests {
         let (a, b) = (generate(&d).expect("a"), generate(&d).expect("b"));
         assert_eq!(hash(&a), hash(&b));
         assert_eq!(hash(&a), GOLDEN_RIDGE_HASH, "ridge hash was {:#018x}", hash(&a));
+    }
+
+    /// The slice course without its rough sections: the same ground, no ripples.
+    fn smooth_slice() -> Course {
+        let mut d = def();
+        d.road.whoops.clear();
+        d.road.washboards.clear();
+        generate(&d).expect("smooth slice")
+    }
+
+    /// Centreline sample of the slice road at road distance `s_m`, with the unit direction of travel.
+    fn road_at(c: &Course, s_m: f64) -> ((f64, f64), (f64, f64)) {
+        let mut acc = 0.0;
+        for w in c.road.windows(2) {
+            let len = scalar::hypot(w[1].0 - w[0].0, w[1].1 - w[0].1);
+            if acc + len >= s_m {
+                let f = (s_m - acc) / len;
+                return (
+                    (w[0].0 + (w[1].0 - w[0].0) * f, w[0].1 + (w[1].1 - w[0].1) * f),
+                    ((w[1].0 - w[0].0) / len, (w[1].1 - w[0].1) / len),
+                );
+            }
+            acc += len;
+        }
+        panic!("beyond the end of the road");
+    }
+
+    fn road_length(c: &Course) -> f64 {
+        c.road.windows(2).map(|w| scalar::hypot(w[1].0 - w[0].0, w[1].1 - w[0].1)).sum()
+    }
+
+    #[test]
+    fn whoops_have_the_stated_wavelength_and_peak_to_peak_amplitude() {
+        let d = def();
+        let (with, without) = (generate(&d).expect("slice"), smooth_slice());
+        let r = &d.road.whoops[0];
+        let start = r.at_fraction.v * road_length(&with) - r.length_m.v * 0.5;
+        let (lam, amp) = (r.wavelength_m.v, r.amplitude_m.v);
+        let diff = |s: f64| {
+            let (p, _) = road_at(&with, s);
+            with.world.height_m(p.0, p.1) - without.world.height_m(p.0, p.1)
+        };
+        // Mid-section (full weight): crest half a wavelength after a trough, spaced one wavelength apart.
+        let s0 = start + 3.0 * lam;
+        for k in 0..3 {
+            let t = s0 + k as f64 * lam;
+            assert!(diff(t).abs() < 0.15 * amp, "trough at {t}: {}", diff(t));
+            assert!(
+                (diff(t + lam * 0.5) - amp).abs() < 0.15 * amp,
+                "crest at {}: {}",
+                t + lam * 0.5,
+                diff(t + lam * 0.5)
+            );
+        }
+    }
+
+    #[test]
+    fn washboard_ripples_have_the_stated_wavelength_and_amplitude() {
+        let d = def();
+        let c = generate(&d).expect("slice");
+        let r = &d.road.washboards[0];
+        let mid = r.at_fraction.v * road_length(&c);
+        let ((x, z), dir) = road_at(&c, mid);
+        let lam = r.wavelength_m.v;
+        let steps = 4000;
+        let hs: Vec<f64> = (0..steps)
+            .map(|k| {
+                let s = k as f64 * lam * 5.0 / steps as f64;
+                c.world.height_m(x + dir.0 * s, z + dir.1 * s)
+            })
+            .collect();
+        // Remove the slow trend of the road under the ripples with a one-wavelength running mean.
+        let win = (steps as f64 / 5.0) as usize;
+        let ripple: Vec<f64> =
+            (win..steps - win).map(|k| hs[k] - hs[k - win / 2..k + win / 2].iter().sum::<f64>() / win as f64).collect();
+        let (lo, hi) = ripple.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(l, h), &v| (l.min(v), h.max(v)));
+        assert!(
+            (hi - lo - r.amplitude_m.v).abs() < 0.3 * r.amplitude_m.v,
+            "peak to peak {} vs stated {}",
+            hi - lo,
+            r.amplitude_m.v
+        );
+        let crossings = ripple.windows(2).filter(|w| w[0] < 0.0 && w[1] >= 0.0).count() as f64;
+        let span = (ripple.len() as f64) * lam * 5.0 / steps as f64;
+        assert!((span / crossings - lam).abs() < 0.15 * lam, "wavelength {} vs stated {lam}", span / crossings);
+    }
+
+    #[test]
+    fn washboard_normal_is_the_gradient_of_its_height() {
+        let d = def();
+        let c = generate(&d).expect("slice");
+        let r = &d.road.washboards[0];
+        let eps = 1e-5;
+        for k in 0..200 {
+            let ((x, z), dir) = road_at(&c, r.at_fraction.v * road_length(&c) + (k as f64 - 100.0) * 0.137);
+            let (x, z) = (x + 0.3 * dir.1, z - 0.3 * dir.0 + 1e-3 * k as f64);
+            let gx = (c.world.height_m(x + eps, z) - c.world.height_m(x - eps, z)) / (2.0 * eps);
+            let gz = (c.world.height_m(x, z + eps) - c.world.height_m(x, z - eps)) / (2.0 * eps);
+            let n = Vec3::new(-gx, 1.0, -gz).normalized_or_zero();
+            assert!(
+                (c.world.normal(x, z) - n).length() < 1e-4,
+                "normal disagrees with the height gradient at ({x}, {z})"
+            );
+        }
+    }
+
+    #[test]
+    fn rough_sections_leave_ground_away_from_the_road_untouched() {
+        let d = def();
+        let (with, without) = (generate(&d).expect("slice"), smooth_slice());
+        let mut rng = Pcg32::new(21, 21);
+        let mut checked = 0;
+        for _ in 0..4000 {
+            let (x, z) = (rng.range_f64(-190.0, 190.0), rng.range_f64(-190.0, 190.0));
+            let near = with.road.iter().map(|p| scalar::hypot(p.0 - x, p.1 - z)).fold(f64::INFINITY, f64::min);
+            if near > d.road.width_m.v * 0.5 + 3.0 {
+                assert!(
+                    (with.world.height_m(x, z) - without.world.height_m(x, z)).abs() < 1e-9,
+                    "ground changed at ({x}, {z})"
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 3000);
+    }
+
+    #[test]
+    fn a_whoop_too_short_for_the_grid_or_a_washboard_too_long_is_refused() {
+        let mut d = def();
+        d.road.whoops[0].wavelength_m = Param::spec(2.0, "test");
+        assert!(generate(&d).err().expect("refused").contains("use a washboard"));
+        let mut d = def();
+        d.road.washboards[0].wavelength_m = Param::spec(5.0, "test");
+        assert!(generate(&d).err().expect("refused").contains("use whoops"));
+    }
+
+    fn river_course() -> CourseDef {
+        CourseDef::from_ron(include_str!("../../../content/world/courses/river.ron")).expect("river.ron parses")
+    }
+
+    /// A point on the river centreline at arc distance `arc_m`, its unit tangent and the unit normal (plan).
+    fn river_frame(d: &CourseDef, arc_m: f64) -> ((f64, f64), (f64, f64), (f64, f64)) {
+        let line = d.rivers[0].centreline(d.seed);
+        let k = line.iter().position(|p| p.2 >= arc_m).expect("arc on the river").clamp(1, line.len() - 2);
+        let (a, b) = (line[k - 1], line[k + 1]);
+        let len = scalar::hypot(b.0 - a.0, b.1 - a.1);
+        let t = ((b.0 - a.0) / len, (b.1 - a.1) / len);
+        ((line[k].0, line[k].1), t, (-t.1, t.0))
+    }
+
+    fn river_total(d: &CourseDef) -> f64 {
+        d.rivers[0].centreline(d.seed).last().expect("line").2
+    }
+
+    #[test]
+    fn river_surface_is_flat_across_the_channel_and_falls_downstream() {
+        let d = river_course();
+        let c = generate(&d).expect("river");
+        let slope = d.rivers[0].surface_slope.v;
+        let level = |arc: f64, off: f64| {
+            let (p, _, nrm) = river_frame(&d, arc);
+            c.world.water_surface_m(p.0 + nrm.0 * off, p.1 + nrm.1 * off).expect("water at this offset")
+        };
+        for arc in [90.0, 150.0, 330.0] {
+            for off in [-4.0, -2.0, 2.0, 4.0] {
+                assert!(
+                    (level(arc, off) - level(arc, 0.0)).abs() < 0.02,
+                    "surface not flat across the channel at arc {arc}, offset {off}"
+                );
+            }
+        }
+        assert!(
+            (level(90.0, 0.0) - level(330.0, 0.0) - slope * 240.0).abs() < 0.03,
+            "the water must fall {slope} per metre downstream"
+        );
+    }
+
+    #[test]
+    fn channel_is_as_deep_as_stated_away_from_the_ford() {
+        let d = river_course();
+        let c = generate(&d).expect("river");
+        let (p, _, _) = river_frame(&d, 100.0);
+        let depth = c.world.water_surface_m(p.0, p.1).expect("water") - c.world.height_m(p.0, p.1);
+        assert!((depth - d.rivers[0].depth_m.v).abs() < 0.1, "depth {depth} vs stated {}", d.rivers[0].depth_m.v);
+    }
+
+    #[test]
+    fn ford_is_wadable_across_its_whole_width() {
+        let d = river_course();
+        let c = generate(&d).expect("river");
+        let (r, f) = (&d.rivers[0], &d.rivers[0].fords[0]);
+        let arc = f.at_fraction.v * river_total(&d);
+        let mut deepest = 0.0f64;
+        for k in -8..=8 {
+            let (p, _, nrm) = river_frame(&d, arc);
+            let (x, z) = (p.0 + nrm.0 * k as f64, p.1 + nrm.1 * k as f64);
+            if let Some(s) = c.world.water_surface_m(x, z) {
+                deepest = deepest.max(s - c.world.height_m(x, z));
+            }
+        }
+        assert!(deepest > 0.3, "there must still be water at the ford ({deepest} m)");
+        assert!(
+            deepest <= f.depth_m.v + 0.1 && f.depth_m.v < r.depth_m.v,
+            "ford depth {deepest} vs stated {}",
+            f.depth_m.v
+        );
+    }
+
+    #[test]
+    fn river_banks_climb_out_at_the_stated_grade() {
+        let d = river_course();
+        let c = generate(&d).expect("river");
+        let r = &d.rivers[0];
+        let (p, _, nrm) = river_frame(&d, 100.0);
+        let h = |off: f64| c.world.height_m(p.0 + nrm.0 * off, p.1 + nrm.1 * off);
+        let (from, to) = (r.width_m.v * 0.5 + 1.0, r.width_m.v * 0.5 + r.freeboard_m.v / r.bank_grade.v - 1.0);
+        let grade = (h(to) - h(from)) / (to - from);
+        assert!((grade - r.bank_grade.v).abs() < 0.07, "bank grade {grade} vs stated {}", r.bank_grade.v);
+    }
+
+    #[test]
+    fn no_road_enters_the_water() {
+        let d = river_course();
+        let c = generate(&d).expect("river");
+        for &(x, z, _) in &c.road {
+            for (dx, dz) in [(0.0, 0.0), (3.0, 0.0), (-3.0, 0.0), (0.0, 3.0), (0.0, -3.0)] {
+                assert!(c.world.water_surface_m(x + dx, z + dz).is_none(), "water on the road at ({x}, {z})");
+            }
+        }
+    }
+
+    #[test]
+    fn water_exists_only_where_the_ground_is_below_the_surface_and_lies_on_a_riverbed() {
+        let d = river_course();
+        let c = generate(&d).expect("river");
+        let mut rng = Pcg32::new(4, 4);
+        let (mut wet, mut dry) = (0, 0);
+        for _ in 0..20000 {
+            let (x, z) = (rng.range_f64(-199.0, 199.0), rng.range_f64(-199.0, 199.0));
+            match c.world.water_surface_m(x, z) {
+                Some(s) => {
+                    wet += 1;
+                    assert!(c.world.height_m(x, z) < s);
+                    assert_eq!(
+                        c.world.material_at(x, z).name,
+                        "riverbed",
+                        "the bed under the water is riverbed at ({x}, {z})"
+                    );
+                }
+                None => dry += 1,
+            }
+        }
+        assert!(wet > 200 && dry > 15000, "wet {wet}, dry {dry}");
+    }
+
+    #[test]
+    fn river_course_is_deterministic_for_a_seed() {
+        let d = river_course();
+        let (a, b) = (generate(&d).expect("a"), generate(&d).expect("b"));
+        assert_eq!(hash(&a), hash(&b));
+        assert_eq!(hash(&a), GOLDEN_RIVER_HASH, "river hash was {:#018x}", hash(&a));
+    }
+
+    #[test]
+    fn a_river_valley_narrower_than_its_banks_is_refused() {
+        let mut d = river_course();
+        d.rivers[0].valley_half_m = Param::spec(5.0, "test");
+        assert!(generate(&d).err().expect("refused").contains("narrower than the channel"));
+        let mut d = river_course();
+        d.rivers[0].width_m = Param::spec(8.0, "test: too narrow for its depth");
+        assert!(generate(&d).err().expect("refused").contains("at least"));
     }
 }

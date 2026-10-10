@@ -1,6 +1,6 @@
 # Status: WORLD
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/world/cliff | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/world/river | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
 
 ## Done
 - PR 17 settling (merged): spike S-W, design note, CCR text. PR 21 data-driven bump strip (merged).
@@ -20,6 +20,10 @@
 - Owner request 2026-10-10 (cliffs with switchbacks, rock fields, a river with amphibious / wooden bridge / road bridge crossings, route choices an AI picks between): plan in `docs/lanes/world/routes-design.md`; CCR text `docs/swarm/requests/world-ccr-water-bridges.md` (water surface query, bridge load limit). Step 1 (rock fields, gravel) in branch `lane/world/rocks`. PROVISIONAL(route-cliff) face grade 1.0; PROVISIONAL(route-bridge) wooden bridge rated not collapsing; PROVISIONAL(route-ai) the AI never sees the survey.
 
 - ARCH order (13:40Z): (1) per-cell grade limits + cliff + switchback + steep direct line [this PR, `lane/world/cliff`, course `content/world/courses/ridge.ron`: scarp 20 m at face grade 1.0, switchback road with 7 m hairpins at the stated 8%, a gravel chute at grade 0.45, the long way round the eased end]; (2) washboard + whoops; (3) river + ford + bridges; (4) soft-ground patch (Bekker-style, UNVALIDATED); (5) `w5k world stats` (slope histogram, road grades, ISO 8608 PSD classes, material numbers beside Wong ranges, JSON + PNG). Each as its own small PR; PR numbers are visible on GitHub (lane sessions cannot message ARCH).
+
+- (2) washboard + whoops [PR open, `lane/world/rough`, stacked on #62]: whoops (>= 4 m wavelength) baked into the heightfield, washboard (0.2 to 2 m) as a per-query formula (`corrugation.rs`: phase, weight and section per node, bilinear; normal is the exact gradient). Slice course now has both (golden hash updated deliberately). `raycast` ignores ripples (centimetres); not yet benchmarked with a washboard layer present.
+
+- (3a) river + ford + water surface [`lane/world/river`, stacked on #65]: meandering channel in a levelled valley, trapezoid bed with a stated bank grade, flat water surface falling downstream, fords, `riverbed` material, `GridWorld::water_surface_m` (WORLD-only until CCR W-6), `terrain.json` gains `water_m`. Course `content/world/courses/river.ron`. (3b, next) bridges (wooden, road) and multi-road support (the long road bridge as a detour, a track to the wooden bridge). Amphibious crossing = swim the channel anywhere; the survey (later) will list depth and exit bank grade.
 
 ## Blocked
 - Nothing.

@@ -14,6 +14,9 @@ use w5k_world::grid::CELL_M;
 // Display-only colours and lighting for the preview (never feed the simulation).
 const ASPHALT_RGB: [f64; 3] = [150.0, 150.0, 156.0]; // const-ok: display colour
 const GRAVEL_RGB: [f64; 3] = [140.0, 132.0, 118.0]; // const-ok: display colour
+const WATER_RGB: [f64; 3] = [40.0, 90.0, 150.0]; // const-ok: display colour
+const WATER_DEEP_RGB: [f64; 3] = [15.0, 40.0, 100.0]; // const-ok: display colour
+const WATER_DEPTH_FULL_M: f64 = 2.5; // const-ok: depth at which the water colour is darkest
 const MUD_RGB: [f64; 3] = [105.0, 80.0, 52.0]; // const-ok: display colour
 const GROUND_RGB: [f64; 3] = [95.0, 135.0, 78.0]; // const-ok: display colour
 const HEIGHT_TINT_PER_M: f64 = 5.0; // const-ok: display colour ramp
@@ -57,10 +60,13 @@ fn export(args: &[String]) -> Result<(), String> {
     let (x0, z0) = w.node_xz(0, 0);
     let mut heights = Vec::with_capacity(idx.len() * idx.len());
     let mut mats = Vec::with_capacity(idx.len() * idx.len());
+    let mut water = Vec::with_capacity(idx.len() * idx.len());
     for &j in &idx {
         for &i in &idx {
             heights.push(mm(w.height_at_node(i, j)));
             mats.push(w.splat_at_node(i, j));
+            // Water surface height where the node is under water, else null (the viewer draws a plane clipped to these nodes).
+            water.push(w.water_at_node(i, j).filter(|&s| s > w.height_at_node(i, j)).map(mm));
         }
     }
     let props: Vec<_> = w
@@ -86,6 +92,7 @@ fn export(args: &[String]) -> Result<(), String> {
         "heights_m": heights,
         "material_ids": mats,
         "materials": w.materials().materials.iter().map(|m| m.name.clone()).collect::<Vec<_>>(),
+        "water_m": water,
         "road_m": course.road.iter().step_by(step).map(|r| [mm(r.0), mm(r.2), mm(r.1)]).collect::<Vec<_>>(),
         "props": props,
     });
@@ -131,11 +138,20 @@ fn preview(args: &[String]) -> Result<(), String> {
             let (x, z) = (lo.x + c as f64 / px as f64, lo.z + r as f64 / px as f64);
             let shade = (w.normal(x, z).dot(light) * SHADE_GAIN + SHADE_AMBIENT).clamp(0.0, 1.0);
             let name = &w.material_at(x, z).name;
-            let base = match name.as_str() {
-                "asphalt" => ASPHALT_RGB,
-                "mud" => MUD_RGB,
-                "gravel" => GRAVEL_RGB,
-                _ => [GROUND_RGB[0] + (w.height_m(x, z) - lo.y) * HEIGHT_TINT_PER_M, GROUND_RGB[1], GROUND_RGB[2]],
+            let water = w.water_surface_m(x, z).map(|s| ((s - w.height_m(x, z)) / WATER_DEPTH_FULL_M).clamp(0.0, 1.0));
+            let base = if let Some(depth) = water {
+                [
+                    WATER_RGB[0] + (WATER_DEEP_RGB[0] - WATER_RGB[0]) * depth,
+                    WATER_RGB[1] + (WATER_DEEP_RGB[1] - WATER_RGB[1]) * depth,
+                    WATER_RGB[2] + (WATER_DEEP_RGB[2] - WATER_RGB[2]) * depth,
+                ]
+            } else {
+                match name.as_str() {
+                    "asphalt" => ASPHALT_RGB,
+                    "mud" => MUD_RGB,
+                    "gravel" => GRAVEL_RGB,
+                    _ => [GROUND_RGB[0] + (w.height_m(x, z) - lo.y) * HEIGHT_TINT_PER_M, GROUND_RGB[1], GROUND_RGB[2]],
+                }
             };
             for k in 0..3 {
                 img[(r * side + c) * 3 + k] = (base[k] * shade).min(CHANNEL_MAX) as u8;
