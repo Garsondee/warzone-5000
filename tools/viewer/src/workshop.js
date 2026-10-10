@@ -60,7 +60,7 @@ renderer.setAnimationLoop((now) => {
 });
 
 // ---- the vehicle on show -----------------------------------------------------------------------------------------------------
-let shown = null, base = null, factors = {}, seq = 0, quick = 0, final = 0, detail = 'none';
+let shown = null, base = null, factors = {}, epoch = 0, quick = 0, final = 0, detail = 'none', designId = null;
 function setStatus(kind, text) { const s = $('status'); s.className = kind; s.textContent = text; }
 
 async function show(d, reframe) {
@@ -84,6 +84,8 @@ async function show(d, reframe) {
   shadow.position.set(centre.x, 0.02, centre.z);
   if (reframe) { orbit.target.copy(centre); orbit.dist = Math.max(size.x, size.y, size.z) * 2.6; }
   $('report').textContent = (d.report || []).join('\n');
+  designId = d.id;
+  $('drive').disabled = false;
 }
 
 // ---- sliders -------------------------------------------------------------------------------------------------------------------
@@ -111,35 +113,76 @@ function buildSliders(levers) {
 
 function changed() {
   clearTimeout(quick); clearTimeout(final);
-  seq++; // whatever is on its way is now out of date
+  epoch++; // whatever is on its way is now out of date
   detail = 'pending';
+  setBoard(null);
+  $('drive').disabled = true; // until the body that goes with these sliders has arrived
   quick = setTimeout(() => ask('preview'), QUICK_DEBOUNCE_MS);
 }
 async function ask(quality) {
-  const mine = ++seq, t0 = performance.now();
+  const mine = epoch, t0 = performance.now();
   setStatus('', quality === 'final' ? 'Baking the final detail…' : 'Building…');
   try {
     const r = await fetch('/api/design', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ base: base.id, levers: factors, quality }) });
     const d = await r.json();
-    if (mine !== seq) return; // a newer change has been made since: drop this answer
+    if (mine !== epoch) return; // a newer change has been made since: drop this answer
     if (!r.ok) { setStatus('error', d.error); return; }
     await show(d, false);
-    if (mine !== seq) return;
+    if (mine !== epoch) return;
     detail = quality;
     setStatus('', `${quality === 'final' ? 'Final detail' : 'Quick detail'}, ${((performance.now() - t0) / 1000).toFixed(1)} s`);
-    if (quality === 'preview') final = setTimeout(() => ask('final'), FINAL_AFTER_MS);
-  } catch (e) { if (mine === seq) setStatus('error', String(e.message || e)); }
+    if (quality === 'preview') { final = setTimeout(() => ask('final'), FINAL_AFTER_MS); measure(d.id, mine); }
+  } catch (e) { if (mine === epoch) setStatus('error', String(e.message || e)); }
 }
+
+// ---- the scoreboard and DRIVE -------------------------------------------------------------------------------------------------
+const digits = (v) => (Math.abs(v) >= 100 ? 0 : Math.abs(v) >= 10 ? 1 : 2);
+const fmt = (v, as = v) => v.toFixed(digits(as)); // both numbers of a row take the decimals of the smaller, so 11.40 and 9.05 line up
+const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+function setBoard(rows) {
+  const t = $('board');
+  t.classList.toggle('stale', rows === null); // the old numbers stay, greyed, until the new ones arrive: never shown as current
+  if (!rows) return;
+  t.tBodies[0].replaceChildren(...rows.map((r) => {
+    const tr = document.createElement('tr');
+    const change = r.delta_pct == null ? '' : r.better == null ? 'no change' : `${r.delta_pct > 0 ? '+' : '\u2212'}${Math.abs(r.delta_pct).toFixed(1)}% ${r.better ? 'better' : 'worse'}`;
+    const why = r.note ? `<small>ended early: ${esc(r.note)}</small>` : ''; // a run that stops early says why
+    tr.innerHTML = `<th>${esc(r.name)}<small>${fmt(r.base, Math.min(Math.abs(r.base), Math.abs(r.value)))} \u2192 ${fmt(r.value, Math.min(Math.abs(r.base), Math.abs(r.value)))} ${esc(r.unit)}</small>${why}</th><td class="${r.better == null ? '' : r.better ? 'better' : 'worse'}">${change}</td>`;
+    return tr;
+  }));
+}
+async function measure(id, mine) {
+  setBoard(null);
+  try {
+    const r = await fetch('/api/score', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) });
+    const b = await r.json();
+    if (mine !== epoch) return;
+    if (!r.ok) { setStatus('error', b.error); return; }
+    setBoard(b.rows);
+  } catch (e) { if (mine === epoch) setStatus('error', String(e.message || e)); }
+}
+$('drive').addEventListener('click', async () => {
+  const tab = window.open('', '_blank'); // opened inside the click, so a pop-up blocker lets it; pointed at the game once that is running
+  setStatus('', 'Starting the simulation\u2026');
+  try {
+    const r = await fetch('/api/drive', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: designId }) });
+    const d = await r.json();
+    if (!r.ok) { if (tab) tab.close(); setStatus('error', d.error); return; }
+    if (tab) tab.location = d.url; else location.href = d.url;
+    setStatus('', 'Driving in the other tab');
+  } catch (e) { if (tab) tab.close(); setStatus('error', String(e.message || e)); }
+});
 
 async function pick(id) {
   const info = await getJSON(`/api/base/${encodeURIComponent(id)}`);
-  base = info; factors = {}; seq++;
+  base = info; factors = {}; epoch++;
   clearTimeout(quick); clearTimeout(final);
   [...$('bases').children].forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.id === id)));
   buildSliders(info.levers);
   await show(info.design, true);
   detail = 'authored';
   setStatus('', 'As authored');
+  measure(info.design.id, epoch);
 }
 
 resize();
@@ -156,6 +199,9 @@ window.__workshop = {
   base: () => base && base.id,
   levers: () => (base ? base.levers.map((l) => l.id) : []),
   detail: () => detail,
+  board: () => [...$('board').tBodies[0].rows].map((r) => ({ name: r.cells[0].firstChild.textContent, change: r.cells[1].textContent, class: r.cells[1].className })),
+  stale: () => $('board').classList.contains('stale'),
+  designId: () => designId,
   error: () => ($('status').className === 'error' ? $('status').textContent : null),
   size: () => { const b = new THREE.Box3().setFromObject(shown.root).getSize(new THREE.Vector3()); return [b.x, b.y, b.z]; },
 };

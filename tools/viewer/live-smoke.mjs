@@ -17,10 +17,10 @@ const live = (fn, arg) => page.evaluate(fn, arg);
 const until = (fn, timeout = 90000) => page.waitForFunction(fn, null, { timeout, polling: 200 });
 
 await page.goto(url);
-await until(() => window.__live && window.__live.vehicles().length === 3 && window.__live.thumbs() === 3);
+await until(() => window.__live && window.__live.vehicles().length >= 3 && window.__live.thumbs() === window.__live.vehicles().length); // the garage grows (the tracked carrier joined the three trucks)
 check(true, `the page found the game: vehicles ${await live(() => window.__live.vehicles().join(', '))}`);
 const cards = await page.$$eval('.card', (cs) => cs.map((c) => ({ name: c.textContent.trim(), w: c.querySelector('img').naturalWidth, box: c.getBoundingClientRect().toJSON() })));
-check(cards.length === 3 && cards.every((c) => c.w > 0), `three picture cards with pictures: ${cards.map((c) => c.name).join(' / ')}`);
+check(cards.length >= 3 && cards.every((c) => c.w > 0), `${cards.length} picture cards with pictures: ${cards.map((c) => c.name).join(' / ')}`);
 check(cards.every((c) => c.box.width >= 150 && c.box.height >= 150), `cards are big (smallest ${Math.round(Math.min(...cards.map((c) => c.box.width)))} x ${Math.round(Math.min(...cards.map((c) => c.box.height)))} px)`);
 check(await live(() => window.__live.picking()), 'the start screen is open at the start');
 await page.waitForTimeout(1500);
