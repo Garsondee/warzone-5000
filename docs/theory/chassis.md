@@ -74,3 +74,5 @@ under braking the front compresses 57 mm and the rear extends 72 mm (dive).
 axes meeting at one turn centre on the rear axle line. Then neither tyre scrubs. At low speed the truck's turn radius matches `L / tan(delta) - t/2` to 0.2%.
 **Braking distance.** With every tyre at the friction limit the deceleration is `(mu + Crr) g`, so the stop takes `v^2 / (2 (mu + Crr) g)`. The test gets 21.6 m against 21.2 m: the extra 2% is the brake building up while the wheels slow down before they slide.
 
+![Mule on the data strip: heave and pitch](../lanes/chassis/media/mule_strip_heave_pitch.png)
+![Suspension travel per wheel](../lanes/chassis/media/mule_strip_travel.png)
