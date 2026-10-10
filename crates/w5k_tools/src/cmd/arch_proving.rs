@@ -15,6 +15,7 @@ mod facts;
 mod longitudinal;
 mod mobility;
 mod sim;
+mod traction;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -76,6 +77,18 @@ scenario_file!(
     step_max_s,
     step_search_max_m,
     step_resolution_m,
+    skid_radius_m,
+    skid_start_speed_m_s,
+    skid_ramp_m_s2,
+    skid_warmup_s,
+    skid_max_s,
+    skid_slide_out_frac,
+    skid_window_s,
+    skid_plateau_gain_m_s,
+    grade_hold_s,
+    grade_progress_m,
+    grade_search_max,
+    grade_resolution,
 );
 
 /// What a test needs: the vehicle's rig, the chassis tuning and the driver numbers.
@@ -122,6 +135,8 @@ const RUNNERS: &[(&str, Runner)] = &[
     ("accel_0_48kmh", longitudinal::acceleration),
     ("side_slope_rollover", mobility::side_slope),
     ("step_climb", mobility::step_climb),
+    ("skidpad", traction::skidpad),
+    ("gradeability", traction::gradeability),
 ];
 
 /// The contract the result was produced against, e.g. `contract-v0.2`.
@@ -229,7 +244,7 @@ fn run(args: &[String], root: &Path) -> Result<(), String> {
             };
             let (mut result, replay) = run_test(&ctx, name, t, *runner).map_err(|e| format!("{name}/{t}: {e}"))?;
             let (json_path, replay_path) = paths(out, single, name, t);
-            if let Some(p) = &replay_path {
+            if let Some(p) = replay_path.as_ref().filter(|_| !replay.frames.is_empty()) {
                 w5k_replay::write_bin(p, &replay)?;
                 result.replay = Some(p.display().to_string());
             }
@@ -390,9 +405,12 @@ mod tests {
         for f in &files {
             let r = ProvingResult::from_json(&std::fs::read_to_string(dir.join(f)).expect("read")).expect("parses");
             r.check().expect("valid");
-            let replay = r.replay.expect("replay path");
-            assert!(w5k_replay::read_bin(Path::new(&replay)).expect("readable replay").frames.len() > 10);
-            // const-ok: test bound
+            // the skidpad bench returns no frames, so it has no replay; every other test has one
+            assert_eq!(r.replay.is_none(), r.test == "skidpad", "{}", r.test);
+            if let Some(replay) = r.replay {
+                assert!(w5k_replay::read_bin(Path::new(&replay)).expect("readable replay").frames.len() > 10);
+                // const-ok: test bound
+            }
         }
         let _ = std::fs::remove_dir_all(&out);
     }
@@ -408,7 +426,7 @@ mod tests {
         assert_eq!((r.test.as_str(), r.vehicle.as_str()), ("braking_50kmh", "mule_4x4"));
         let _ = std::fs::remove_file(&out);
         let _ = std::fs::remove_file(out.with_extension("replay.w5kr"));
-        let e = run(&args("skidpad", &out), &root()).expect_err("no runner yet");
+        let e = run(&args("ride_washboard", &out), &root()).expect_err("no runner yet");
         assert!(e.contains("not implemented"), "{e}");
         assert!(!out.exists(), "a test that cannot run must not leave a file");
         let e = run(&args("teleport", &out), &root()).expect_err("unknown");
@@ -468,6 +486,57 @@ mod tests {
                     "{v}: {h} m against the traction limit {traction_limit} m"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn skidpad_lateral_grip_never_exceeds_mu_or_the_rollover_limit_and_every_garage_truck_understeers() {
+        for v in GARAGE {
+            let r = Fixture::load(v).run("skidpad");
+            r.check().expect("valid");
+            let (mu, t, h) = (r.inputs["mu"], r.inputs["track_m"], r.inputs["cg_height_m"]);
+            let bound = mu.min(t / (2.0 * h));
+            let ay = r.measured["max_lat_accel_g"];
+            assert!(ay <= 1.03 * bound, "{v}: {ay} g is above min(mu, t/2h) = {bound}"); // const-ok: the scorer's slack
+            assert!(ay >= 0.5 * bound, "{v}: {ay} g is far below the bound {bound}"); // const-ok: test band
+            assert!(r.measured["understeer_gradient_rad_per_g"] > 0.0, "{v} oversteers");
+            assert!(r.labels.contains_key("limited_by"));
+        }
+    }
+
+    #[test]
+    fn a_truck_on_half_the_friction_cannot_climb_more_than_mu_f_and_every_garage_truck_stays_under_its_bounds() {
+        for v in GARAGE {
+            let mut f = Fixture::load(v);
+            let full = f.run("gradeability");
+            f.rig.stations.iter_mut().filter_map(|s| s.wheel.tyre.as_mut()).for_each(|t| t.mu_scale *= 0.5); // const-ok: the negative control
+            let slick = f.run("gradeability");
+            for (r, name) in [(&full, "full"), (&slick, "half friction")] {
+                r.check().expect("valid");
+                let i = &r.inputs;
+                let (traction, force_n) =
+                    (i["mu"] * i["driven_load_fraction"], i["wheel_torque_crawl_nm"] / i["wheel_radius_m"]);
+                // F = m g (sin a + c cos a), solved by bisection on the angle
+                let (mut lo, mut hi) = (0.0, 1.5);
+                for _ in 0..60 {
+                    let a = 0.5 * (lo + hi);
+                    if i["mass_kg"] * scalar::G * (scalar::sin(a) + i["rolling_resistance_coeff"] * scalar::cos(a))
+                        < force_n
+                    {
+                        lo = a;
+                    } else {
+                        hi = a;
+                    }
+                }
+                let bound = traction.min(scalar::tan(lo));
+                let (g, m) = (r.measured["max_grade_ratio"], &r.measured);
+                assert!(g <= 1.03 * bound, "{v} {name}: climbs {g} but min(mu f, torque) = {bound}"); // const-ok: the scorer's slack
+                assert!(g > 0.2 * bound, "{v} {name}: climbs only {g} of {bound}"); // const-ok: test band
+                assert!(m["bracket_hi"] - m["bracket_lo"] <= 0.01 + 1e-9, "{v}: bracket {m:?}");
+                // const-ok: the spec's resolution
+            }
+            assert!((slick.inputs["mu"] - 0.5 * full.inputs["mu"]).abs() < 1e-6, "the echoed mu follows the tyre"); // const-ok: tolerance
+            assert!(slick.measured["max_grade_ratio"] < full.measured["max_grade_ratio"] + 1e-9);
         }
     }
 }
