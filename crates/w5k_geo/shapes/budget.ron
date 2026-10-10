@@ -6,4 +6,9 @@ BudgetParams(
         prov: Spec,
         src: "owner, 2026-10-10 (via ARCH, docs/swarm/lanes/geometry.md): vehicles are nearly done but close to the limit; raised from 40,000",
     ),
+    tracked_triangles: (
+        v: 80000.0,
+        prov: Spec,
+        src: "docs/swarm/lanes/geometry.md and ARCH, 2026-10-10: tracked 80k with instanced links counted once (a static belt counts every link)",
+    ),
 )
