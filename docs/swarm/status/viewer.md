@@ -1,6 +1,6 @@
 # Status: VIEWER
 
-**Last updated:** 2026-10-10 11:30 UTC | **Branch:** lane/viewer/skins | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** M1 deliverables done, awaiting CI/merge
+**Last updated:** 2026-10-10 11:30 UTC | **Branch:** lane/viewer/start | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** M1 deliverables done, awaiting CI/merge
 
 ## Done
 - Spike S-V passes (WebGL 2 under SwiftShader, 46 ms/frame, 10 s clip = 72 KB): `docs/lanes/viewer/spike-v.md`.
@@ -30,6 +30,8 @@
 - Live test-drive page (PR on `lane/viewer/live`): `tools/viewer/dist/index.html` (committed build; `node tools/viewer/build.mjs --live`), modules `live.js`, `live-input.js`, `live-audio.js`, `live.html`; `live-smoke.mjs` runs 21 checks against a real `w5k drive`. Named `index.html` (not `live.html`) because the server serves that name. Note for the tripwire list: the page fetches from the local server (same origin); that is the owner's goal for this page, not a replay-viewer network fetch.
 
 - Skins for the live page (PR on `lane/viewer/skins`, stacked on the live-page PR): GEOMETRY's truck packed to `tools/viewer/dist/skins/utility_4x4.skin` (`w5k viewer pack-skin`, `w5k_replay::skinpack`), fitted onto scout, mule and hauler by `skin.js`; an RTS-view ring under the truck. The scout wears GEOMETRY's own skin (`scout_4x4.skin`, via `Skin::for_id`); for the hauler, pack GEOMETRY's hauler skin when it exists (`w5k viewer pack-skin hauler_4x4 ...`, then `node tools/viewer/build.mjs --live`). Finding for ARCH: `tools/ci/package_testdrive.py` zips only `index.html`; it must add `tools/viewer/dist/skins/*.skin` as `viewer/skins/` or the packaged game falls back to boxes.
+
+- Start screen (PR on `lane/viewer/start`, stacked on the skins PR): the page opens on three big vehicle pictures and a huge DRIVE button with no stream open and no moving truck (the camera floats over the road start); tap = choose, DRIVE = go, keys 1 2 3 / arrows / Enter; no pedals are sent while it is open.
 
 ## In progress
 - Nothing: PRs #15, #22, #26, #28, #33 (stacked, merge in that order) await ARCH. Idle.

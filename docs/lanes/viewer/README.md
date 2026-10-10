@@ -37,7 +37,7 @@ It talks to the server over the protocol in `docs/swarm/requests/arch-drive-prot
 | choose a vehicle | G or Escape; 1, 2, 3 in the picker | garage button | |
 | sound on or off | M | speaker button | |
 
-The picker shows a picture of each vehicle (rendered by the page from the rig the server sends). The HUD is a huge speed bar (green to amber, `TOP SPEED!` when the kid cap holds the throttle back), a banner when the server reports `message_event` ("Back on the road!"), and nothing else: no plots, no numbers beyond the speed.
+The page opens on a **start screen**: nothing is driving, the stream is not open, the camera floats slowly over the start of the road. Three big pictures of the vehicles (rendered by the page from the rig the server sends, each with its skin) and a huge green DRIVE button; tapping a picture only chooses it (the Mule is chosen to begin with; keys 1 2 3 or the left and right arrows choose, Enter or space drives). DRIVE turns the sound on, opens the stream and puts the chosen vehicle on the road start. The garage button brings the screen back during a drive (DRIVE then starts over with the chosen vehicle). The HUD is a huge speed bar (green to amber, `TOP SPEED!` when the kid cap holds the throttle back), a banner when the server reports `message_event` ("Back on the road!"), and nothing else: no plots, no numbers beyond the speed.
 Test: start the server, then `node tools/viewer/live-smoke.mjs http://127.0.0.1:8787/ out/live` (headless Chromium: picker pictures, picking, keyboard, on-screen buttons, gamepad, camera key, reset and banner, backing up, sound, big targets, no console errors).
 
 ### Skins in the test-drive page

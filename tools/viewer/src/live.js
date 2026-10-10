@@ -49,7 +49,7 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
-let ground = () => 0;
+let ground = () => 0, intro = null;
 function buildWorld(terrain) {
   const t = terrainMesh(terrain);
   t.mesh.receiveShadow = true;
@@ -64,6 +64,11 @@ function buildWorld(terrain) {
   floor.position.set(t.centre[0], t.min - 0.05, t.centre[1]);
   scene.add(floor);
   ground = heightSampler(terrain);
+  const roadPts = terrain.road_m || [];
+  if (roadPts.length > 1) { // where the start screen looks: the start of the road, along it
+    const a = roadPts[0], b = roadPts[Math.min(4, roadPts.length - 1)], d = new THREE.Vector3(b[0] - a[0], 0, b[2] - a[2]);
+    intro = { pos: new THREE.Vector3(a[0], a[1], a[2]), dir: d.lengthSq() > 1e-6 ? d.normalize() : new THREE.Vector3(0, 0, -1) };
+  }
 }
 
 // ---- vehicles ----------------------------------------------------------------------------------------------------------------
@@ -142,30 +147,46 @@ function thumbnail(rig, id) {
 }
 
 // ---- picker, banner, HUD -----------------------------------------------------------------------------------------------------
-let vehicles = [], thumbs = 0, wanted = null, wantedAt = 0;
-function openPicker() { document.body.classList.add('picking'); }
+let vehicles = [], thumbs = 0, wanted = null, wantedAt = 0, selected = null, streaming = false;
+const picking = () => document.body.classList.contains('picking');
+function select(id) { // the highlighted card: tapping a card only chooses it, DRIVE goes
+  selected = id;
+  document.querySelectorAll('.card').forEach((c) => c.classList.toggle('sel', c.dataset.id === id));
+}
+function openPicker() { if (cur) select(cur.id); document.body.classList.add('picking'); }
 function closePicker() { document.body.classList.remove('picking'); }
-async function choose(id) {
+// DRIVE: sound on (a button press is the browser's permission), the stream opens (the first time), the server puts the chosen vehicle on the road start.
+async function startDrive(id = selected) {
+  if (!id) return;
   sound.start();
+  select(id);
   closePicker();
   wanted = id; wantedAt = performance.now();
+  if (!streaming) { streaming = true; openStream(); }
   try { await postJSON('/api/select', { vehicle: id }); } catch { /* the stream shows what happened */ }
 }
 async function buildPicker() {
   const cards = $('cards');
   cards.textContent = '';
-  vehicles.forEach((v, i) => {
+  vehicles.forEach((v) => {
     const b = document.createElement('button');
     b.className = 'card';
     b.dataset.id = v.id;
     b.innerHTML = '<img alt=""><span></span>';
     b.querySelector('span').textContent = v.name;
-    b.onclick = () => choose(v.id);
+    b.onclick = () => { sound.start(); select(v.id); };
     cards.appendChild(b);
   });
-  addEventListener('keydown', (e) => { // 1, 2, 3 pick a vehicle while the picker is open
-    const n = Number(e.key);
-    if (document.body.classList.contains('picking') && n >= 1 && n <= vehicles.length) choose(vehicles[n - 1].id);
+  const middle = vehicles.find((v) => v.id === 'mule_4x4') || vehicles[Math.floor(vehicles.length / 2)];
+  select(cur ? cur.id : middle.id);
+  $('drive').onclick = () => startDrive();
+  addEventListener('keydown', (e) => { // on the start screen: 1 2 3 or the left and right arrows choose, Enter or space drives
+    if (!picking()) return;
+    const at = vehicles.findIndex((v) => v.id === selected), n = Number(e.key);
+    if (n >= 1 && n <= vehicles.length) select(vehicles[n - 1].id);
+    else if (e.code === 'ArrowLeft' && at > 0) select(vehicles[at - 1].id);
+    else if (e.code === 'ArrowRight' && at < vehicles.length - 1) select(vehicles[at + 1].id);
+    else if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); startDrive(); }
   });
   for (const v of vehicles) {
     try {
@@ -252,13 +273,24 @@ scene.add(marker);
 const setCamera = (mode) => { cam.mode = mode; snap = true; document.body.dataset.camera = mode; };
 const toggleCamera = () => setCamera(cam.mode === 'chase' ? 'rts' : 'chase');
 
+// Before any vehicle is driving (the start screen) the camera floats slowly over the start of the road: nothing moves but the view.
+function introCamera(now) {
+  if (!intro) return;
+  const t = now / 1000, side = new THREE.Vector3(-intro.dir.z, 0, intro.dir.x);
+  camera.position.copy(intro.pos).addScaledVector(intro.dir, -20).addScaledVector(side, Math.sin(t * 0.13) * 9);
+  camera.position.y = Math.max(intro.pos.y + 8, ground(camera.position.x, camera.position.z) + 3);
+  camera.lookAt(aim.copy(intro.pos).addScaledVector(intro.dir, 14).add({ x: 0, y: 1.5, z: 0 }));
+  sun.position.copy(intro.pos).add(SUN_OFFSET);
+  sun.target.position.copy(intro.pos);
+}
+
 // ---- input -------------------------------------------------------------------------------------------------------------------
 const sound = makeEngineSound();
 let wantReset = false;
 const input = makeInput({
   onReset: () => { wantReset = true; },
   onCamera: toggleCamera,
-  onGarage: () => (document.body.classList.contains('picking') ? closePicker() : openPicker()),
+  onGarage: () => (picking() ? (cur ? closePicker() : null) : openPicker()), // the start screen only closes with DRIVE
   onMute: () => { const m = !sound.muted; sound.setMuted(m); $('sound').classList.toggle('off', m); },
   onFirstGesture: () => sound.start(),
 });
@@ -293,7 +325,7 @@ let lastT = performance.now();
 function inputTick() {
   const now = performance.now(), dt = Math.min(0.1, (now - lastT) / 1000);
   lastT = now;
-  lastCmd = input.read(dt, last ? last.f.speed_m_s : 0);
+  lastCmd = picking() ? { throttle: 0, brake: 0, steer: 0, reverse: false } : input.read(dt, last ? last.f.speed_m_s : 0); // no pedals on the start screen
   send(now, lastCmd);
 }
 function loop(now) {
@@ -320,6 +352,7 @@ function loop(now) {
     sun.target.position.copy(pos);
     sound.update({ rpm: last.f.engine_rpm, throttle: lastCmd.throttle, speed });
   }
+  else introCamera(now);
   renderer.render(scene, camera);
 }
 
@@ -337,15 +370,14 @@ async function boot() {
   }
   $('fatal').style.display = 'none';
   vehicles.sort((a, b) => a.mass_kg - b.mass_kg); // small to big: scout, mule, hauler
-  openPicker();
-  openStream();
+  openPicker(); // the start screen first: no stream, no moving truck
   setInterval(inputTick, 33);
   requestAnimationFrame(loop);
   await buildPicker();
 }
 window.__live = { // for the browser test only
   frame: () => (last ? last.f : null), vehicle: () => (cur ? cur.id : null), camera: () => cam.mode, input: () => lastCmd,
-  thumbs: () => thumbs, fit: () => (cur ? cur.fit : null), sound: () => sound.state, picking: () => document.body.classList.contains('picking'), pick: choose, setCamera,
+  thumbs: () => thumbs, fit: () => (cur ? cur.fit : null), sound: () => sound.state, picking, pick: startDrive, selected: () => selected, streaming: () => streaming, setCamera,
   vehicles: () => vehicles.map((v) => v.id),
 };
 boot();
