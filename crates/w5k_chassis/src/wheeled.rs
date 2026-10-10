@@ -86,6 +86,8 @@ pub struct WheeledChassis {
     pub ledger: ForceLedger,
     /// Each station's travel acceleration in the last substep, m/s^2 (the ledger's station bodies are booked in the hull's frame).
     pub travel_acc_m_s2: Vec<f64>,
+    /// Gravity, world frame, m/s^2. Straight down by default; a tilt-table bench rotates it instead of tilting the ground.
+    pub gravity_m_s2: Vec3,
 }
 
 impl WheeledChassis {
@@ -170,6 +172,7 @@ impl WheeledChassis {
             time_s: 0.0,
             ledger: ForceLedger::off(),
             travel_acc_m_s2: vec![0.0; rig.stations.len()],
+            gravity_m_s2: Vec3::new(0.0, -scalar::G, 0.0),
         })
     }
 
@@ -210,7 +213,7 @@ impl WheeledChassis {
 
     /// One substep, in the reference order of `CONTRACTS.md`.
     pub fn substep(&mut self, dt_s: f64, inputs: &DriveInputs, world: &dyn WorldQuery, drive: &mut dyn DrivePort) {
-        let g = Vec3::new(0.0, -scalar::G, 0.0);
+        let g = self.gravity_m_s2;
         let a_prev = self.hull.acc_m_s2;
         self.ledger.clear();
         let speed = self.forward_speed_m_s();
@@ -290,6 +293,11 @@ impl WheeledChassis {
             let on_hull = d * strut_n + across;
             self.hull.add_force_at(on_hull, wc);
             self.hull.add_torque(n * out.mz_nm);
+            // the tyre's forces act at the contact patch, not the wheel centre: moving them up to the hub leaves the moment
+            // (patch - hub) x F. Its part about the spin axis is the shaft reaction (the wheel takes it); the rest, the lateral
+            // force's roll/pitch lever `dist * fy` about the wheel's forward axis, goes through the upright into the hull.
+            let patch_moment = x_c * (dist * out.fy_n);
+            self.hull.add_torque(patch_moment);
 
             // 4 (second half): wheel spin; the drive torque's reaction goes into the hull about the wheel's axle (positive spin axis = y_c)
             let t_shaft = st.drive_output.map_or(0.0, |k| self.torque_out[k] / members[k].max(1) as f64);
@@ -322,7 +330,7 @@ impl WheeledChassis {
                     a_prev * st.unsprung_mass_kg,
                     t_shaft * st.omega_rad_s >= 0.0,
                     y_c * -t_shaft,
-                    n * out.mz_nm,
+                    n * out.mz_nm + patch_moment,
                 );
             }
             st.report = StationReport {
