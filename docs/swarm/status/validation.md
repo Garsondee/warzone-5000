@@ -1,13 +1,14 @@
 # Status: VALIDATION
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/validation/proving | **Contract pinned:** contract-v0.1 | **Phase:** building
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/validation/scorers | **Contract pinned:** contract-v0.1 | **Phase:** building
 
 ## Done
 - Spike S9 (`docs/lanes/validation/spike-s9.md`), design note with CCR text (`design-note.md`), theory note stub (`docs/theory/validation.md`).
 
 ## In progress
 - **Reply to ARCH (lane sessions cannot send messages): the proving-ground spec PR is #57.** Runner target: result JSON `w5k.proving.result.v1` (spec section 2); the runner must echo in `inputs` the numbers the sim actually used (mass_kg, mu, track_m, cg_height_m, wheel_radius_m, power_w ...); required keys per test are in the spec and `proving::TESTS`.
-- PROVING-GROUND spec (owner direction via ARCH): `docs/validation/proving-ground.md` plus the result schema `w5k_validate::proving`; next: scorers for (b), (e), (g), then (a), (c), (d), quarter-car oracle for (f), terrain scorer, dashboard grid.
+- Proving-ground spec merged (#57). Scorers for (b) braking, (e) side slope, (g) step climb in `w5k_validate::oracle` (PR open); next (a), (c), (d), quarter-car for (f), terrain scorer, dashboard grid. Lanes may now message ARCH (RULES 5b): only for blockers.
+- (earlier) PROVING-GROUND spec (owner direction via ARCH): `docs/validation/proving-ground.md` plus the result schema `w5k_validate::proving`; next: scorers for (b), (e), (g), then (a), (c), (d), quarter-car oracle for (f), terrain scorer, dashboard grid.
 - PR #14 (settling) and #16 (dossier loader, M998 dossier) merged.
 - Harness v0 PR: verdict classes, replay measurement, scoring, `w5k validation dashboard --out DIR` (self-contained HTML). Image: `docs/lanes/validation/media/dashboard-v0.png`.
 

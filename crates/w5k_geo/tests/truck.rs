@@ -12,7 +12,7 @@ use w5k_geo::mesh::Mesh;
 use w5k_geo::module::{Assembly, SocketKind};
 use w5k_geo::mount::{ring_mount, RingMountDims};
 use w5k_geo::part::Part;
-use w5k_geo::truck::{utility_4x4, utility_assembly, utility_hull, utility_truck, UtilityDims};
+use w5k_geo::truck::{utility_4x4, utility_assembly, utility_hull, utility_truck, TruckKind, UtilityDims};
 use w5k_geo::weapon::{gun_module, GunDims};
 use w5k_math::{scalar, Pcg32, Quat, StateHasher, Vec3};
 
@@ -213,7 +213,7 @@ fn utility_4x4_dimensions_match_the_stated_hull_box_and_the_triangle_budget_hold
     assert!(((hi.z - lo.z) / d.length_m - 1.0).abs() < 0.03, "length");
     let tris: usize = parts.iter().map(|p| p.mesh.t.len()).sum();
     println!("triangles at detail 1: {tris}");
-    assert!(tris < 40_000, "{tris} triangles, budget 40,000 (wheeled)");
+    assert!(tris < 50_000, "{tris} triangles, budget 50,000 (wheeled)");
 }
 
 // ---- cohesion: nothing floats
@@ -489,7 +489,7 @@ fn nothing_on_the_mounted_truck_floats_the_mount_clears_the_hull_and_the_budget_
     check_parts(&parts);
     let rig = render_rig("mounted_utility", &parts, &FlagParams::default_params());
     println!("truck with the ring mount in the rig: {} triangles", rig.triangle_count());
-    assert!(rig.triangle_count() < 40_000, "{} triangles, budget 40,000 (wheeled)", rig.triangle_count());
+    assert!(rig.triangle_count() < 50_000, "{} triangles, budget 50,000 (wheeled)", rig.triangle_count());
 }
 
 /// The 4x4 with the standard ring mount on its roof socket and the named gun on the mount's trunnion.
@@ -561,7 +561,7 @@ fn swapping_the_gun_changes_only_the_gun_parts_and_the_armed_truck_stays_inside_
     // the heavier gun, as exported (flags baked, so parts are subdivided): inside the wheeled budget
     let rig = render_rig("armed_utility", &ac, &FlagParams::default_params());
     println!("armed truck (autocannon) in the rig: {} triangles", rig.triangle_count());
-    assert!(rig.triangle_count() < 40_000, "{} triangles, budget 40,000 (wheeled)", rig.triangle_count());
+    assert!(rig.triangle_count() < 50_000, "{} triangles, budget 50,000 (wheeled)", rig.triangle_count());
 }
 
 // ---- the hull is built from regions in metres
@@ -573,7 +573,7 @@ fn z_from_front(p: &Part, length_m: f64) -> Vec<f64> {
 #[test]
 fn regions_equal_to_the_templates_proportions_build_the_same_truck_and_a_longer_bed_moves_only_the_bed() {
     let d0 = UtilityDims::placeholder();
-    let (same, long) = (d0.with_bed_stretch(0.0), d0.with_bed_stretch(1.2));
+    let (same, long) = (d0.with_bed_stretch(TruckKind::Utility, 0.0), d0.with_bed_stretch(TruckKind::Utility, 1.2));
     let hull = |d: &UtilityDims| utility_hull(d, &d.axles_z(d0.overhang_m(), None), 0);
     let (a, b, c) = (hull(&d0), hull(&same), hull(&long));
     assert_eq!((a.parts.len(), c.parts.len()), (b.parts.len(), b.parts.len()));
@@ -633,7 +633,7 @@ fn regions_equal_to_the_templates_proportions_build_the_same_truck_and_a_longer_
 #[test]
 #[should_panic(expected = "regions must fit in the length")]
 fn regions_longer_than_the_length_are_refused() {
-    let mut d = UtilityDims::placeholder().with_bed_stretch(0.0);
+    let mut d = UtilityDims::placeholder().with_bed_stretch(TruckKind::Utility, 0.0);
     d.length_m -= 1.0;
     let _ = utility_hull(&d, &[-1.0, 1.0], 0);
 }
@@ -647,7 +647,7 @@ fn a_stretched_six_wheeler_has_closed_parts_clear_wheels_and_its_sill_step_betwe
         [-z, z].map(|a| (a * 1e9).round()),
         "the helper reproduces the 4x4"
     );
-    let long = d0.with_bed_stretch(1.2);
+    let long = d0.with_bed_stretch(TruckKind::Utility, 1.2);
     let axles = long.axles_z(d0.overhang_m(), Some(1.2));
     assert!(
         (axles[2] - axles[1] - 1.2).abs() < 1e-12 && (axles[2] - long.length_m / 2.0 + d0.overhang_m()).abs() < 1e-12

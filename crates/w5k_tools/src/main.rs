@@ -7,6 +7,7 @@ fn main() {
     let result = match args.first().map(String::as_str) {
         Some("arch") => cmd::arch::run(&args[1..]),
         Some("chassis") => cmd::chassis::run(&args[1..]),
+        Some("drive") if cmd::arch_drive::wants(&args[1..]) => cmd::arch_drive::run(&args[1..]),
         Some("drive") => cmd::drive::run(&args[1..]),
         Some("tracks") => cmd::tracks::run(&args[1..]),
         Some("world") => cmd::world::run(&args[1..]),
