@@ -110,6 +110,8 @@ pub struct SkidpadPoint {
     pub lateral_transfer_n: f64,
     /// Body roll toward the outside of the turn, rad (positive = leaning out).
     pub roll_out_rad: f64,
+    /// The lightest wheel load, N: at 0 an inside wheel has lifted (the onset of rollover; a limit that moves with track / COM height).
+    pub min_wheel_load_n: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -174,6 +176,7 @@ pub fn skidpad(
             steer_angle_rad: delta,
             lateral_transfer_n: transfer,
             roll_out_rad: c.hull.rot.to_ypr().2 * outer_sign, // positive roll lowers the right side: leaning out of a left turn
+            min_wheel_load_n: c.stations.iter().map(|st| st.report.contact.fz_n).fold(f64::MAX, f64::min),
         });
         // a moving average of a_y over the window: the limit and the slide-out test see the turn, not a lurch inside it
         sum_window += ay;

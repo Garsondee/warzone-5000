@@ -9,7 +9,11 @@ fn main() {
     let rd = |p: &str| std::fs::read_to_string(format!("{root}{p}")).unwrap();
     let def = w5k_forge::compile::parse_def(&rd(&format!("content/vehicles/game/{}.ron", a[1]))).unwrap();
     let ex = w5k_forge::compile::parse_extras(&rd(&format!("content/vehicles/game/{}.extras.ron", a[1]))).unwrap();
-    let rig = w5k_forge::compile::compile(&def, &ex).unwrap().rig;
+    let mut rig = w5k_forge::compile::compile(&def, &ex).unwrap().rig;
+    let track_scale: f64 = a.get(3).map_or(1.0, |v| v.parse().unwrap());
+    for st in rig.stations.iter_mut() {
+        st.rest_pos_m.x *= track_scale;
+    }
     let steer: f64 = a[2].parse().unwrap();
     for (label, k_mu, k_c) in [("linear", 0.0, 0.0), ("sensitive", 0.15, 0.3)] {
         let mut t = ChassisTuning::from_ron(&rd("content/physics/chassis/tuning.ron")).unwrap();
@@ -29,9 +33,11 @@ fn main() {
         let win = 180usize;
         let med = |e: usize| { let mut w: Vec<f64> = r.points[e + 1 - win..=e].iter().map(|p| p.lateral_acc_m_s2).collect(); w.sort_by(f64::total_cmp); w[win / 2] };
         let (be, bm) = (win - 1..n).map(|e| (e, med(e))).fold((0, 0.0), |a, b| if b.1 > a.1 { b } else { a });
-        println!("   ARCH median limit {:.3} g at point {be} of {n}", bm / 9.80665);
-        for p in r.points.iter().skip(n.saturating_sub(240)).step_by(12) {
-            println!("   v {:5.2} ay {:5.2} yaw {:5.3} steer {:5.3} transfer {:6.0} roll_out {:6.3}", p.speed_m_s, p.lateral_acc_m_s2, p.yaw_rate_rad_s, p.steer_angle_rad, p.lateral_transfer_n, p.roll_out_rad);
+        println!("   ARCH median limit {:.3} g at point {be} of {n}; lightest wheel there {:.0} N; samples with a wheel off the ground: {}", bm / 9.80665, r.points[be].min_wheel_load_n, r.points.iter().filter(|p| p.min_wheel_load_n <= 0.0).count());
+        let half_w = (rig.hull.mass_kg + rig.stations.iter().map(|s| s.unsprung_mass_kg).sum::<f64>()) * 9.80665 / 2.0;
+        println!("   half the weight {half_w:.0} N: transfer / (W/2) = 1 means the inner wheels carry nothing");
+        for p in r.points.iter().skip(n.saturating_sub(1200)).step_by(80) {
+            println!("   v {:5.2} ay {:5.2} yaw {:5.3} steer {:5.3} transfer {:6.0} ({:4.2} of W/2) roll_out {:6.3}", p.speed_m_s, p.lateral_acc_m_s2, p.yaw_rate_rad_s, p.steer_angle_rad, p.lateral_transfer_n, p.lateral_transfer_n / half_w, p.roll_out_rad);
         }
     }
 }
