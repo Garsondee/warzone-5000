@@ -14,3 +14,4 @@ pub mod verdict;
 
 pub mod oracle;
 pub mod proving;
+pub mod terrain;
