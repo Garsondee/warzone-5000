@@ -12,6 +12,7 @@ pub mod course;
 pub mod detail;
 pub mod features;
 pub mod grid;
+pub mod mobility;
 pub mod plot;
 pub mod river;
 pub mod stats;
