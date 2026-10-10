@@ -1,6 +1,6 @@
 # Status: VIEWER
 
-**Last updated:** 2026-10-10 11:30 UTC | **Branch:** lane/viewer/front-cam | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** M1 deliverables done, awaiting CI/merge
+**Last updated:** 2026-10-10 11:30 UTC | **Branch:** lane/viewer/rts | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** M1 deliverables done, awaiting CI/merge
 
 ## Done
 - Spike S-V passes (WebGL 2 under SwiftShader, 46 ms/frame, 10 s clip = 72 KB): `docs/lanes/viewer/spike-v.md`.
@@ -22,6 +22,8 @@
 - Course (PR on `lane/viewer/course`): reads WORLD's `w5k-terrain-1` (`--terrain`, or the header's `terrain`): hills, road ribbon, mud, trees and barricades as instanced props; layouts `full|inset|off` for the plots; a follow camera (`quarter`, `chase`) driven by the direction of travel over 0.8 s, so it is smooth over bumps and deterministic when scrubbing. Final clip: the whole 520 m road, quarter then orbit.
 
 - Front camera (PR on `lane/viewer/front-cam`): `--camera front` (front-quarter, 7 m, pitch 0.22), page dropdown entry, HUD steering readout from the replay's steer joints, e.g. `steer L -15.0 R -13.2 deg (+ right)`.
+
+- RTS camera (PR on `lane/viewer/rts`, default for recordings): pitch 55 degrees, heading-up (heading = centroid travel over 2.5 s), follows the centroid of all vehicles, aims 25 m ahead, distance auto-framed for the vehicles plus about 60 m of road. Next: multi-vehicle replays (PR B).
 
 ## In progress
 - Nothing: PRs #15, #22, #26, #28, #33 (stacked, merge in that order) await ARCH. Idle.
