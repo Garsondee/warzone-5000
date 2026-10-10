@@ -1,0 +1,9 @@
+{
+  "name": "w5k-viewer",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reference three.js viewer for replay v2 (lane VIEWER).",
+  "dependencies": {
+    "three": "0.170.0"
+  }
+}

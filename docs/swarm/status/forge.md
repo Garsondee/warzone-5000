@@ -2,13 +2,14 @@
 
 *Update with every PR.*
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/forge/settling | **Contract pinned:** `contract-v0.1` = commit `f8f5e5d` | **Phase:** settling (stopped for review)
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/forge/build (then lane/forge/compile) | **Contract pinned:** `contract-v0.1` = commit `f8f5e5d` | **Phase:** building (owner instruction in force: no waiting for review)
 
 ## Done
 - Settling round PR (this branch): spike S5 (`crates/w5k_forge/src/s5.rs`, `docs/lanes/forge/spike-s5.md`), design note (`docs/lanes/forge/design-note.md`), `VehicleDef` CCR as text (`docs/swarm/requests/forge-ccr-vehicledef.md`), theory starter (`docs/theory/forge.md`), image `docs/lanes/forge/media/s5-torque-curve.png`.
 
 ## In progress
-- Nothing: stopped for review as the brief says.
+- PR A (this branch): `curve.rs` (engine curve through the two peaks, promoted from spike S5), `extras.rs` (PROVISIONAL(CCR-forge) sidecar types), the first truck `content/vehicles/game/mule_4x4.ron` + `.extras.ron` (fictional "Mule 4x4", all ESTIMATE with bands, M998-like archetype, no real figures from memory).
+- PR B (next, stacked on A): `compile.rs` wheeled compile of that truck to `PhysRig` + `RenderRig` for CHASSIS and DRIVE (it is above 400 non-test lines if joined with A, so split; the S5 spike file is removed there).
 
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).
@@ -27,7 +28,8 @@
 - Not run: Windows CI (Linux only here). Golden and impact matrix: unchanged (no contract or content touched).
 
 ## Owner instructions received
-- None directly. Applied from the brief: owner's answers C-001 and C-002 (fictional game ids; the reference garage spans all roles; new components as data).
+- 2026-10-10 (via ARCH, verified in `docs/swarm/STATE.md` on integration): continue into the build steps without waiting for review; priority a truck-class 4x4 that compiles for CHASSIS and DRIVE; keep provisional types local, tagged PROVISIONAL(CCR-forge).
+- None directly otherwise. Applied from the brief: owner's answers C-001 and C-002 (fictional game ids; the reference garage spans all roles; new components as data).
 
 ## Handoff note (fill in when you stop)
 - Not yet: the lane continues to M1 after review.
