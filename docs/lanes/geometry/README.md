@@ -5,7 +5,7 @@ Run on your PC (`docs/dev-environment.md`): `cargo run --release -p w5k_tools --
 A vehicle is a hull module, running-gear modules, a weapon-mount module and a weapon module joined at sockets (design note section 9). Its
 name in the commands below is a **subject**: `hull` (the hull alone), `truck` (the 4x4) or `truck6` (the same hull with a bed 1.2 m longer on three axles: front steer, rear tandem),
 then optionally `+ring` (the ring mount on the roof socket), `+mg` or `+ac25` (a 12.7 mm class machine gun or a 25 mm class autocannon on the
-mount; a gun brings the ring) and `+x` (the modules pulled apart). `truck6+ac25+x` is a 6x6 with the autocannon, exploded. `wheel` is the wheel, `run` is one side of the tracked carrier's running gear (wheels and belt) and `carrier` is the tracked carrier (it takes `+ring`, `+mg`, `+ac25` and `+x` like the trucks).
+mount; a gun brings the ring) and `+x` (the modules pulled apart). `truck6+ac25+x` is a 6x6 with the autocannon, exploded. `wheel` is the wheel, `run` is one side of the tracked carrier's running gear (wheels and belt) and `carrier` is the tracked carrier (it takes `+ring`, `+mg`, `+ac25` and `+x` like the trucks; `export carrier` writes its rig: 43 nodes, 40 joints). In code, `Skin::from_rig(&rig, &def)` builds it from a compiled tracked rig.
 
 | Command | What it does |
 |---|---|

@@ -97,12 +97,55 @@ fn to_local(node: &Transform, p: Vec3) -> Vec3 {
 /// module sits on. Joint coordinates in the layout of the contract: spin, then steer, then travel, then the articulation chains. Flags are
 /// baked here, on the assembled parts.
 pub fn render_rig(id: &str, parts: &[Part], p: &FlagParams) -> RenderRig {
+    render_rig_with(id, parts, p, &Overrides::default())
+}
+
+/// What a physics rig knows and the parts do not: the axis each station's suspension travel moves along (`bump_dir`; vertical when absent)
+/// and how many joint coordinates its frames carry (an unarmed skin of an armed rig leaves the articulation coordinates unbound).
+#[derive(Clone, Debug, Default)]
+pub struct Overrides {
+    pub travel_axes: Vec<Vec3>,
+    pub joint_count: Option<usize>,
+}
+
+/// The wheel roles of a tracked vehicle: they make stations the way `Wheel` does, with one global index per station (`Part::station`, in the
+/// physics rig's order) instead of an axle index shared by the two sides.
+const TRACKED: [NodeRole; 4] = [NodeRole::RoadWheel, NodeRole::Sprocket, NodeRole::Idler, NodeRole::ReturnRoller];
+
+fn is_wheel(role: NodeRole) -> bool {
+    role == NodeRole::Wheel || TRACKED.contains(&role)
+}
+
+/// The node name of a tracked station: `<l|r>_idler`, `<l|r>_spr`, `<l|r>_r<k>` (road wheel k from the front) and `<l|r>_rr<k>` (return roller).
+fn tracked_name(parts: &[Part], station: u8, right: bool) -> String {
+    let wheel = |q: &&Part| is_wheel(q.role) && q.side == if right { Side::Right } else { Side::Left };
+    let Some(me) = parts.iter().filter(wheel).find(|q| q.station == Some(station)) else { return String::new() };
+    let mut mates: Vec<(f64, u8)> = parts
+        .iter()
+        .filter(wheel)
+        .filter(|q| q.role == me.role)
+        .filter_map(|q| q.station.map(|s| (q.pose.pos.z, s)))
+        .collect();
+    mates.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    mates.dedup();
+    let k = mates.iter().position(|m| m.1 == station).unwrap_or(0) + 1;
+    let tag = match me.role {
+        NodeRole::Idler => "idler".to_string(),
+        NodeRole::Sprocket => "spr".to_string(),
+        NodeRole::ReturnRoller => format!("rr{k}"),
+        _ => format!("r{k}"),
+    };
+    format!("{}_{tag}", if right { "r" } else { "l" })
+}
+
+/// `render_rig` with what the physics rig says about the stations (`Overrides`).
+pub fn render_rig_with(id: &str, parts: &[Part], p: &FlagParams, over: &Overrides) -> RenderRig {
     let hulls: Vec<Mesh> = parts.iter().map(Part::in_hull_frame).collect();
     let baked = bake(&hulls.iter().collect::<Vec<_>>(), p);
     // stations: (axle, right?) sorted axle first, left before right: fl, fr, rl, rr
     let mut stations: Vec<(u8, bool)> = parts
         .iter()
-        .filter(|q| q.role == NodeRole::Wheel)
+        .filter(|q| is_wheel(q.role))
         .filter_map(|q| q.station.map(|a| (a, q.side == Side::Right)))
         .collect();
     stations.sort_unstable();
@@ -117,9 +160,8 @@ pub fn render_rig(id: &str, parts: &[Part], p: &FlagParams) -> RenderRig {
         .into_iter()
         .collect();
     let (n, axles) = (stations.len(), stations.iter().map(|s| usize::from(s.0)).max().map_or(0, |a| a + 1));
-    let hub = |i: usize| {
-        parts.iter().find(|q| q.role == NodeRole::Wheel && index_of(q) == Some(i)).map_or(Vec3::ZERO, |q| q.pose.pos)
-    };
+    let hub =
+        |i: usize| parts.iter().find(|q| is_wheel(q.role) && index_of(q) == Some(i)).map_or(Vec3::ZERO, |q| q.pose.pos);
     let mut rig = RenderRig {
         id: id.into(),
         nodes: vec![RenderNode {
@@ -136,14 +178,24 @@ pub fn render_rig(id: &str, parts: &[Part], p: &FlagParams) -> RenderRig {
     let joint = |kind, axis, index| Some(JointBinding { kind, axis, index });
     let (mut wheel_node, mut steer_node) = (vec![0usize; n], vec![None; n]);
     for (i, &(axle, right)) in stations.iter().enumerate() {
-        let name = format!("{}{}", axle_name(usize::from(axle), axles), if right { "r" } else { "l" });
+        let role =
+            parts.iter().find(|q| is_wheel(q.role) && index_of(q) == Some(i)).map_or(NodeRole::Wheel, |q| q.role);
+        let name = if role == NodeRole::Wheel {
+            format!("{}{}", axle_name(usize::from(axle), axles), if right { "r" } else { "l" })
+        } else {
+            tracked_name(parts, axle, right)
+        };
         let travel = rig.nodes.len();
         rig.nodes.push(RenderNode {
             name: format!("{name}.travel"),
             parent: Some(0),
             role: NodeRole::SuspensionArm,
             rest: Transform::from_pos(hub(i)),
-            joint: joint(JointAxisKind::Prismatic, Vec3::Y, n + steered.len() + i),
+            joint: joint(
+                JointAxisKind::Prismatic,
+                over.travel_axes.get(i).copied().unwrap_or(Vec3::Y),
+                n + steered.len() + i,
+            ),
         });
         let mut parent = travel;
         if let Some(k) = steered.iter().position(|&s| s == i) {
@@ -161,10 +213,17 @@ pub fn render_rig(id: &str, parts: &[Part], p: &FlagParams) -> RenderRig {
         rig.nodes.push(RenderNode {
             name: format!("{name}.wheel"),
             parent: Some(parent),
-            role: NodeRole::Wheel,
+            role,
             rest: Transform::IDENTITY,
             joint: joint(JointAxisKind::Revolute, -Vec3::X, i),
         });
+    }
+    // the belt of each side: one jointless node on the hull at the track centre line, as in `testing::box_tank()`
+    let mut belt_node = std::collections::BTreeMap::new();
+    for q in parts.iter().filter(|q| q.role == NodeRole::Track) {
+        let name = format!("track_{}", if q.side == Side::Right { "r" } else { "l" });
+        belt_node.insert(q.name.clone(), rig.nodes.len());
+        rig.nodes.push(RenderNode { name, parent: Some(0), role: NodeRole::Track, rest: q.pose, joint: None });
     }
     // articulation chains: one node per (placement, role), the placement's own chain first, each hung from the node that carries its socket
     let mut chain_nodes: Vec<(String, NodeRole, usize, Transform)> = Vec::new();
@@ -200,13 +259,14 @@ pub fn render_rig(id: &str, parts: &[Part], p: &FlagParams) -> RenderRig {
             next_joint += 1;
         }
     }
-    rig.joint_count = next_joint;
+    rig.joint_count = over.joint_count.map_or(next_joint, |c| c.max(next_joint));
     let smooth = p.smooth_angle_deg * std::f64::consts::PI / 180.0; // const-ok: degrees to radians at the authoring edge
     for (part, (mesh, flags)) in parts.iter().zip(&baked) {
         let chain =
             part.placement.as_ref().and_then(|pl| chain_nodes.iter().find(|c| c.0 == pl.label && c.1 == part.role));
         let (node, frame) = match (part.role, chain) {
-            (NodeRole::Wheel, _) => (index_of(part).map_or(0, |i| wheel_node[i]), part.pose),
+            (role, _) if is_wheel(role) => (index_of(part).map_or(0, |i| wheel_node[i]), part.pose),
+            (NodeRole::Track, _) => (belt_node.get(&part.name).copied().unwrap_or(0), part.pose),
             (NodeRole::SteerKnuckle, _) => (index_of(part).and_then(|i| steer_node[i]).unwrap_or(0), part.pose),
             (_, Some(c)) => (c.2, c.3),
             _ => (0, Transform::IDENTITY),

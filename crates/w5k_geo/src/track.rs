@@ -38,6 +38,17 @@ pub struct RunSpec {
     pub pitch_m: f64,
     pub sprocket_teeth: u32,
     pub wheels: Vec<RunWheel>,
+    /// The physics rig's index of every wheel, by loop order, on each side (`None`: the stand-in order of `station`).
+    #[serde(default)]
+    pub stations: Option<StationIds>,
+}
+
+/// The station index in a physics rig of each wheel of `RunSpec::wheels` (same order) on the right and on the left.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StationIds {
+    pub right: Vec<u8>,
+    pub left: Vec<u8>,
 }
 
 impl RunSpec {
@@ -45,6 +56,17 @@ impl RunSpec {
     pub fn placeholder() -> RunSpec {
         ron::from_str(include_str!("../shapes/placeholder_carrier_run.ron"))
             .expect("placeholder_carrier_run.ron parses")
+    }
+
+    /// The station index of wheel `i` of the loop on `side`: the rig's if it was given, else the stand-in order (the left side first, each side
+    /// from the front to the back, like `testing::box_tank()`).
+    pub fn station(&self, side: Side, i: usize) -> u8 {
+        if let Some(ids) = &self.stations {
+            return if side == Side::Right { ids.right[i] } else { ids.left[i] };
+        }
+        let n = self.wheels.len();
+        let rank = (0..n).filter(|&j| (self.wheels[j].z_m, j) < (self.wheels[i].z_m, i)).count();
+        (rank + if side == Side::Right { n } else { 0 }) as u8
     }
 
     /// The circles the belt's pin line wraps, in loop order: a wheel's tip radius plus half the belt thickness, the sprocket's pitch radius.
@@ -63,6 +85,10 @@ pub fn pitch_radius_m(pitch_m: f64, teeth: u32) -> f64 {
 /// A wheel within this turn of a straight run counts as on it (a millimetre over a metre), and the total-turn check allows each such wheel to
 /// have dropped that much.
 const ON_THE_RUN_RAD: f64 = 2e-3; // const-ok: 2 mrad, a tolerance on the band's turn round a wheel that sits on a straight run
+
+/// The spacing of the points the band is checked at, and how far a wheel may poke through it before the band is refused.
+const BAND_STEP_M: f64 = 5e-3; // const-ok: 5 mm sampling of the path for the clearance check
+const POKE_M: f64 = 1e-3; // const-ok: a millimetre of a wheel through the band is rounding, more is a wrong loop
 
 /// A circle in the side plane.
 #[derive(Clone, Copy, Debug)]
@@ -133,7 +159,20 @@ impl Belt {
                 s += sweeps[j] * b.r;
             }
         }
-        Ok(Belt { pieces, length_m: s })
+        let belt = Belt { pieces, length_m: s };
+        // the band passes outside every wheel: a wheel it cuts through means the loop order was wrong (the band is walked counter-clockwise)
+        let steps = (belt.length_m / BAND_STEP_M).ceil() as usize;
+        let points: Vec<[f64; 2]> = (0..steps).map(|k| belt.at(belt.length_m * k as f64 / steps as f64).0).collect();
+        for (j, c) in circles.iter().enumerate() {
+            let nearest = points.iter().map(|p| scalar::hypot(p[0] - c.z, p[1] - c.y)).fold(f64::MAX, f64::min);
+            if nearest < c.r - POKE_M {
+                return Err(format!(
+                    "wheel {j} pokes {:.3} m through the band: the loop order must run counter-clockwise in (z, y)",
+                    c.r - nearest
+                ));
+            }
+        }
+        Ok(belt)
     }
 
     /// The point at arc length `s` (wrapping round the loop) and the unit direction of travel there.
@@ -365,7 +404,7 @@ pub fn run_sockets(spec: &RunSpec) -> Vec<Socket> {
                 side,
                 hub,
                 w.radius_m,
-                Some(i as u8),
+                Some(spec.station(side, i)),
             ));
         }
         let centre = Vec3::new(sx * spec.track_x_m, 0.0, 0.0);
