@@ -9,6 +9,7 @@
 
 pub mod budget;
 pub mod bvh;
+pub mod carrier;
 pub mod cavity;
 pub mod edge;
 pub mod export;
