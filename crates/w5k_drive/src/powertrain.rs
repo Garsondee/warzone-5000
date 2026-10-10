@@ -48,6 +48,7 @@ pub struct Powertrain {
     final_drive: Vec<f64>,
     ambient_k: f64,
     clutch_heat_j: f64,
+    fuel_used_kg: f64,
     tel: DriveTelemetry,
     scratch: Vec<f64>,
 }
@@ -84,6 +85,7 @@ impl Powertrain {
             final_drive: def.outputs.iter().map(|o| o.final_drive_ratio).collect(),
             ambient_k: crate::AMBIENT_FALLBACK_K,
             clutch_heat_j: 0.0,
+            fuel_used_kg: 0.0,
             tel: DriveTelemetry::default(),
             scratch: vec![0.0; def.outputs.len()],
         })
@@ -117,10 +119,11 @@ impl DrivePort for Powertrain {
         let carrier = self.driveline.reflect(&outs);
         let input_side = self.gearbox.reflect(&carrier);
 
-        let shift = self.gearbox.update(dt, inputs.gear, inputs.throttle, self.engine.rpm(), speed);
+        let shift = self.gearbox.update(dt, inputs.gear, inputs.throttle, carrier.omega_rad_s, speed);
         let throttle = if inputs.engine_on { inputs.throttle } else { 0.0 };
         let c = self.coupling.step(dt, &mut self.engine, throttle, inputs.clutch, shift.capacity_scale, &input_side);
         self.clutch_heat_j += c.heat_j;
+        self.fuel_used_kg += self.engine.fuel_rate_kg_s() * dt;
 
         // gearbox output -> driveline input torque; a driveline-site brake acts on this shaft
         let mut t_carrier = self.gearbox.output_torque(c.torque_nm);
@@ -164,14 +167,14 @@ impl DrivePort for Powertrain {
             engine_rpm: self.engine.rpm(),
             gear: shift.gear,
             engine_torque_nm: self.engine.torque_nm(),
-            fuel_rate_kg_s: 0.0,
+            fuel_rate_kg_s: self.engine.fuel_rate_kg_s(),
             coupling_slip_rad_s: c.slip_rad_s,
             brake_temps_k: self.brakes.iter().map(|(b, _)| b.temperature_k()).collect(),
             shifting: shift.shifting,
             drive_mode: self.driveline.mode(),
             clutch_heat_j: self.clutch_heat_j,
             output_torque_nm: self.scratch[..n].to_vec(),
-            fuel_used_kg: 0.0,
+            fuel_used_kg: self.fuel_used_kg,
         };
     }
 
@@ -187,6 +190,7 @@ impl DrivePort for Powertrain {
             b.hash_state(h);
         }
         h.write_f64(self.clutch_heat_j);
+        h.write_f64(self.fuel_used_kg);
     }
 }
 

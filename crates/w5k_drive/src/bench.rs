@@ -133,4 +133,66 @@ mod tests {
         };
         assert_eq!(hash(), hash());
     }
+
+    /// A Mule-class truck: its gear set, final drive and shift points, the box truck's driveline otherwise.
+    fn mule_like() -> (Powertrain, LumpedVehicle) {
+        let mut def = box_truck().0.drivetrain;
+        def.gearbox.forward_ratios = vec![2.48, 1.48, 1.0, 0.75];
+        def.gearbox.shift.upshift_rpm = 3500.0;
+        def.gearbox.shift.downshift_rpm = 1400.0;
+        def.gearbox.shift.shift_time_s = 0.35;
+        def.engine.torque_curve = vec![(750.0, 300.0), (1900.0, 380.0), (3400.0, 330.0), (3900.0, 280.0)];
+        def.engine.redline_rpm = 3900.0;
+        def.outputs.iter_mut().for_each(|o| o.final_drive_ratio = 5.13);
+        let p = Powertrain::new(&def, &Tunings::shipped()).unwrap();
+        let mut v = LumpedVehicle::new(2300.0, 0.4, 2.0, p.output_count());
+        v.rolling_coeff = 0.015;
+        v.drag_n_s2_m2 = 0.5 * 1.2 * 0.9 * 2.8;
+        v.gravity_m_s2 = 9.81;
+        (p, v)
+    }
+
+    #[test]
+    fn a_steady_40_kmh_cruise_holds_a_high_gear_without_hunting() {
+        let (mut p, mut v) = mule_like();
+        let (dt, target) = (1.0 / 240.0, 40.0 / 3.6);
+        // a driver: flat out for 12 s, then a PI controller on speed holds 40 km/h for the rest of 100 s
+        let (mut integral, mut gears) = (0.0, Vec::new());
+        for k in 0..(100 * 240) {
+            let t = f64::from(k) * dt;
+            let err = target - v.speed_m_s;
+            integral = (integral + 0.05 * err * dt).clamp(0.0, 1.0);
+            let throttle = if t < 12.0 { 1.0 } else { (0.4 * err + integral).clamp(0.0, 1.0) };
+            v.step(dt, &mut p, &DriveInputs { throttle, ..Default::default() });
+            let g = p.telemetry().gear;
+            if gears.last().map(|&(_, last)| last) != Some(g) {
+                gears.push((t, g));
+            }
+        }
+        // before the fix the box hunted between first and second about every 3 s and never reached third
+        assert!((v.speed_m_s - target).abs() < 0.3, "cruise speed {} m/s", v.speed_m_s);
+        let late: Vec<_> = gears.iter().filter(|(t, _)| *t > 12.0).collect();
+        assert!(late.is_empty(), "shifted during the cruise: {gears:?}");
+        assert!(gears.last().unwrap().1 >= 3, "cruise should sit in third or above: {gears:?}");
+        assert!(gears.len() <= 4, "hunting on the way up: {gears:?}");
+    }
+
+    #[test]
+    fn the_truck_burns_fuel_in_proportion_to_work_and_idles_cheaply() {
+        let (mut p, mut v) = mule_like();
+        for _ in 0..(5 * 240) {
+            v.step(1.0 / 240.0, &mut p, &DriveInputs::default());
+        }
+        let idle_rate = p.telemetry().fuel_rate_kg_s;
+        assert!(idle_rate > 0.0 && idle_rate < 1.0e-3, "idle burn {idle_rate} kg/s"); // creeping on the converter at idle
+        let before = p.telemetry().fuel_used_kg;
+        let mut peak: f64 = 0.0;
+        for _ in 0..(10 * 240) {
+            v.step(1.0 / 240.0, &mut p, &DriveInputs { throttle: 1.0, ..Default::default() });
+            peak = peak.max(p.telemetry().fuel_rate_kg_s);
+        }
+        let used = p.telemetry().fuel_used_kg - before;
+        assert!(peak > 5.0 * idle_rate, "peak {peak} vs idle {idle_rate}");
+        assert!(used > idle_rate * 10.0 * 2.0, "accelerating burnt {used} kg, idling would burn {}", idle_rate * 10.0);
+    }
 }
