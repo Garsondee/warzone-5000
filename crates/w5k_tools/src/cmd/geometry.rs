@@ -9,7 +9,7 @@ use w5k_geo::mount::{ring_mount, RingMountDims};
 use w5k_geo::part::Part;
 use w5k_geo::raster::{render, Camera, Item, Mode};
 use w5k_geo::skin::Skin;
-use w5k_geo::truck::{truck_assembly as skin_assembly, utility_assembly, utility_hull, UtilityDims};
+use w5k_geo::truck::{truck_assembly as skin_assembly, utility_assembly, utility_hull, TruckKind, UtilityDims};
 use w5k_geo::weapon::{gun_module, GunDims};
 use w5k_geo::wheel::{segments_for, wheel, WheelDims};
 use w5k_math::{Transform, Vec3};
@@ -173,8 +173,12 @@ fn truck_assembly(what: &str, detail: u8) -> Result<(Assembly, bool), String> {
     let z = d.wheelbase_m / 2.0;
     let mut asm = match base {
         "hull" => Assembly::new(utility_hull(&d, &[-z, z], detail)),
-        // front steer axle and a rear tandem 1.2 m apart
-        "truck6" => utility_assembly(&d, &[-z, z - 1.2, z], &[true, false, false], detail), // const-ok: tandem spacing for the picture
+        // the same hull with a bed 1.2 m longer, front steer axle and a rear tandem 1.2 m apart, the overhangs of the 4x4
+        "truck6" => {
+            let long = d.with_bed_stretch(TruckKind::Utility, 1.2); // const-ok: bed stretch and tandem spacing for the picture, metres
+            utility_assembly(&long, &long.axles_z(d.overhang_m(), Some(1.2)), &[true, false, false], detail)
+            // const-ok: tandem spacing
+        }
         // a skin of the game garage (`truck` is the utility truck) on the axles of its stand-in definition
         _ => match skin_id(base).and_then(Skin::for_id) {
             Some(skin) => skin_assembly(skin.kind, &skin.dims, &skin.axles_z, &skin.steered, detail),

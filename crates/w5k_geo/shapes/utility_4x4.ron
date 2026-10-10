@@ -27,6 +27,9 @@
             (z: 0.945, w: 0.98, yb: 0.54, wu: 0.86, yt: 0.79, tilt: 0.04, yo: 0.06), // departure ramp
             (z: 0.9565, w: 0.94, yb: 0.53, wu: 0.84, yt: 0.78, tilt: 0.04, yo: 0.15),// tail face
         ],
+        // where the cab starts (the cowl) and ends (its back wall), as fractions of the length: the cuts between the three regions (front,
+        // cab, bed) that `regions_m` of the dimensions sets in metres; every `Frac` along z below follows its region
+        cab_f: (0.285, 0.745),
         lip_proud_m: 0.04,
         lower_chamfer_m: 0.035,
         sill_chamfer_m: 0.09,
