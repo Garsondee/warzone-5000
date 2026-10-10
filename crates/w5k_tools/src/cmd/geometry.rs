@@ -52,8 +52,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
             let (tw, th) = (cols * w, views.len().div_ceil(cols) * h);
             let (pw, ph) = (grid * tw, subjects.len().div_ceil(grid) * th);
             let mut pixels = vec![0u8; pw * ph * 3];
-            for (i, name) in subjects.iter().enumerate() {
-                let tile = sheet(&subject(name, detail)?, mode, &views, w, h, zoom_out)?;
+            let all = subjects.iter().map(|name| subject(name, detail)).collect::<Result<Vec<_>, _>>()?;
+            // one scale for every tile, the largest vehicle's, so that sizes can be compared
+            let min_ext = all.iter().map(|p| extent(p)).fold(0.0, f64::max);
+            for (i, parts) in all.iter().enumerate() {
+                let tile = sheet(parts, mode, &views, w, h, zoom_out, min_ext)?;
                 for y in 0..th {
                     let dst = ((i / grid * th + y) * pw + i % grid * tw) * 3;
                     pixels[dst..dst + tw * 3].copy_from_slice(&tile[y * tw * 3..(y + 1) * tw * 3]);
@@ -159,8 +162,12 @@ fn truck_assembly(what: &str, detail: u8) -> Result<(Assembly, bool), String> {
     let mut asm = match base {
         "hull" => Assembly::new(utility_hull(&d, &[-z, z], detail)),
         "truck" => utility_assembly(&d, &[-z, z], &[true, false], detail),
-        // front steer axle and a rear tandem 1.2 m apart
-        "truck6" => utility_assembly(&d, &[-z, z - 1.2, z], &[true, false, false], detail), // const-ok: tandem spacing for the picture
+        // the same hull with a bed 1.2 m longer, front steer axle and a rear tandem 1.2 m apart, the overhangs of the 4x4
+        "truck6" => {
+            let long = d.with_bed_stretch(1.2); // const-ok: bed stretch and tandem spacing for the picture, metres
+            utility_assembly(&long, &long.axles_z(d.overhang_m(), Some(1.2)), &[true, false, false], detail)
+            // const-ok: tandem spacing
+        }
         _ => return Err(format!("unknown subject {what}; {USAGE}")),
     };
     let (mut ringed, mut exploded) = (false, false);
@@ -227,6 +234,16 @@ const VIEWS: [(&str, [f64; 3], bool); 9] = [
     ("gun", [0.8, 0.45, -1.0], true),     // const-ok: camera direction
 ];
 
+/// The diagonal of the box around the parts that count for the camera framing.
+fn extent(parts: &[(Mesh, [f64; 3], bool)]) -> f64 {
+    let (lo, hi) = parts
+        .iter()
+        .filter(|p| p.2)
+        .map(|p| p.0.bounds())
+        .fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(a, b), (l, u)| (a.min(l), b.max(u)));
+    (hi - lo).length()
+}
+
 /// One picture per name in `views`: a single view fills the image, four views make a 2 x 2 sheet.
 fn sheet(
     parts: &[(Mesh, [f64; 3], bool)],
@@ -235,6 +252,7 @@ fn sheet(
     w: usize,
     h: usize,
     zoom_out: f64,
+    min_ext: f64,
 ) -> Result<Vec<u8>, String> {
     let flags = bake(&parts.iter().map(|p| &p.0).collect::<Vec<_>>(), &FlagParams::default_params());
     let items: Vec<Item> = parts
@@ -247,7 +265,7 @@ fn sheet(
         .filter(|p| p.2)
         .map(|p| p.0.bounds())
         .fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(a, b), (l, u)| (a.min(l), b.max(u)));
-    let (c, ext) = ((lo + hi) * 0.5, (hi - lo).length() * zoom_out);
+    let (c, ext) = ((lo + hi) * 0.5, (hi - lo).length().max(min_ext) * zoom_out);
     let cols = if views.len() == 1 { 1 } else { 2 };
     let mut out = vec![0u8; cols * w * views.len().div_ceil(cols) * h * 3];
     for (i, name) in views.iter().enumerate() {
