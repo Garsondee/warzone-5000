@@ -8,3 +8,4 @@
 pub mod quarter_car;
 pub mod suspension;
 pub mod tuning;
+pub mod tyre;

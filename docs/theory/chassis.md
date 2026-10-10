@@ -35,3 +35,16 @@ set speed the damper bleeds (digressive), because a valve blows off. Dry frictio
 integrator does not chatter around zero speed.
 **Bump stop.** A rubber block that engages near full travel, stiffening as it squashes. If a rig declares a *hard* limit, the travel is clamped and the approach speed is reflected with a
 restitution coefficient: a bounce, not a spring that grows without bound.
+
+## The tyre: a slip-force curve, a friction circle, and a patch that remembers
+**Slip.** A tyre produces force only when its patch slides a little against the road. Longitudinal *slip ratio* `kappa = (wheel speed - ground speed) / speed`; sideways *slip angle*
+`alpha`, the angle between where the wheel points and where it is going. For small slip the force is a straight line: `Fx = C_kappa Fz kappa`, `Fy = -C_alpha Fz alpha` (the
+stiffness is "per unit load", which is why a heavy truck on the same tyres corners harder). The tests check those slopes against the stated stiffness.
+**Friction circle.** The road can give at most `mu Fz` in total, in any direction. Spend it all on braking and nothing is left for steering: the force *vector* is capped on a circle of radius `mu Fz`.
+**Relaxation length.** The rubber must roll about one relaxation length (0.1 to 0.3 m) before it builds its full force. We model the *stretch of the contact patch* as a state that grows
+with slip speed and relaxes as the tyre rolls: `du/dt = slip_velocity - (speed / sigma) u`, force `= (C Fz / sigma) u`. At speed it settles to `sigma * slip`, the curve above.
+**Why not a stick/slip switch.** The textbook Coulomb rule "friction = -mu N sign(v)" gives *zero* friction at exactly zero speed, so a parked truck creeps (spike S1 measured 1.6 mm per second on
+a 10% grade). A stretched patch is a spring: at rest it keeps its stretch, supplies exactly the force needed to balance the slope, and nothing moves. Graphics analogy: it is the same trick as a
+spring-based "grab" constraint instead of teleporting a held object. The tyre holds a small residual stretch (25 mm for a 0.2 m relaxation length on 10%): that is the visible price.
+**Aligning moment.** The force acts a little behind the middle of the patch (the pneumatic trail), so a sideways-sliding tyre also tries to straighten itself; the trail shrinks to zero as the patch saturates, which is why steering goes "light" at the limit.
+**Rolling resistance.** `Crr x Fz`, opposing motion, fading to zero at standstill over a small speed so a parked truck is not shoved backwards.

@@ -13,8 +13,12 @@
 
 - Build step 2: `suspension` (all spring kinds, damper, dry friction, bump stop, hard limit) + `tuning.ron` Params (this PR).
 
+- Contract-v0.2 merged into the build branch; tyre uses `speed_floor_m_s` and `aligning_trail_frac` from `TyreDef`.
+- Build step 3: `tyre` (`ContactElement`: patch-stretch relaxation, friction circle, rolling resistance, aligning moment) + `slip_damping_time_s` Param.
+
 ## In progress
-- Next PR: `tyre`.
+- Next PR: `hull` (6-DoF body).
+- Not yet used: `TyreDef.kappa_peak` / `alpha_peak_rad` (curve is linear to the circle cap). Watch: spin <-> patch-stretch coupling is a ~25 Hz oscillator at ~4 substeps (stable, w dt ~0.7); recheck in the assembly.
 
 ## Blocked
 - Nothing.
