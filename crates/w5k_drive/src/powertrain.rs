@@ -11,7 +11,7 @@ use w5k_math::StateHasher;
 
 use crate::brakes::{Brake, BrakedShaft};
 use crate::coupling::{Coupling, CouplingTuning, Downstream};
-use crate::driveline::Driveline;
+use crate::driveline::{Driveline, DrivelineTuning};
 use crate::engine::{Engine, EngineTuning};
 use crate::gearbox::{Gearbox, ShiftTuning};
 
@@ -21,6 +21,7 @@ pub struct Tunings {
     pub engine: EngineTuning,
     pub coupling: CouplingTuning,
     pub shift: ShiftTuning,
+    pub driveline: DrivelineTuning,
 }
 
 impl Tunings {
@@ -34,6 +35,8 @@ impl Tunings {
                 .expect("coupling_tuning.ron"),
             shift: ron::from_str(include_str!("../../../content/physics/drive/shift_tuning.ron"))
                 .expect("shift_tuning.ron"),
+            driveline: ron::from_str(include_str!("../../../content/physics/drive/driveline_tuning.ron"))
+                .expect("driveline_tuning.ron"),
         }
     }
 }
@@ -59,7 +62,7 @@ impl Powertrain {
         let peak = def.engine.torque_curve.iter().fold(0.0_f64, |m, &(_, t)| m.max(t));
         let coupling = Coupling::new(&def.coupling, peak, &tunings.coupling)?;
         let gearbox = Gearbox::new(&def.gearbox, def.engine.redline_rpm, &tunings.shift)?;
-        let driveline = Driveline::new(def)?;
+        let driveline = Driveline::new(def, &tunings.driveline)?;
         let mut brakes = Vec::new();
         for (i, b) in def.brakes.iter().enumerate() {
             if b.steering {
@@ -140,7 +143,7 @@ impl DrivePort for Powertrain {
                 t_carrier += brake.step(dt, cmd, &sh, inputs.ambient_k);
             }
         }
-        self.driveline.distribute(t_carrier, &mut self.scratch);
+        self.driveline.distribute(dt, t_carrier, &outs, &mut self.scratch);
 
         // wheel-site brakes
         for (brake, shaft) in &mut self.brakes {

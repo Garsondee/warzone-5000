@@ -1,0 +1,4 @@
+// Driveline settings shared by every differential.
+DrivelineTuning(
+    lsd_full_bias_speed_rad_s: Param(v: 3.0, lo: Some(0.5), hi: Some(10.0), prov: Estimate, src: "a torque-sensing or viscous limited-slip differential builds its bias over a few rad/s of speed difference across it; below that it behaves as an open differential"),
+)
