@@ -91,3 +91,19 @@ Two subtleties. **Internal forces cancel**: the spring pushes the hull up and th
 tyres, aero) survive the sum, which is Newton's third law at work. **The wheel is booked in the hull's frame**: the wheel's travel is measured relative to the hull, so its bookkeeping includes a
 *frame force* (term `Other`, minus the wheel mass times the hull's acceleration), the same fictitious force that pushes you back into your seat when a car accelerates.
 On the Mule at a steady 20 km/h the replay's ledger summary reads: drive force 566 N against rolling resistance 455 N and aero drag 33 N; under braking the tyres pull 21 kN.
+
+## Proving-ground benches: tilt table and skidpad
+**Tilt table.** Park the truck on a platform and tilt it sideways until the uphill wheels lift. For a rigid block the answer is `tan(theta) = (t/2) / h`, the *static stability factor* (half track over
+centre-of-mass height); trucks sit around 1.0 to 1.4, cars around 1.4 to 1.6. A real truck tips earlier for two reasons the bench shows: the springs let the body lean toward the low side, which
+moves the centre of mass outward (the test checks the uphill load against that compliant statics within 2.5% from 10 to 40 degrees), and once an uphill wheel reaches its **droop stop** the body starts
+lifting it off the ground. The box truck: rigid 54.2 degrees, linear-compliant 52.3, tips at 46.8 (front-left wheel first at 45.3, because the stiffer front anti-roll bar sends more of the load
+transfer to the front axle). The table is tilted by rotating gravity rather than the ground: in the truck's frame the two are the same.
+**Skidpad.** Fix the steering and creep the speed up so every moment is a steady turn. Two numbers come out. The **lateral limit**: with all four tyres at the friction circle, `a_y = mu g`; whichever axle
+saturates first sets the real limit, so a truck that understeers stops a little short (box truck 0.85 g against mu 0.945). The **understeer gradient** `K` in `delta = L / R + K a_y`: the extra steer
+the truck needs per unit of lateral acceleration. The bicycle model predicts `K = (m / L)(b / C_f - a / C_r)`; with this tyre model the cornering stiffness is proportional to load, so a stock truck is
+almost neutral, and halving the front tyres' stiffness gives K = 0.0127 rad per m/s^2 against 0.0128 predicted. Positive K (understeer) is stable: the faster you go the wider the circle. Negative K
+(oversteer) has a critical speed above which the truck spins on its own.
+**Lateral load transfer in a turn.** `delta F = m a_y h / t`, plus the body's lean: our wheels slide on vertical struts and their contact patches sit under the wheel centres, so the body rolls about
+a centre at wheel-centre height and its centre of mass moves outward by `(h_s - h_wheel) phi`. With that term the test agrees to 0.4%.
+**A bug the tilt table found.** A tyre's sideways force acts at the ground, but the chassis applied it at the wheel centre without the moment `dist * F_y` that moving it up needs, so the truck rolled
+too little in a turn and tilted to 59 degrees, past the rigid limit. Physics cannot beat the rigid limit, so the bench caught it.

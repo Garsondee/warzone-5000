@@ -116,6 +116,7 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
     let mut stations = Vec::new();
     let mut anti_roll = Vec::new();
     let mut omega_max: f64 = 0.0;
+    let mut k_series_sum = 0.0;
     for (ai, axle) in w.axles.iter().enumerate() {
         let m_corner = 0.5 * loads[ai] / g;
         let f_hz = if ai == 0 { su.front_ride_frequency_hz.v } else { su.rear_ride_frequency_hz.v };
@@ -137,7 +138,11 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
         let half_track = 0.5 * axle.track_width_m.v;
         let m_u = ty.unsprung_mass_kg.v;
         // The stiffest mode: the unsprung mass on the tyre in parallel with the strut and the engaged bump stop (the slip mode is excluded).
-        let hop = scalar::sqrt((k_t + k_spring + stop_rate) / m_u);
+        // The stop's incremental stiffness at full bump travel (d/dx of rate x (1 + p x / engage) x), as CHASSIS' mode analysis reads it.
+        let (engage_m, pen) = (engage * su.bump_travel_m.v, su.bump_travel_m.v * (1.0 - engage));
+        let k_stop = stop_rate * (1.0 + 2.0 * e.bump_stop_progression.v * pen / engage_m);
+        let hop = scalar::sqrt((k_t + k_spring + k_stop) / m_u);
+        k_series_sum += 2.0 * k_spring * k_t / (k_spring + k_t); // two wheels per axle
         omega_max = omega_max.max(hop);
         let steer = if axle.steered {
             let deg = need(&axle.max_steer_deg, &format!("running_gear.axles[{ai}].max_steer_deg"))?;
@@ -216,6 +221,8 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
             patch * 1e3       // const-ok: m to mm for display
         ));
     }
+    // The hull's heave on the series spring-tyre rates is the other candidate for the stiffest mode.
+    omega_max = omega_max.max(scalar::sqrt(k_series_sum / h.mass_kg.v));
     let f_max_hz = omega_max / scalar::TAU;
     // The contract's rule: `substeps * TICK_HZ >= SAMPLES_PER_PERIOD * f_max`.
     let substeps = ((SAMPLES_PER_PERIOD * f_max_hz / TICK_HZ).ceil() as u32).max(1);
@@ -223,7 +230,7 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
         return Err(format!("numerically unstable design: the stiffest mode ({f_max_hz:.1} Hz) needs {substeps} substeps per tick, above {MAX_SUBSTEPS}"));
     }
     report.push(format!(
-        "stiffest mode {f_max_hz:.1} Hz (wheel hop with the bump stop engaged) -> {substeps} substeps per tick"
+        "stiffest mode {f_max_hz:.1} Hz (wheel hop with the bump stop fully engaged at full bump travel) -> {substeps} substeps per tick"
     ));
 
     // ---- hull mass properties: a uniform box moved to the COM (parallel-axis theorem)
