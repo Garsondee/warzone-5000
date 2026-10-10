@@ -276,4 +276,62 @@ mod tests {
             html.len()
         ); // const-ok: the lint's limit
     }
+
+    fn skin_files() -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(viewer_dir().join("dist/skins"))
+            .map(|d| {
+                d.filter_map(Result::ok)
+                    .filter_map(|e| e.file_name().to_str().and_then(|n| n.strip_suffix(".skin")).map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+        names.sort();
+        names
+    }
+
+    /// The bodies the page draws are generated files. If GEOMETRY changes a body and nobody packs it again, the page would ship the old one,
+    /// so every skin of GEOMETRY's registry must have a committed file that is byte for byte what `pack-skin` writes now (and no file may be
+    /// left for an id the registry no longer has).
+    #[test]
+    fn every_committed_skin_is_what_pack_skin_generates_now() {
+        for id in w5k_geo::skin::IDS {
+            let file = viewer_dir().join(format!("dist/skins/{id}.skin"));
+            let fix = format!(
+                "run `w5k viewer pack-skin {id} --out tools/viewer/dist/skins/{id}.skin` and `node tools/viewer/build.mjs --live`"
+            );
+            let committed =
+                std::fs::read(&file).unwrap_or_else(|e| panic!("{} is missing ({e}); {fix}", file.display()));
+            let fresh = w5k_replay::skinpack::pack(&skin_rig(id).expect("a registry skin builds"));
+            assert!(
+                committed == fresh,
+                "{id}.skin is stale ({} bytes committed, {} generated now); {fix}",
+                committed.len(),
+                fresh.len()
+            );
+        }
+        for name in skin_files() {
+            assert!(
+                w5k_geo::skin::IDS.contains(&name.as_str()),
+                "dist/skins/{name}.skin is not a skin of GEOMETRY's registry: delete it"
+            );
+        }
+    }
+
+    /// The page asks only for the skins listed in its data block (so it never probes for a missing file); that list is written when the page
+    /// is built, so it must be the skins that are committed.
+    #[test]
+    fn the_page_lists_exactly_the_skins_it_ships() {
+        let page = viewer_dir().join("dist/index.html");
+        let html = std::fs::read_to_string(&page).unwrap_or_else(|e| panic!("{} is missing ({e})", page.display()));
+        let key = "\"skins\":[";
+        let at = html.find(key).expect("the page's data block lists its skins") + key.len();
+        let end = at + html[at..].find(']').expect("the skin list ends");
+        let listed: Vec<&str> =
+            html[at..end].split(',').map(|n| n.trim().trim_matches('"')).filter(|n| !n.is_empty()).collect();
+        assert_eq!(
+            listed,
+            skin_files(),
+            "dist/index.html lists other skins than dist/skins holds: run `node tools/viewer/build.mjs --live`"
+        );
+    }
 }
