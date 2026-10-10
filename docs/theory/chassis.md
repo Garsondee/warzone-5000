@@ -82,3 +82,12 @@ Each wheel is a small mass (100 to 200 kg) held between two springs, its suspens
 about 10 Hz on the Mule. When a wheel slams into its bump stop, the stop adds a third, much stiffer spring and the ring goes up to about 13 Hz. The integrator needs about 20 samples per
 period of the fastest ring (spike S1), so `substeps = ceil(20 f_max / 60)`. For the Mule that is 5 substeps per 60 Hz tick (300 Hz). `w5k chassis modes <vehicle>` prints this for any vehicle, and the
 chassis always runs at least that many substeps, even if a rig declares fewer, because too few is an explosion waiting for the first hard bump, while one extra costs 20% more time.
+
+## The force ledger: every outcome explainable
+Every force the chassis applies is also written into a ledger, with its *term* (gravity, spring, damper, tyre longitudinal, rolling resistance, aero, ...) and the *body* it acts on (0 is the hull,
+then one body per wheel station). The test `ledger_net_force_equals_mass_times_acceleration` adds up the ledger for each body after every substep and checks it equals mass times acceleration to
+1e-9 (it agrees to about 1e-15). If any force were applied but not booked, or booked but not applied, that test would fail, so when a run surprises us we can trust the ledger to say why.
+Two subtleties. **Internal forces cancel**: the spring pushes the hull up and the wheel down by the same amount, so in the per-term totals the spring adds to zero; only external forces (gravity, the
+tyres, aero) survive the sum, which is Newton's third law at work. **The wheel is booked in the hull's frame**: the wheel's travel is measured relative to the hull, so its bookkeeping includes a
+*frame force* (term `Other`, minus the wheel mass times the hull's acceleration), the same fictitious force that pushes you back into your seat when a car accelerates.
+On the Mule at a steady 20 km/h the replay's ledger summary reads: drive force 566 N against rolling resistance 455 N and aero drag 33 N; under braking the tyres pull 21 kN.

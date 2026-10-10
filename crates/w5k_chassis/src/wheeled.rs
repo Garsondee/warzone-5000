@@ -9,7 +9,7 @@ use w5k_contract::rig::{AeroDef, PhysRig, StationDef, WheelKind};
 use w5k_contract::{
     ContactElement, ContactInput, ContactOutput, DriveInputs, DrivePort, MaterialId, ShaftState, SuspensionElement,
 };
-use w5k_contract::{SuspensionOut, WorldQuery, AIR_DENSITY_KG_M3};
+use w5k_contract::{ForceLedger, ForceTerm, SuspensionOut, WorldQuery, AIR_DENSITY_KG_M3};
 use w5k_math::{scalar, Quat, StateHasher, Vec3};
 
 use crate::hull::{Hull, HullError};
@@ -43,6 +43,8 @@ pub struct StationReport {
     pub material: MaterialId,
     /// Force the station puts on the hull, world frame, N.
     pub force_on_hull_n: Vec3,
+    /// The strut (travel) direction this substep, world frame.
+    pub strut_dir: Vec3,
 }
 
 #[derive(Clone, Debug)]
@@ -80,6 +82,10 @@ pub struct WheeledChassis {
     shafts: Vec<ShaftState>,
     torque_out: Vec<f64>,
     pub time_s: f64,
+    /// Every force of the last substep, by term and body (0 = hull, 1 + i = station i). Off unless switched on.
+    pub ledger: ForceLedger,
+    /// Each station's travel acceleration in the last substep, m/s^2 (the ledger's station bodies are booked in the hull's frame).
+    pub travel_acc_m_s2: Vec<f64>,
 }
 
 impl WheeledChassis {
@@ -162,6 +168,8 @@ impl WheeledChassis {
             shafts: vec![ShaftState::default(); outputs],
             torque_out: vec![0.0; outputs],
             time_s: 0.0,
+            ledger: ForceLedger::off(),
+            travel_acc_m_s2: vec![0.0; rig.stations.len()],
         })
     }
 
@@ -204,6 +212,7 @@ impl WheeledChassis {
     pub fn substep(&mut self, dt_s: f64, inputs: &DriveInputs, world: &dyn WorldQuery, drive: &mut dyn DrivePort) {
         let g = Vec3::new(0.0, -scalar::G, 0.0);
         let a_prev = self.hull.acc_m_s2;
+        self.ledger.clear();
         let speed = self.forward_speed_m_s();
 
         // 4 (first half): the powertrain sees the shafts as they are at the start of the substep.
@@ -291,6 +300,31 @@ impl WheeledChassis {
             st.spin_angle_rad += st.omega_rad_s * dt_s;
             self.hull.add_torque(y_c * -t_shaft);
 
+            if self.ledger.is_on() {
+                let parts = [
+                    (ForceTerm::TyreLongitudinal, x_c * (out.fx_n + st.tyre.last_rolling_n())),
+                    (ForceTerm::RollingResistance, x_c * -st.tyre.last_rolling_n()),
+                    (ForceTerm::TyreLateral, y_c * out.fy_n),
+                    (ForceTerm::TyreNormal, n * out.fz_n),
+                    (ForceTerm::Gravity, g * st.unsprung_mass_kg),
+                ];
+                let struts = [
+                    (ForceTerm::SuspensionSpring, so.spring_n),
+                    (ForceTerm::SuspensionDamper, so.damper_n),
+                    (ForceTerm::BumpStop, so.bump_stop_n),
+                    (ForceTerm::AntiRoll, st.anti_roll_n),
+                ];
+                let book = BookCtx { d, wc, com: self.hull.pos_m, body: 1 + i as u16 };
+                book.station(
+                    &mut self.ledger,
+                    &parts,
+                    &struts,
+                    a_prev * st.unsprung_mass_kg,
+                    t_shaft * st.omega_rad_s >= 0.0,
+                    y_c * -t_shaft,
+                    n * out.mz_nm,
+                );
+            }
             st.report = StationReport {
                 contact: out,
                 suspension: so,
@@ -298,6 +332,7 @@ impl WheeledChassis {
                 normal: n,
                 material: mat_id,
                 force_on_hull_n: on_hull,
+                strut_dir: d,
             };
         }
 
@@ -307,9 +342,14 @@ impl WheeledChassis {
         let drag = v * (-0.5 * AIR_DENSITY_KG_M3 * self.aero.drag_coeff * self.aero.frontal_area_m2 * v.length());
         let cp = self.hull.point_world(self.aero.centre_of_pressure_m - self.com_m);
         self.hull.add_force_at(drag, cp);
+        if self.ledger.is_on() {
+            self.ledger.add(ForceTerm::Gravity, 0, g * self.hull.mass_kg(), Vec3::ZERO);
+            self.ledger.add(ForceTerm::Aero, 0, drag, (cp - self.hull.pos_m).cross(drag));
+        }
 
         // 6. integrate the hull and each station's travel (semi-implicit: rate first), with the travel limits
         self.hull.integrate(dt_s);
+        self.travel_acc_m_s2.clone_from(&travel_acc);
         for (st, acc) in self.stations.iter_mut().zip(travel_acc) {
             st.travel_rate_m_s += acc * dt_s;
             st.travel_m += st.travel_rate_m_s * dt_s;
@@ -336,5 +376,47 @@ impl WheeledChassis {
             }
             s.tyre.hash_state(h);
         }
+    }
+}
+
+/// Books one station's forces in the ledger. The hull (body 0) receives every force's **cross-strut** part at the wheel centre and the
+/// strut's force along the strut; the station body (1 + i) keeps every force's **along-strut** part, minus the strut, minus the inertia of
+/// riding on an accelerating hull (`ForceTerm::Other`, a frame force), so that its net force is `m_u * travel_acc * d`. Summed over bodies
+/// each term then appears exactly once.
+struct BookCtx {
+    d: Vec3,
+    wc: Vec3,
+    com: Vec3,
+    body: u16,
+}
+
+impl BookCtx {
+    #[allow(clippy::too_many_arguments)]
+    fn station(
+        &self,
+        l: &mut ForceLedger,
+        parts: &[(ForceTerm, Vec3)],
+        struts: &[(ForceTerm, f64)],
+        m_a_prev: Vec3,
+        driving: bool,
+        drive_reaction_nm: Vec3,
+        aligning_nm: Vec3,
+    ) {
+        let r = self.wc - self.com;
+        let hull = |l: &mut ForceLedger, t: ForceTerm, f: Vec3| l.add(t, 0, f, r.cross(f));
+        for &(t, f) in parts {
+            let along = self.d * f.dot(self.d);
+            hull(l, t, f - along);
+            l.add(t, self.body, along, Vec3::ZERO);
+        }
+        for &(t, f) in struts {
+            hull(l, t, self.d * f);
+            l.add(t, self.body, self.d * -f, Vec3::ZERO);
+        }
+        // the hull carries the wheel across the strut: it pays for the wheel's cross-strut inertia
+        hull(l, ForceTerm::Other, -(m_a_prev - self.d * m_a_prev.dot(self.d)));
+        l.add(ForceTerm::Other, self.body, -self.d * m_a_prev.dot(self.d), Vec3::ZERO);
+        l.add(if driving { ForceTerm::EngineDrive } else { ForceTerm::Brake }, 0, Vec3::ZERO, drive_reaction_nm);
+        l.add(ForceTerm::TyreLateral, 0, Vec3::ZERO, aligning_nm);
     }
 }

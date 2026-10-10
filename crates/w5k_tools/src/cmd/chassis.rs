@@ -95,6 +95,7 @@ fn strip(args: &[String]) -> Result<(), String> {
     let world = DataStrip::standard();
     let mut chassis = WheeledChassis::new(rig, &tuning, &world, 0.0, 0.0, 0.0)
         .map_err(|e| format!("CHASSIS refused {}: {e:?}", rig.id))?;
+    chassis.ledger = w5k_contract::ForceLedger::on();
     let mut drive =
         ConstantTorquePowertrain::new(rig.drivetrain.outputs.len(), sc.wheel_torque_nm.v, sc.brake_torque_nm.v);
 
@@ -245,7 +246,7 @@ fn vehicle_frame(c: &WheeledChassis, rig: &PhysRig, telemetry: &DriveTelemetry) 
         engine_rpm: telemetry.engine_rpm as f32,
         gear: telemetry.gear,
         contacts,
-        ledger_n: Vec::new(),
+        ledger_n: c.ledger.summary_n(),
         limiting: LimitingFactor::None,
         weapons: Vec::new(),
     }
