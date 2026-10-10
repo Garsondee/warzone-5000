@@ -12,6 +12,7 @@ use w5k_contract::param::Param;
 use w5k_contract::world::{MaterialId, PropId, PropKind, PropRef, PropShape, WorldQuery};
 use w5k_math::{scalar, Pcg32, Transform, Vec3};
 
+use crate::cliff::{switchback_path, CliffDef, SwitchbackDef};
 use crate::features::{
     barricade_blocks, cell_slope, dilate, mud_mask, poisson_disc, poisson_disc_in, BarricadeDef, MudDef, RockFieldDef,
     TreesDef,
@@ -55,6 +56,9 @@ pub struct RoadDef {
     /// Stretches where the road itself is mud (a ford, a washed-out section the vehicle must cross).
     #[serde(default)]
     pub mud_crossings: Vec<MudCrossing>,
+    /// Zig-zag climbs up cliffs, spliced into the waypoint list.
+    #[serde(default)]
+    pub switchbacks: Vec<SwitchbackDef>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -82,6 +86,8 @@ pub struct CourseDef {
     pub barricade: Option<BarricadeDef>,
     #[serde(default)]
     pub rock_fields: Vec<RockFieldDef>,
+    #[serde(default)]
+    pub cliffs: Vec<CliffDef>,
 }
 
 impl CourseDef {
@@ -96,6 +102,8 @@ pub struct Course {
     pub road: Vec<(f64, f64, f64)>,
     pub ground: MaterialId,
     pub road_material: MaterialId,
+    /// The steepest grade (rise over run) each node is allowed: the hills limit, or a cliff's own near a cliff.
+    pub grade_limit: Vec<f64>,
 }
 
 /// Salt separating the tree-stand noise from the hills noise (same seed, different field).
@@ -106,42 +114,59 @@ const STANDS_SALT: u64 = 0x7EEE; // const-ok: noise stream label
 /// A rock's centre sits this fraction of its radius above the ground, so it is partly buried and presents a rounded face.
 const BURIAL: f64 = 0.4; // const-ok: how deep rocks sit in the ground
 
+/// Headroom on a cliff zone's axis limit over the face grade plus the hills' own slope.
+const CLIFF_LIMIT_SLACK: f64 = 1.1; // const-ok: margin so the clamp never shaves the face it is told to allow
+
+/// Run-in and run-out of a switchback beyond the foot and the lip of the face, m.
+const SWITCHBACK_APPROACH_M: f64 = 8.0; // const-ok: where the zig-zag meets the ordinary road
+
 /// The profile is graded to this fraction of the stated road grade; sampled bilinearly the road can add a sliver of slope.
 const PROFILE_MARGIN: f64 = 0.9; // const-ok: safety factor on the stated grade
 
-/// One exact two-pass sweep of `v[p] = op(v[p], v[q] + sign * L)` over the 4-neighbour grid (forward then backward raster order):
-/// the distance transform that turns a field into the tightest L-Lipschitz field above (`min`, sign +) or below (`max`, sign -) it.
-fn sweep(v: &mut [f64], n: usize, l: f64, lower: bool) {
-    let step = |a: f64, b: f64| if lower { a.min(b + l) } else { a.max(b - l) };
-    for j in 0..n {
-        for i in 0..n {
-            let c = j * n + i;
-            if i > 0 {
-                v[c] = step(v[c], v[c - 1]);
-            }
-            if j > 0 {
-                v[c] = step(v[c], v[c - n]);
+/// Raster sweeps of `v[p] = op(v[p], v[q] + sign * L)` over the 4-neighbour grid with a limit per cell (an edge uses the larger of its two
+/// cells' limits), repeated until nothing changes: the distance transform that turns a field into the tightest Lipschitz field above
+/// (`lower`, sign +) or below (sign -) it. With one limit everywhere a single forward and backward pass is exact; with varying limits the
+/// repeat makes it so.
+fn sweep(v: &mut [f64], n: usize, lim: &[f64], lower: bool) {
+    let step = |a: f64, b: f64, l: f64| if lower { a.min(b + l) } else { a.max(b - l) };
+    for _ in 0..SWEEP_REPEATS {
+        let before = v.to_vec();
+        for j in 0..n {
+            for i in 0..n {
+                let c = j * n + i;
+                if i > 0 {
+                    v[c] = step(v[c], v[c - 1], lim[c].max(lim[c - 1]));
+                }
+                if j > 0 {
+                    v[c] = step(v[c], v[c - n], lim[c].max(lim[c - n]));
+                }
             }
         }
-    }
-    for j in (0..n).rev() {
-        for i in (0..n).rev() {
-            let c = j * n + i;
-            if i + 1 < n {
-                v[c] = step(v[c], v[c + 1]);
+        for j in (0..n).rev() {
+            for i in (0..n).rev() {
+                let c = j * n + i;
+                if i + 1 < n {
+                    v[c] = step(v[c], v[c + 1], lim[c].max(lim[c + 1]));
+                }
+                if j + 1 < n {
+                    v[c] = step(v[c], v[c + n], lim[c].max(lim[c + n]));
+                }
             }
-            if j + 1 < n {
-                v[c] = step(v[c], v[c + n]);
-            }
+        }
+        if before == v {
+            return;
         }
     }
 }
 
-/// Make the field L-Lipschitz along the grid axes (no two axis neighbours differ by more than `axis_limit_m`), exactly and in O(n^2):
-/// peaks are shaved by a min-envelope and pits filled by a max-envelope. `anchors` (cell, fixed height) are never moved: every free cell
-/// is first clamped into the cone each anchor allows, which makes the two envelopes leave the anchors alone (provided the anchors are
-/// mutually consistent).
-pub fn limit_grades(h: &mut [f64], n: usize, axis_limit_m: f64, anchors: &[bool]) {
+/// Cap on repeated sweeps; one limit everywhere converges in the first, varying limits in a few.
+const SWEEP_REPEATS: usize = 12; // const-ok: iteration cap
+
+/// Make the field Lipschitz along the grid axes (no two axis neighbours differ by more than the larger of their cells' `axis_limit_m`),
+/// in O(n^2) per sweep: peaks are shaved by a min-envelope and pits filled by a max-envelope. `anchors` are never moved: every free
+/// cell is first clamped into the cone each anchor allows, which makes the two envelopes leave the anchors alone (provided the anchors
+/// are mutually consistent).
+pub fn limit_grades(h: &mut [f64], n: usize, axis_limit_m: &[f64], anchors: &[bool]) {
     let mut lo = vec![f64::NEG_INFINITY; n * n];
     let mut hi = vec![f64::INFINITY; n * n];
     for c in 0..n * n {
@@ -287,7 +312,25 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
     }
     // Axis limit g / sqrt(2): the bilinear gradient magnitude is at most sqrt(2) x the largest axis difference.
     let axis_terrain = hd.max_grade.v * CELL_M * std::f64::consts::FRAC_1_SQRT_2;
-    limit_grades(&mut h, n, axis_terrain, &vec![false; n * n]);
+    limit_grades(&mut h, n, &vec![axis_terrain; n * n], &vec![false; n * n]);
+
+    // Cliffs: a separate layer on top of the clamped hills, with its own, larger grade limit in and around its face.
+    let reach = def.road.width_m.v * 0.5 + def.road.shoulder_m.v;
+    let mut axis_limit = vec![axis_terrain; n * n];
+    let mut grade_limit = vec![hd.max_grade.v; n * n];
+    for (k, cl) in def.cliffs.iter().enumerate() {
+        cl.check(&format!("{}.cliffs[{k}]", def.name))?;
+        // The face's axis differences can reach its full grade when it faces along an axis: allow that, plus a little.
+        let axis_zone = (cl.steepest_grade() + hd.max_grade.v) * CELL_M * CLIFF_LIMIT_SLACK;
+        for c in 0..n * n {
+            let (x, z) = xz(c % n, c / n);
+            h[c] += cl.height_at(x, z);
+            if cl.in_zone(x, z, reach) {
+                axis_limit[c] = axis_limit[c].max(axis_zone);
+                grade_limit[c] = grade_limit[c].max(axis_zone * std::f64::consts::SQRT_2 / CELL_M);
+            }
+        }
+    }
 
     // 2. Road path, profile, stamp.
     let snap = |p: (f64, f64)| -> Result<(usize, usize), String> {
@@ -297,27 +340,75 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
         }
         Ok((i as usize, j as usize))
     };
-    let mut nodes: Vec<(usize, usize)> = Vec::new();
-    for pair in def.road.waypoints.windows(2) {
-        let leg = astar(&h, n, snap(pair[0])?, snap(pair[1])?, def.road.max_grade.v)
-            .ok_or("no road path between waypoints")?;
-        nodes.extend(if nodes.is_empty() { &leg[..] } else { &leg[1..] });
+    // The road as a list of grid-unit points and a flag per point: `exact` points (a zig-zag climb) are laid as authored; the rest come
+    // from A* between waypoints and are smoothed afterwards.
+    let to_grid = |p: (f64, f64)| ((p.0 + half) / CELL_M, (p.1 + half) / CELL_M);
+    let mut path: Vec<((f64, f64), bool)> = Vec::new();
+    let leg_to = |path: &mut Vec<((f64, f64), bool)>, target: (f64, f64)| -> Result<(), String> {
+        let b = snap(target)?;
+        match path.last() {
+            None => path.push(((b.0 as f64, b.1 as f64), false)),
+            Some(&(last, _)) => {
+                let a = (last.0.round() as usize, last.1.round() as usize);
+                let leg = astar(&h, n, a, b, def.road.max_grade.v).ok_or("no road path between waypoints")?;
+                path.extend(leg[1..].iter().map(|&(i, j)| ((i as f64, j as f64), false)));
+            }
+        }
+        Ok(())
+    };
+    for (k, &wp) in def.road.waypoints.iter().enumerate() {
+        leg_to(&mut path, wp)?;
+        for sb in def.road.switchbacks.iter().filter(|sb| sb.after_waypoint == k) {
+            sb.span_m.check(&format!("{}.road.switchbacks.span_m", def.name))?;
+            sb.hairpin_radius_m.check(&format!("{}.road.switchbacks.hairpin_radius_m", def.name))?;
+            let cl = def
+                .cliffs
+                .get(sb.cliff)
+                .ok_or_else(|| format!("switchback refers to cliff {} which does not exist", sb.cliff))?;
+            let dense = switchback_path(
+                cl,
+                sb,
+                def.road.width_m.v,
+                def.road.shoulder_m.v,
+                def.road.max_grade.v,
+                SWITCHBACK_APPROACH_M,
+            )?;
+            leg_to(&mut path, dense[0])?;
+            path.extend(dense.iter().skip(1).map(|&p| (to_grid(p), true)));
+        }
     }
-    // The A* staircase has tight kinks that a real road would not: average the path over a window (symmetric, so the ends stay put).
+    let nodes: Vec<(f64, f64)> = path.iter().map(|p| p.0).collect();
+    // The A* staircase has tight kinks that a real road would not: average the path over a window (symmetric, so the ends stay put),
+    // but never across an exact point: averaging a tight authored arc would shrink its radius.
     let smooth = 16usize; // const-ok: moving-average half width in samples, a smoothing choice (radius of curvature of about 10 m)
+    let mut near_exact = vec![usize::MAX; nodes.len()];
+    for k in 0..nodes.len() {
+        near_exact[k] = if path[k].1 {
+            0
+        } else if k > 0 {
+            near_exact[k - 1].saturating_add(1)
+        } else {
+            usize::MAX
+        };
+    }
+    for k in (0..nodes.len()).rev() {
+        if k + 1 < nodes.len() {
+            near_exact[k] = near_exact[k].min(near_exact[k + 1].saturating_add(1));
+        }
+    }
     let pts: Vec<(f64, f64)> = (0..nodes.len())
         .map(|k| {
-            let w = smooth.min(k).min(nodes.len() - 1 - k);
+            let w = smooth.min(k).min(nodes.len() - 1 - k).min(near_exact[k].saturating_sub(1));
             let (mut sx, mut sz) = (0.0, 0.0);
             for &(i, j) in &nodes[k - w..=k + w] {
-                sx += i as f64;
-                sz += j as f64;
+                sx += i;
+                sz += j;
             }
             let m = (2 * w + 1) as f64;
             (sx / m, sz / m)
         })
         .collect();
-    let mut y: Vec<f64> = nodes.iter().map(|&(i, j)| h[j * n + i]).collect();
+    let mut y: Vec<f64> = nodes.iter().map(|&(i, j)| h[j.round() as usize * n + i.round() as usize]).collect();
     let ds: Vec<f64> = pts.windows(2).map(|w| scalar::hypot(w[1].0 - w[0].0, w[1].1 - w[0].1) * CELL_M).collect();
     // Grade a little under the stated limit: the stamped cells are sampled bilinearly, which can add a sliver of slope.
     grade_profile(&mut y, &ds, def.road.max_grade.v * PROFILE_MARGIN);
@@ -373,7 +464,7 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
         }
     }
     // The centreline cells are exactly the profile (they have weight 1); keep the shoulders inside the terrain grade limit.
-    limit_grades(&mut h, n, axis_terrain, &frozen);
+    limit_grades(&mut h, n, &axis_limit, &frozen);
     let road: Vec<(f64, f64, f64)> =
         pts.iter().zip(&y).map(|(&(i, j), &yy)| (i * CELL_M - half, j * CELL_M - half, yy)).collect();
 
@@ -388,6 +479,17 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
         for (c, wet) in mud_mask(&h, n, m).into_iter().enumerate() {
             if wet && !frozen[c] {
                 splat[c] = mud_id.0 as u8;
+            }
+        }
+    }
+    // Chutes: the notch straight up a cliff is laid with its own surface (loose gravel makes it a traction test).
+    for cl in &def.cliffs {
+        let Some(ch) = &cl.chute else { continue };
+        let surf = materials.id_of(&ch.surface).ok_or_else(|| format!("unknown chute surface `{}`", ch.surface))?;
+        for (c, cell) in splat.iter_mut().enumerate() {
+            let (x, z) = xz(c % n, c / n);
+            if !frozen[c] && cl.in_chute(x, z) {
+                *cell = surf.0 as u8;
             }
         }
     }
@@ -508,7 +610,7 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
         }));
     }
     world.set_props(props);
-    Ok(Course { world, road, ground, road_material })
+    Ok(Course { world, road, ground, road_material, grade_limit })
 }
 
 #[cfg(test)]
@@ -521,6 +623,7 @@ mod tests {
         CourseDef::from_ron(include_str!("../../../content/world/courses/slice.ron")).expect("slice.ron parses")
     }
 
+    const GOLDEN_RIDGE_HASH: u64 = 0xd12f_8246_c76a_0341;
     const GOLDEN_SLICE_HASH: u64 = 0xf30c_bc94_ccbc_4e71;
 
     fn hash(c: &Course) -> u64 {
@@ -563,15 +666,21 @@ mod tests {
     }
 
     #[test]
-    fn terrain_never_exceeds_the_stated_maximum_grade() {
+    fn terrain_never_exceeds_its_own_stated_maximum_grade() {
         let d = def();
         let c = generate(&d).expect("course");
+        let n = c.world.n();
         let mut rng = Pcg32::new(5, 5);
         for _ in 0..4000 {
             let (x, z) = (rng.range_f64(-199.0, 199.0), rng.range_f64(-199.0, 199.0));
             let nrm = c.world.normal(x, z);
             let grade = scalar::hypot(nrm.x, nrm.z) / nrm.y;
-            assert!(grade <= d.hills.max_grade.v * 1.02, "grade {grade} at ({x}, {z})");
+            let (i, j) = (((x + 200.0).floor() as usize).min(n - 2), ((z + 200.0).floor() as usize).min(n - 2));
+            let lim = [(i, j), (i + 1, j), (i, j + 1), (i + 1, j + 1)]
+                .iter()
+                .map(|&(a, b)| c.grade_limit[b * n + a])
+                .fold(0.0, f64::max);
+            assert!(grade <= lim * 1.02, "grade {grade} over its limit {lim} at ({x}, {z})");
         }
     }
 
@@ -804,5 +913,141 @@ mod tests {
             radii.len()
         );
         assert!(radii.iter().all(|&r| r >= f.rock_radius_min_m.v - 1e-9 && r <= f.rock_radius_max_m.v + 1e-9));
+    }
+
+    fn ridge() -> CourseDef {
+        CourseDef::from_ron(include_str!("../../../content/world/courses/ridge.ron")).expect("ridge.ron parses")
+    }
+
+    /// Smallest radius of curvature of the road, from circles through points `step_m` of arc apart, m.
+    fn min_turn_radius_m(road: &[(f64, f64, f64)], step_m: f64) -> f64 {
+        let mut pts = vec![road[0]];
+        for &p in road {
+            let q = pts[pts.len() - 1];
+            if scalar::hypot(p.0 - q.0, p.1 - q.1) >= step_m {
+                pts.push(p);
+            }
+        }
+        let mut best = f64::INFINITY;
+        for w in pts.windows(3) {
+            let (a, b, c) = ((w[0].0, w[0].1), (w[1].0, w[1].1), (w[2].0, w[2].1));
+            let area2 = ((b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)).abs();
+            if area2 > 1e-9 {
+                let (la, lb, lc) = (
+                    scalar::hypot(b.0 - a.0, b.1 - a.1),
+                    scalar::hypot(c.0 - b.0, c.1 - b.1),
+                    scalar::hypot(c.0 - a.0, c.1 - a.1),
+                );
+                best = best.min(la * lb * lc / (2.0 * area2));
+            }
+        }
+        best
+    }
+
+    #[test]
+    fn switchback_road_climbs_the_whole_cliff_within_the_road_grade() {
+        let d = ridge();
+        let c = generate(&d).expect("ridge");
+        let (first, last) = (c.road[0], c.road[c.road.len() - 1]);
+        let h = d.cliffs[0].height_m.v;
+        assert!(first.2 < 3.0 && last.2 > h - 3.0, "the road starts at {} m and ends at {} m", first.2, last.2);
+        for w in c.road.windows(2) {
+            let run = scalar::hypot(w[1].0 - w[0].0, w[1].1 - w[0].1);
+            assert!(
+                (w[1].2 - w[0].2).abs() / run <= d.road.max_grade.v + 1e-4,
+                "road grade over the limit at ({}, {})",
+                w[0].0,
+                w[0].1
+            );
+        }
+        // The road really zig-zags: it is several times longer than the straight line between its ends.
+        let len: f64 = c.road.windows(2).map(|w| scalar::hypot(w[1].0 - w[0].0, w[1].1 - w[0].1)).sum();
+        let direct = scalar::hypot(last.0 - first.0, last.1 - first.1);
+        assert!(len > 1.5 * direct, "road {len} m vs straight {direct} m");
+    }
+
+    #[test]
+    fn switchback_hairpins_are_wider_than_a_truck_can_turn_in() {
+        let c = generate(&ridge()).expect("ridge");
+        let r = min_turn_radius_m(&c.road, 6.0);
+        assert!(r >= 5.0, "tightest bend on the road has radius {r} m");
+    }
+
+    #[test]
+    fn cliff_face_is_as_steep_as_stated_and_the_hills_stay_inside_their_limit() {
+        let d = ridge();
+        let c = generate(&d).expect("ridge");
+        let cl = &d.cliffs[0];
+        let mut steepest = 0.0f64;
+        for k in 0..4000 {
+            let (s, t) = (cl.depth_m() * (k % 61) as f64 / 60.0, -110.0 + 140.0 * (k / 61) as f64 / 65.0);
+            let (x, z) = cl.to_xz(s, t);
+            let nrm = c.world.normal(x, z);
+            if !c.road.iter().any(|r| scalar::hypot(r.0 - x, r.1 - z) < 14.0) {
+                steepest = steepest.max(scalar::hypot(nrm.x, nrm.z) / nrm.y);
+            }
+        }
+        let (g, base) = (cl.face_grade.v, d.hills.max_grade.v);
+        assert!(steepest >= 0.9 * g && steepest <= g + base + 0.05, "steepest face grade {steepest}, stated {g}");
+    }
+
+    #[test]
+    fn chute_is_as_steep_as_stated_and_laid_in_its_surface() {
+        let d = ridge();
+        let c = generate(&d).expect("ridge");
+        let (cl, ch) = (&d.cliffs[0], d.cliffs[0].chute.as_ref().expect("chute"));
+        let mut steepest = 0.0f64;
+        for k in 0..=40 {
+            let s = cl.max_depth_m() * k as f64 / 40.0;
+            let (x, z) = cl.to_xz(s, ch.t_m);
+            let nrm = c.world.normal(x, z);
+            steepest = steepest.max(scalar::hypot(nrm.x, nrm.z) / nrm.y);
+            if s > 1.0 && s < cl.max_depth_m() - 1.0 {
+                assert_eq!(c.world.material_at(x, z).name, ch.surface, "the chute is laid in {}", ch.surface);
+            }
+        }
+        assert!(
+            steepest >= 0.9 * ch.grade.v && steepest <= ch.grade.v + d.hills.max_grade.v + 0.05,
+            "chute grade {steepest}"
+        );
+        assert!(steepest < d.cliffs[0].face_grade.v, "the chute must be gentler than the wall");
+    }
+
+    #[test]
+    fn terrain_on_the_ridge_never_exceeds_its_own_stated_maximum_grade() {
+        let d = ridge();
+        let c = generate(&d).expect("ridge");
+        let n = c.world.n();
+        let mut rng = Pcg32::new(8, 8);
+        for _ in 0..6000 {
+            let (x, z) = (rng.range_f64(-199.0, 199.0), rng.range_f64(-199.0, 199.0));
+            let nrm = c.world.normal(x, z);
+            let grade = scalar::hypot(nrm.x, nrm.z) / nrm.y;
+            let (i, j) = (((x + 200.0).floor() as usize).min(n - 2), ((z + 200.0).floor() as usize).min(n - 2));
+            let lim = [(i, j), (i + 1, j), (i, j + 1), (i + 1, j + 1)]
+                .iter()
+                .map(|&(a, b)| c.grade_limit[b * n + a])
+                .fold(0.0, f64::max);
+            assert!(grade <= lim * 1.02, "grade {grade} over its limit {lim} at ({x}, {z})");
+        }
+    }
+
+    #[test]
+    fn a_switchback_that_cannot_fit_or_cannot_climb_is_refused_with_the_numbers() {
+        let mut d = ridge();
+        d.road.switchbacks[0].span_m = Param::spec(60.0, "test: short legs need many lanes");
+        let e = generate(&d).err().expect("refused");
+        assert!(e.contains("between lanes"), "{e}");
+        d.road.switchbacks[0].span_m = Param::spec(20.0, "test: too short to climb at all");
+        let e = generate(&d).err().expect("refused");
+        assert!(e.contains("cannot climb"), "{e}");
+    }
+
+    #[test]
+    fn ridge_generator_is_deterministic_for_a_seed() {
+        let d = ridge();
+        let (a, b) = (generate(&d).expect("a"), generate(&d).expect("b"));
+        assert_eq!(hash(&a), hash(&b));
+        assert_eq!(hash(&a), GOLDEN_RIDGE_HASH, "ridge hash was {:#018x}", hash(&a));
     }
 }
