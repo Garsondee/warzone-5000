@@ -1,5 +1,7 @@
 import { buildRig, applyVehicle, poseRig, sample, makeScene } from './viewer.js';
 import { decodeReplay } from './replay.js';
+import { makeDebug, updateHud } from './debug.js';
+import { makeScope } from './scope.js';
 import * as THREE from 'three';
 
 const { rig, replay: b64 } = JSON.parse(document.getElementById('data').textContent);
@@ -7,8 +9,12 @@ const replay = decodeReplay(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
 const canvas = document.getElementById('c');
 const W = canvas.clientWidth || innerWidth, H = canvas.clientHeight || innerHeight;
 const { renderer, scene, camera } = makeScene(canvas, W, H);
+camera.setViewOffset(W, H, 0, 110, W, H); // lift the picture above the scope panel
 const built = buildRig(rig);
 scene.add(built.root);
+const debug = makeDebug(scene, built, replay.header);
+const scope = makeScope(document.getElementById('scope'), replay, (tt) => { t = tt; renderAt(t); });
+for (const k of Object.keys(debug.flags)) document.getElementById('t_' + k).onchange = (e) => { debug.flags[k] = e.target.checked; renderAt(t); };
 const duration = (replay.frames.length - 1) * replay.header.frame_dt_s;
 
 // Camera state: orbit (drag to turn, wheel to zoom) around the vehicle, or chase (behind the hull, follows its heading).
@@ -31,9 +37,13 @@ function placeCamera() {
 }
 
 function renderAt(t) {
-  applyVehicle(built, sample(replay, Math.min(Math.max(t, 0), duration)));
+  const s = sample(replay, Math.min(Math.max(t, 0), duration));
+  applyVehicle(built, s);
   if (freeze) { built.root.position.set(0, 0, 0); built.root.quaternion.identity(); }
   placeCamera();
+  debug.update(s.a < 0.5 ? s.f0 : s.f1);
+  updateHud(document.getElementById('hud'), document.getElementById('ledger'), s.a < 0.5 ? s.f0 : s.f1, t);
+  scope.draw(t);
   renderer.render(scene, camera);
 }
 
@@ -82,9 +92,17 @@ function jointPixels(name, value) {
   return n;
 }
 const meshCount = (name) => { const i = built.nodes.findIndex((x) => x.def.name === name); const kids = (k) => [k, ...built.nodes.flatMap((n, j) => (n.def.parent === k ? kids(j) : []))]; return kids(i).reduce((s, k) => s + built.nodes[k].g.children.filter((c) => c.isMesh).length, 0); };
+// How far the node's world position moves when only this joint changes by `delta`: the exact oracle for sliding joints.
+function worldShift(name, delta) {
+  const node = built.nodes.find((x) => x.def.name === name), base = sample(replay, 0).f0.vehicles[0].joints.slice();
+  const at = (j) => { applyVehicle(built, sample(replay, 0)); poseRig(built, j); built.root.updateMatrixWorld(true); return node.g.getWorldPosition(new THREE.Vector3()); };
+  const a = at(base), moved = base.slice();
+  moved[node.def.joint.index] += delta;
+  return at(moved).distanceTo(a);
+}
 const jointAt = (name, t) => { const j = built.nodes.find((n) => n.def.name === name).def.joint; const s = sample(replay, t); return s.f0.vehicles[0].joints[j.index]; };
 window.__v = {
-  only, jointPixels, meshCount, jointAt, setFreeze: (f) => { freeze = f; },
+  setDebug: (on) => { debug.group.visible = on; }, only, jointPixels, worldShift, meshCount, jointAt, setFreeze: (f) => { freeze = f; },
   renderAt, duration, poseOf, setCamera: (m) => Object.assign(cam, m),
   nodeNames: built.nodes.map((n) => n.def.name),
   triangles: built.triangles, expectedTriangles: rig.meshes.reduce((s, m) => s + m.indices.length / 3, 0),
