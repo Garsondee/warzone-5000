@@ -47,4 +47,7 @@
 - 2026-10-10: via ARCH, run on without checking in (STATE.md); slice target: M998-class truck powertrain through DrivePort.
 
 ## Handoff note (fill in when you stop)
-- Changed: ... | Unfinished: ... | Surprised me: ... | I would do next: ...
+- Changed: `w5k_drive` now has the engine (torque map, idle controller, rev-limiter fade, fuel map), clutch / torque converter / lock-up as implicit stick-slip, a gearbox with a pedal-filtered automatic shift map (also a driver model for manual boxes), hill hold and grade braking, open / locked / limited-slip differentials, four tracked steering units, brakes with heat and fade, a `Powertrain: DrivePort` and the `w5k drive bench` command (`w5k_drive::benches`); tuning is in `content/physics/drive/*.ron`; theory in `docs/theory/drive.md`; notes in `docs/lanes/drive/`.
+- Unfinished: hydrostatic pivot in neutral does not debit engine power (PROVISIONAL(steer-neutral-power)); fuel range needs a tank capacity that neither the vehicle definition nor the rig carries (contract field plus FORGE lever to request); the Hauler's gradeability limit is a launch transient (a smoother torque build-up at the clutch bite is not built); no 200-definition NaN fuzz yet and no Windows hash check (acceptance items of the brief); `w5k_tools` is at 98% of its old budget.
+- Surprised me: manual boxes under `Auto` had no driver at all, so the Hauler sat in first gear for a whole course; and more engine torque made one truck climb worse until the shift logic stopped upshifting on a hill.
+- I would do next: the NaN fuzz and the Windows hash check; the fuel-capacity request; a wheel-slip-aware launch; the engine power debit for the neutral pivot (after 20:30 UTC, per ARCH).
