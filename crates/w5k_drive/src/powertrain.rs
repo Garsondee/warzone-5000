@@ -62,8 +62,11 @@ impl Powertrain {
     pub fn new(def: &DrivetrainDef, tunings: &Tunings) -> Result<Powertrain, String> {
         let engine = Engine::new(&def.engine, &tunings.engine)?;
         let peak = def.engine.torque_curve.iter().fold(0.0_f64, |m, &(_, t)| m.max(t));
-        let coupling = Coupling::new(&def.coupling, peak, &tunings.coupling)?;
-        let gearbox = Gearbox::new(&def.gearbox, def.engine.redline_rpm, &tunings.shift)?;
+        let peak_rpm =
+            def.engine.torque_curve.iter().fold((0.0_f64, 0.0_f64), |m, &(r, t)| if t > m.1 { (r, t) } else { m }).0;
+        let coupling = Coupling::new(&def.coupling, peak, peak_rpm, &tunings.coupling)?;
+        let gearbox = Gearbox::new(&def.gearbox, def.engine.redline_rpm, &tunings.shift)?
+            .with_engine_curve(&def.engine.torque_curve);
         let driveline = Driveline::new(def, &tunings.driveline)?;
         let mut brakes = Vec::new();
         for (i, b) in def.brakes.iter().enumerate() {
@@ -146,6 +149,7 @@ impl DrivePort for Powertrain {
         let input_side = self.gearbox.reflect(&carrier);
 
         self.gearbox.note_brake(dt, inputs.brake);
+        self.gearbox.note_load(-carrier.ext_torque_nm);
         let shift = self.gearbox.update(dt, inputs.gear, inputs.throttle, carrier.omega_rad_s, speed);
         let throttle = if inputs.engine_on { inputs.throttle } else { 0.0 };
         let c = self.coupling.step(dt, &mut self.engine, throttle, inputs.clutch, shift.capacity_scale, &input_side);

@@ -32,6 +32,12 @@ pub struct ShiftTuning {
     pub engine_brake_pedal: Param,
     /// Time constant of the brake-pedal filter, s: only sustained braking (a descent) asks for engine braking, not a stab into a corner.
     pub engine_brake_filter_s: Param,
+    /// An upshift is refused unless the engine could pull the road load in the higher gear with this much to spare (a margin over 1): a truck
+    /// on a steep hill stays in the gear that can climb it instead of shifting up and rolling back.
+    pub upshift_pull_margin: Param,
+    /// Below this road speed the pull margin applies (a torque interruption can stall or roll back a slow, loaded truck); above it an
+    /// upshift only needs the higher gear to hold the load, m/s.
+    pub hill_hold_speed_m_s: Param,
     /// A downshift for engine braking may land up to this fraction of the full-throttle upshift point.
     pub engine_brake_limit_fraction: Param,
     pub reverse_engage_max_speed_m_s: Param,
@@ -49,6 +55,8 @@ impl ShiftTuning {
         self.downshift_pedal_influence.check("downshift_pedal_influence")?;
         self.engine_brake_pedal.check("engine_brake_pedal")?;
         self.engine_brake_filter_s.check("engine_brake_filter_s")?;
+        self.upshift_pull_margin.check("upshift_pull_margin")?;
+        self.hill_hold_speed_m_s.check("hill_hold_speed_m_s")?;
         self.engine_brake_limit_fraction.check("engine_brake_limit_fraction")?;
         self.reverse_engage_max_speed_m_s.check("reverse_engage_max_speed_m_s")?;
         self.upshift_max_fraction_of_redline.check("upshift_max_fraction_of_redline")
@@ -87,6 +95,12 @@ pub struct Gearbox {
     down_influence: f64,
     brake_pedal_min: f64,
     brake_tau_s: f64,
+    pull_margin: f64,
+    hill_speed: f64,
+    road_speed: f64,
+    /// The engine's full-load torque curve `(rpm, N m)`, if the powertrain gave it (enables the hill check on upshifts).
+    curve: Vec<(f64, f64)>,
+    load_nm: f64,
     brake_limit: f64,
     brake: f64,
     pedal: f64,
@@ -134,6 +148,11 @@ impl Gearbox {
             down_influence: tuning.downshift_pedal_influence.v,
             brake_pedal_min: tuning.engine_brake_pedal.v,
             brake_tau_s: tuning.engine_brake_filter_s.v,
+            pull_margin: tuning.upshift_pull_margin.v,
+            hill_speed: tuning.hill_hold_speed_m_s.v,
+            road_speed: 0.0,
+            curve: Vec::new(),
+            load_nm: 0.0,
             brake_limit: tuning.engine_brake_limit_fraction.v,
             brake: 0.0,
             pedal: 0.0,
@@ -151,6 +170,32 @@ impl Gearbox {
     /// the automatic then refuses upshifts and may drop a gear, as grade-braking logic does.
     pub fn note_brake(&mut self, dt: f64, brake: f64) {
         self.brake += (brake.clamp(0.0, 1.0) - self.brake) * (1.0 - exp(-dt / self.brake_tau_s));
+    }
+
+    /// Give the gearbox the engine's full-load curve so it can tell whether the engine could pull the load in a higher gear.
+    pub fn with_engine_curve(mut self, curve: &[(f64, f64)]) -> Gearbox {
+        self.curve = curve.to_vec();
+        self
+    }
+
+    /// Tell the shift logic the load at the gearbox output now (road load, grade, drag: positive resists), N m.
+    pub fn note_load(&mut self, load_nm: f64) {
+        self.load_nm = load_nm;
+    }
+
+    /// Could the engine pull the present load in `gear` at this output speed, with the margin to spare? True when the load helps, or when
+    /// no curve was given.
+    fn can_pull(&self, gear: i8, w_out: f64) -> bool {
+        if self.curve.len() < 2 || self.load_nm <= 0.0 {
+            return true;
+        }
+        let rpm = self.input_rpm(gear, w_out).max(self.curve[0].0);
+        let tq = match self.curve.windows(2).find(|p| rpm <= p[1].0) {
+            Some(p) => lerp(p[0].1, p[1].1, (rpm - p[0].0) / (p[1].0 - p[0].0)),
+            None => self.curve[self.curve.len() - 1].1,
+        };
+        let margin = if self.road_speed < self.hill_speed { self.pull_margin } else { 1.0 };
+        tq * self.efficiency * self.ratio_of(gear) >= margin * self.load_nm
     }
 
     pub fn gear(&self) -> i8 {
@@ -190,6 +235,7 @@ impl Gearbox {
         road_speed_m_s: f64,
     ) -> ShiftOut {
         self.dwell_s += dt;
+        self.road_speed = road_speed_m_s.abs();
         // the shift map reads a smoothed pedal: a driver who wobbles around a cruise must not wobble the gearbox
         if self.pedal_seeded {
             self.pedal += (throttle.clamp(0.0, 1.0) - self.pedal) * (1.0 - exp(-dt / self.pedal_tau_s));
@@ -283,6 +329,7 @@ impl Gearbox {
             && gear < top
             && self.input_rpm(gear, w_out) > up
             && self.input_rpm(gear + 1, w_out) >= down + self.margin_rpm
+            && self.can_pull(gear + 1, w_out)
     }
 
     /// Would it drop a gear? Below the downshift point, or (with `kickdown`) on a pedal past the kick-down threshold; either way the

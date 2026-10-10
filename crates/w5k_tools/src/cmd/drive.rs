@@ -80,4 +80,61 @@ mod tests {
             assert!(late_accel < 0.5, "{name} is still accelerating at {v} m/s at the end ({late_accel} m/s per s)");
         }
     }
+
+    /// Engine speed and torque with the vehicle held at rest, full throttle in first gear (what a steep start asks for).
+    fn stall(name: &str) -> (f64, f64, f64, f64) {
+        let rig = compile(name);
+        let mut pt = Powertrain::new(&rig.drivetrain, &Tunings::shipped()).unwrap();
+        let n = pt.output_count();
+        let shafts = vec![w5k_contract::ShaftState { inertia_kg_m2: 1.0e6, ..Default::default() }; n];
+        let mut out = vec![0.0; n];
+        let go = DriveInputs { throttle: 1.0, gear: w5k_contract::GearRequest::Gear(1), ..Default::default() };
+        for _ in 0..(8 * 240) {
+            pt.step(1.0 / 240.0, &go, &shafts, &mut out);
+        }
+        let t = pt.telemetry();
+        let curve = &rig.drivetrain.engine.torque_curve;
+        let (peak_rpm, peak) = curve.iter().fold((0.0, 0.0), |m: (f64, f64), &(r, q)| if q > m.1 { (r, q) } else { m });
+        (t.engine_rpm / peak_rpm, t.engine_torque_nm / peak, out.iter().sum(), peak)
+    }
+
+    #[test]
+    fn a_clutch_launch_holds_the_engine_at_its_peak_torque_speed_when_the_vehicle_is_held() {
+        // a driver pulling away on a steep hill slips the clutch near the engine's torque peak; the scout and hauler have clutches
+        for name in ["scout_4x4", "hauler_4x4"] {
+            let (speed_frac, torque_frac, wheel_nm, _) = stall(name);
+            assert!((speed_frac - 1.0).abs() < 0.03, "{name}: engine at {speed_frac} of its peak-torque speed");
+            assert!(torque_frac > 0.97, "{name}: engine torque {torque_frac} of its peak");
+            assert!(wheel_nm > 0.0);
+        }
+    }
+
+    #[test]
+    fn a_loaded_truck_on_a_steep_grade_stays_in_first_instead_of_shifting_up_and_rolling_back() {
+        let rig = compile("hauler_4x4");
+        let mut pt = Powertrain::new(&rig.drivetrain, &Tunings::shipped()).unwrap();
+        let wheel = rig.stations.iter().find(|s| s.drive_output.is_some()).unwrap().wheel.clone();
+        let mass = rig.hull.mass_kg + rig.stations.iter().map(|s| s.unsprung_mass_kg).sum::<f64>();
+        let mut v = LumpedVehicle::new(mass, wheel.radius_m, wheel.inertia_kg_m2, pt.output_count());
+        v.rolling_coeff = 0.02;
+        v.gravity_m_s2 = 9.81;
+        v.grade_rad = w5k_math::scalar::atan(0.25);
+        let dt = 1.0 / 240.0;
+        let mut gears = Vec::new();
+        for k in 0..(10 * 240) {
+            v.step(dt, &mut pt, &DriveInputs { throttle: 1.0, ..Default::default() });
+            let g = pt.telemetry().gear;
+            if gears.last() != Some(&g) {
+                gears.push(g);
+            }
+            assert!(
+                k < 3 * 240 || v.speed_m_s > 0.5,
+                "rolling back or stalled at {} m/s after {} s",
+                v.speed_m_s,
+                k / 240
+            );
+        }
+        assert_eq!(gears, vec![1], "the 1-2 shift (0.8 s without drive) on this grade must not happen: {gears:?}");
+        assert!(v.distance_m > 20.0, "climbed only {} m", v.distance_m);
+    }
 }
