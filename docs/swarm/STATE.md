@@ -33,6 +33,9 @@ the same window: *produce the first slice (vehicles that tackle the whole course
 once all lanes are merged and clean, stop and give the GitHub download link.* The owner also gave WORLD four reference images (a low-poly, flat-shaded,
 diorama look): WORLD's plan V0 to V8 is `docs/lanes/world/visual-target.md`.
 
+## Slice 2 is on (owner, 2026-10-10 17:10 UTC: "go ahead with slice 2")
+The plan is `docs/swarm/SLICE-2.md` ("The Design Loop"); card C-016 is answered. Launched: TRACKS (`session_0164JvpUPVC7qZk6rn6yYHUe`) and COMBAT (`session_01UuhRGVzNqdFXvA4Chv8CTp`, spike S6 and ballistics only). Stage A briefs went to CHASSIS (tyre load sensitivity, tracked hull and sinking-tyre notes), DRIVE (grade and braking explanations, fuel bench), WORLD (ISO 8608 fix, mud pit, proving fixtures, mobility map, then the visual-target plan), FORGE (lever API), VALIDATION (Impact Matrix runner), VIEWER (tornado and ladder charts, Workshop design note), GEOMETRY (M113 carrier, economical). Sequencing: A (measure honestly) then B (mud and steel) with C (Workshop) starting in parallel on the wheeled trucks. Contract v0.3 is settled from the S3, S4 and S6 findings and the tyre load-sensitivity CCR; the contract stays unfrozen for tracks and articulation until then. Active sessions: 11 including ARCH (limit 13). Pause rule: if the five-hour window runs low, COMBAT's spike goes first, then stage C.
+
 ## Owner instruction in force (2026-10-10 02:30 UTC): run without checking in
 The owner is asleep and has authorised ARCH to run the swarm without asking them, aiming for a fun, visible slice: **a truck-class 4x4 with real
 suspension, tyres and powertrain driving the bump strip and a short obstacle course, played back in the browser viewer with forces drawn on, with
@@ -72,9 +75,9 @@ pictures and a clip.** For every lane this means:
 | VALIDATION | 1 | `session_01TBBxTxyT1moXwGWjRx6YWx` (10:33) | `lane/validation/harness` | harness v0 and dashboard merged; scoring the Mule replay next | 2026-10-10 13:28 | $4.00 |
 | GEOMETRY | 2 | `session_01Wrh5HHcDHQFnFuNE1iqJNv` (10:33, effort max) | `lane/geometry/modules` | loft kernel, truck shell, silhouette and glazing merged; costliest lane | 2026-10-10 13:28 | $45.54 |
 | LOOK | 2 | `session_01QXtWzjyYsNM1xnhBwd8MRk` (10:33) | `lane/look/weathering` | camouflage and weathering merged; idle | 2026-10-10 13:28 | $3.07 |
-| TRACKS | 2 | - | - | not launched | - | - |
+| TRACKS | 2 | `session_0164JvpUPVC7qZk6rn6yYHUe` (2026-10-10 17:13) | `lane/tracks/settling` | slice 2 stage A and B: spikes S3 and S4, soil laws, track contact, skid steering, ladder bench | 2026-10-10 17:13 | $0 |
 | GODOT | 2 | - | - | not launched | - | - |
-| COMBAT | 2 | - | - | not launched | - | - |
+| COMBAT | 2 | `session_01UuhRGVzNqdFXvA4Chv8CTp` (2026-10-10 17:13) | `lane/combat/settling` | slice 2, bounded: spike S6 and the ballistics kernel only, then stop | 2026-10-10 17:13 | $0 |
 | AI | 3 | - | - | not launched | - | - |
 
 ## Milestone tracker

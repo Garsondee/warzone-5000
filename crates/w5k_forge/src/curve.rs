@@ -7,8 +7,7 @@ pub fn rpm_to_rad_s(rpm: f64) -> f64 {
     rpm * scalar::TAU / 60.0 // const-ok: unit conversion, 60 s per minute
 }
 
-/// Full-load torque curve through the def's two peaks, exact at both. Above the torque peak a quartic in `d = n - n_T` with its vertex at
-/// the peak, `T(n_P) = P / omega_P`, `dP/dn = 0` and `d2T/dn2 = 0` at `n_P`; below it a parabola with the same vertex that
+/// Full-load torque curve through the def's two peaks, exact at both. Above the torque peak a power law above the torque peak (exponent from the power peak, see below); below it a parabola with the same vertex that
 /// reaches `idle_torque_frac` of the peak at idle (a single cubic blows up on the low side). Rejects peaks that admit no such curve.
 pub fn torque_curve_through_peaks(
     t_pk: f64,
@@ -29,20 +28,24 @@ pub fn torque_curve_through_peaks(
     if !(idle < n_t && n_p < redline) {
         return Err("the torque peak must lie above idle and the power peak below the redline".into());
     }
-    // Above the peak: T = T_pk + a d^2 + b d^3 + c d^4 with T(n_P) = T_P, dT/dn = -T_P/n_P (so dP/dn = 0) and d2T/dn2 = 0 at n_P, which
-    // makes d2P/dn2 = 2 dT/dn < 0: a true power maximum at n_P (a cubic with only the first two conditions can make it a minimum).
-    let x = t_p - t_pk;
-    let q = t_p / n_p;
-    let c = (2.0 * q + 3.0 * x / d_p) / (d_p * d_p * d_p);
-    let b = -(x + 5.0 * c * (d_p * d_p * d_p * d_p)) / (2.0 * d_p * d_p * d_p); // const-ok: coefficient of the closed-form solve
-    let a = -3.0 * b * d_p - 6.0 * c * d_p * d_p; // const-ok: coefficient of the closed-form solve
+    // Above the torque peak: T = T_pk - c d^k with d = n - n_T. T(n_P) = T_P fixes c; the power peak needs dP/dn = T + n dT/dn = 0 at n_P,
+    // which fixes the exponent k = T_P d_P / (n_P (T_pk - T_P)). For k >= 1 the torque is concave and falling, so P = T n has
+    // d2P/dn2 = 2 T' + n T'' < 0 everywhere: ONE power maximum, at n_P, and the torque maximum is at n_T. Both peaks are exact and
+    // consistent by construction. k < 1 means torque falls from its peak too steeply for the power to peak that late: inconsistent peaks.
+    let k = t_p * d_p / (n_p * (t_pk - t_p));
+    if k < 1.0 {
+        return Err(format!(
+            "the peaks are inconsistent: torque falls from {t_pk} N m to {t_p:.0} N m too steeply for power to still be rising at {n_p} rpm (curve exponent {k:.2} < 1); raise the power or move its peak earlier"
+        ));
+    }
+    let c = (t_pk - t_p) / scalar::pow(d_p, k);
     let q_low = (1.0 - idle_torque_frac) * t_pk / ((n_t - idle) * (n_t - idle));
     let t = |n: f64| {
         let d = n - n_t;
         if d < 0.0 {
             t_pk - q_low * d * d
         } else {
-            t_pk + a * d * d + b * d * d * d + c * d * d * d * d
+            t_pk - c * scalar::pow(d, k)
         }
     };
     let steps = 40; // const-ok: sampling resolution of the stored curve
