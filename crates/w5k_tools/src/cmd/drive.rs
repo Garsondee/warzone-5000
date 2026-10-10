@@ -14,13 +14,8 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
-use w5k_contract::ports::DrivePort;
 use w5k_contract::rig::PhysRig;
-use w5k_contract::{DriveInputs, GearRequest, Param};
-use w5k_drive::bench::LumpedVehicle;
-use w5k_drive::engine::Engine;
-use w5k_drive::powertrain::{Powertrain, Tunings};
+use w5k_drive::benches::{self, Bed, BenchWorld, Report};
 
 const USAGE: &str =
     "usage: w5k drive bench <engine|shift|launch|brake|fuel> [--vehicle a.ron,b.ron,...] [--out DIR] [--tank-l N]";
@@ -39,56 +34,10 @@ fn root() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
     }
 }
-const RPM_TO_RAD_S: f64 = core::f64::consts::PI / 30.0; // const-ok: unit conversion, mathematical
-const KMH: f64 = 3.6; // const-ok: unit conversion, m/s to km/h
-const STEP_S: f64 = 1.0 / 240.0; // const-ok: the bench's fixed step, a numerical choice (one chassis substep)
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct BenchWorld {
-    gravity_m_s2: Param,
-    air_density_kg_m3: Param,
-    rolling_resistance_coeff: Param,
-    fuel_density_kg_m3: Param,
-    cruise_kmh: Param,
-    descent_grade_rad: Param,
-}
-
-impl BenchWorld {
-    fn load() -> Result<BenchWorld, String> {
-        let text = std::fs::read_to_string(root().join(WORLD_FILE)).map_err(|e| format!("{WORLD_FILE}: {e}"))?;
-        let w: BenchWorld = ron::from_str(&text).map_err(|e| format!("{WORLD_FILE}: {e}"))?;
-        for (n, p) in [
-            ("gravity_m_s2", &w.gravity_m_s2),
-            ("air_density_kg_m3", &w.air_density_kg_m3),
-            ("rolling_resistance_coeff", &w.rolling_resistance_coeff),
-            ("fuel_density_kg_m3", &w.fuel_density_kg_m3),
-            ("cruise_kmh", &w.cruise_kmh),
-            ("descent_grade_rad", &w.descent_grade_rad),
-        ] {
-            p.check(n)?;
-        }
-        Ok(w)
-    }
-}
-
-/// One vehicle on the bench: its compiled rig, the real powertrain and a lumped body of its mass.
-struct Bed {
-    id: String,
-    rig: PhysRig,
-    pt: Powertrain,
-    veh: LumpedVehicle,
-}
-
-fn bed(rig: PhysRig, world: &BenchWorld) -> Result<Bed, String> {
-    let pt = Powertrain::new(&rig.drivetrain, &Tunings::shipped())?;
-    let wheel = rig.stations.iter().find(|s| s.drive_output.is_some()).ok_or("no driven station")?.wheel.clone();
-    let mass = rig.hull.mass_kg + rig.stations.iter().map(|s| s.unsprung_mass_kg).sum::<f64>();
-    let mut veh = LumpedVehicle::new(mass, wheel.radius_m, wheel.inertia_kg_m2, pt.output_count());
-    veh.rolling_coeff = world.rolling_resistance_coeff.v;
-    veh.drag_n_s2_m2 = 0.5 * world.air_density_kg_m3.v * rig.aero.drag_coeff * rig.aero.frontal_area_m2;
-    veh.gravity_m_s2 = world.gravity_m_s2.v;
-    Ok(Bed { id: rig.id.clone(), rig, pt, veh })
+fn load_world() -> Result<BenchWorld, String> {
+    let text = std::fs::read_to_string(root().join(WORLD_FILE)).map_err(|e| format!("{WORLD_FILE}: {e}"))?;
+    BenchWorld::parse(&text)
 }
 
 fn compile(path: &str) -> Result<PhysRig, String> {
@@ -109,131 +58,9 @@ fn write_csv(dir: &Path, name: &str, header: &str, rows: &[Vec<f64>]) -> Result<
     Ok(())
 }
 
-/// The dyno: full-load torque, power and specific fuel consumption (at the map's best load) against rpm.
-fn engine_bench(b: &Bed, out: &Path) -> Result<(), String> {
-    let d = &b.rig.drivetrain.engine;
-    let e = Engine::new(d, &Tunings::shipped().engine)?;
-    let mut rows = Vec::new();
-    let (mut peak_t, mut peak_p) = ((0.0, 0.0), (0.0, 0.0));
-    let mut rpm = d.idle_rpm;
-    while rpm <= d.redline_rpm {
-        let w = rpm * RPM_TO_RAD_S;
-        let (t, p) = (e.full_load_nm(w), e.power_w(w, 1.0) / 1000.0); // const-ok: W to kW
-        if t > peak_t.0 {
-            peak_t = (t, rpm);
-        }
-        if p > peak_p.0 {
-            peak_p = (p, rpm);
-        }
-        rows.push(vec![rpm, t, p, e.bsfc_g_kwh(w, 0.75)]); // const-ok: the map's best load fraction is 0.75
-        rpm += (d.redline_rpm - d.idle_rpm) / 40.0; // const-ok: 41 points along the curve
-    }
-    println!(
-        "{}: peak torque {:.0} N m at {:.0} rpm, peak power {:.1} kW at {:.0} rpm",
-        b.id, peak_t.0, peak_t.1, peak_p.0, peak_p.1
-    );
-    write_csv(out, &format!("engine_{}.csv", b.id), "rpm,torque_nm,power_kw,bsfc_g_kwh", &rows)
-}
-
-/// Speed in each gear at idle, at the (capped) upshift point and at the redline.
-fn shift_bench(b: &Bed, out: &Path) -> Result<(), String> {
-    let d = &b.rig.drivetrain;
-    let wheel = b.veh.wheel_radius_m;
-    let kmh = |rpm: f64, g: usize| {
-        rpm * RPM_TO_RAD_S * wheel / (b.pt.gear_ratio(g).unwrap_or(1.0) * b.pt.driveline_ratio()) * KMH
-    };
-    let mut rows = Vec::new();
-    println!("{}: gear  overall  km/h@idle  km/h@upshift  km/h@redline", b.id);
-    for g in 1..=d.gearbox.forward_ratios.len() {
-        let r = vec![
-            g as f64,
-            b.pt.gear_ratio(g).unwrap_or(1.0) * b.pt.driveline_ratio(),
-            kmh(d.engine.idle_rpm, g),
-            kmh(d.gearbox.shift.upshift_rpm, g),
-            kmh(d.engine.redline_rpm, g),
-        ];
-        println!("  {:>4} {:>8.2} {:>10.1} {:>13.1} {:>13.1}", g, r[1], r[2], r[3], r[4]);
-        rows.push(r);
-    }
-    write_csv(
-        out,
-        &format!("shift_{}.csv", b.id),
-        "gear,overall_ratio,kmh_at_idle,kmh_at_upshift,kmh_at_redline",
-        &rows,
-    )
-}
-
-/// Flat out from rest for 60 s: the acceleration trace and the times to 32 and 48 km/h.
-fn launch_bench(mut b: Bed, out: &Path) -> Result<(), String> {
-    let go = DriveInputs { throttle: 1.0, ..Default::default() };
-    let (mut rows, mut t32, mut t48) = (Vec::new(), None, None);
-    for k in 0..(60 * 240) {
-        let t = f64::from(k) * STEP_S;
-        b.veh.step(STEP_S, &mut b.pt, &go);
-        let v = b.veh.speed_m_s * KMH;
-        t32 = t32.or((v >= 32.0).then_some(t)); // const-ok: the brief's 0-32 km/h benchmark
-        t48 = t48.or((v >= 48.0).then_some(t)); // const-ok: the proving ground's 0-48 km/h benchmark
-        if k % 60 == 0 {
-            let tel = b.pt.telemetry();
-            rows.push(vec![t, v, tel.engine_rpm, f64::from(tel.gear)]);
-        }
-    }
-    let fmt = |t: Option<f64>| t.map_or("not reached".to_string(), |t| format!("{t:.1} s"));
-    println!("{}: 0-32 km/h {}, 0-48 km/h {}, {:.0} km/h after 60 s", b.id, fmt(t32), fmt(t48), b.veh.speed_m_s * KMH);
-    write_csv(out, &format!("launch_{}.csv", b.id), "t_s,speed_kmh,engine_rpm,gear", &rows)
-}
-
-/// A long descent at a held speed on the vehicle's own brakes and gearbox: disc temperature and the pedal it takes.
-fn brake_bench(mut b: Bed, world: &BenchWorld, out: &Path) -> Result<(), String> {
-    b.veh.grade_rad = -world.descent_grade_rad.v;
-    let hold = 10.0; // const-ok: the held descent speed, m/s: a driver's choice on a mountain road
-    b.veh.speed_m_s = hold;
-    let (mut rows, mut peak) = (Vec::new(), 0.0_f64);
-    for k in 0..(300 * 240) {
-        let brake = (0.2 + 0.6 * (b.veh.speed_m_s - hold)).clamp(0.0, 1.0); // const-ok: a feed-forward and a trim, the driver
-        b.veh.step(STEP_S, &mut b.pt, &DriveInputs { brake, ..Default::default() });
-        let temp = b.pt.telemetry().brake_temps_k.iter().copied().fold(0.0, f64::max);
-        peak = peak.max(temp);
-        if k % 240 == 0 {
-            rows.push(vec![f64::from(k) * STEP_S, b.veh.speed_m_s, temp, brake, f64::from(b.pt.telemetry().gear)]);
-        }
-    }
-    let fade = b.rig.drivetrain.brakes.first().map_or(0.0, |x| x.fade_start_k);
-    println!(
-        "{}: 300 s down {:.0} degrees at {hold} m/s: hottest disc {peak:.0} K (fade starts at {fade:.0} K)",
-        b.id,
-        world.descent_grade_rad.v.to_degrees()
-    );
-    write_csv(out, &format!("brake_{}.csv", b.id), "t_s,speed_m_s,disc_temp_k,pedal,gear", &rows)
-}
-
-/// Consumption at a steady cruise on level ground: a PI driver settles for 90 s, then fuel and distance are integrated for 120 s.
-fn fuel_bench(mut b: Bed, world: &BenchWorld, tank_l: Option<f64>) -> Result<Vec<f64>, String> {
-    let target = world.cruise_kmh.v / KMH;
-    let (mut integral, mut start) = (0.0, None);
-    for k in 0..(210 * 240) {
-        let err = target - b.veh.speed_m_s;
-        integral = (integral + 0.05 * err * STEP_S).clamp(0.0, 1.0); // const-ok: driver gains
-        let throttle = if k < 20 * 240 { 1.0 } else { (0.4 * err + integral).clamp(0.0, 1.0) }; // const-ok: driver gains and the launch
-        b.veh.step(STEP_S, &mut b.pt, &DriveInputs { throttle, gear: GearRequest::Auto, ..Default::default() });
-        if k == 90 * 240 {
-            start = Some((b.pt.telemetry().fuel_used_kg, b.veh.distance_m));
-        }
-    }
-    let (f0, d0) = start.ok_or("bench too short")?;
-    let (fuel_kg, km) = (b.pt.telemetry().fuel_used_kg - f0, (b.veh.distance_m - d0) / 1000.0); // const-ok: m to km
-    let kg_km = fuel_kg / km;
-    let l_100 = kg_km / world.fuel_density_kg_m3.v * 1000.0 * 100.0; // const-ok: m3 to L and per 100 km
-    let range = tank_l.map_or(f64::NAN, |l| l * world.fuel_density_kg_m3.v / 1000.0 / kg_km);
-    println!(
-        "{}: {:.1} km/h cruise burns {:.4} kg/km = {:.1} L/100 km{}",
-        b.id,
-        b.veh.speed_m_s * KMH,
-        kg_km,
-        l_100,
-        tank_l.map_or(String::new(), |l| format!("; a {l} L tank lasts {range:.0} km"))
-    );
-    Ok(vec![b.veh.speed_m_s * KMH, kg_km, l_100, range])
+fn emit(r: &Report, out: &Path) -> Result<(), String> {
+    println!("{}", r.summary);
+    write_csv(out, &r.file, r.header, &r.rows)
 }
 
 fn bench(args: &[String]) -> Result<(), String> {
@@ -250,26 +77,25 @@ fn bench(args: &[String]) -> Result<(), String> {
             _ => return Err(format!("unknown option {a}; {USAGE}")),
         }
     }
-    let world = BenchWorld::load()?;
+    let world = load_world()?;
     let mut fuel_rows = Vec::new();
     for v in &vehicles {
-        let b = bed(compile(v)?, &world)?;
+        let b = Bed::new(compile(v)?, &world)?;
         match what {
-            "engine" => engine_bench(&b, &out)?,
-            "shift" => shift_bench(&b, &out)?,
-            "launch" => launch_bench(b, &out)?,
-            "brake" => brake_bench(b, &world, &out)?,
-            "fuel" => fuel_rows.push(fuel_bench(b, &world, tank)?),
+            "engine" => emit(&benches::engine(&b)?, &out)?,
+            "shift" => emit(&benches::shift(&b), &out)?,
+            "launch" => emit(&benches::launch(b), &out)?,
+            "brake" => emit(&benches::brake(b, &world), &out)?,
+            "fuel" => {
+                let f = benches::fuel(b, &world, tank)?;
+                println!("{}", f.summary);
+                fuel_rows.push(vec![fuel_rows.len() as f64, f.cruise_kmh, f.kg_per_km, f.l_per_100km, f.range_km]);
+            }
             _ => return Err(USAGE.to_string()),
         }
     }
     if what == "fuel" {
-        let rows: Vec<Vec<f64>> = fuel_rows
-            .iter()
-            .enumerate()
-            .map(|(i, r)| std::iter::once(i as f64).chain(r.iter().copied()).collect())
-            .collect();
-        write_csv(&out, "fuel.csv", "vehicle_index,cruise_kmh,kg_per_km,l_per_100km,range_km", &rows)?;
+        write_csv(&out, "fuel.csv", "vehicle_index,cruise_kmh,kg_per_km,l_per_100km,range_km", &fuel_rows)?;
     }
     Ok(())
 }
@@ -416,16 +242,15 @@ mod tests {
 
     #[test]
     fn cruise_fuel_per_km_is_at_least_the_best_point_bsfc_times_the_road_work_and_not_absurdly_more() {
-        let world = super::BenchWorld::load().unwrap();
+        let world = super::load_world().unwrap();
         for file in super::GARAGE_FILES {
             let rig = super::compile(file).unwrap();
-            let b = super::bed(rig.clone(), &world).unwrap();
+            let b = super::Bed::new(rig.clone(), &world).unwrap();
             let v = world.cruise_kmh.v / 3.6;
             let road_force =
                 world.rolling_resistance_coeff.v * b.veh.mass_kg * world.gravity_m_s2.v + b.veh.drag_n_s2_m2 * v * v;
             let best_kg_per_km = road_force * 1000.0 / 3.6e6 * rig.drivetrain.engine.bsfc_best_g_kwh / 1000.0;
-            let row = super::fuel_bench(b, &world, None).unwrap();
-            let kg_km = row[1];
+            let kg_km = super::benches::fuel(b, &world, None).unwrap().kg_per_km;
             assert!(kg_km >= best_kg_per_km, "{file}: {kg_km} kg/km is below the thermodynamic floor {best_kg_per_km}");
             assert!(kg_km <= 4.0 * best_kg_per_km, "{file}: {kg_km} kg/km is more than 4 x the floor {best_kg_per_km}");
         }
