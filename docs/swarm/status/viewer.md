@@ -1,6 +1,6 @@
 # Status: VIEWER
 
-**Last updated:** 2026-10-10 18:03 UTC | **Branch:** lane/viewer/pin-v03 | **Contract pinned:** contract-v0.3 (commit 0982843) | **Phase:** slice 2 stage A (charts, Workshop note) done; idle until stage B
+**Last updated:** 2026-10-10 18:09 UTC | **Branch:** lane/viewer/pin-v03 | **Contract pinned:** contract-v0.3 (commit 0982843) | **Phase:** slice 2 stage A (charts, Workshop note) done; idle until stage B
 
 ## Done
 - Spike S-V passes (WebGL 2 under SwiftShader, 46 ms/frame, 10 s clip = 72 KB): `docs/lanes/viewer/spike-v.md`.
@@ -37,6 +37,8 @@
 
 - Slice 2 stage A (PR on `lane/viewer/charts`): the **tornado** and the **ladder** as PNG charts (`w5k viewer tornado DIR/impact.json --out t.png`, `w5k viewer ladder ladder.json --out l.png`; `tools/viewer/chart.mjs`, drawing in `src/charts.js`; light and dark themes; 23 checks in `node tools/viewer/test-charts.mjs`; Rust tests keep the sample files honest and check VALIDATION's own `impact::evaluate` output for the fields and words the chart reads). **The tornado reads VALIDATION's real `impact.json`** (their runner landed while I built it, so I dropped my stub shape): one panel per benchmark, one bar per vehicle for each lever, their verdicts drawn as they are, failed checks always shown, "no runner yet" benchmarks named. Real picture `docs/lanes/viewer/media/tornado-impact.png` (31 of 54 signs right, 57%, on `integration` after TRACKS and CHASSIS merged; the findings are theirs). The **ladder** still reads a stub shape of mine (`w5k-ladder-1`, `docs/lanes/viewer/charts.md`) with invented numbers (the picture says STUB DATA) until TRACKS's ladder bench exists: request `docs/swarm/requests/viewer-validation-impact-shape.md` (optional names and thresholds in `impact.json`; TRACKS to give me its CSV columns or write the JSON). Palette checked with the dataviz validator, both modes. `chart.mjs` re-saves a picture over 300 KB with a 64-colour palette (media lint).
 - Workshop design note (text only, same PR): `docs/lanes/viewer/workshop-design-note.md`: three layers of answer (instant re-fit in the browser, proxy skin about 0.5 s, final skin about 5 s), the endpoints `w5k drive` needs, the budget against "under 10 s", the test that will enforce it, five open questions with defaults.
+
+- Track animation plan (text only, at ARCH's request, `docs/lanes/viewer/track-animation-note.md`): the belt needs no new replay data (`RenderRig.track_runs` plus the sprocket spin already in the frame); GEOMETRY's `Belt::round` is the path in closed form, ported to JS and checked against a Rust-written vector; the decisive risk is aliasing (links 0.152 m apart look frozen at 16 km/h at 30 fps), fixed by temporal supersampling (shutter blur); the sinkage overlay reads `ContactFrame.sinkage_m` now, and pressure needs a footprint area per contact (default: show sinkage and force until it exists). No code until ARCH says the contact data is real.
 
 ## In progress
 - Nothing. Waiting for ARCH's stage B (track animation, sinkage and ground-pressure overlay) and for the real impact and ladder files; the charts then read them instead of the stubs.
