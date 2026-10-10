@@ -14,7 +14,7 @@ use w5k_geo::weapon::{gun_module, GunDims};
 use w5k_geo::wheel::{segments_for, wheel, WheelDims};
 use w5k_math::{Transform, Vec3};
 
-const USAGE: &str = "usage: w5k geometry sheet <subject>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close,gun] [--size WxH] [--grid N: tiles per row] [--back F: pull the camera back by this factor]\n       w5k geometry export <subject> --out DIR [--detail 0|1|2]\nsubject: wheel, or hull | truck (4x4) | scout (the light recon 4x4) | truck6 (front steer, rear tandem), then +ring (the roof mount), +mg or +ac25 (a gun on it), +x (pulled apart): truck6+ac25+x";
+const USAGE: &str = "usage: w5k geometry sheet <subject>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close,gun] [--size WxH] [--grid N: tiles per row] [--back F: pull the camera back by this factor]\n       w5k geometry export <subject> --out DIR [--detail 0|1|2]\nsubject: wheel, or hull | truck (4x4) | scout (the light recon 4x4) | hauler (the heavy cargo 4x4) | truck6 (front steer, rear tandem), then +ring (the roof mount), +mg or +ac25 (a gun on it), +x (pulled apart): truck6+ac25+x";
 
 /// Entry point for `w5k geometry <args>`.
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -139,6 +139,7 @@ fn skin_id(subject: &str) -> Option<&'static str> {
     match subject {
         "truck" => Some("utility_4x4"),
         "scout" => Some("scout_4x4"),
+        "hauler" => Some("hauler_4x4"),
         _ => None,
     }
 }

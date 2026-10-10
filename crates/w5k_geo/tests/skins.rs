@@ -11,11 +11,12 @@ use w5k_geo::export::render_rig;
 use w5k_geo::flags::FlagParams;
 use w5k_geo::mesh::Mesh;
 use w5k_geo::part::Part;
+use w5k_geo::raster::{render, Camera, Item, Mode};
 use w5k_geo::skin::{Skin, IDS};
 use w5k_math::{Pcg32, StateHasher, Vec3};
 
 /// The skins whose physics definition FORGE has authored (the Mule's skin, the utility truck, has a dossier-based box instead).
-const AUTHORED: [&str; 1] = ["scout_4x4"];
+const AUTHORED: [&str; 2] = ["scout_4x4", "hauler_4x4"];
 
 fn skin(id: &str) -> Skin {
     Skin::for_id(id).unwrap_or_else(|| panic!("no skin {id}"))
@@ -197,5 +198,55 @@ fn skin_generation_is_deterministic_same_params_same_bytes() {
             golden.trim(),
             "{id}: the generator changed: bless deliberately with W5K_BLESS=1"
         );
+    }
+}
+
+/// The side silhouette of a skin at a fixed scale (20 px per metre, the ground on one row, the hull centre on one column): true where
+/// something is drawn. This is what a vehicle looks like from far away.
+fn silhouette(s: &Skin) -> Vec<bool> {
+    let meshes: Vec<Mesh> = s.parts(0).iter().map(Part::in_hull_frame).collect();
+    let items: Vec<Item> =
+        meshes.iter().map(|m| Item { mesh: m, colour: [0.2, 0.2, 0.2], edge: &[], cavity: &[] }).collect();
+    let ground = -s.dims.ride_height_m();
+    let cam = Camera {
+        eye: Vec3::new(50.0, ground + 2.0, 0.0),
+        target: Vec3::new(0.0, ground + 2.0, 0.0),
+        fov_rad: None,
+        ortho_half_h_m: 2.5,
+    };
+    render(&items, &cam, 200, 100, Mode::Shaded, [1.0, 1.0, 1.0]).chunks(3).map(|p| p != [255, 255, 255]).collect()
+}
+
+#[test]
+fn the_three_skins_have_clearly_different_silhouettes_and_sizes_so_they_read_at_a_distance() {
+    let masks: Vec<(&str, Vec<bool>, Skin)> = IDS.iter().map(|&id| (id, silhouette(&skin(id)), skin(id))).collect();
+    for (_, m, s) in &masks {
+        assert!(m.iter().filter(|&&p| p).count() > 400, "{:?} draws something", s.kind);
+    }
+    for i in 0..masks.len() {
+        for j in i + 1..masks.len() {
+            let (a, b) = (&masks[i], &masks[j]);
+            let (xor, or) =
+                a.1.iter()
+                    .zip(&b.1)
+                    .fold((0, 0), |(x, o), (&p, &q)| (x + usize::from(p != q), o + usize::from(p || q)));
+            let different = xor as f64 / or as f64;
+            println!("{} vs {}: {:.0}% of the union differs", a.0, b.0, 100.0 * different);
+            assert!(
+                different > 0.25,
+                "{} and {} are too alike from the side ({:.0}% differs)",
+                a.0,
+                b.0,
+                100.0 * different
+            );
+            let (da, db) = (a.2.dims, b.2.dims);
+            assert!((da.length_m / db.length_m - 1.0).abs() > 0.15, "{} and {} are too close in length", a.0, b.0);
+            assert!(
+                (da.wheel.outer_radius_m / db.wheel.outer_radius_m - 1.0).abs() > 0.1,
+                "{} and {} have tyres of too similar a size",
+                a.0,
+                b.0
+            );
+        }
     }
 }
