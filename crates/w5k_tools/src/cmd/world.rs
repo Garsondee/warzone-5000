@@ -256,7 +256,10 @@ fn preview(args: &[String]) -> Result<(), String> {
                     "mud" => MUD_RGB,
                     "gravel" => GRAVEL_RGB,
                     "planks" => PLANKS_RGB,
-                    "sand" => SAND_RGB,
+                    "sand" | "beach" => SAND_RGB,
+                    "rock_granite" => GRAVEL_RGB,
+                    "rock_sandstone" => PLANKS_RGB,
+                    "scree" => GRAVEL_RGB,
                     _ => [GROUND_RGB[0] + (w.height_m(x, z) - lo.y) * HEIGHT_TINT_PER_M, GROUND_RGB[1], GROUND_RGB[2]],
                 }
             };

@@ -38,7 +38,7 @@ Geometry stays simple on purpose: a 2 km course at 1 m cells is 8 M triangles ra
 ## 3. Plan (each one small PR, cut from the latest integration)
 **V0 Perspective preview** (DONE, `w5k world view`, `crates/w5k_world/src/render.rs`: z-buffered flat-shaded rasteriser, fog, sky, a shadow ray per ground quad against the heightfield; props are low-poly solids; pictures in `docs/lanes/world/media/view/`; trees and rocks do not cast shadows yet) (do first: it is our eyes). Flat-shaded triangle rasteriser with z-buffer, sun direction, hard shadows by shadow-ray against the heightfield, the diorama camera. Outputs `perspective.png` next to `topdown.png`. Test: a known tilted plane gets the Lambert shade the formula gives; a pillar casts a shadow of the right length.
 **V1 Decimated terrain mesh** (DONE, `crates/w5k_world/src/mesh.rs`, `w5k world export|view --mesh TOL`, `docs/swarm/requests/world-viewer-terrain.md`: exact-error RTIN, watertight, material boundaries kept sharp; slice 31 thousand triangles at 25 cm; images `media/view/*-mesh.png`; the interface request to VIEWER is the `mesh` section of that file; the slab skirt is V8) (RTIN or quadtree), flat per-face normals, per-face material from the splat; `terrain.json` gains `mesh` (vertices, indices, face materials) with a stated triangle budget and the maximum height error. Interface request to VIEWER to draw it with flat shading and a slab skirt. Test: max error <= tolerance everywhere; triangle count falls as tolerance rises; every query point is within tolerance of the mesh.
-**V2 Rule-based material painting**: slope > threshold becomes rock of the course's rock type, ledges (flat cells on a cliff) become moss, scree where slope relaxes below a cliff, sand near water and in dry valleys, dirt strips; parameters in the course RON; rock type is a palette entry (grey granite, red sandstone, sand-coloured). Test: no grass on cells steeper than the rock threshold; scree only within a stated distance below a cliff face.
+**V2 Rule-based material painting** (DONE, `PaintDef` in `features.rs`, `paint:` in the course RON, ridge and the two river courses use it; four new hard materials `rock_granite`, `rock_sandstone`, `scree`, `beach`; images `media/view/*-paint.png`; not yet: moss on ledges, dry-valley sand, dirt where traffic goes, curvature, a rule for rock type by height or region): slope > threshold becomes rock of the course's rock type, ledges (flat cells on a cliff) become moss, scree where slope relaxes below a cliff, sand near water and in dry valleys, dirt strips; parameters in the course RON; rock type is a palette entry (grey granite, red sandstone, sand-coloured). Test: no grass on cells steeper than the rock threshold; scree only within a stated distance below a cliff face.
 **V3 Procedural rocks**: a generator for boulder meshes (noise-displaced icosphere decimated to N faces, flat shaded) with a size/shape/rounding parameter set and a collider (sphere now, convex hull after CCR W-3), outcrop and scree scatter rules, cliff strata (layered planes by quantised height plus ledge cap). Test: facet count within budget; mesh volume vs collider volume sane; scatter never overlaps a road.
 **V4 Road dressing**: centre line (single, double, none), edge lines, dashes, shoulder width and surface, kerbs, wear patches; exported as polylines with style; `w5k world preview` draws them. Test: lines are inside the road, spacing of dashes is as stated, shoulder keeps its stated width.
 **V5 Decor**: tufts, shrubs, tree canopies as render-only instances (position, scale, kind) in `terrain.json`, density by material and slope with the same Poisson sampling; never in `WorldQuery`. Test: none on road or in water; counts follow the stated density; deterministic.
@@ -47,6 +47,19 @@ Geometry stays simple on purpose: a 2 km course at 1 m cells is 8 M triangles ra
 **V8 Diorama preset** (VIEWER/LOOK): slab skirt with a soil strip, background gradient, sun with shadow map, AO; WORLD supplies the slab outline and a camera preset (`diorama` in the course RON).
 
 Order by value over cost: V0, V1, V2, V3, V4, V5, V6, V7. Each lands with a before/after image from V0's renderer, so the owner sees the gap to these four pictures closing.
+
+## 3b. Where each step stands against the four reference images (updated with every PR)
+| Step | Status | What it buys against the images |
+|---|---|---|
+| V0 perspective render | done (#145) | We can see courses at all: flat shading, fog, sky, terrain shadows. |
+| V1 decimated flat-shaded mesh | done (#163) | The faceted look of images 1 to 3: large flat triangles, small ones where the form changes, roads kept sharp. |
+| V2 rule-based painting | done (this PR) | "Materials follow the terrain" (images 1, 2): red sandstone or grey granite where steep (the rock type is a palette name), scree below a face, a sand shore by water. Still plain green elsewhere; moss, dry-valley sand and traffic dirt are next. |
+| V3 procedural rocks | not started | Boulders, outcrops and cliff strata: the biggest remaining gap to images 1 and 3. |
+| V4 road dressing | not started | Centre and edge lines, shoulders, kerbs (images 3, 4). |
+| V5 decor | not started | Tufts, shrubs, tree canopies (2, 3, 4). Trees are cones today. |
+| V6 compound | not started | Image 4. |
+| V7 lakes and shore | not started | The pool of image 2 (the shore rule exists since V2). |
+| V8 diorama | not started | Slab skirt, background, soft sun and AO: the framing of every image. |
 
 ## 4. Decisions and defaults (PROVISIONAL)
 - **PROVISIONAL(look-flat)**: flat shading, not smooth normals, is the house style for terrain and rock.

@@ -69,4 +69,14 @@ CourseDef(
             depth_m: Param(v: 0.6, prov: Spec, src: "course design: wadable by a light 4x4"),
         )],
     )],
+    // Rule-based surface painting: no rock on this flat course, a beach on gentle ground within 5 m of the water.
+    paint: PaintDef(
+        rock_surface: "rock_granite",
+        rock_grade: Param(v: 5.0, prov: Spec, src: "course design: beyond any slope here, so no rock is painted"),
+        scree_min_grade: Param(v: 0.2, prov: Spec, src: "course design: unused, no scree surface"),
+        scree_reach_m: Param(v: 1.0, prov: Spec, src: "course design: unused"),
+        shore_surface: "beach",
+        shore_band_m: Param(v: 5.0, prov: Spec, src: "course design: width of the beach"),
+        shore_max_grade: Param(v: 0.25, prov: Spec, src: "course design: steeper banks stay as they are"),
+    ),
 )

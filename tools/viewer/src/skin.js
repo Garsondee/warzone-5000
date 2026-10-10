@@ -18,7 +18,7 @@ export function unpackSkin(buffer) {
     const indices = e.index_bytes === 2 ? new Uint16Array(buffer, base + e.idx, e.indices) : new Uint32Array(buffer, base + e.idx, e.indices);
     return { name: e.name, node: e.node, material_slot: e.material_slot, positions, normals, edge: unit(e.edge), cavity: unit(e.cav), indices };
   });
-  return { id: h.id, nodes: h.nodes, material_slots: h.material_slots, joint_count: h.joint_count, meshes };
+  return { id: h.id, nodes: h.nodes, material_slots: h.material_slots, joint_count: h.joint_count, meshes, track_runs: h.track_runs ?? [] };
 }
 
 // Visit every vertex of a mesh whatever its form: a flat typed array, or the JSON form (a list of [x, y, z]).

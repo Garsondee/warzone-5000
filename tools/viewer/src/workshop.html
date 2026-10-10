@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workshop</title>
+<link rel="icon" href="data:,">
+<style>
+:root{color-scheme:light;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--grid:#e1e0d9;--accent:#2a78d6;--bad:#d03b3b;--stage:#c9d3dc;--stage2:#eef1f3}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--grid:#2c2c2a;--accent:#3987e5;--stage:#2a3036;--stage2:#3a424a}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--surface);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+#app{display:grid;grid-template-columns:minmax(300px,380px) 1fr;height:100%}
+aside{padding:20px 22px;overflow:auto;border-right:1px solid var(--grid)}
+h1{font-size:20px;margin:0 0 4px}
+.sub{color:var(--ink2);margin:0 0 16px}
+#bases{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+#bases button{font:inherit;padding:6px 12px;border-radius:8px;border:1px solid var(--grid);background:transparent;color:var(--ink);cursor:pointer}
+#bases button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#fff}
+.lever{margin:0 0 16px}
+.lever .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.lever label{font-weight:600}
+.lever .val{color:var(--ink2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.lever input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0}
+.lever button{font:inherit;font-size:13px;border:0;background:none;color:var(--accent);cursor:pointer;padding:0}
+#status{min-height:1.4em;margin:6px 0 14px;color:var(--ink2)}
+#status.error{color:var(--ink)}
+#status.error::before{content:"\2715  ";color:var(--bad);font-weight:700}
+details{margin-top:14px;color:var(--ink2)}
+details pre{white-space:pre-wrap;font:12px/1.45 ui-monospace,Consolas,monospace;margin:8px 0 0}
+#stage{position:relative;background:radial-gradient(120% 100% at 50% 30%,var(--stage2),var(--stage))}
+#c{position:absolute;inset:0;width:100%;height:100%;display:block}
+@media (max-width:760px){#app{grid-template-columns:1fr;grid-template-rows:auto 55vh}aside{border-right:0;border-bottom:1px solid var(--grid)}}
+</style>
+<div id="app">
+  <aside>
+    <h1>Workshop</h1>
+    <p class="sub">Change a design lever; the vehicle is rebuilt around it.</p>
+    <div id="bases" role="group" aria-label="Base vehicle"></div>
+    <div id="levers"></div>
+    <div id="status" role="status" aria-live="polite"></div>
+    <details><summary>What the compile made of it</summary><pre id="report"></pre></details>
+  </aside>
+  <div id="stage"><canvas id="c"></canvas></div>
+</div>
+<script id="data" type="application/json">__DATA__</script>
+<script type="module">__BOOT__</script>

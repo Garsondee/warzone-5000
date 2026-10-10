@@ -45,4 +45,14 @@ CourseDef(
             surface: "gravel",
         )),
     )],
+    // Rule-based surface painting: the face and anything steeper than 0.7 is sandstone, loose scree lies on the steep ground within 14 m below it.
+    paint: PaintDef(
+        rock_surface: "rock_sandstone",
+        rock_grade: Param(v: 0.7, prov: Spec, src: "course design: steeper than this is bare rock (the face is 1.0, the chute 0.45 stays gravel)"),
+        scree_surface: "scree",
+        scree_min_grade: Param(v: 0.2, prov: Spec, src: "course design: flatter ground below a face is just ground"),
+        scree_reach_m: Param(v: 14.0, prov: Spec, src: "course design: how far scree runs out below a face"),
+        shore_band_m: Param(v: 1.0, prov: Spec, src: "course design: no water on this course"),
+        shore_max_grade: Param(v: 0.2, prov: Spec, src: "course design"),
+    ),
 )

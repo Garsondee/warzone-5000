@@ -1,5 +1,5 @@
 // hauler: stand-in vehicle for `w5k world mobility`. Material ids follow content/world/materials.ron order:
-// 0 asphalt, 1 dirt, 2 mud, 3 gravel, 4 riverbed, 5 planks, 6 sand. A surface with no entry falls back to the vehicle's worst.
+// 0 asphalt, 1 dirt, 2 mud, 3 gravel, 4 riverbed, 5 planks, 6 sand, 7 sandy_loam (no row: worst), 8 rock_granite, 9 rock_sandstone, 10 scree, 11 beach (8 to 11 copy dirt, dirt, gravel, dirt: PLACEHOLDER). A surface with no entry falls back to the vehicle's worst.
 MobilitySpec(
     name: "hauler",
     note: "PLACEHOLDER (UNVALIDATED): a heavy 6x6 truck, 5600 kg, 2.45 m wide. Numbers are guesses; replace with a measured CapabilityTable.",
@@ -16,6 +16,10 @@ MobilitySpec(
             (MaterialId(4), 0.2),
             (MaterialId(5), 0.25),
             (MaterialId(6), 0.18),
+            (MaterialId(8), 0.38),
+            (MaterialId(9), 0.38),
+            (MaterialId(10), 0.36),
+            (MaterialId(11), 0.38),
         ],
         top_speed_m_s: [
             (MaterialId(0), 20.0),
@@ -25,6 +29,10 @@ MobilitySpec(
             (MaterialId(4), 3.0),
             (MaterialId(5), 8.0),
             (MaterialId(6), 4.0),
+            (MaterialId(8), 13.0),
+            (MaterialId(9), 13.0),
+            (MaterialId(10), 10.0),
+            (MaterialId(11), 13.0),
         ],
         soil_go: [
             (MaterialId(0), true),
@@ -34,6 +42,10 @@ MobilitySpec(
             (MaterialId(4), false),
             (MaterialId(5), true),
             (MaterialId(6), false),
+            (MaterialId(8), true),
+            (MaterialId(9), true),
+            (MaterialId(10), true),
+            (MaterialId(11), true),
         ],
         max_side_slope_rad: 0.3,
         max_step_m: 0.55,
