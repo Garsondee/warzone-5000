@@ -22,6 +22,91 @@ pub struct Extras {
     /// PROVISIONAL(CCR-forge): the tyre's load sensitivity (contract 0.3, CHASSIS CCR-4). Absent = linear tyres (0).
     #[serde(default)]
     pub tyre_load: Option<TyreLoadExtras>,
+    /// PROVISIONAL(C-020): the component mass budget (design note `mass-budget-note.md`). Absent = the def's `hull.mass_kg` is the whole
+    /// sprung mass at the def's COM, as before.
+    #[serde(default)]
+    pub mass_budget: Option<MassBudgetExtras>,
+}
+
+/// A position in the hull as a designer states it: back from the front of the hull, height above the ground at the design pose, and
+/// sideways (+ right), metres.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PartPos {
+    pub from_front_m: Param,
+    pub height_m: Param,
+    pub lateral_m: Param,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Loading {
+    /// Tanks at the `fill_curb` fraction.
+    Curb,
+    /// Tanks at the `fill_combat` fraction.
+    #[default]
+    Combat,
+}
+
+/// Every part's mass follows from the choice that sizes it; the structure is authored (D3 will derive it from armour and the loft). Linear
+/// laws on purpose (PROVISIONAL): the simplest honest dependence, each coefficient an ESTIMATE with a band and a source.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MassBudgetExtras {
+    /// Hull, body, armour and everything not listed below: mass and where it sits.
+    pub structure_mass_kg: Param,
+    pub structure_pos: PartPos,
+    /// Installed engine (with cooling and accessories), kg per kW of peak power, and where it sits.
+    pub engine_kg_per_kw: Param,
+    pub engine_pos: PartPos,
+    /// Gearbox, transfer case and steer unit, kg per N m of peak engine torque.
+    pub transmission_kg_per_nm: Param,
+    pub transmission_pos: PartPos,
+    /// Final drives: kg per N m of the torque each driven axle (or sprocket) carries (peak torque x first gear x final drive / drives), and
+    /// their height above the ground (they sit at the axles or sprockets).
+    pub final_drive_kg_per_nm: Param,
+    pub final_drive_height_m: Param,
+    pub tank_litres: Param,
+    pub fuel_density_kg_l: Param,
+    pub tank_kg_per_litre: Param,
+    pub fill_curb: Param,
+    pub fill_combat: Param,
+    pub fuel_pos: PartPos,
+    pub crew_count: Param,
+    pub crew_kg_each: Param,
+    pub crew_pos: PartPos,
+    #[serde(default)]
+    pub loading: Loading,
+}
+
+impl MassBudgetExtras {
+    pub fn visit_params(&self, f: &mut dyn FnMut(&str, &Param)) {
+        let pos = |f: &mut dyn FnMut(&str, &Param), n: &str, p: &PartPos| {
+            f(&format!("mass_budget.{n}.from_front_m"), &p.from_front_m);
+            f(&format!("mass_budget.{n}.height_m"), &p.height_m);
+            f(&format!("mass_budget.{n}.lateral_m"), &p.lateral_m);
+        };
+        for (n, p) in [
+            ("structure_mass_kg", &self.structure_mass_kg),
+            ("engine_kg_per_kw", &self.engine_kg_per_kw),
+            ("transmission_kg_per_nm", &self.transmission_kg_per_nm),
+            ("final_drive_kg_per_nm", &self.final_drive_kg_per_nm),
+            ("final_drive_height_m", &self.final_drive_height_m),
+            ("tank_litres", &self.tank_litres),
+            ("fuel_density_kg_l", &self.fuel_density_kg_l),
+            ("tank_kg_per_litre", &self.tank_kg_per_litre),
+            ("fill_curb", &self.fill_curb),
+            ("fill_combat", &self.fill_combat),
+            ("crew_count", &self.crew_count),
+            ("crew_kg_each", &self.crew_kg_each),
+        ] {
+            f(&format!("mass_budget.{n}"), p);
+        }
+        pos(f, "structure_pos", &self.structure_pos);
+        pos(f, "engine_pos", &self.engine_pos);
+        pos(f, "transmission_pos", &self.transmission_pos);
+        pos(f, "fuel_pos", &self.fuel_pos);
+        pos(f, "crew_pos", &self.crew_pos);
+    }
 }
 
 /// `s(k) = 1 / (1 + k (Fz / Fz0 - 1))` scales the friction coefficient and the slip and cornering stiffnesses (Pacejka, ch. 4); `Fz0`
@@ -193,6 +278,9 @@ impl Extras {
         let (s, d, b) = (&self.susp, &self.drive, &self.brake);
         if let Some(t) = &self.tracked {
             t.visit_params(f);
+        }
+        if let Some(m) = &self.mass_budget {
+            m.visit_params(f);
         }
         if let Some(l) = &self.tyre_load {
             f("tyre_load.mu_load_sensitivity", &l.mu_load_sensitivity);
