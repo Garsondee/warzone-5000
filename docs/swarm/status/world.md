@@ -1,6 +1,6 @@
 # Status: WORLD
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/world/props | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/world/rocks | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
 
 ## Done
 - PR 17 settling (merged): spike S-W, design note, CCR text. PR 21 data-driven bump strip (merged).
@@ -16,6 +16,8 @@
 - `w5k world export` + `docs/swarm/requests/world-viewer-terrain.md` (format `w5k-terrain-1`, no contract change: `WorldHeader.terrain` already exists). ARCH asks: (1) terrain in the replay header, then (2) land #41 and a mud/barricade section.
 
 - Road mud crossing (25 m at 35% of the road, `road.mud_crossings` in the course RON) so the truck crosses soft ground on the road; test `road_is_mud_exactly_where_the_crossing_says`. The slice golden hash changed deliberately (course content added), constant updated in the same PR.
+
+- Owner request 2026-10-10 (cliffs with switchbacks, rock fields, a river with amphibious / wooden bridge / road bridge crossings, route choices an AI picks between): plan in `docs/lanes/world/routes-design.md`; CCR text `docs/swarm/requests/world-ccr-water-bridges.md` (water surface query, bridge load limit). Step 1 (rock fields, gravel) in branch `lane/world/rocks`. PROVISIONAL(route-cliff) face grade 1.0; PROVISIONAL(route-bridge) wooden bridge rated not collapsing; PROVISIONAL(route-ai) the AI never sees the survey.
 
 ## Blocked
 - Nothing.

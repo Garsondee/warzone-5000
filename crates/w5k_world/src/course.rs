@@ -12,7 +12,10 @@ use w5k_contract::param::Param;
 use w5k_contract::world::{MaterialId, PropId, PropKind, PropRef, PropShape, WorldQuery};
 use w5k_math::{scalar, Pcg32, Transform, Vec3};
 
-use crate::features::{barricade_blocks, cell_slope, mud_mask, poisson_disc, BarricadeDef, MudDef, TreesDef};
+use crate::features::{
+    barricade_blocks, cell_slope, dilate, mud_mask, poisson_disc, poisson_disc_in, BarricadeDef, MudDef, RockFieldDef,
+    TreesDef,
+};
 use crate::grid::{warped_fbm, GridWorld, CELL_M};
 use crate::strip::standard_material_table;
 
@@ -77,6 +80,8 @@ pub struct CourseDef {
     pub trees: Option<TreesDef>,
     #[serde(default)]
     pub barricade: Option<BarricadeDef>,
+    #[serde(default)]
+    pub rock_fields: Vec<RockFieldDef>,
 }
 
 impl CourseDef {
@@ -97,6 +102,9 @@ pub struct Course {
 /// Noise values at which a stand fades from empty to full density.
 const STAND_NOISE_EDGES: (f64, f64) = (-0.15, 0.35); // const-ok: shape of the clumping
 const STANDS_SALT: u64 = 0x7EEE; // const-ok: noise stream label
+
+/// A rock's centre sits this fraction of its radius above the ground, so it is partly buried and presents a rounded face.
+const BURIAL: f64 = 0.4; // const-ok: how deep rocks sit in the ground
 
 /// The profile is graded to this fraction of the stated road grade; sampled bilinearly the road can add a sliver of slope.
 const PROFILE_MARGIN: f64 = 0.9; // const-ok: safety factor on the stated grade
@@ -383,6 +391,30 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
             }
         }
     }
+    // Rock fields: the ground under a field becomes gravel (never over road or mud).
+    for (k, r) in def.rock_fields.iter().enumerate() {
+        for (l, p) in [
+            ("radius_m", &r.radius_m),
+            ("min_spacing_m", &r.min_spacing_m),
+            ("density", &r.density),
+            ("rock_radius_min_m", &r.rock_radius_min_m),
+            ("rock_radius_max_m", &r.rock_radius_max_m),
+            ("road_clearance_m", &r.road_clearance_m),
+        ] {
+            p.check(&format!("{}.rock_fields[{k}].{l}", def.name))?;
+        }
+        if r.rock_radius_min_m.v > r.rock_radius_max_m.v {
+            return Err(format!("{}.rock_fields[{k}]: rock_radius_min_m exceeds rock_radius_max_m", def.name));
+        }
+        let gravel =
+            materials.id_of(&r.surface).ok_or_else(|| format!("unknown rock field surface `{}`", r.surface))?;
+        for (c, cell) in splat.iter_mut().enumerate() {
+            let (x, z) = xz(c % n, c / n);
+            if *cell == ground.0 as u8 && scalar::hypot(x - r.x_m, z - r.z_m) <= r.radius_m.v {
+                *cell = gravel.0 as u8;
+            }
+        }
+    }
     let heights: Vec<f32> = h.iter().map(|&v| v as f32).collect();
     let mut world = GridWorld::from_arrays(n, heights, splat.clone(), materials);
 
@@ -401,24 +433,7 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
         ] {
             p.check(&format!("{}.trees.{l}", def.name))?;
         }
-        let clear = (t.road_clearance_m.v / CELL_M).ceil() as i64;
-        let mut near_road = vec![false; n * n];
-        for c in (0..n * n).filter(|&c| frozen[c]) {
-            let (i, j) = ((c % n) as i64, (c / n) as i64);
-            for dj in -clear..=clear {
-                for di in -clear..=clear {
-                    let (ni, nj) = (i + di, j + dj);
-                    if ni >= 0
-                        && nj >= 0
-                        && ni < n as i64
-                        && nj < n as i64
-                        && scalar::hypot(di as f64, dj as f64) * CELL_M <= t.road_clearance_m.v
-                    {
-                        near_road[nj as usize * n + ni as usize] = true;
-                    }
-                }
-            }
-        }
+        let near_road = dilate(&frozen, n, t.road_clearance_m.v);
         let accept = |x: f64, z: f64| -> f64 {
             let (i, j) = (((x + half) / CELL_M).round() as usize, ((z + half) / CELL_M).round() as usize);
             let c = j.min(n - 1) * n + i.min(n - 1);
@@ -442,6 +457,35 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
                 shape: PropShape::Cylinder { radius_m: t.trunk_radius_m.v, height_m: t.height_m.v },
                 transform: Transform::from_pos(Vec3::new(x, world.height_m(x, z), z)),
                 break_impulse_ns: t.break_impulse_ns.v,
+            });
+        }
+    }
+    for (k, r) in def.rock_fields.iter().enumerate() {
+        let gravel =
+            world.materials().id_of(&r.surface).ok_or_else(|| format!("unknown rock field surface `{}`", r.surface))?.0
+                as u8;
+        let near_road = dilate(&frozen, n, r.road_clearance_m.v);
+        let accept = |x: f64, z: f64| -> f64 {
+            let (i, j) = (((x + half) / CELL_M).round() as usize, ((z + half) / CELL_M).round() as usize);
+            let c = j.min(n - 1) * n + i.min(n - 1);
+            if splat[c] == gravel && !near_road[c] && scalar::hypot(x - r.x_m, z - r.z_m) <= r.radius_m.v {
+                r.density.v
+            } else {
+                0.0
+            }
+        };
+        let mut rng = Pcg32::derive(def.seed, &[4, k as u64]); // stage 4: rock field k
+        let pts = poisson_disc_in(&mut rng, (r.x_m, r.z_m), r.radius_m.v, r.min_spacing_m.v, &accept);
+        for (x, z) in pts {
+            // Many small and few large: u^2 skews the size toward the minimum.
+            let u = rng.next_f64();
+            let rad = r.rock_radius_min_m.v + (r.rock_radius_max_m.v - r.rock_radius_min_m.v) * u * u;
+            props.push(PropRef {
+                id: PropId(props.len() as u32),
+                kind: PropKind::Rock,
+                shape: PropShape::Sphere { radius_m: rad },
+                transform: Transform::from_pos(Vec3::new(x, world.height_m(x, z) + BURIAL * rad, z)),
+                break_impulse_ns: f64::INFINITY,
             });
         }
     }
@@ -477,7 +521,7 @@ mod tests {
         CourseDef::from_ron(include_str!("../../../content/world/courses/slice.ron")).expect("slice.ron parses")
     }
 
-    const GOLDEN_SLICE_HASH: u64 = 0x2013_5b8d_d833_7db3;
+    const GOLDEN_SLICE_HASH: u64 = 0xf30c_bc94_ccbc_4e71;
 
     fn hash(c: &Course) -> u64 {
         let mut s = StateHasher::new();
@@ -605,7 +649,12 @@ mod tests {
             assert_ne!(c.world.material_id_at(x, z), c.road_material);
             let near = c.road.iter().map(|r| scalar::hypot(r.0 - x, r.1 - z)).fold(f64::INFINITY, f64::min);
             assert!(near >= w2 + clearance - 2.0, "tree {near} m from the road centre");
-            for o in c.world.props().iter().filter(|o| o.kind != PropKind::Tree) {
+            for o in c
+                .world
+                .props()
+                .iter()
+                .filter(|o| matches!(o.kind, PropKind::Barricade | PropKind::Building | PropKind::Wall))
+            {
                 let (lo, hi) = (o.transform.pos - Vec3::new(8.0, 0.0, 8.0), o.transform.pos + Vec3::new(8.0, 0.0, 8.0));
                 assert!(x < lo.x || x > hi.x || z < lo.z || z > hi.z, "tree beside a barricade block");
             }
@@ -682,5 +731,78 @@ mod tests {
             }
         }
         assert!(inside > 15 && outside > 300);
+    }
+
+    fn rocks(c: &Course) -> Vec<&PropRef> {
+        c.world.props().iter().filter(|p| p.kind == PropKind::Rock).collect()
+    }
+
+    #[test]
+    fn rocks_stay_inside_their_field_and_keep_off_the_road() {
+        let d = def();
+        let c = generate(&d).expect("course");
+        let f = &d.rock_fields[0];
+        let rocks = rocks(&c);
+        assert!(rocks.len() > 100, "the field should be full of stones ({})", rocks.len());
+        for r in &rocks {
+            let (x, z) = (r.transform.pos.x, r.transform.pos.z);
+            assert!(scalar::hypot(x - f.x_m, z - f.z_m) <= f.radius_m.v + 1e-9);
+            let near = c.road.iter().map(|p| scalar::hypot(p.0 - x, p.1 - z)).fold(f64::INFINITY, f64::min);
+            assert!(near >= d.road.width_m.v * 0.5 + f.road_clearance_m.v - 2.0, "rock {near} m from the road centre");
+            assert_eq!(c.world.material_at(x, z).name, "gravel");
+        }
+    }
+
+    #[test]
+    fn rocks_keep_the_stated_minimum_spacing_and_leave_a_gap_to_drive_through() {
+        let d = def();
+        let c = generate(&d).expect("course");
+        let f = &d.rock_fields[0];
+        let rocks = rocks(&c);
+        for (a, pa) in rocks.iter().enumerate() {
+            for pb in &rocks[a + 1..] {
+                let (p, q) = (pa.transform.pos, pb.transform.pos);
+                assert!(scalar::hypot(p.x - q.x, p.z - q.z) >= f.min_spacing_m.v - 1e-9);
+            }
+        }
+        // The widest rock allowed leaves this much clear between two of its kind: the field is hard, not a wall.
+        assert!(
+            f.min_spacing_m.v - 2.0 * f.rock_radius_max_m.v > 0.5,
+            "a lane at least 0.5 m wide must exist between the largest rocks"
+        );
+    }
+
+    #[test]
+    fn rocks_sit_partly_buried_in_the_ground() {
+        let c = generate(&def()).expect("course");
+        for r in rocks(&c) {
+            let PropShape::Sphere { radius_m } = r.shape else { panic!("rocks are spheres") };
+            let ground = c.world.height_m(r.transform.pos.x, r.transform.pos.z);
+            let above = r.transform.pos.y - ground;
+            assert!((above - BURIAL * radius_m).abs() < 1e-9, "centre {above} m above the ground");
+            assert!(above < radius_m && above > 0.0, "a rock must stand out of the ground without floating");
+        }
+    }
+
+    #[test]
+    fn rock_sizes_skew_to_small_stones() {
+        let d = def();
+        let c = generate(&d).expect("course");
+        let f = &d.rock_fields[0];
+        let radii: Vec<f64> = rocks(&c)
+            .iter()
+            .map(|r| match r.shape {
+                PropShape::Sphere { radius_m } => radius_m,
+                _ => 0.0,
+            })
+            .collect();
+        let mid = 0.5 * (f.rock_radius_min_m.v + f.rock_radius_max_m.v);
+        let small = radii.iter().filter(|&&r| r < mid).count();
+        assert!(
+            small * 5 > radii.len() * 3,
+            "more than 60% should be below the mid radius ({small} of {})",
+            radii.len()
+        );
+        assert!(radii.iter().all(|&r| r >= f.rock_radius_min_m.v - 1e-9 && r <= f.rock_radius_max_m.v + 1e-9));
     }
 }
