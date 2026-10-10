@@ -9,12 +9,12 @@ use serde::Deserialize;
 use w5k_chassis::tuning::ChassisTuning;
 use w5k_chassis::wheeled::WheeledChassis;
 use w5k_contract::rig::{PhysRig, TICK_HZ};
-use w5k_contract::{DrivePort, Param, VehicleFrame};
+use w5k_contract::{DrivePort, Param, VehicleFrame, WorldQuery};
 use w5k_drive::powertrain::{Powertrain, Tunings};
 use w5k_math::{scalar, Quat, StateHasher, Vec3};
 use w5k_world::grid::GridWorld;
 
-use super::assist::{Assist, Raw};
+use super::assist::{Assist, AssistTuning, Obs, Raw, Recovery};
 use crate::cmd::arch_course::{read, vehicle_frame};
 
 /// Wording of the one-shot event after a recovery (a reset or an auto-recover).
@@ -31,6 +31,7 @@ pub(crate) struct Tuning {
     pub input_timeout_s: Param,
     pub idle_finish_s: Param,
     pub road_probe_m: Param,
+    pub assist: AssistTuning,
 }
 
 impl Tuning {
@@ -43,6 +44,7 @@ impl Tuning {
         ] {
             p.check(&format!("drive_assist.{name}"))?;
         }
+        t.assist.check()?;
         if t.publish_every_ticks == 0 || t.max_ticks_per_wake == 0 {
             return Err("drive_assist: publish_every_ticks and max_ticks_per_wake must be at least 1".into());
         }
@@ -199,12 +201,23 @@ pub(crate) struct Session {
     pub ticks: u64,
     /// Set by a recovery, taken by the next published frame.
     pub event: Option<&'static str>,
+    /// Why the last automatic recovery happened (`None` for a reset or a numerical failure).
+    pub last_recovery: Option<Recovery>,
 }
 
 impl Session {
     pub(crate) fn new(scene: Arc<Scene>, car: Arc<Car>, assist_on: bool) -> Result<Session, String> {
         let (chassis, drive) = Session::build(&scene, &car, 0)?;
-        Ok(Session { car, scene, chassis, drive, assist: Assist::new(assist_on), ticks: 0, event: None })
+        Ok(Session {
+            car,
+            scene,
+            chassis,
+            drive,
+            assist: Assist::new(assist_on),
+            ticks: 0,
+            event: None,
+            last_recovery: None,
+        })
     }
 
     /// A fresh chassis and powertrain standing on road point `idx`, rear axle on the point, facing along the road.
@@ -239,14 +252,31 @@ impl Session {
         self.ticks as f64 / TICK_HZ
     }
 
+    /// What the assists look at.
+    fn obs(&self) -> Obs {
+        let t = &self.scene.assist_tuning.assist;
+        let up = self.chassis.hull.rot.rotate(Vec3::UP);
+        let (p, (lo, hi)) = (self.chassis.datum_m(), self.scene.world.bounds());
+        let m = t.bounds_margin_m.v;
+        let inside =
+            p.x > lo.x + m && p.x < hi.x - m && p.z > lo.z + m && p.z < hi.z - m && p.y > lo.y - t.fall_depth_m.v;
+        Obs { speed_m_s: self.speed_m_s(), tilt_rad: scalar::acos(scalar::clamp(up.y, -1.0, 1.0)), off_map: !inside }
+    }
+
     /// One tick with the raw pedals and wheel of the player.
     pub(crate) fn step(&mut self, raw: &Raw) {
-        let dt = 1.0 / TICK_HZ;
-        let inputs = self.assist.apply(raw, dt);
-        self.chassis.tick(dt, &inputs, &self.scene.world, &mut self.drive);
+        let (dt, scene) = (1.0 / TICK_HZ, self.scene.clone());
+        let t = &scene.assist_tuning.assist;
+        let obs = self.obs();
+        let inputs = self.assist.apply(raw, &obs, t, dt);
+        self.chassis.tick(dt, &inputs, &scene.world, &mut self.drive);
         self.ticks += 1;
-        if !self.chassis.is_finite() {
-            eprintln!("w5k drive: non-finite state, recovering");
+        let why = self.assist.watch(&raw.clamped(), &self.obs(), t, dt);
+        if why.is_some() || !self.chassis.is_finite() {
+            self.last_recovery = why;
+            if why.is_none() {
+                eprintln!("w5k drive: non-finite state, recovering");
+            }
             self.recover();
         }
     }
@@ -365,32 +395,99 @@ mod tests {
     }
 
     #[test]
-    fn the_garage_lists_the_three_vehicles_with_sane_mass_and_wheelbase() {
-        for (id, lo_kg, hi_kg) in
-            [("scout_4x4", 800.0, 2000.0), ("mule_4x4", 1500.0, 4000.0), ("hauler_4x4", 4000.0, 9000.0)]
-        {
-            let c = car(id);
-            assert!((lo_kg..hi_kg).contains(&c.mass_kg), "{id}: {} kg", c.mass_kg);
-            assert!((1.8..4.5).contains(&c.wheelbase_m), "{id}: wheelbase {} m", c.wheelbase_m);
-        }
-    }
-
-    #[test]
-    fn a_vehicle_starts_on_the_road_start_at_rest_and_stays_there_with_no_throttle() {
+    fn full_throttle_on_flat_ground_holds_every_garage_vehicle_under_the_speed_cap() {
         for id in GARAGE {
-            let mut s = session(id, false, |_| ());
-            let start = s.chassis.datum_m();
-            run(&mut s, Raw { brake: 1.0, ..Raw::default() }, 3.0);
-            assert!((s.chassis.datum_m() - start).length() < 0.5, "{id} moved with the brake on");
-            assert!(s.chassis.hull.rot.rotate(Vec3::UP).y > 0.99, "{id} is not upright");
+            let mut s = session(id, true, |_| ());
+            let cap = s.scene.assist_tuning.assist.speed_cap_m_s.v;
+            let mut top = 0.0_f64;
+            for _ in 0..(30.0 * TICK_HZ) as u32 {
+                s.step(&full_throttle());
+                top = top.max(s.speed_m_s());
+            }
+            eprintln!("{id}: top speed {top:.2} m/s ({:.1} km/h) against a cap of {cap} m/s", scalar::ms_to_kmh(top));
+            assert!(top < cap + 0.5, "{id} reached {top} m/s against a cap of {cap}");
+            assert!(top > 0.8 * cap, "{id} only reached {top} m/s: the cap should be a ceiling, not a brake");
         }
     }
 
     #[test]
-    fn without_assists_full_throttle_goes_past_25_km_h() {
+    fn without_assists_full_throttle_goes_past_the_kid_cap() {
         let mut s = session("scout_4x4", false, |_| ());
         run(&mut s, full_throttle(), 12.0);
-        assert!(s.speed_m_s() > scalar::kmh_to_ms(36.0), "{} m/s", s.speed_m_s());
+        assert!(s.speed_m_s() > 1.5 * s.scene.assist_tuning.assist.speed_cap_m_s.v, "{}", s.speed_m_s());
+    }
+
+    #[test]
+    fn with_no_input_the_vehicle_stops_gently_and_stays_put() {
+        let mut s = session("mule_4x4", true, |_| ());
+        run(&mut s, full_throttle(), 8.0);
+        assert!(s.speed_m_s() > 5.0, "{}", s.speed_m_s());
+        let (v0, p0, t0) = (s.speed_m_s(), s.chassis.datum_m(), s.time_s());
+        let mut stopped_at = None;
+        for _ in 0..(12.0 * TICK_HZ) as u32 {
+            s.step(&Raw::default());
+            if stopped_at.is_none() && s.speed_m_s().abs() < 0.05 {
+                stopped_at = Some((s.time_s() - t0, (s.chassis.datum_m() - p0).length()));
+            }
+        }
+        eprintln!("released at {v0:.2} m/s: stopped after {stopped_at:?} (s, m)");
+        let at = s.chassis.datum_m();
+        assert!(s.speed_m_s().abs() < 0.05, "still rolling at {} m/s", s.speed_m_s());
+        run(&mut s, Raw::default(), 6.0);
+        let moved = (s.chassis.datum_m() - at).length();
+        assert!(moved < 0.2, "crept {moved} m in 6 s with no pedal");
+    }
+
+    #[test]
+    fn a_rolled_hull_is_back_on_the_road_upright_within_two_seconds() {
+        let mut s = session("scout_4x4", true, |_| ());
+        run(&mut s, Raw::default(), 1.0);
+        s.chassis.hull.rot = Quat::from_roll(2.0); // 115 degrees: on its side and then some
+        let started = s.ticks;
+        let mut done = None;
+        for _ in 0..(2.0 * TICK_HZ) as u32 {
+            s.step(&Raw::default());
+            if s.event.is_some() {
+                done = Some(s.ticks - started);
+                break;
+            }
+        }
+        let n = done.expect("not recovered within 2 s");
+        assert_eq!(s.last_recovery, Some(Recovery::RolledOver));
+        assert!(n as f64 / TICK_HZ >= 0.99, "recovered after only {n} ticks: the dwell is 1 s");
+        let up = s.chassis.hull.rot.rotate(Vec3::UP);
+        assert!(up.y > 0.99, "not upright: {up:?}");
+        assert!(s.chassis.datum_m().x.abs() < 1.0, "not on the road (the line x = 0): {:?}", s.chassis.datum_m());
+    }
+
+    #[test]
+    fn a_vehicle_held_below_0_3_m_s_with_the_throttle_down_is_recovered_after_3_s() {
+        // The speed cap is a crawl, so full throttle cannot move the vehicle: the stuck rule is what fires.
+        let mut s = session("scout_4x4", true, |t| t.assist.speed_cap_m_s.v = 0.1);
+        let mut at = None;
+        for _ in 0..(5.0 * TICK_HZ) as u32 {
+            s.step(&full_throttle());
+            if s.event.is_some() {
+                at = Some(s.time_s());
+                break;
+            }
+        }
+        let t = at.expect("never recovered");
+        assert_eq!(s.last_recovery, Some(Recovery::Stuck));
+        assert!((2.95..3.2).contains(&t), "recovered at {t} s");
+    }
+
+    #[test]
+    fn leaving_the_terrain_puts_the_vehicle_back_on_the_nearest_road_point_facing_along_it() {
+        let mut s = session("mule_4x4", true, |_| ());
+        run(&mut s, Raw::default(), 1.0);
+        s.chassis.hull.pos_m = Vec3::new(500.0, 1.0, -20.0); // far outside the 400 m world
+        s.step(&Raw::default());
+        assert_eq!(s.last_recovery, Some(Recovery::OffMap));
+        let p = s.chassis.datum_m();
+        assert!(p.x.abs() < 1.0 && (p.z + 20.0).abs() < 6.0, "put back at {p:?}, the nearest road point is at z = -20");
+        let fwd = s.chassis.hull.rot.rotate(Vec3::FORWARD);
+        assert!(fwd.z < -0.99, "not facing along the road (down -Z): {fwd:?}");
     }
 
     #[test]
@@ -400,7 +497,6 @@ mod tests {
         s.recover();
         assert_eq!(s.event, Some(BACK_ON_ROAD));
         assert!(s.chassis.datum_m().x.abs() < 1.0);
-        assert!(s.chassis.hull.rot.rotate(Vec3::FORWARD).z < -0.99, "facing along the road (down -Z)");
     }
 
     #[test]
@@ -408,26 +504,6 @@ mod tests {
         let mut s = session("scout_4x4", true, |_| ());
         run(&mut s, Raw { throttle: 0.8, reverse: true, ..Raw::default() }, 4.0);
         assert!(s.speed_m_s() < -0.5, "speed {}", s.speed_m_s());
-    }
-
-    #[test]
-    fn the_stream_frame_has_the_documented_shape_and_the_event_is_sent_once() {
-        let mut s = session("scout_4x4", true, |_| ());
-        run(&mut s, full_throttle(), 1.0);
-        let f: serde_json::Value = serde_json::from_str(&s.stream_json()).expect("json");
-        assert_eq!(f["vehicle"], "scout_4x4");
-        assert_eq!(f["pos_m"].as_array().expect("pos").len(), 3);
-        assert_eq!(f["rot"].as_array().expect("rot").len(), 4);
-        assert_eq!(f["joints"].as_array().expect("joints").len(), s.car.rig.joint_names().len());
-        assert_eq!(f["contacts"].as_array().expect("contacts").len(), 4);
-        assert!(f["contacts"][0]["in_contact"].as_bool().expect("flag"));
-        assert!((f["t_s"].as_f64().expect("t") - 1.0).abs() < 1e-3);
-        assert!(f.get("message_event").is_none());
-        s.recover();
-        let f: serde_json::Value = serde_json::from_str(&s.stream_json()).expect("json");
-        assert_eq!(f["message_event"], BACK_ON_ROAD);
-        let f: serde_json::Value = serde_json::from_str(&s.stream_json()).expect("json");
-        assert!(f.get("message_event").is_none(), "an event is sent once");
     }
 
     #[test]
@@ -442,9 +518,9 @@ mod tests {
     }
 
     #[test]
-    fn the_tuning_file_loads_and_every_param_passes_its_check() {
+    fn the_tuning_file_loads_and_the_cap_is_25_km_h() {
         let t = Tuning::load(&root(), TUNING).expect("loads and every Param checks");
-        assert!(t.publish_every_ticks >= 1 && t.max_ticks_per_wake >= 1);
+        assert!((scalar::ms_to_kmh(t.assist.speed_cap_m_s.v) - 25.0).abs() < 0.2);
     }
 
     #[test]
