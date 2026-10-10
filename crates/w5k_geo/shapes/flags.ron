@@ -1,0 +1,9 @@
+// How the `edge` and `cavity` flags are baked (lane GEOMETRY; docs/lanes/geometry/spike-g.md). All ESTIMATE, PROVISIONAL(status:geometry)
+// until lane LOOK agrees. Angles are authored in degrees at the edge of the system and converted on load.
+FlagParams(
+    edge_ramp_lo_deg: 20.0,   // band 10 to 30: below this turning angle an edge reads as smooth
+    edge_ramp_hi_deg: 70.0,   // band 55 to 85: above this an edge reads as fully sharp
+    cavity_rays: 256,         // spike S-G: 3.1 s for 15k vertices; 1024 breaks the 10 s kill line
+    cavity_cap_m: 0.5,        // the ray length that counts as "blocked" (LOOK may ask for another)
+    cavity_lift_m: 0.0005,    // origin lifted off the surface: a ray cannot leave a surface it starts on
+)
