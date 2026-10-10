@@ -15,4 +15,6 @@ Proving(
     braking_hold_tol_m_s: Param(v: 0.3, lo: 0.1, hi: 0.5, prov: Estimate, src: "the entry speed must be steady to about 1 km/h; the speed actually reached is echoed as the oracle's input"),
     braking_max_s: Param(v: 30.0, prov: Spec, src: "stop rule: a truck that has not stopped in 30 s from 50 km/h is reported as ended early"),
     decel_window_s: Param(v: 0.25, lo: 0.1, hi: 0.5, prov: Estimate, src: "peak deceleration is averaged over this window so one tick of pitch ringing does not read as a friction spike"),
+    accel_target_kmh: Param(v: 48.0, prov: Spec, src: "docs/validation/proving-ground.md section 3a: time from rest to 48 km/h (13.33 m/s)"),
+    accel_max_s: Param(v: 60.0, prov: Spec, src: "stop rule: a truck that has not reached 48 km/h in 60 s is reported as ended early"),
 )

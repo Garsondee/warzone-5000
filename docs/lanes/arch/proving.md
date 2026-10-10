@@ -18,5 +18,14 @@ A simulation that stops *shorter* than `v^2/(2 mu g)` beat friction (a bug). Lon
 
 *Straight lines are constant deceleration: slopes of 0.83 g (Mule), 0.73 g (Scout), 0.54 g (Hauler). A friction-limited stop on mu = 0.85 to 0.9 would be about 0.9 g, so the Hauler is brake-limited, not tyre-limited.*
 
+## Acceleration 0 to 48 km/h
+The vehicle cannot beat two limits, so the best possible time is the larger of them. **Energy**: reaching speed `v` takes kinetic energy `m v^2 / 2`, and the engine delivers at most its peak power `P`, so `t >= m v^2 / (2 P)`. **Traction**: the tyres push with at most `mu f m g` (`f` = share of the weight on driven wheels), so `t >= v / (mu f g)`. The runner echoes `mass_kg`, `power_w` (the engine's peak shaft power over its torque curve up to the redline, times the gearbox efficiency: an upper bound, since the converter and the final drives only lose more), `mu` and `driven_load_fraction` (from the settled static loads) so the scorer can compute that bound. Real trucks sit at a small multiple of it (shift pauses, converter slip, drag): measured Mule 4.6 s (2.0 times the bound), Scout 6.7 s (2.7 times), Hauler 11.0 s (2.4 times).
+
+The test: park (drive selected, parking brake) for 1.5 s, release, throttle to the floor with the automatic box, time to cross 13.33 m/s (interpolated inside the 60 Hz tick that crosses it).
+
+![Speed against time for the three garage trucks, full throttle from rest](media/proving-accel-0-48kmh.png)
+
+*The plateaus and small dips are gear shifts with the torque cut (the Hauler's slow 2-3 shift is visible at 7 to 8 s): drag and shift pauses are why real trucks sit at two to three times the energy bound.*
+
 ## Determinism and early ends
 Every test is run twice and the two final state hashes and results must be identical. A run that rolls over, produces a NaN, cannot reach its entry speed or does not stop in time is written with `ended_early` set and no measurements (the scorer makes the whole test red). A test with no runner yet says `not implemented` and writes nothing.

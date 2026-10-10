@@ -65,6 +65,8 @@ scenario_file!(
     braking_hold_tol_m_s,
     braking_max_s,
     decel_window_s,
+    accel_target_kmh,
+    accel_max_s,
 );
 
 /// What a test needs: the vehicle's rig, the chassis tuning and the driver numbers.
@@ -106,7 +108,8 @@ pub(crate) fn flat_world() -> Box<dyn WorldQuery> {
 
 type Runner = fn(&Ctx) -> Result<Outcome, String>;
 
-const RUNNERS: &[(&str, Runner)] = &[("braking_50kmh", longitudinal::braking)];
+const RUNNERS: &[(&str, Runner)] =
+    &[("braking_50kmh", longitudinal::braking), ("accel_0_48kmh", longitudinal::acceleration)];
 
 /// The contract the result was produced against, e.g. `contract-v0.2`.
 fn contract_pin() -> String {
@@ -260,6 +263,7 @@ mod tests {
         rig: PhysRig,
         tuning: ChassisTuning,
         cfg: Config,
+        engine_peak_w: f64,
     }
 
     impl Fixture {
@@ -269,7 +273,7 @@ mod tests {
             let tuning = ChassisTuning::from_ron(&read(&root(), &cfg.chassis_tuning).expect("tuning")).expect("tuning");
             let entry = load_entry(&root(), vehicle).expect("vehicle");
             let rig = w5k_forge::compile::compile(&entry.def, &entry.extras).expect("compiles").rig;
-            Fixture { rig, tuning, cfg }
+            Fixture { rig, tuning, cfg, engine_peak_w: entry.def.powertrain.engine.peak_power_w.v }
         }
 
         fn ctx(&self) -> Ctx<'_> {
@@ -290,6 +294,7 @@ mod tests {
     fn braking_distance_matches_v2_over_2mu_g_within_the_oracle_band_for_the_mule() {
         let r = Fixture::load(GARAGE[1]).run("braking_50kmh");
         r.check().expect("the scorer's parser accepts it");
+        w5k_validate::oracle::score_braking(&r).expect("VALIDATION's scorer accepts the result");
         let (v, mu, d) = (r.inputs["speed_m_s"], r.inputs["mu"], r.measured["stop_distance_m"]);
         let oracle_m = v * v / (2.0 * mu * scalar::G);
         // const-ok: test bands. A sim cannot stop shorter than friction allows (3 % for the oracle's own idealisations), and the
@@ -310,6 +315,24 @@ mod tests {
                 d >= 0.97 * v0 * v0 / (2.0 * mu * scalar::G),
                 "{v}: stopped in {d} m, shorter than friction allows"
             );
+            // const-ok: test band
+        }
+    }
+
+    #[test]
+    fn no_garage_vehicle_reaches_48_kmh_faster_than_its_energy_and_traction_bound() {
+        for v in GARAGE {
+            let f = Fixture::load(v);
+            let r = f.run("accel_0_48kmh");
+            r.check().expect("valid");
+            let (m, p, mu, frac) =
+                (r.inputs["mass_kg"], r.inputs["power_w"], r.inputs["mu"], r.inputs["driven_load_fraction"]);
+            let v48 = r.inputs["speed_m_s"];
+            let t_min = (m * v48 * v48 / (2.0 * p)).max(v48 / (mu * frac * scalar::G));
+            let t = r.measured["t_0_48_s"];
+            assert!(t >= t_min, "{v}: {t} s beats the bound {t_min} s");
+            assert!(t <= 3.0 * t_min, "{v}: {t} s is more than 3x the bound {t_min} s"); // const-ok: the spec's green band
+            assert!(p <= f.engine_peak_w * 1.05, "{v}: wheel power {p} W above the engine's {} W", f.engine_peak_w);
             // const-ok: test band
         }
     }

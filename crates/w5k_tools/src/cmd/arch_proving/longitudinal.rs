@@ -1,4 +1,4 @@
-//! The straight-line proving tests: `braking_50kmh` (docs/validation/proving-ground.md section 3b).
+//! The straight-line proving tests: `braking_50kmh` and `accel_0_48kmh` (docs/validation/proving-ground.md sections 3a and 3b).
 
 use w5k_contract::rig::TICK_HZ;
 use w5k_contract::{DriveInputs, GearRequest};
@@ -78,6 +78,50 @@ pub fn braking(c: &Ctx) -> Result<Outcome, String> {
             ("peak_decel_g", peak_decel_m_s2 / scalar::G),
             ("stop_time_s", t_stop_s),
         ]);
+    }
+    Ok(out)
+}
+
+/// Full throttle from rest on dry asphalt with the automatic gearbox; the time to 48 km/h, interpolated inside the tick that crosses it.
+pub fn acceleration(c: &Ctx) -> Result<Outcome, String> {
+    let cfg = c.cfg;
+    let target_m_s = scalar::kmh_to_ms(cfg.accel_target_kmh.v);
+    let mut sim = Sim::new(c.rig, c.tuning, flat_world(), cfg.frame_every_ticks)?;
+    sim.park(cfg.settle_s.v);
+    let facts = Facts::read(&sim);
+
+    let go = DriveInputs { throttle: 1.0, gear: GearRequest::Auto, ..DriveInputs::default() };
+    let t0 = sim.chassis.time_s;
+    let mut reached = None;
+    for _ in 0..ticks(cfg.accel_max_s.v) {
+        let (v_prev, t_prev) = (sim.speed_m_s(), sim.chassis.time_s);
+        if !sim.tick(&go) {
+            break;
+        }
+        let v = sim.speed_m_s();
+        if v >= target_m_s {
+            reached = Some(t_prev - t0 + (sim.chassis.time_s - t_prev) * scalar::inv_lerp(v_prev, v, target_m_s));
+            break;
+        }
+    }
+
+    let mut out = Outcome::from_sim(sim);
+    out.inputs.extend([
+        ("mass_kg", facts.mass_kg),
+        ("power_w", facts.power_w),
+        ("mu", facts.mu),
+        ("driven_load_fraction", facts.driven_load_fraction),
+        ("speed_m_s", target_m_s),
+    ]);
+    out.labels.extend([
+        ("surface", "dry_asphalt"),
+        ("gearbox", "auto"),
+        ("power_basis", "engine peak shaft power x gearbox efficiency (an upper bound)"),
+    ]);
+    match (out.ended_early.is_some(), reached) {
+        (false, Some(t)) => out.measured.extend([("t_0_48_s", t)]),
+        (false, None) => out.ended_early = Some(format!("did not reach 48 km/h within {} s", cfg.accel_max_s.v)),
+        _ => {}
     }
     Ok(out)
 }
