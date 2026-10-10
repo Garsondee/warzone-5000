@@ -1,0 +1,8 @@
+#![enable(implicit_some)]
+// The belly of the reference tank the ladder bench uses (box_tank has no Belly proxy). UNVALIDATED archetype numbers.
+LadderTank(
+    clearance_m: Param(v: 0.43, lo: 0.35, hi: 0.5, prov: Estimate,
+        src: "UNVALIDATED. Hull underside above the ground of a medium-tank archetype (published figures for such tanks are 0.4 to 0.5 m; VALIDATION to source)"),
+    belly_width_m: Param(v: 2.0, lo: 1.5, hi: 2.6, prov: Estimate, src: "UNVALIDATED. Plan width of the hull floor between the tracks"),
+    belly_length_m: Param(v: 4.0, lo: 3.0, hi: 5.0, prov: Estimate, src: "UNVALIDATED. Plan length of the hull floor"),
+)

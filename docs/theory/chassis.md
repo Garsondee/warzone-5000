@@ -123,3 +123,13 @@ produce (the friction term alone can cost an axle at most `1 / (1 + k)`, 13%). T
 shifted, the truck lurched, and the lateral acceleration wobbled for about a second; the bench's slide-out rule compared single samples with the best single sample and
 took the wobble for a slide. The bench now judges the limit and the slide-out on a moving average over 1.5 s (a `Param`), and the Scout reads 0.77 g (0.80 g with linear
 tyres: the expected few percent). A test that measures a peak must not be fooled by a transient; the same idea as filtering a noisy sensor before thresholding it.
+
+## A tyre that sinks: mud as a spring that does not spring back
+On firm ground the tyre is the only spring between the wheel and the earth. In mud the ground gives too: Bekker measured that a plate pressed into soil meets a pressure
+`p = (kc / b + kphi) z^n` that grows with depth `z`, and less for a wider plate (the `kc / b` term: a wide footprint spreads its load). Add that pressure up around the
+arc of a sunken wheel and you get how much load the soil carries at each sinkage; the tyre spring and the soil spring then sit **in series**, like two springs stacked:
+the penetration splits between them so that both push with the same force. Unlike the tyre, the soil does not push back as the wheel leaves: the rut stays. The energy
+that went into pressing it is lost, and per metre travelled it *is* the extra rolling resistance, the **compaction resistance** `R_c = b (kc / b + kphi) z^(n+1) / (n+1)`.
+On the bump strip's mud the box truck sinks about 10 cm and coasts down at 0.26 g instead of 0.02 g. Grip changes too: mud holds the tyre with its own strength,
+cohesion over the footprint plus friction under the load (`A c + W tan(phi)`, Mohr-Coulomb), not with rubber friction. A wider tyre sinks less and rolls easier, the
+lever that makes tracks (a very wide, very long "tyre") float where a truck bogs. `UNVALIDATED`: the formulas are textbook, the mud numbers are stand-ins.

@@ -127,7 +127,13 @@ impl WheeledChassis {
                 susp: Suspension::new(&s.suspension, s.bump_travel_m, tuning.suspension()),
                 // the tyre's static load: the spring's preload (the sprung share) plus the wheel's own weight
                 tyre: Tyre::new(tyre_def, s.wheel.radius_m, tuning.tyre())
-                    .with_nominal_load(s.suspension.preload_n + s.unsprung_mass_kg * scalar::G),
+                    .with_width(s.wheel.width_m)
+                    // the reference of the load sensitivity: the rig's nominal load, or the tyre's static load (spring preload + wheel weight)
+                    .with_nominal_load(if tyre_def.nominal_load_n > 0.0 {
+                        tyre_def.nominal_load_n
+                    } else {
+                        s.suspension.preload_n + s.unsprung_mass_kg * scalar::G
+                    }),
                 rest_body_m: s.rest_pos_m - com,
                 bump_dir: s.bump_dir.normalized_or_zero(),
                 droop_travel_m: s.droop_travel_m,
@@ -312,7 +318,11 @@ impl WheeledChassis {
 
             if self.ledger.is_on() {
                 let parts = [
-                    (ForceTerm::TyreLongitudinal, x_c * (out.fx_n + st.tyre.last_rolling_n())),
+                    (
+                        ForceTerm::TyreLongitudinal,
+                        x_c * (out.fx_n + st.tyre.last_rolling_n() + st.tyre.last_compaction_n()),
+                    ),
+                    (ForceTerm::SoilCompaction, x_c * -st.tyre.last_compaction_n()),
                     (ForceTerm::RollingResistance, x_c * -st.tyre.last_rolling_n()),
                     (ForceTerm::TyreLateral, y_c * out.fy_n),
                     (ForceTerm::TyreNormal, n * out.fz_n),

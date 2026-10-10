@@ -1,0 +1,50 @@
+{
+  "schema": "w5k.capability.v1",
+  "vehicle": "hauler_4x4",
+  "contract_pin": "contract-v0.3",
+  "surface": "dry asphalt (the proving ground's flat plane)",
+  "max_grade_ratio": {
+    "value": 0.375,
+    "unit": "ratio",
+    "test": "gradeability",
+    "light": "not scored",
+    "note": ""
+  },
+  "max_side_slope_rad": {
+    "value": 0.5853333333333354,
+    "unit": "rad",
+    "test": "side_slope_rollover",
+    "light": "green",
+    "note": "roll"
+  },
+  "braking_distance_m": {
+    "value": 18.863875123780815,
+    "unit": "m",
+    "test": "braking_50kmh",
+    "light": "red",
+    "note": ""
+  },
+  "braking_speed_m_s": 13.902724361803084,
+  "time_0_48kmh_s": {
+    "value": 11.36188892499316,
+    "unit": "s",
+    "test": "accel_0_48kmh",
+    "light": "not scored",
+    "note": ""
+  },
+  "max_lateral_accel_m_s2": {
+    "value": 5.78163217915313,
+    "unit": "m/s^2",
+    "test": "skidpad",
+    "light": "not scored",
+    "note": "power (speed stopped rising below the grip limit)"
+  },
+  "max_step_m": {
+    "value": 0.1015625,
+    "unit": "m",
+    "test": "step_climb",
+    "light": "red",
+    "note": ""
+  },
+  "missing": []
+}
