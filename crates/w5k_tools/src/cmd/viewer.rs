@@ -8,6 +8,9 @@ use std::process::Command;
 
 use w5k_contract::render::RenderRig;
 use w5k_contract::testing::{box_tank, box_truck, tank_slew_and_pitch, truck_over_bumps};
+use w5k_geo::export::render_rig;
+use w5k_geo::flags::FlagParams;
+use w5k_geo::truck::{utility_4x4, UtilityDims};
 use w5k_replay::ReplayFile;
 
 const USAGE: &str = "usage:
@@ -62,6 +65,10 @@ fn rig_for(replay: &ReplayFile, rig_arg: Option<&str>) -> Result<RenderRig, Stri
     match replay.header.vehicles.first().map(|v| v.rig_id.as_str()) {
         Some("box_truck") => Ok(box_truck().1),
         Some("box_tank") => Ok(box_tank().1),
+        // GEOMETRY's utility truck (same node layout as the stand-in truck, so the canned truck replay drives it).
+        Some("utility_4x4") => {
+            Ok(render_rig("utility_4x4", &utility_4x4(&UtilityDims::placeholder(), 1), &FlagParams::default_params()))
+        }
         Some(other) => Err(format!("no built-in rig for {other}; pass --rig <rig.json>")),
         None => Err("the replay has no vehicles".to_string()),
     }

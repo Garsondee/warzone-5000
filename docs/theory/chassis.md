@@ -60,3 +60,17 @@ deriving the local one each frame, instead of accumulating error in a value that
 **How the tests know it is right.** Free fall: semi-implicit Euler drops exactly `g dt^2 n(n+1)/2`, which is `g t^2 / 2` plus a small `g t dt / 2` lag (0.2% after 1 s at 240 Hz). Energy: a hull
 on four undamped corner springs, heaving, pitching and rolling, keeps its oscillation energy to 0.1% over a minute. As a check that the test has teeth, swapping to plain (explicit) Euler makes the
 same test fail by a factor of about 3e8.
+
+## Putting it together: the truck
+**Wheels without a constraint solver.** Each wheel slides on its strut axis relative to the hull: its travel is a coordinate with its own mass (the unsprung mass). *Along* the strut, the
+wheel feels the tyre pushing up, the strut pushing down and gravity; that sets how fast the travel changes. *Across* the strut the wheel cannot move relative to the hull, so the hull simply
+receives the tyre's sideways and fore-aft force at the wheel centre (minus what it takes to accelerate the wheel along with it). Graphics analogy: it is a parent-child transform where the
+child has exactly one local degree of freedom (a prismatic joint), and we integrate that one coordinate instead of solving constraints.
+**Load transfer: why a braking truck dives.** Braking forces act at the ground, but the truck's mass sits higher, at the centre of mass (height `h`). That offset is a torque that pitches
+the nose down and moves weight onto the front axle: `delta F_front = m a h / L` (L = wheelbase). The test measures 4.65 kN at 0.96 g against 4.53 kN closed form (3%). The same in a corner, sideways
+over the track width, is what makes a truck roll and can lift its inside wheels. On the Mule run you can see it directly: at launch the rear compresses 30 mm and the front extends 20 mm (squat),
+under braking the front compresses 57 mm and the rear extends 72 mm (dive).
+**Ackermann.** In a turn the inner wheel follows a tighter circle than the outer one, so it must steer further: `tan(delta_inner) = L / (R - t/2)`, `tan(delta_outer) = L / (R + t/2)`, both
+axes meeting at one turn centre on the rear axle line. Then neither tyre scrubs. At low speed the truck's turn radius matches `L / tan(delta) - t/2` to 0.2%.
+**Braking distance.** With every tyre at the friction limit the deceleration is `(mu + Crr) g`, so the stop takes `v^2 / (2 (mu + Crr) g)`. The test gets 21.6 m against 21.2 m: the extra 2% is the brake building up while the wheels slow down before they slide.
+
