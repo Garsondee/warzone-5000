@@ -96,7 +96,8 @@ fn a_three_axle_independent_layout_compiles_today() {
     // differential over the axle differentials). Tandem and solid-axle linkages are not compiled yet.
     let (mut d, _) = build("hauler_4x4");
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../content/vehicles/game/");
-    let x = parse_extras(&std::fs::read_to_string(format!("{dir}hauler_4x4.extras.ron")).unwrap()).unwrap();
+    let mut x = parse_extras(&std::fs::read_to_string(format!("{dir}hauler_4x4.extras.ron")).unwrap()).unwrap();
+    x.brake.axle_torque_nm.clear(); // the authored torque is for two axles: size the three from the design deceleration instead
     if let RunningGearDef::Wheeled(w) = &mut d.running_gear {
         let mut mid = w.axles[1].clone();
         mid.from_front_m = w5k_contract::param::Param::estimate(3.6, 3.0, 4.0, "three-axle check");
