@@ -3,16 +3,22 @@
 //! The page, the recorder and the plotter are Node scripts in `tools/viewer` (headless Chromium does the drawing); these commands
 //! prepare their inputs (a binary replay and a rig) and call them. Packages are installed by `npm ci` in `tools/viewer`.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Instant;
 
+use w5k_contract::def::VehicleDef;
 use w5k_contract::render::RenderRig;
 use w5k_contract::testing::{box_tank, box_truck, tank_slew_and_pitch, truck_over_bumps};
 use w5k_contract::world::WorldQuery;
 use w5k_geo::export::render_rig;
 use w5k_geo::flags::FlagParams;
 use w5k_geo::skin::Skin;
+use w5k_math::scalar;
 use w5k_replay::ReplayFile;
+use w5k_validate::impact::{BENCHES, EPS};
+use w5k_validate::proving::ProvingResult;
 use w5k_world::strip::DataStrip;
 
 const USAGE: &str = "usage:
@@ -23,6 +29,7 @@ const USAGE: &str = "usage:
   w5k viewer plot   <data.csv> --out chart.png [--title T] [--xlabel X] [--ylabel Y] [--width W] [--height H]
   w5k viewer tornado <impact.json> --out tornado.png [--theme light|dark] [--cols N] [--rows N]   (the impact.json of `w5k validation impact`: a panel per benchmark, a bar per vehicle for each lever; docs/lanes/viewer/charts.md)
   w5k viewer ladder  <ladder.json> --out ladder.png [--theme light|dark]   (sinkage up a ladder of load or track width, beside the soil theory)
+  w5k viewer design <scout_4x4|mule_4x4|hauler_4x4|base.ron> --out DIR [--lever wheelbase=1.1,mass=0.9] [--skin preview|final|off] [--score off]   (the Workshop's step: levers in; the compiled design, its skin and the proving scoreboard out)
   w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.w5kr, replay.json and rig.json)";
 
 /// Entry point for `w5k viewer <args>`.
@@ -35,6 +42,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some(kind @ ("tornado" | "ladder")) => chart(kind, &args[1..]),
         Some("fake-fleet") => fake_fleet(&args[1..]),
         Some("pack-skin") => pack_skin(&args[1..]),
+        Some("design") => design(&args[1..]),
         _ => Err(USAGE.to_string()),
     }
 }
@@ -66,10 +74,14 @@ fn read_any(path: &Path) -> Result<ReplayFile, String> {
 }
 
 /// The meshes to draw over the physics rig's skeleton: one of GEOMETRY's skins by id (`utility_4x4`, `scout_4x4`, built the way
-/// `w5k geometry export` builds them) or a serialised `RenderRig` file.
+/// `w5k geometry export` builds them), a packed `.skin` file (`pack-skin`, `design`) or a serialised `RenderRig` file.
 fn skin_rig(name: &str) -> Result<RenderRig, String> {
     if let Some(skin) = Skin::for_id(name) {
         return Ok(render_rig(skin.kind.id(), &skin.parts(1), &FlagParams::default_params()));
+    }
+    if name.ends_with(".skin") {
+        let bytes = std::fs::read(name).map_err(|e| format!("cannot read {name}: {e}"))?;
+        return w5k_replay::skinpack::unpack(&bytes);
     }
     let s = std::fs::read_to_string(name).map_err(|e| {
         format!("--skin is a GEOMETRY skin id (utility_4x4, scout_4x4) or a rig file; cannot read {name}: {e}")
@@ -203,6 +215,187 @@ fn chart(kind: &str, args: &[String]) -> Result<(), String> {
     let mut all = vec![kind.to_string()];
     all.extend_from_slice(args);
     node("chart.mjs", &all)
+}
+
+/// `name=factor[,name=factor...]`: FORGE's levers, each a positive factor on the base design (1 is the base). FORGE checks the names.
+fn parse_levers(spec: &str) -> Result<Vec<(String, f64)>, String> {
+    spec.split(',')
+        .filter(|item| !item.is_empty())
+        .map(|item| {
+            let (name, f) = item.split_once('=').ok_or_else(|| format!("lever `{item}` is not name=factor"))?;
+            let factor: f64 = f.parse().map_err(|_| format!("lever {name}: `{f}` is not a number"))?;
+            if !(factor.is_finite() && factor > 0.0) {
+                return Err(format!("lever {name}: the factor {factor} must be finite and positive"));
+            }
+            Ok((name.to_string(), factor))
+        })
+        .collect()
+}
+
+/// The scoreboard rows, by impact-matrix id: name, unit, scale from the result's unit to it, and whether a bigger number is better. (The
+/// names carry their units in `impact::BENCHES` as the runner measures them; the board shows grades in percent and angles in degrees.)
+const BOARD: [(&str, &str, &str, f64, bool); 6] = [
+    ("B1", "0-48 km/h time", "s", 1.0, false),
+    ("B4", "braking distance from 50 km/h", "m", 1.0, false),
+    ("B6", "maximum gradient", "%", 100.0, true), // const-ok: a grade ratio shown as a percentage
+    ("B7", "side-slope limit", "deg", 180.0 / scalar::PI, true), // const-ok: radians shown as degrees
+    ("B11", "step height cleared", "m", 1.0, true),
+    ("B12", "cornering limit", "g", 1.0, true),
+];
+
+/// The change of a scoreboard number as a percentage of the base (`None` for a base of zero) and whether it is for the better; a change
+/// under the impact runner's no-change threshold is neither.
+fn board_change(base: f64, value: f64, bigger_is_better: bool) -> (Option<f64>, Option<bool>) {
+    let delta = (base != 0.0).then(|| 100.0 * (value - base) / base.abs()); // const-ok: percent
+    let better = delta.filter(|d| d.abs() >= 100.0 * EPS).map(|d| (d > 0.0) == bigger_is_better); // const-ok: percent
+    (delta, better)
+}
+
+/// The proving battery on one vehicle file (its `.extras.ron` beside it), by running `w5k scenario proving` as the impact runner does.
+fn run_battery(vehicle: &Path, out: &Path) -> Result<BTreeMap<String, ProvingResult>, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let status = Command::new(exe)
+        .args(["scenario", "proving", "--test", "all", "--vehicle"])
+        .arg(vehicle)
+        .arg("--out")
+        .arg(out)
+        .stdout(std::process::Stdio::null())
+        .status()
+        .map_err(|e| format!("cannot run the proving ground: {e}"))?;
+    if !status.success() {
+        return Err(format!("the proving ground failed on {}", vehicle.display()));
+    }
+    let dir = std::fs::read_dir(out)
+        .map_err(|e| e.to_string())?
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .find(|p| p.is_dir());
+    let mut results = BTreeMap::new();
+    for b in BENCHES {
+        if let Some(text) = dir.as_ref().and_then(|d| std::fs::read_to_string(d.join(format!("{}.json", b.test))).ok())
+        {
+            results.insert(b.id.to_string(), ProvingResult::from_json(&text)?);
+        }
+    }
+    Ok(results)
+}
+
+/// A design: the base with levers applied, compiled by FORGE, and the skin that wears it.
+struct Design {
+    def: VehicleDef,
+    extras: w5k_forge::extras::Extras,
+    rig: RenderRig,
+    report: Vec<String>,
+    skin: Option<(Vec<u8>, usize, Vec<f64>)>,
+}
+
+/// Apply the levers in order (an error names the lever and says why, never a silent clamp), compile, and bake the skin of the result
+/// (`quality`: `preview` is GEOMETRY's quick bake, `final` the full one, `off` none). A design FORGE refuses yields no skin.
+fn build_design(base: &Path, levers: &[(String, f64)], quality: &str) -> Result<Design, String> {
+    let read = |p: &Path| std::fs::read_to_string(p).map_err(|e| format!("cannot read {}: {e}", p.display()));
+    let (mut def, mut extras) = (
+        w5k_forge::compile::parse_def(&read(base)?)?,
+        w5k_forge::compile::parse_extras(&read(&base.with_extension("extras.ron"))?)?,
+    );
+    for (name, factor) in levers {
+        (def, extras) =
+            w5k_forge::levers::apply_both(&def, &extras, name, *factor).map_err(|e| format!("lever {name}: {e}"))?;
+    }
+    let family = def.clone(); // GEOMETRY picks the hull family by the base id
+    def.name = format!("{} (your design)", def.name);
+    def.id = format!("{}_design", def.id);
+    let compiled = w5k_forge::compile::compile(&def, &extras).map_err(|r| {
+        format!("FORGE refused the design: {}", r.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "))
+    })?;
+    let rig = w5k_forge::render::render_rig(&compiled.rig, compiled.hull_size_m);
+    let skin = match quality {
+        "off" => None,
+        "preview" | "final" => {
+            let skin = Skin::from_def(&family)?;
+            let flags = if quality == "final" { FlagParams::default_params() } else { FlagParams::preview() };
+            let baked = render_rig(skin.kind.id(), &skin.parts(1), &flags);
+            Some((w5k_replay::skinpack::pack(&baked), baked.triangle_count(), skin.axles_z.clone()))
+        }
+        other => return Err(format!("--skin is preview, final or off, not {other}")),
+    };
+    Ok(Design { def, extras, rig, report: compiled.report, skin })
+}
+
+/// `w5k viewer design BASE --out DIR [--lever a=1.1,b=0.9] [--skin preview|final|off] [--score off]`: writes `<id>.ron`, `<id>.extras.ron`,
+/// `<id>.rig.json`, `<id>.skin` and `design.json` (what each lever became, the compile report, the scoreboard against the base, timings).
+#[allow(clippy::disallowed_methods)] // `Instant::now` only times this CLI run for design.json; nothing simulated reads it
+fn design(args: &[String]) -> Result<(), String> {
+    let base = args.first().ok_or(USAGE)?;
+    let out = PathBuf::from(opt(args, "--out").ok_or("--out is required")?);
+    let base_file = if base.ends_with(".ron") {
+        PathBuf::from(base)
+    } else {
+        Path::new("content/vehicles/game").join(format!("{base}.ron"))
+    };
+    let levers = parse_levers(opt(args, "--lever").unwrap_or(""))?;
+    let (quality, scored) = (opt(args, "--skin").unwrap_or("preview"), opt(args, "--score") != Some("off"));
+    std::fs::create_dir_all(&out).map_err(|e| format!("cannot create {}: {e}", out.display()))?;
+    let t0 = Instant::now();
+    let d = build_design(&base_file, &levers, quality)?;
+    let (id, t_build) = (d.def.id.clone(), t0.elapsed().as_secs_f64());
+    let write = |name: String, bytes: &[u8]| {
+        std::fs::write(out.join(&name), bytes).map_err(|e| format!("cannot write {name}: {e}"))
+    };
+    let ron = |r: Result<String, ron::Error>| r.map_err(|e| e.to_string());
+    write(format!("{id}.ron"), ron(ron::to_string(&d.def))?.as_bytes())?;
+    write(format!("{id}.extras.ron"), ron(ron::to_string(&d.extras))?.as_bytes())?;
+    write(format!("{id}.rig.json"), serde_json::to_string(&d.rig).map_err(|e| e.to_string())?.as_bytes())?;
+    if let Some((bytes, _, _)) = &d.skin {
+        write(format!("{id}.skin"), bytes)?;
+    }
+    let t1 = Instant::now();
+    let board = if scored {
+        let (base_results, design_results) = (
+            run_battery(&base_file, &out.join("score/base"))?,
+            run_battery(&out.join(format!("{id}.ron")), &out.join("score/design"))?,
+        );
+        BOARD
+            .iter()
+            .filter_map(|&(bench, name, unit, scale, bigger)| {
+                let b = BENCHES.iter().find(|b| b.id == bench)?;
+                let read = |m: &BTreeMap<String, ProvingResult>| m.get(bench).and_then(|r| r.measured.get(b.key)).map(|v| v * scale);
+                let (base_v, value) = (read(&base_results)?, read(&design_results)?);
+                let (delta, better) = board_change(base_v, value, bigger);
+                let note = design_results.get(bench).and_then(|r| r.ended_early.clone());
+                Some(serde_json::json!({"bench": bench, "name": name, "unit": unit, "base": base_v, "value": value, "delta_pct": delta, "better": better, "note": note}))
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let doc = serde_json::json!({
+        "schema": "w5k-design-1", "base": base, "id": id,
+        "levers": levers.iter().map(|(n, f)| serde_json::json!({"name": n, "factor": f})).collect::<Vec<_>>(),
+        "report": d.report, "scoreboard": board,
+        "skin": d.skin.as_ref().map(|(b, tris, axles)| serde_json::json!({"file": format!("{id}.skin"), "bytes": b.len(), "triangles": tris, "quality": quality, "axles_z_m": axles})),
+        "timings_s": {"levers_compile_skin": t_build, "score": t1.elapsed().as_secs_f64(), "total": t0.elapsed().as_secs_f64()},
+    });
+    write("design.json".into(), serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?.as_bytes())?;
+    println!(
+        "{id}: {} levers, skin {}, {} scoreboard rows, {:.2} s in all -> {}",
+        levers.len(),
+        quality,
+        doc["scoreboard"].as_array().map_or(0, Vec::len),
+        t0.elapsed().as_secs_f64(),
+        out.join("design.json").display()
+    );
+    for row in doc["scoreboard"].as_array().into_iter().flatten() {
+        println!(
+            "  {} {}: {:.3} -> {:.3} {} ({})",
+            row["bench"].as_str().unwrap_or("?"),
+            row["name"].as_str().unwrap_or(""),
+            row["base"].as_f64().unwrap_or(f64::NAN),
+            row["value"].as_f64().unwrap_or(f64::NAN),
+            row["unit"].as_str().unwrap_or(""),
+            row["delta_pct"].as_f64().map_or("n/a".into(), |d| format!("{d:+.1}%"))
+        );
+    }
+    Ok(())
 }
 
 fn dump_canned(args: &[String]) -> Result<(), String> {
@@ -430,5 +623,73 @@ mod tests {
                 );
             }
         }
+    }
+
+    fn base(id: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content/vehicles/game").join(format!("{id}.ron"))
+    }
+
+    #[test]
+    fn levers_parse_into_names_and_positive_factors_and_bad_ones_are_refused() {
+        assert_eq!(
+            parse_levers("wheelbase=1.1,mass=0.9").unwrap(),
+            vec![("wheelbase".to_string(), 1.1), ("mass".to_string(), 0.9)]
+        );
+        assert!(parse_levers("").unwrap().is_empty());
+        for bad in ["wheelbase", "mass=x", "mass=0", "mass=-1", "mass=inf", "mass=NaN"] {
+            assert!(parse_levers(bad).is_err(), "{bad} should be refused");
+        }
+    }
+
+    /// FORGE moves the axles about the front one, so the skin that wears the design must be cut for exactly that wheelbase.
+    #[test]
+    fn a_wheelbase_lever_stretches_the_skins_axle_spacing_by_the_same_factor() {
+        let spacing = |levers: &[(String, f64)]| {
+            let axles = build_design(&base("scout_4x4"), levers, "preview").unwrap().skin.unwrap().2;
+            axles.last().unwrap() - axles.first().unwrap()
+        };
+        let factor = 1.25;
+        let ratio = spacing(&[("wheelbase".to_string(), factor)]) / spacing(&[]);
+        assert!((ratio - factor).abs() < 1e-9, "the skin's axle spacing grew by {ratio}, not {factor}");
+    }
+
+    #[test]
+    fn a_lever_the_physics_cannot_honour_is_refused_with_its_reason_and_an_unknown_one_lists_the_names() {
+        let refused =
+            build_design(&base("scout_4x4"), &[("ride_frequency".to_string(), 30.0)], "off").err().expect("refused");
+        assert!(
+            refused.contains("ride rate") && refused.contains("tyre stiffness"),
+            "the reason should say what broke: {refused}"
+        );
+        let unknown =
+            build_design(&base("scout_4x4"), &[("flux_capacitor".to_string(), 1.1)], "off").err().expect("refused");
+        assert!(unknown.contains("flux_capacitor") && unknown.contains("engine_peak_power"), "{unknown}");
+    }
+
+    #[test]
+    fn a_scoreboard_change_is_a_percentage_of_the_base_and_says_which_way_is_better() {
+        assert_eq!(board_change(10.0, 9.0, false), (Some(-10.0), Some(true)));
+        assert_eq!(board_change(10.0, 9.0, true), (Some(-10.0), Some(false)));
+        assert_eq!(
+            board_change(10.0, 10.01, true).1,
+            None,
+            "a change under the impact runner's threshold is neither better nor worse"
+        );
+        assert_eq!(board_change(0.0, 1.0, true), (None, None));
+    }
+
+    /// The board names benchmarks by the impact matrix's ids: if VALIDATION renames or drops one, a row must not vanish silently.
+    #[test]
+    fn every_scoreboard_row_is_a_benchmark_the_impact_runner_measures() {
+        for (id, ..) in BOARD {
+            assert!(BENCHES.iter().any(|b| b.id == id), "{id} is not in w5k_validate::impact::BENCHES");
+        }
+    }
+
+    #[test]
+    fn a_packed_skin_file_is_accepted_where_a_skin_id_is() {
+        let file = viewer_dir().join("dist/skins/scout_4x4.skin");
+        let rig = skin_rig(file.to_str().unwrap()).unwrap();
+        assert!(rig.triangle_count() > 0 && rig.id == skin_rig("scout_4x4").unwrap().id);
     }
 }
