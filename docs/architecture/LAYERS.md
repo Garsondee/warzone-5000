@@ -8,7 +8,7 @@ GEOMETRY's generators and the **composition roots** (`w5k_vehicle`, `w5k_sim`, `
 |---|---|---|---|
 | `w5k_math` | ARCH | `f64` + `libm` maths: `Vec3`, `Quat`, `Mat3`, `Transform`, scalar helpers, `Pcg32`, `StateHasher` | `libm`, `serde` |
 | `w5k_contract` | ARCH | data, traits, ports and test doubles (`testing`): see `CONTRACTS.md` | `w5k_math` |
-| `w5k_chassis` | CHASSIS | hull integrator, suspension, tyres, steering, aero | contract, math |
+| `w5k_chassis` | CHASSIS | hull integrator, suspension, tyres, steering, aero | contract, math, terramech (its pure soil functions only: a tyre that sinks uses the same laws as a track; ARCH approved 2026-10-10) |
 | `w5k_drive` | DRIVE | engine, clutch or converter, gearbox, diffs, tracked steering units, brakes, fuel | contract, math |
 | `w5k_terramech` | TRACKS | soil laws (Bekker, Janosi-Hanamoto), track contact, skid-steer | contract, math |
 | `w5k_vehicle` | ARCH | *glue*: assembles a `PhysRig` into a stepping `VehicleModel`; force ledger; calls the articulation port | contract, math, chassis*, drive*, terramech*, combat* (the servo and recoil module only) |
