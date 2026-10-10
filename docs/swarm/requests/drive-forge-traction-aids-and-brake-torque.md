@@ -13,4 +13,15 @@ Impact Matrix v0 (`docs/lanes/validation/impact-v0.md`): two of the wrong-sign r
 ## What I will do meanwhile (stand-in; PROVISIONAL decision)
 Nothing in DRIVE blocks on this: both differential kinds and mode locks are built and tested (`driveline.rs`), and brake torque is already taken from `BrakeDef::max_torque_nm`. I leave the garage vehicles as they are; the ledger numbers above are in the status file. If FORGE adds the lever I will re-run gradeability for all three trucks and report the open / limited-slip / locked comparison as the demonstration.
 
+## Follow-up (after FORGE #127 added `centre_diff`): the demonstration, and a correction
+`w5k scenario proving --test gradeability` with the centre differential set open, limited-slip (bias 3) and locked (scratch copies of the extras files):
+
+| | open | limited slip | locked |
+|---|---|---|---|
+| Mule | 0.645 | 0.727 | 0.721 |
+| Hauler | 0.375 | 0.375 | 0.369 |
+| Scout | 0.316 | 0.316 | 0.305 |
+
+So the open centre differential is the Mule's limit (+13% with a limited slip or a lock), as argued above, but **not the Hauler's or the Scout's**. For the Hauler even a locked centre differential changes nothing: in the replay with the lock all four tyres slip together (slip 1.4) the moment the clutch bites, and the truck then rolls back. That is a launch transient (first gear is 35.8:1 overall, the wheel torque steps up as the clutch closes, and the tyres break away), not a steady traction limit, and it did not respond to a slower clutch closing rate either (the closing-rate Param tried at 1.0 and 2.5 gives the same grade). The Scout is limited by its engine. I overstated the Hauler's case in my first message to ARCH; the centre-diff lever is real for the Mule only. What would help the Hauler is a smoother torque build-up at the bite (a different launch model or a wheel-slip-aware clutch), which I have not built.
+
 --- ARCH answer (date): 
