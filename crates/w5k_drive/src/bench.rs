@@ -195,4 +195,45 @@ mod tests {
         assert!(peak > 5.0 * idle_rate, "peak {peak} vs idle {idle_rate}");
         assert!(used > idle_rate * 10.0 * 2.0, "accelerating burnt {used} kg, idling would burn {}", idle_rate * 10.0);
     }
+
+    /// Gear changes `(time, gear)` of a run in which the driver's pedal wobbles by `wobble` around what a PI controller asks for.
+    fn wobbling_cruise(mean_speed: f64, wobble: f64, gain: f64, secs: f64) -> Vec<(f64, i8)> {
+        let (mut p, mut v) = mule_like();
+        let (dt, mut integral, mut gears) = (1.0 / 240.0, 0.0, Vec::new());
+        for k in 0..((secs / dt) as usize) {
+            let t = k as f64 * dt;
+            let err = mean_speed - v.speed_m_s;
+            integral = (integral + 0.05 * err * dt).clamp(0.0, 1.0);
+            // a twitchy speed driver: proportional gain high enough that the pedal swings between lift-off and full throttle
+            let base = if t < 12.0 { 1.0 } else { (gain * err + integral).clamp(0.0, 1.0) };
+            // two incommensurate wobbles, so it never settles into a pattern the gearbox could sync to
+            let w = wobble
+                * (0.6 * w5k_math::scalar::sin(core::f64::consts::TAU * 0.35 * t)
+                    + 0.4 * w5k_math::scalar::sin(core::f64::consts::TAU * 0.83 * t));
+            let throttle = if t < 12.0 { 1.0 } else { (base + w).clamp(0.0, 1.0) };
+            v.step(dt, &mut p, &DriveInputs { throttle, ..Default::default() });
+            let g = p.telemetry().gear;
+            if gears.last().map(|&(_, last)| last) != Some(g) {
+                gears.push((t, g));
+            }
+        }
+        gears
+    }
+
+    #[test]
+    fn a_cruise_with_a_wobbling_pedal_holds_one_gear_for_at_least_ten_seconds() {
+        for (speed_kmh, wobble, gain) in [(30.0, 0.2, 0.4), (40.0, 0.2, 0.4), (40.0, 0.35, 1.5), (35.0, 0.2, 3.0)] {
+            let gears = wobbling_cruise(speed_kmh / 3.6, wobble, gain, 90.0);
+            let after: Vec<_> = gears.iter().filter(|(t, _)| *t > 20.0).collect();
+            let times: Vec<f64> =
+                std::iter::once(20.0).chain(after.iter().map(|(t, _)| *t)).chain(std::iter::once(90.0)).collect();
+            let longest = times.windows(2).map(|w| w[1] - w[0]).fold(0.0, f64::max);
+            assert!(
+                longest >= 10.0,
+                "{speed_kmh} km/h, wobble {wobble}, gain {gain}: longest hold {longest:.1} s, gears {gears:?}"
+            );
+            let top = gears.last().unwrap().1;
+            assert!((3..=4).contains(&top), "{speed_kmh} km/h settles in gear {top}: {gears:?}");
+        }
+    }
 }

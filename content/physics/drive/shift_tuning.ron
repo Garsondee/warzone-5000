@@ -2,7 +2,9 @@
 ShiftTuning(
     light_throttle_shift_scale: Param(v: 0.45, lo: Some(0.3), hi: Some(0.95), prov: Estimate, src: "an automatic shifts at this fraction of its full-throttle input speed on a closed throttle, rising linearly to 1 at full throttle (economy map: a light-throttle cruise reaches top gear at a bit over a third of the redline)"),
     kickdown_throttle: Param(v: 0.9, lo: Some(0.8), hi: Some(1.0), prov: Estimate, src: "pedal position above which the automatic drops a gear for acceleration if the engine can take it"),
-    hysteresis_margin_rpm: Param(v: 150.0, lo: Some(50.0), hi: Some(400.0), prov: Estimate, src: "a shift is refused if it would land within this many rpm of the opposite shift point (prevents hunting)"),
-    min_gear_dwell_s: Param(v: 1.0, lo: Some(0.3), hi: Some(3.0), prov: Estimate, src: "least time between two shifts"),
+    hysteresis_margin_rpm: Param(v: 250.0, lo: Some(50.0), hi: Some(400.0), prov: Estimate, src: "a shift is refused if it would land within this many rpm of the opposite shift point (prevents hunting)"),
+    min_gear_dwell_s: Param(v: 2.5, lo: Some(0.3), hi: Some(6.0), prov: Estimate, src: "least time between two shifts; production automatics hold a gear a few seconds before the next change"),
+    pedal_filter_s: Param(v: 0.8, lo: Some(0.2), hi: Some(2.0), prov: Estimate, src: "low-pass time constant of the pedal as the shift map sees it, so a wobbling pedal neither moves the shift points nor triggers a kick-down"),
+    downshift_pedal_influence: Param(v: 0.3, lo: Some(0.0), hi: Some(1.0), prov: Estimate, src: "the downshift curve lies well below the upshift curve at every pedal position, so a pedal swing at one road speed cannot turn an upshift into a downshift (the hunting band of a first-cut map)"),
     reverse_engage_max_speed_m_s: Param(v: 1.0, lo: Some(0.2), hi: Some(3.0), prov: Estimate, src: "reverse (and drive from reverse) engages only below this road speed, as a synchro or lock-out does"),
 )
