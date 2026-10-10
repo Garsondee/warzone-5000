@@ -11,7 +11,8 @@
 ## In progress
 - Slice 2 stage A (ARCH 17:13Z: owner approved; C-016 still OPEN in QUEUE.md): tyre load sensitivity PR #118 (CCR-chassis-4 text in the design
   note, shared PROVISIONAL Params) + skidpad bench fix (a gear-shift lurch read as slide-out: the Scout's -34% impact row; now +0.4%).
-  Hauler skidpad is at rollover onset (lightest wheel 0.6 kN of ~15 kN static), not power: `min_wheel_load_n` added. Next: tracked-hull note.
+  Hauler skidpad is at rollover onset (lightest wheel 0.6 kN of ~15 kN static), not power: `min_wheel_load_n` added. Tracked/sinkage note #123
+  (ARCH: terramech soil dep + RunningGear seam approved). Sinking tyre (rigid-wheel Bekker, UNVALIDATED): stacked on #118. Next: tracked hull.
 - **Not trusted yet:** tyre curve linear to the cap (no slide drop; locked braking reads high); roll centre at wheel-centre height (sliding struts);
   single-ray contact; `relaxation_length_m`, `slip_damping_time_s` are estimates.
 - **6x6:** expressible today with independent axles; walking beams / inboard leaves (`LinkageDef`) are refused until linkages land (about one PR).

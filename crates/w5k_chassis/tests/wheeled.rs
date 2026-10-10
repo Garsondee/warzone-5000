@@ -289,3 +289,49 @@ fn switching_the_ledger_on_does_not_change_the_motion() {
     };
     assert_eq!(hash(false), hash(true));
 }
+
+#[test]
+fn a_truck_rolling_into_mud_sinks_and_compaction_slows_it_with_the_ledger_balanced() {
+    use w5k_contract::testing::BumpStrip;
+    use w5k_contract::{ForceLedger, ForceTerm};
+    let (r, w) = (rig(), BumpStrip::standard());
+    let (mud_start, mud_end) = w.mud;
+    let mut c = WheeledChassis::new(&r, &tuning(), &w, 0.0, mud_start + 15.0, 0.0).unwrap();
+    c.ledger = ForceLedger::on();
+    let mut d = drive(&r);
+    run(&mut c, &w, &mut d, &coast(), 1.0);
+    c.set_forward_speed(8.0);
+    let (mut decel_firm, mut decel_mud, mut n_firm, mut n_mud, mut max_sink, mut worst): (
+        f64,
+        f64,
+        f64,
+        f64,
+        f64,
+        f64,
+    ) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    let h = 1.0 / TICK_HZ / f64::from(c.substeps());
+    while c.datum_m().z > mud_end + 5.0 && c.forward_speed_m_s() > 0.5 {
+        for _ in 0..c.substeps() {
+            c.substep(h, &coast(), &w, &mut d);
+            let worst_hull =
+                (c.ledger.net_force_on(0) - c.hull.acc_m_s2 * r.hull.mass_kg).length() / (r.hull.mass_kg * scalar::G);
+            worst = worst.max(worst_hull);
+        }
+        let all_in = c.stations.iter().all(|s| s.report.contact.sinkage_m > 0.0);
+        let decel = -c.hull.acc_m_s2.dot(c.hull.rot.rotate(w5k_math::Vec3::FORWARD));
+        if c.datum_m().z > mud_start + 5.0 {
+            decel_firm += decel;
+            n_firm += 1.0;
+        } else if all_in {
+            decel_mud += decel;
+            n_mud += 1.0;
+            assert!(c.ledger.totals()[ForceTerm::SoilCompaction as usize].0.length() > 0.0);
+        }
+        max_sink = c.stations.iter().map(|s| s.report.contact.sinkage_m).fold(max_sink, f64::max);
+    }
+    let (decel_firm, decel_mud) = (decel_firm / n_firm.max(1.0), decel_mud / n_mud.max(1.0));
+    println!("coasting decel {decel_firm:.3} m/s2 on asphalt, {decel_mud:.3} m/s2 in mud; max sinkage {:.1} mm; ledger {worst:e}", max_sink * 1e3);
+    assert!(n_mud > 0.0 && max_sink > 0.005);
+    assert!(decel_mud > 2.0 * decel_firm, "compaction must slow the truck");
+    assert!(worst < 1e-9);
+}

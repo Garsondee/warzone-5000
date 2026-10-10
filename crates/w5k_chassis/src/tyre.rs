@@ -10,6 +10,8 @@ use w5k_contract::rig::TyreDef;
 use w5k_contract::{ContactElement, ContactInput, ContactOutput};
 use w5k_math::scalar;
 
+use crate::soil_wheel;
+
 /// Numbers that belong to the model, not to one tyre (loaded from `content/physics/chassis/tuning.ron` as `Param`s).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TyreTuning {
@@ -30,6 +32,10 @@ pub struct Tyre {
     tuning: TyreTuning,
     /// The tyre's static load, N: the reference of the load sensitivity (0 = no load sensitivity).
     nominal_load_n: f64,
+    /// Tread width, m: how wide a rut it presses on soft ground (0 = the tyre ignores soil and behaves as on firm ground).
+    width_m: f64,
+    /// Compaction resistance included in the last `fx_n` (N, positive = resisting forward motion), kept for the ledger.
+    last_compaction_n: f64,
     /// Patch stretch along the rolling direction and sideways, m.
     stretch_x_m: f64,
     stretch_y_m: f64,
@@ -44,6 +50,8 @@ impl Tyre {
             free_radius_m,
             tuning,
             nominal_load_n: 0.0,
+            width_m: 0.0,
+            last_compaction_n: 0.0,
             stretch_x_m: 0.0,
             stretch_y_m: 0.0,
             last_rolling_n: 0.0,
@@ -54,6 +62,17 @@ impl Tyre {
     pub fn with_nominal_load(mut self, nominal_load_n: f64) -> Tyre {
         self.nominal_load_n = nominal_load_n.max(0.0);
         self
+    }
+
+    /// The tread width that presses the rut on soft ground (`WheelDef::width_m`).
+    pub fn with_width(mut self, width_m: f64) -> Tyre {
+        self.width_m = width_m.max(0.0);
+        self
+    }
+
+    /// The compaction-resistance part of the last step's `fx_n` (subtracted from it), N.
+    pub fn last_compaction_n(&self) -> f64 {
+        self.last_compaction_n
     }
 
     /// Load-sensitivity factor `1 / (1 + k (Fz / Fz0 - 1))`: 1 at the static load, below 1 above it, so the force `s * Fz` rises
@@ -93,17 +112,33 @@ impl ContactElement for Tyre {
     fn step(&mut self, i: &ContactInput) -> ContactOutput {
         let d = &self.def;
         self.last_rolling_n = 0.0;
+        self.last_compaction_n = 0.0;
         if i.penetration_m <= 0.0 {
             self.reset();
             return ContactOutput::default();
         }
-        let fz =
-            (d.vertical_stiffness_n_m * i.penetration_m + d.vertical_damping_ns_m * i.penetration_rate_m_s).max(0.0);
-        let mu = i.ground.mu_peak * d.mu_scale * self.load_factor(self.tuning.mu_load_sensitivity, fz);
-        let fmax = mu * fz;
+        // On soft ground the tyre spring and the soil share the penetration (soil_wheel.rs): the wheel sinks by `sinkage`.
+        let soil = i.ground.soil.as_ref().filter(|_| self.width_m > 0.0);
+        let sinkage = soil.map_or(0.0, |s| {
+            soil_wheel::series_sinkage_m(s, self.width_m, self.free_radius_m, d.vertical_stiffness_n_m, i.penetration_m)
+        });
+        let fz = (d.vertical_stiffness_n_m * (i.penetration_m - sinkage)
+            + d.vertical_damping_ns_m * i.penetration_rate_m_s)
+            .max(0.0);
+        // The traction cap: rubber friction on firm ground; the soil's own strength (Mohr-Coulomb) on soft ground, over the rut's
+        // footprint (the chord of the sunk wheel, or the tyre's own patch if longer).
+        let fmax = match soil {
+            Some(s) => {
+                let length = scalar::sqrt(2.0 * self.free_radius_m * sinkage).max(d.patch_length_m);
+                soil_wheel::shear_strength_n(s, self.width_m * length, fz)
+            }
+            None => i.ground.mu_peak * d.mu_scale * self.load_factor(self.tuning.mu_load_sensitivity, fz) * fz,
+        };
+        // Soil shear needs displacement to build (Janosi-Hanamoto's K): the patch stretch relaxes over at least that distance.
+        let sigma = soil.map_or(d.relaxation_length_m, |s| d.relaxation_length_m.max(s.shear_k_m));
 
         // Exact update of the stretch: u' = s - a u over dt.
-        let a = i.vel_long_m_s.abs() / d.relaxation_length_m;
+        let a = i.vel_long_m_s.abs() / sigma;
         let x = a * i.dt_s;
         let decay = scalar::exp(-x);
         let w = decay_weight(x) * i.dt_s;
@@ -116,8 +151,8 @@ impl ContactElement for Tyre {
         let rate_x = slip_vel_x - a * self.stretch_x_m;
         let rate_y = slip_vel_y - a * self.stretch_y_m;
         let stiff = self.load_factor(self.tuning.stiffness_load_sensitivity, fz);
-        let kx = d.slip_stiffness * stiff * fz / d.relaxation_length_m;
-        let ky = d.cornering_stiffness_per_rad * stiff * fz / d.relaxation_length_m;
+        let kx = d.slip_stiffness * stiff * fz / sigma;
+        let ky = d.cornering_stiffness_per_rad * stiff * fz / sigma;
         let mut fx = kx * (self.stretch_x_m + self.tuning.slip_damping_time_s * rate_x);
         let mut fy = -ky * (self.stretch_y_m + self.tuning.slip_damping_time_s * rate_y);
 
@@ -132,12 +167,13 @@ impl ContactElement for Tyre {
             self.stretch_y_m *= s;
         }
 
-        let radius_m = self.free_radius_m - i.penetration_m;
-        let rolling_n = (d.rolling_coeff + i.ground.rolling_coeff)
-            * fz
-            * scalar::tanh(i.vel_long_m_s / self.tuning.rolling_fade_speed_m_s);
+        let radius_m = self.free_radius_m - (i.penetration_m - sinkage);
+        let fade = scalar::tanh(i.vel_long_m_s / self.tuning.rolling_fade_speed_m_s);
+        let rolling_n = (d.rolling_coeff + i.ground.rolling_coeff) * fz * fade;
+        let compaction_n = soil.map_or(0.0, |s| soil_wheel::compaction_resistance_n(s, self.width_m, sinkage)) * fade;
 
         self.last_rolling_n = rolling_n;
+        self.last_compaction_n = compaction_n;
 
         // Pneumatic trail shrinks to zero as the patch saturates.
         let trail_m = if fmax > 0.0 {
@@ -149,12 +185,12 @@ impl ContactElement for Tyre {
         let v_ground = i.vel_long_m_s;
         let denom = i.surface_speed_m_s.abs().max(v_ground.abs()).max(d.speed_floor_m_s).max(1e-9); // const-ok: division guard
         ContactOutput {
-            fx_n: fx - rolling_n,
+            fx_n: fx - rolling_n - compaction_n,
             fy_n: fy,
             fz_n: fz,
             mz_nm: -fy * trail_m,
             shaft_reaction_nm: fx * radius_m,
-            sinkage_m: 0.0,
+            sinkage_m: sinkage,
             slip_ratio: (i.surface_speed_m_s - v_ground) / denom,
             slip_angle_rad: scalar::atan2(i.vel_lat_m_s, v_ground.abs().max(d.speed_floor_m_s).max(1e-9)), // const-ok: division guard
             saturated,
