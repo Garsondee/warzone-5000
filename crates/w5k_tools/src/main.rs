@@ -44,6 +44,10 @@ const LANES: [&str; 13] = [
 ];
 
 /// `w5k scenario first-light --out DIR`: run the integration spine on the stand-ins (see w5k_sim).
+/// `w5k scenario mule-course --out DIR`: the Mule with DRIVE's real powertrain on WORLD's slice course (ARCH glue).
 fn scenario(args: &[String]) -> Result<(), String> {
-    w5k_sim::cli::scenario(args)
+    match args.first().map(String::as_str) {
+        Some("mule-course") => cmd::arch_course::mule_course(&args[1..]),
+        _ => w5k_sim::cli::scenario(args),
+    }
 }

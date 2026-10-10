@@ -8,13 +8,15 @@ use std::process::Command;
 
 use w5k_contract::render::RenderRig;
 use w5k_contract::testing::{box_tank, box_truck, tank_slew_and_pitch, truck_over_bumps};
+use w5k_contract::world::WorldQuery;
 use w5k_geo::export::render_rig;
 use w5k_geo::flags::FlagParams;
 use w5k_geo::truck::{utility_4x4, UtilityDims};
 use w5k_replay::ReplayFile;
+use w5k_world::strip::DataStrip;
 
 const USAGE: &str = "usage:
-  w5k viewer render <replay.json|replay.w5kr> --out clip.mp4 [--rig rig.json] [--camera chase|orbit] [--seconds N] [--start S] [--fps N]
+  w5k viewer render <replay.json|replay.w5kr> --out clip.mp4 [--rig rig.json] [--skin utility_4x4] [--strip standard] [--camera chase|orbit] [--seconds N] [--start S] [--fps N]
   w5k viewer page   <replay.json|replay.w5kr> --out page.html [--rig rig.json]   (a self-contained page to open in a browser)
   w5k viewer plot   <data.csv> --out chart.png [--title T] [--xlabel X] [--ylabel Y] [--width W] [--height H]
   w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.w5kr, replay.json and rig.json)";
@@ -56,6 +58,50 @@ fn read_any(path: &Path) -> Result<ReplayFile, String> {
     }
 }
 
+/// The meshes to draw over the physics rig's skeleton: a built-in rig id or a serialised `RenderRig` file.
+fn skin_rig(name: &str) -> Result<RenderRig, String> {
+    match name {
+        "utility_4x4" => {
+            Ok(render_rig("utility_4x4", &utility_4x4(&UtilityDims::placeholder(), 1), &FlagParams::default_params()))
+        }
+        file => {
+            let s = std::fs::read_to_string(file).map_err(|e| {
+                format!("--skin is a built-in rig id (utility_4x4) or a rig file; cannot read {file}: {e}")
+            })?;
+            serde_json::from_str(&s).map_err(|e| format!("cannot parse {file}: {e}"))
+        }
+    }
+}
+
+/// A heightfield of the ground the replay drove over, sampled from the world model on a regular grid (x, z, in metres) and written as
+/// JSON for the page: `{x0, z0, step, nx, nz, h: [..], mat: [..], materials: [..]}`, rows of constant z. Wide enough for the whole drive.
+fn terrain_json(world: &dyn WorldQuery, replay: &ReplayFile) -> String {
+    const STEP_M: f64 = 0.25; // const-ok: viewer mesh resolution
+    const MARGIN_M: f64 = 20.0; // const-ok: ground shown beyond the driven path
+    const HALF_WIDTH_M: f64 = 10.0; // const-ok: ground shown either side of the path
+    let (mut z_lo, mut z_hi, mut x_lo, mut x_hi) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
+    for v in replay.frames.iter().flat_map(|f| f.vehicles.iter()) {
+        z_lo = z_lo.min(v.pos_m.z);
+        z_hi = z_hi.max(v.pos_m.z);
+        x_lo = x_lo.min(v.pos_m.x);
+        x_hi = x_hi.max(v.pos_m.x);
+    }
+    let (x0, z0) = ((x_lo - HALF_WIDTH_M).floor(), (z_lo - MARGIN_M).floor());
+    let (nx, nz) = (((x_hi + HALF_WIDTH_M - x0) / STEP_M) as usize + 1, ((z_hi + MARGIN_M - z0) / STEP_M) as usize + 1);
+    let (mut h, mut mat) = (Vec::with_capacity(nx * nz), Vec::with_capacity(nx * nz));
+    for j in 0..nz {
+        for i in 0..nx {
+            let (x, z) = (x0 + i as f64 * STEP_M, z0 + j as f64 * STEP_M);
+            h.push((world.height_m(x, z) * 1e4).round() / 1e4); // const-ok: 0.1 mm
+            mat.push(world.material_id_at(x, z).0);
+        }
+    }
+    let names: Vec<String> = (0..=mat.iter().copied().max().unwrap_or(0))
+        .map(|k| world.materials().get(w5k_contract::world::MaterialId(k)).name.clone())
+        .collect();
+    serde_json::json!({ "x0": x0, "z0": z0, "step": STEP_M, "nx": nx, "nz": nz, "h": h, "mat": mat, "materials": names }).to_string()
+}
+
 /// The rig to draw: `--rig file.json` (a serialised `RenderRig`), or, for the canned stand-ins, the rig named in the header.
 fn rig_for(replay: &ReplayFile, rig_arg: Option<&str>) -> Result<RenderRig, String> {
     if let Some(p) = rig_arg {
@@ -78,24 +124,38 @@ fn render(args: &[String], record: bool) -> Result<(), String> {
     let input = args.first().ok_or(USAGE)?;
     let out = opt(args, "--out").ok_or("--out is required")?;
     let replay = read_any(Path::new(input))?;
-    let rig = rig_for(&replay, opt(args, "--rig"))?;
+    let mut rig = rig_for(&replay, opt(args, "--rig"))?;
+    if let Some(skin) = opt(args, "--skin") {
+        rig = w5k_replay::skin::retarget(&skin_rig(skin)?, &rig)?;
+    }
     let tmp = std::env::temp_dir().join(format!("w5k-viewer-{}", std::process::id()));
     std::fs::create_dir_all(&tmp).map_err(|e| format!("cannot create {}: {e}", tmp.display()))?;
     let (bin, rig_json) = (tmp.join("replay.w5kr"), tmp.join("rig.json"));
     w5k_replay::write_bin(&bin, &replay)?;
     std::fs::write(&rig_json, serde_json::to_string(&rig).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    let mut extra = Vec::new();
+    match opt(args, "--strip") {
+        None => {}
+        Some("standard") => {
+            let terrain = tmp.join("terrain.json");
+            std::fs::write(&terrain, terrain_json(&DataStrip::standard(), &replay)).map_err(|e| e.to_string())?;
+            extra.extend(["--terrain".to_string(), terrain.display().to_string()]);
+        }
+        Some(other) => return Err(format!("unknown strip {other} (known: standard)")),
+    }
     let page = if record { tmp.join("page.html") } else { PathBuf::from(out) };
-    node(
-        "build.mjs",
-        &[
-            "--rig".into(),
-            rig_json.display().to_string(),
-            "--replay".into(),
-            bin.display().to_string(),
-            "--out".into(),
-            page.display().to_string(),
-        ],
-    )?;
+    let mut build: Vec<String> = [
+        "--rig",
+        &rig_json.display().to_string(),
+        "--replay",
+        &bin.display().to_string(),
+        "--out",
+        &page.display().to_string(),
+    ]
+    .map(String::from)
+    .to_vec();
+    build.extend(extra);
+    node("build.mjs", &build)?;
     if record {
         let mut a = vec![page.display().to_string(), "--out".to_string(), out.to_string()];
         for k in ["--camera", "--seconds", "--start", "--fps", "--width", "--height"] {

@@ -1,6 +1,6 @@
 # Status: VIEWER
 
-**Last updated:** 2026-10-10 11:30 UTC | **Branch:** lane/viewer/render | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** M1 deliverables done, awaiting CI/merge
+**Last updated:** 2026-10-10 11:30 UTC | **Branch:** lane/viewer/mule-showpiece | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** M1 deliverables done, awaiting CI/merge
 
 ## Done
 - Spike S-V passes (WebGL 2 under SwiftShader, 46 ms/frame, 10 s clip = 72 KB): `docs/lanes/viewer/spike-v.md`.
@@ -16,6 +16,8 @@
 - Steps 5 and 6 (PR on `lane/viewer/render`): `w5k viewer render|page|plot`; the first-light replay plays (clip 14 s, 0.57 MB; frame `docs/lanes/viewer/media/first-light-chase.png`). README `docs/lanes/viewer/README.md`.
 
 - Real truck (PR on `lane/viewer/real-truck`): GEOMETRY's `utility_4x4` rig plays (built-in rig id for `w5k viewer render|page`), LOOK's camo and weathering through the hook `tools/viewer/src/look.js` (answer: `docs/swarm/requests/viewer-look-hook.md`), page modules generalised in `build.mjs`.
+
+- Showpiece (PR on `lane/viewer/mule-showpiece`): CHASSIS's Mule strip replay on GEOMETRY's camouflaged `utility_4x4` (`--skin`, `w5k_replay::skin::retarget`: the skin's suspension arms take the Mule's rest positions, the body moves by the mean offset (0, -0.16, +0.3) m), WORLD's strip as ground (`--strip standard`), contact bars found by joint index. Clip: chase + orbit, 36 s each, force bars on.
 
 ## In progress
 - Nothing: PRs #15, #22, #26, #28, #33 (stacked, merge in that order) await ARCH. Idle.

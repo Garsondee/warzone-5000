@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod arch;
+pub mod arch_course;
 pub mod chassis;
 pub mod combat;
 pub mod drive;

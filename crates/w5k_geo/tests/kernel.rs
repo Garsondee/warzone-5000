@@ -135,3 +135,66 @@ fn subdivision_keeps_the_mesh_closed_and_its_volume_and_caps_the_edge_length() {
         .all(|&(p, q)| (s.v[p as usize] - s.v[q as usize]).length() <= 0.2)));
     assert!(s.t.len() > b.t.len());
 }
+
+use w5k_geo::loft::{polygon_ring, sweep_arc, triangulate_ring};
+
+fn polygon_area(p: &[[f64; 2]]) -> f64 {
+    (0..p.len()).map(|i| p[i][0] * p[(i + 1) % p.len()][1] - p[(i + 1) % p.len()][0] * p[i][1]).sum::<f64>() / 2.0
+}
+
+#[test]
+fn a_non_convex_ring_with_collinear_points_triangulates_without_slivers_and_a_loft_of_it_has_the_prism_volume() {
+    // a T: wide base, narrow stem, with extra points on the long edges
+    let t = [
+        [-1.0, 0.0],
+        [0.0, 0.0],
+        [1.0, 0.0],
+        [1.0, 0.5],
+        [0.3, 0.5],
+        [0.3, 1.5],
+        [-0.3, 1.5],
+        [-0.3, 0.5],
+        [-1.0, 0.5],
+    ];
+    for ring in [t.to_vec(), t.iter().rev().copied().collect::<Vec<_>>()] {
+        let tris = triangulate_ring(&ring);
+        let area: f64 = tris
+            .iter()
+            .map(|&[a, b, c]| (polygon_area(&[ring[a as usize], ring[b as usize], ring[c as usize]])).abs())
+            .sum();
+        assert!(close(area, polygon_area(&ring).abs(), 1e-12));
+        assert!(tris
+            .iter()
+            .all(|&[a, b, c]| polygon_area(&[ring[a as usize], ring[b as usize], ring[c as usize]]).abs() > 1e-6));
+        assert_eq!(tris.len(), ring.len() - 2);
+    }
+    let a = loft(&[Section { z_m: 0.0, ring: t.to_vec() }, Section { z_m: 2.0, ring: t.to_vec() }], 10.0);
+    assert!(a.check_closed().is_ok() && close(a.signed_volume(), 2.0 * polygon_area(&t), 1e-12));
+}
+
+#[test]
+fn a_chamfered_polygon_ring_keeps_its_point_count_while_the_shape_changes_and_lofts_closed() {
+    let shape = |w: f64, h: f64| {
+        [[-w, 0.0], [w, 0.0], [w, h], [0.3 * w, h], [0.3 * w, 2.0 * h], [-0.3 * w, 2.0 * h], [-0.3 * w, h], [-w, h]]
+    };
+    let flags = [0.05, 0.05, 0.05, 0.0, 0.05, 0.05, 0.0, 0.05];
+    let a = polygon_ring(&shape(1.0, 0.5), &flags, 0.05);
+    let b = polygon_ring(&shape(0.8, 0.002), &flags, 0.05);
+    assert_eq!(a.len(), b.len());
+    let m = loft(&[Section { z_m: 0.0, ring: a }, Section { z_m: 1.0, ring: b }], 0.5);
+    assert!(m.check_closed().is_ok() && m.signed_volume() > 0.0);
+}
+
+#[test]
+fn an_arc_sweep_of_a_rectangle_has_the_pappus_volume() {
+    // Pappus: volume = cross-section area x path length of its centroid; a 0.1 x 0.05 section at radius 0.5 swept through 90 degrees
+    let (n, ang) = (64usize, std::f64::consts::FRAC_PI_2);
+    let ring = [[-0.05, 0.45], [-0.05, 0.55], [0.05, 0.55], [0.05, 0.45]];
+    let angles: Vec<f64> = (0..=n).map(|i| ang * i as f64 / n as f64).collect();
+    let m = sweep_arc(&ring, (0.0, 0.0), &angles);
+    assert!(m.check_closed().is_ok());
+    // a polyline sweep slightly undercuts the true arc: the chord factor sin(d/2)/(d/2) of the centroid path
+    let d = ang / n as f64;
+    let exact = 0.1 * 0.1 * 0.5 * ang * (w5k_math::scalar::sin(d / 2.0) / (d / 2.0));
+    assert!((m.signed_volume() / exact - 1.0).abs() < 2e-3, "{} vs {}", m.signed_volume(), exact);
+}

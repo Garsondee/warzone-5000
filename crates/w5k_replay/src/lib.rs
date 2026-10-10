@@ -6,6 +6,7 @@
 //! (`Frame`, `ReplayHeader`) belongs to the contract (`w5k_contract::frame`), not to this crate.
 
 pub mod binary;
+pub mod skin;
 
 use std::path::Path;
 
