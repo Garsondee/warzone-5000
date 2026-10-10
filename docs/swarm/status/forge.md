@@ -40,6 +40,9 @@ Provisional extras now carry centre and axle differential kind and bias and the 
 ## Tracked compile (slice 2 stage B)
 Design note: `docs/lanes/forge/tracked-design-note.md` (stations and loop order, belt, steer unit, belly proxy, extras, test list, PR plan T1 to T3). Contract pin v0.3 = 0982843.
 
+## Tracked T2 (carrier compiles end to end)
+**`carrier_tracked` now compiles end to end** with drivetrain, steer unit (with its law), sprocket brakes, torsion-bar road wheels (rate from the ride-frequency slider: `K = (k + F0 sin(phi0) / (L cos^2 phi0)) (L cos(phi0))^2`, preload = the wheel share of the sprung weight, `arm_pivot_m` set, trailing arm), the belt's static penetration baked into the road-wheel rest pose (`(preload + m_u g) / k_wc`, 4 mm), and a Belly proxy whose underside is the ground clearance. `w5k_forge::compile::{parse_def, parse_extras, compile}` on `content/vehicles/game/carrier_tracked{,.extras}.ron`; `Compiled.rig` is the `PhysRig` (render rig is T3). CHASSIS / ARCH can assemble the vehicle from it.
+
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).
 
