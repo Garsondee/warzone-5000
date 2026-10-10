@@ -208,3 +208,125 @@ fn utility_4x4_dimensions_match_the_stated_hull_box_and_the_triangle_budget_hold
     println!("triangles at detail 1: {tris}");
     assert!(tris < 40_000, "{tris} triangles, budget 40,000 (wheeled)");
 }
+
+// ---- cohesion: nothing floats
+
+/// Odd number of crossings along an irrational direction: the point is inside the closed mesh.
+fn inside(m: &Mesh, p: Vec3) -> bool {
+    crossings(m, p, Vec3::new(0.371_1, 0.568_3, 0.735_7).normalized_or_zero()).len() % 2 == 1
+}
+
+/// Distance from a point to the nearest triangle (Ericson, Real-Time Collision Detection, closest point on a triangle).
+fn distance_to_surface(m: &Mesh, p: Vec3) -> f64 {
+    (0..m.t.len())
+        .map(|k| {
+            let [a, b, c] = m.tri(k);
+            let (ab, ac, ap) = (b - a, c - a, p - a);
+            let (d1, d2) = (ab.dot(ap), ac.dot(ap));
+            let q = if d1 <= 0.0 && d2 <= 0.0 {
+                a
+            } else {
+                let bp = p - b;
+                let (d3, d4) = (ab.dot(bp), ac.dot(bp));
+                if d3 >= 0.0 && d4 <= d3 {
+                    b
+                } else if d1 * d4 - d3 * d2 <= 0.0 && d1 >= 0.0 && d3 <= 0.0 {
+                    a + ab * (d1 / (d1 - d3))
+                } else {
+                    let cp = p - c;
+                    let (d5, d6) = (ab.dot(cp), ac.dot(cp));
+                    if d6 >= 0.0 && d5 <= d6 {
+                        c
+                    } else if d5 * d2 - d1 * d6 <= 0.0 && d2 >= 0.0 && d6 <= 0.0 {
+                        a + ac * (d2 / (d2 - d6))
+                    } else if d3 * d6 - d5 * d4 <= 0.0 && d4 - d3 >= 0.0 && d5 - d6 >= 0.0 {
+                        b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6)))
+                    } else {
+                        let va = d3 * d6 - d5 * d4;
+                        let vb = d5 * d2 - d1 * d6;
+                        let vc = d1 * d4 - d3 * d2;
+                        let denom = 1.0 / (va + vb + vc);
+                        a + ab * (vb * denom) + ac * (vc * denom)
+                    }
+                }
+            };
+            (p - q).length()
+        })
+        .fold(f64::MAX, f64::min)
+}
+
+fn host_meshes(parts: &[Part]) -> Vec<(String, Mesh)> {
+    parts
+        .iter()
+        .filter(|p| p.role == NodeRole::Hull && !p.fitting)
+        .map(|p| (p.name.clone(), p.in_hull_frame()))
+        .collect()
+}
+
+#[test]
+fn every_fitting_is_embedded_in_the_hull_or_in_a_fitting_that_is() {
+    let mut r = Pcg32::new(11, 3);
+    let mut sets = vec![UtilityDims::placeholder()];
+    sets.extend((0..4).map(|_| dims_in_range(&mut r)));
+    for d in sets {
+        let parts = utility_4x4(&d, 0);
+        let mut attached: Vec<Mesh> = host_meshes(&parts).into_iter().map(|h| h.1).collect();
+        let hosts = attached.len();
+        let mut pending: Vec<&Part> = parts.iter().filter(|p| p.fitting).collect();
+        loop {
+            let before = pending.len();
+            let mut keep = Vec::new();
+            for p in pending {
+                let m = p.in_hull_frame();
+                // overlapping volumes: a vertex of the fitting inside something attached, or a vertex of an attached fitting inside it
+                let touches = m.v.iter().any(|&v| attached.iter().any(|h| inside(h, v)))
+                    || attached[hosts..].iter().any(|h| h.v.iter().any(|&v| inside(&m, v)));
+                if touches {
+                    attached.push(m);
+                } else {
+                    keep.push(p);
+                }
+            }
+            pending = keep;
+            if pending.is_empty() || pending.len() == before {
+                break;
+            }
+        }
+        let floating: Vec<&str> = pending.iter().map(|p| p.name.as_str()).collect();
+        assert!(floating.is_empty(), "floating fittings {floating:?} for {d:?}");
+    }
+}
+
+#[test]
+fn plates_and_glass_hug_the_shell_within_3_cm() {
+    let parts = utility_4x4(&UtilityDims::placeholder(), 0);
+    let shell = parts.iter().find(|p| p.name == "shell").unwrap().in_hull_frame();
+    for p in parts.iter().filter(|p| {
+        ["window", "windscreen", "door_front", "door_rear", "tailgate", "hood_panel"]
+            .iter()
+            .any(|n| p.name.starts_with(n))
+    }) {
+        let far = p
+            .in_hull_frame()
+            .v
+            .iter()
+            .filter(|&&v| !inside(&shell, v))
+            .map(|&v| distance_to_surface(&shell, v))
+            .fold(0.0_f64, f64::max);
+        assert!(far < 0.03, "{} stands {:.3} m off the shell", p.name, far);
+    }
+}
+
+#[test]
+fn wheels_clear_the_shell_and_the_arches_open_over_every_tyre() {
+    let parts = utility_4x4(&UtilityDims::placeholder(), 0);
+    let shell = parts.iter().find(|p| p.name == "shell").unwrap().in_hull_frame();
+    let mut checked = 0;
+    for p in parts.iter().filter(|p| p.role == NodeRole::Wheel) {
+        for &v in p.in_hull_frame().v.iter().step_by(5) {
+            assert!(!inside(&shell, v), "{} reaches into the shell at {:?}", p.name, v);
+            checked += 1;
+        }
+    }
+    assert!(checked > 500);
+}

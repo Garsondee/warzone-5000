@@ -113,7 +113,7 @@ pub fn wheel(d: &WheelDims, segments: u32) -> Wheel {
         let sec = |w: f64, l: f64, z: f64| Section { z_m: z, ring: rect_ring(w, l, 0.0) };
         let embed = d.lug_depth_m * 0.5; // const-ok: a lug sits half its depth inside the carcass
         loft(
-            &[sec(wid, len, -embed), sec(wid, len, 0.0), sec(wid * tpl.lug_taper, len * tpl.lug_taper, d.lug_depth_m)],
+            &[sec(wid, len, -embed), sec(wid * tpl.lug_taper, len * tpl.lug_taper, d.lug_depth_m)],
             // const-ok: a step longer than any lug: no subdivision
             10.0,
         )
