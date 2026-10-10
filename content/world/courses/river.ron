@@ -13,6 +13,7 @@ CourseDef(
         warp_m: Param(v: 30.0, prov: Spec, src: "course design"),
         octaves: 4,
         max_grade: Param(v: 0.15, prov: Spec, src: "course design"),
+        detail_gd_n0_m3: Some(Param(v: 0.01, prov: Spec, src: "course design: ISO 8608 level of the ground detail, class E (gentler ground than the slice)")),
     ),
     road: RoadDef(
         waypoints: [(-120.0, 170.0), (-60.0, 60.0)],
@@ -20,6 +21,7 @@ CourseDef(
         shoulder_m: Param(v: 4.0, prov: Spec, src: "course design"),
         max_grade: Param(v: 0.08, prov: Spec, src: "course design: 8 percent"),
         surface: "asphalt",
+        roughness_gd_n0_m3: Some(Param(v: 0.0003, prov: Spec, src: "course design: ISO 8608 class C, an average road")),
     ),
     rivers: [RiverDef(
         start: (-200.0, -15.0),

@@ -1,0 +1,16 @@
+// One track link, in proportion (lane GEOMETRY): a pad on the ground side, two connectors with the pin bosses and a centre guide horn on the
+// wheel side, and a grouser (a cleat) across the pad. Lengths along the belt are fractions of the pitch, the rest metres. ESTIMATE for every
+// number, bands +-30%, reason: an original design, only the proportions of a light carrier's steel track are intended. Every box is inset
+// from its neighbours so that no vertex of one coincides with another's (the link is a union of closed boxes: 5 boxes, 60 triangles).
+LinkSpec(
+    gap_frac: 0.04,            // gap between neighbouring pads, as a fraction of the pitch
+    connector_w_m: 0.03,       // each of the two connectors, at the pad's edges
+    connector_h_m: 0.032,      // how far they stand on the wheel side of the pad
+    connector_len_frac: 0.5,
+    horn_w_m: 0.045,
+    horn_h_m: 0.05,
+    horn_len_frac: 0.4,
+    grouser_h_m: 0.012,
+    grouser_len_frac: 0.25,
+    inset_m: 0.004,            // how far a box stays inside the pad's outline (and embeds in its face)
+)
