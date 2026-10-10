@@ -6,7 +6,7 @@ use w5k_contract::def::{SuspensionKind, TrackedDef, VehicleDef};
 use w5k_contract::rig::*;
 use w5k_math::{scalar, Transform, Vec3};
 
-use crate::budget::{hull_body, sprung};
+use crate::budget::{hull_body, inertia_report, sprung};
 use crate::compile::{axle_loads, need, powertrain_parts, Compiled, J_PER_KJ, MAX_SUBSTEPS};
 use crate::extras::Extras;
 
@@ -263,6 +263,7 @@ pub(crate) fn tracked(def: &VehicleDef, t: &TrackedDef, ex: &Extras) -> Result<C
 
     // ---- drivetrain: engine, coupling, gearbox as wheeled; a steer unit over the two sprockets; brakes on the sprockets
     let (hull, size) = hull_body(h, &sprung_mass);
+    report.push(inertia_report(&hull, sprung_mass.items.len().saturating_sub(1), size));
     let (engine, coupling, gearbox) = powertrain_parts(def, ex)?;
     let su_def = pt.steering_unit.as_ref().ok_or("a tracked def needs `powertrain.steering_unit` (kind and ratio)")?;
     let sl = &tx.steer_law;

@@ -9,7 +9,7 @@ use w5k_contract::param::Param;
 use w5k_contract::rig::*;
 use w5k_math::{scalar, Transform, Vec3};
 
-use crate::budget::{hull_body, sprung, MassItem};
+use crate::budget::{hull_body, inertia_report, sprung, MassItem};
 use crate::curve::torque_curve_through_peaks;
 use crate::extras::{DiffSpec, Extras};
 
@@ -269,6 +269,7 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
     ));
 
     let (hull, size) = hull_body(h, &sprung_mass);
+    report.push(inertia_report(&hull, sprung_mass.items.len().saturating_sub(1), size));
     let total_mass = m_sprung + ty.unsprung_mass_kg.v * stations.len() as f64;
 
     let (engine, coupling, gearbox) = powertrain_parts(def, ex)?;

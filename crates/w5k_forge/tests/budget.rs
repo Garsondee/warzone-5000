@@ -185,3 +185,29 @@ fn a_part_that_cannot_exist_is_rejected_with_its_name_and_a_heavy_engine_on_a_li
     c.rig.validate().unwrap();
     assert!(mass_of(&c, "engine") > 2.9 * mass_of(&built(&d, &x), "engine"));
 }
+
+#[test]
+fn the_report_prints_the_inertia_source_and_radii_of_gyration_that_match_the_tensor() {
+    for id in IDS {
+        let (d, x) = load(id);
+        let c = built(&d, &x);
+        let line = c
+            .report
+            .iter()
+            .find(|l| l.starts_with("hull inertia (ESTIMATE)"))
+            .unwrap_or_else(|| panic!("{id}: no inertia line"));
+        assert!(line.contains("point masses"), "{id}: {line}");
+        let m = &c.rig.hull.inertia_kg_m2.m;
+        let k = |i: f64| (i / c.rig.hull.mass_kg).sqrt();
+        for (name, v) in [("roll", k(m[2][2])), ("pitch", k(m[0][0])), ("yaw", k(m[1][1]))] {
+            assert!(line.contains(&format!("{name} {v:.2} m")), "{id}: {line}");
+        }
+        // Sanity against the hull box: a body's radius of gyration cannot exceed half the box diagonal in the plane it turns in.
+        let size = c.hull_size_m;
+        assert!(k(m[1][1]) < 0.5 * (size.x * size.x + size.z * size.z).sqrt(), "{id}: yaw radius");
+        let mut lump = x.clone();
+        lump.mass_budget = None;
+        let l = built(&d, &lump).report.iter().find(|l| l.starts_with("hull inertia")).unwrap().clone();
+        assert!(l.contains("one uniform box"), "{l}");
+    }
+}

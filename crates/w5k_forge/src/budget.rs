@@ -3,7 +3,7 @@
 //! `hull.mass_kg` at its COM is the whole sprung mass (the old lump).
 
 use w5k_contract::def::{HullDef, VehicleDef};
-use w5k_math::{Mat3, Vec3};
+use w5k_math::{scalar, Mat3, Vec3};
 
 use crate::extras::{Extras, Loading, PartPos};
 
@@ -101,5 +101,26 @@ pub(crate) fn hull_body(h: &HullDef, s: &Sprung) -> (w5k_contract::rig::BodyDef,
     (
         w5k_contract::rig::BodyDef { name: "hull".into(), mass_kg: s.mass_kg, com_m: s.com_m, inertia_kg_m2: inertia },
         size,
+    )
+}
+
+/// The report line for the hull inertia: where it came from and the radii of gyration (`k = sqrt(I / m)` about the roll axis Z, the pitch
+/// axis X and the yaw axis Y), so a reader can sanity-check them against the hull box. ESTIMATE: positions and coefficients are estimates.
+pub(crate) fn inertia_report(hull: &w5k_contract::rig::BodyDef, parts: usize, size: Vec3) -> String {
+    let k = |i: f64| scalar::sqrt(i / hull.mass_kg);
+    let m = &hull.inertia_kg_m2.m;
+    let source = if parts == 0 {
+        "one uniform box of the whole sprung mass".to_string()
+    } else {
+        format!("the structure as a uniform box plus {parts} parts as point masses (parallel-axis theorem)")
+    };
+    format!(
+        "hull inertia (ESTIMATE): {source}; radii of gyration roll {:.2} m, pitch {:.2} m, yaw {:.2} m (hull box {:.2} x {:.2} x {:.2} m, width x height x length)",
+        k(m[2][2]),
+        k(m[0][0]),
+        k(m[1][1]),
+        size.x,
+        size.y,
+        size.z
     )
 }
