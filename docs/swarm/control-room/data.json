@@ -1,281 +1,301 @@
 {
-  "subtitle": "warzone-5000: a realistic ground-vehicle simulator, built by thirteen domain agents working in parallel. This page is the coordinator's view.",
-  "updated": "",
-  "strip": [
-    {
-      "k": "Phase",
-      "v": "Slice driving",
-      "s": "The Mule 4x4 drives the 520 m course with the real stack on real terrain; clip, forces and plots in the viewer",
-      "state": "run"
-    },
-    {
-      "k": "Contract",
-      "v": "0.2.0",
-      "s": "pinned at 80adac2 (CHASSIS, DRIVE, FORGE CCRs applied)",
-      "state": "run"
-    },
-    {
-      "k": "First light",
-      "v": "green, Linux and Windows",
-      "s": "hash chain identical on both; every merge",
-      "state": "run"
-    },
-    {
-      "k": "Sessions",
-      "v": "9 of 13",
-      "s": "ARCH plus CHASSIS, DRIVE, FORGE, WORLD, VIEWER, VALIDATION, GEOMETRY, LOOK; TRACKS, GODOT, COMBAT, AI not launched",
-      "state": "run"
-    },
-    {
-      "k": "Usage",
-      "v": "lanes about $44",
-      "s": "eight lane sessions this window (CHASSIS 9.4, GEOMETRY 10.1, VIEWER 6.5, WORLD 5.3, FORGE 4.6, DRIVE 3.8, LOOK 2.4, VALIDATION 1.9)",
-      "state": "wait"
-    }
-  ],
-  "ranks": [
-    {
-      "rank": 1,
-      "note": "critical path to first light"
-    },
-    {
-      "rank": 2,
-      "note": "parallel-safe; launches when rank 1's first hour looks healthy"
-    },
-    {
-      "rank": 3,
-      "note": "needs the settled Command and CapabilityTable"
-    }
-  ],
-  "lanes": [
-    {
-      "name": "ARCH",
-      "squad": "platform",
-      "rank": 1,
-      "state": "building",
-      "mission": "Contracts, CI and guardrails, the integration spine, merges, reviews. Writes no feature code.",
-      "last": "Running the swarm overnight: merges, contract v0.2, CI fixes; the glue that puts the truck on the course comes next."
-    },
-    {
-      "name": "CHASSIS",
-      "squad": "dynamics",
-      "rank": 1,
-      "state": "building",
-      "mission": "A wheeled vehicle that rides, grips and handles: hull, suspension, tyres, steering.",
-      "last": "quarter car, suspension, tyre and 6-DoF hull merged; wheeled 4x4 next"
-    },
-    {
-      "name": "DRIVE",
-      "squad": "dynamics",
-      "rank": 1,
-      "state": "building",
-      "mission": "Engine map, converter, gearbox, differentials, brakes with heat, fuel.",
-      "last": "engine, clutch and torque converter merged; gearbox and DrivePort next"
-    },
-    {
-      "name": "WORLD",
-      "squad": "world",
-      "rank": 1,
-      "state": "building",
-      "mission": "The obstacle course: hills, roads, mud, trees, barricades, buildings.",
-      "last": "data-driven bump strip merged; the course next"
-    },
-    {
-      "name": "FORGE",
-      "squad": "design",
-      "rank": 1,
-      "state": "building",
-      "mission": "Designer choices to solver parameters; the reference garage starts with the HMMWV.",
-      "last": "the Mule 4x4 compiles to a validated PhysRig and RenderRig"
-    },
-    {
-      "name": "VIEWER",
-      "squad": "visuals",
-      "rank": 1,
-      "state": "building",
-      "mission": "Replay format, the browser viewer with forces drawn on, MP4 and chart tools.",
-      "last": "binary replays, debug draw, HUD, plots and MP4 render merged"
-    },
-    {
-      "name": "VALIDATION",
-      "squad": "truth",
-      "rank": 1,
-      "state": "building",
-      "mission": "Real-vehicle dossiers, the harness, the dashboard and the Design Impact Matrix.",
-      "last": "dossier schema and the M998 dossier merged; harness next"
-    },
-    {
-      "name": "GEOMETRY",
-      "squad": "design",
-      "rank": 2,
-      "state": "building",
-      "mission": "Realistic hulls, turrets, wheels and tracks from lofted sections.",
-      "last": "parametric utility truck with panel detail, glTF export"
-    },
-    {
-      "name": "LOOK",
-      "squad": "visuals",
-      "rank": 2,
-      "state": "building",
-      "mission": "Camouflage, weathering, materials, lighting and dust.",
-      "last": "three procedural camo schemes and weathering, GLSL chunk"
-    },
-    {
-      "name": "TRACKS",
-      "squad": "dynamics",
-      "rank": 2,
-      "state": "not launched",
-      "mission": "Tracked running gear and soft ground: floats where tyres bog, turns by skidding."
-    },
-    {
-      "name": "GODOT",
-      "squad": "platform",
-      "rank": 2,
-      "state": "not launched",
-      "mission": "The Godot 4.6 front end: replay player, drive mode, Windows package."
-    },
-    {
-      "name": "COMBAT",
-      "squad": "behaviour",
-      "rank": 2,
-      "state": "not launched",
-      "mission": "Ballistics, penetration, damage, targets, turret and gun servos, recoil."
-    },
-    {
-      "name": "AI",
-      "squad": "behaviour",
-      "rank": 3,
-      "state": "not launched",
-      "mission": "Perception, planner, driver, gunner, tactician; fair: it emits only what a human could."
-    }
-  ],
-  "milestones": [
-    {
-      "id": "W0",
-      "name": "Launch Kit",
-      "state": "done",
-      "criteria": "Done: 13 briefs, guards proven by a bad PR, Linux and Windows hashes identical (S2), contract 0.1.1 merged and green, launch rehearsal passed (PR 3: lane guard and CI green, merged, $0.23). Waiting: your go to launch rank 1 (card C-008), or the usage reset (10 Oct 02:00 UTC)."
-    },
-    {
-      "id": "S",
-      "name": "Settling round",
-      "state": "not started",
-      "criteria": "Each lane's spike and design note; contract v0.2 within 24 hours."
-    },
-    {
-      "id": "M1",
-      "name": "First light",
-      "state": "not started",
-      "criteria": "An HMMWV-class 4x4 over the bump strip, within 15/7/15% of the real truck on acceleration, top speed and braking; identical on Linux and Windows."
-    },
-    {
-      "id": "M2",
-      "name": "Mud and steel",
-      "state": "not started",
-      "criteria": "Tracked vehicles on soft ground; a 2 km course; held-out vehicles within 12% median error; Godot drive mode on Windows."
-    },
-    {
-      "id": "M3",
-      "name": "Turret and targets",
-      "state": "not started",
-      "criteria": "Recoil conserves momentum; traverse and elevation times within 20%; damage changes mobility."
-    },
-    {
-      "id": "M4",
-      "name": "Thinking vehicles",
-      "state": "not started",
-      "criteria": "At least 90% course completion for five vehicles, stuck under 3%, rollover under 1%."
-    },
-    {
-      "id": "M5",
-      "name": "Game loop",
-      "state": "not started",
-      "criteria": "Decided at the M4 checkpoint."
-    }
-  ],
-  "pictures": [
-    {
-      "lane": "VIEWER",
-      "caption": "the truck at the mud crossing on WORLD's real terrain (rear-quarter follow camera)",
-      "file": "docs/lanes/viewer/media/course-mud-quarter.png"
-    },
-    {
-      "lane": "VIEWER",
-      "caption": "the barricade gap, force bars on the wheels, plots tucked in a corner",
-      "file": "docs/lanes/viewer/media/course-barricade-quarter.png"
-    },
-    {
-      "lane": "VIEWER",
-      "caption": "orbit camera around the truck on the course",
-      "file": "docs/lanes/viewer/media/course-orbit.png"
-    },
-    {
-      "lane": "GEOMETRY",
-      "caption": "the new silhouette: framed glass on leaning walls, front window parallel to the windscreen",
-      "file": "docs/lanes/geometry/media/truck-front34-look.png"
-    },
-    {
-      "lane": "GEOMETRY",
-      "caption": "the parametric utility truck (fictional, HMMWV-like archetype): panel lines, tread, mirrors, canvas",
-      "file": "docs/lanes/geometry/media/truck-look.png"
-    },
-    {
-      "lane": "VIEWER",
-      "caption": "the first-light replay playing in the browser viewer, chase camera",
-      "file": "docs/lanes/viewer/media/first-light-chase.png"
-    },
-    {
-      "lane": "VIEWER",
-      "caption": "contact forces drawn on: green bars, orange when slipping",
-      "file": "docs/lanes/viewer/media/truck-forces.png"
-    },
-    {
-      "lane": "LOOK",
-      "caption": "three procedural camouflage schemes on a panel and a sphere",
-      "file": "docs/lanes/look/media/camo_panel_sphere.png"
-    },
-    {
-      "lane": "FORGE",
-      "caption": "the Mule 4x4 as compiled: ride height, centre of mass, tyre sink",
-      "file": "docs/lanes/forge/media/mule-side-view.png"
-    },
-    {
-      "lane": "WORLD",
-      "caption": "spike map of the course generator",
-      "file": "docs/lanes/world/media/spike-w-map.png"
-    }
-  ],
-  "log": [
-    {
-      "t": "2026-10-08 17:00",
-      "sessions": "1 of 13",
-      "note": "Launch Kit under way. This session's meter reads about $204 after about 20 hours."
-    },
-    {
-      "t": "2026-10-08 18:05",
-      "sessions": "1 of 13",
-      "note": "Owner warned of about $20 of credit left: ARCH stopped and left the repository green. Handoff: docs/architecture/CONTRACT-0.1.1-PLAN.md and docs/swarm/STATE.md."
-    },
-    {
-      "t": "2026-10-08 18:25",
-      "sessions": "1 of 13",
-      "note": "Contract 0.1.1 merged into integration (PR 2) and green on Linux and Windows. Next: the launch rehearsal; no lane launched."
-    },
-    {
-      "t": "2026-10-08 18:55",
-      "sessions": "1 of 13",
-      "note": "Launch rehearsal passed. One small CHASSIS session cloned, branched, wrote its status file, ran the math tests, pushed and opened PR 3; the lane guard and CI passed and ARCH merged it ($0.23 for the whole session). It tried to force-push and was refused, as designed. Fixes made: the launch prompt now says how to sign commits and never to amend; the contract pin is a commit id. Rank 1 is not launched; it waits for your go."
-    },
-    {
-      "t": "2026-10-08 19:55",
-      "sessions": "1 of 13",
-      "note": "Your four answers are applied (C-001 era, C-002 garage, C-003 courses, C-007 models); the page shows each with my reading of it, so please check I read you right. Docs only, about $1 to $1.5 of your remaining $8. Nothing launched."
-    },
-    {
-      "t": "2026-10-10 11:43",
-      "sessions": "9 of 13",
-      "note": "You went to sleep and said run without checking in. Eight lanes launched; 27 lane PRs merged; contract v0.2 applied; integration went red on Windows only (CRLF line endings in baked JSON) and a repo-wide LF fix is in PR 36. Lanes cost about $0.5 to $1.5 each so far."
-    }
-  ],
-  "footer": "Defaults apply to every open card until you answer it."
+ "subtitle": "warzone-5000: a realistic ground-vehicle simulator, built by thirteen domain agents working in parallel. This page is the coordinator's view.",
+ "updated": "2026-10-10 16:40 UTC",
+ "strip": [
+  {
+   "k": "Phase",
+   "v": "Slice 1 delivered; slice 2 proposed",
+   "s": "three wheeled vehicles drive the whole course; browser viewer; kid test-drive mode in a Windows zip. Slice 2 ('The Design Loop') waits for your word (card C-016)",
+   "state": "run"
+  },
+  {
+   "k": "Contract",
+   "v": "0.2.0",
+   "s": "pinned at 80adac2; tracks (S3, S4) and turret recoil (S6) are untested against any code, so it stays unfrozen for those parts",
+   "state": "wait"
+  },
+  {
+   "k": "First light",
+   "v": "green, Linux and Windows",
+   "s": "hash chain identical on both; every merge",
+   "state": "run"
+  },
+  {
+   "k": "Sessions",
+   "v": "9 of 13",
+   "s": "ARCH plus eight lanes; TRACKS, GODOT, COMBAT and AI not launched (slice 2 would launch TRACKS, and COMBAT for one spike)",
+   "state": "run"
+  },
+  {
+   "k": "Usage",
+   "v": "lanes about $80",
+   "s": "by my last tally, over about 14 hours (GEOMETRY and CHASSIS the largest); slice 2 is estimated at about two five-hour windows",
+   "state": "wait"
+  }
+ ],
+ "ranks": [
+  {
+   "rank": 1,
+   "note": "critical path to first light"
+  },
+  {
+   "rank": 2,
+   "note": "parallel-safe; launches when rank 1's first hour looks healthy"
+  },
+  {
+   "rank": 3,
+   "note": "needs the settled Command and CapabilityTable"
+  }
+ ],
+ "lanes": [
+  {
+   "name": "ARCH",
+   "squad": "platform",
+   "rank": 1,
+   "state": "building",
+   "mission": "Contracts, CI and guardrails, the integration spine, merges, reviews. Writes no feature code.",
+   "last": "w5k drive (live test-drive server, kid assists), course-compare, the proving-ground runner (braking, acceleration merged), the Windows package; lanes may now message ARCH"
+  },
+  {
+   "name": "CHASSIS",
+   "squad": "dynamics",
+   "rank": 1,
+   "state": "building",
+   "mission": "A wheeled vehicle that rides, grips and handles: hull, suspension, tyres, steering.",
+   "last": "wheeled assembly, Ackermann, ledger, skidpad and tilt-table benches merged; known gaps: no tyre load sensitivity, linear tyre curve"
+  },
+  {
+   "name": "DRIVE",
+   "squad": "dynamics",
+   "rank": 1,
+   "state": "building",
+   "mission": "Engine map, converter, gearbox, differentials, brakes with heat, fuel.",
+   "last": "gearbox, brakes, locked and limited-slip diffs, engine braking and fade, tracked steering units merged; hauler gearbox bug fixed"
+  },
+  {
+   "name": "WORLD",
+   "squad": "world",
+   "rank": 1,
+   "state": "building",
+   "mission": "The obstacle course: hills, roads, mud, trees, barricades, buildings.",
+   "last": "rock fields, switchback cliff, river and ford, bridges, soft-ground patches, washboard and whoops, `w5k world stats`; terrain spectra were red against ISO 8608"
+  },
+  {
+   "name": "FORGE",
+   "squad": "design",
+   "rank": 1,
+   "state": "building",
+   "mission": "Designer choices to solver parameters; the reference garage starts with the HMMWV.",
+   "last": "Mule, Scout and Hauler compile to rigs; substeps from the stiffest mode; Scout damping retuned"
+  },
+  {
+   "name": "VIEWER",
+   "squad": "visuals",
+   "rank": 1,
+   "state": "building",
+   "mission": "Replay format, the browser viewer with forces drawn on, MP4 and chart tools.",
+   "last": "RTS camera, multi-vehicle replays, live test-drive page with a start screen and three skinned trucks; packing the hauler skin next"
+  },
+  {
+   "name": "VALIDATION",
+   "squad": "truth",
+   "rank": 1,
+   "state": "building",
+   "mission": "Real-vehicle dossiers, the harness, the dashboard and the Design Impact Matrix.",
+   "last": "proving-ground spec, scorers for braking, rollover, step and terrain; the Impact Matrix runner and real dossiers still to come"
+  },
+  {
+   "name": "GEOMETRY",
+   "squad": "design",
+   "rank": 2,
+   "state": "building",
+   "mission": "Realistic hulls, turrets, wheels and tracks from lofted sections.",
+   "last": "modular vehicles: hull, wheel and weapon modules on sockets, N axles, scout and hauler skins, 50k triangle budget; hauler detail PR in merge"
+  },
+  {
+   "name": "LOOK",
+   "squad": "visuals",
+   "rank": 2,
+   "state": "building",
+   "mission": "Camouflage, weathering, materials, lighting and dust.",
+   "last": "three procedural camouflage schemes and weathering; idle"
+  },
+  {
+   "name": "TRACKS",
+   "squad": "dynamics",
+   "rank": 2,
+   "state": "not launched",
+   "mission": "Tracked running gear and soft ground: floats where tyres bog, turns by skidding.",
+   "last": "not launched; slice 2 proposal would launch it (card C-016)"
+  },
+  {
+   "name": "GODOT",
+   "squad": "platform",
+   "rank": 2,
+   "state": "not launched",
+   "mission": "The Godot 4.6 front end: replay player, drive mode, Windows package.",
+   "last": "not launched; parked until after slice 2"
+  },
+  {
+   "name": "COMBAT",
+   "squad": "behaviour",
+   "rank": 2,
+   "state": "not launched",
+   "mission": "Ballistics, penetration, damage, targets, turret and gun servos, recoil.",
+   "last": "not launched; slice 2 proposal would launch it (card C-016)"
+  },
+  {
+   "name": "AI",
+   "squad": "behaviour",
+   "rank": 3,
+   "state": "not launched",
+   "mission": "Perception, planner, driver, gunner, tactician; fair: it emits only what a human could.",
+   "last": "not launched; parked until after slice 2"
+  }
+ ],
+ "milestones": [
+  {
+   "id": "W0",
+   "name": "Launch Kit",
+   "state": "done",
+   "criteria": "Done: 13 briefs, guards proven by a bad PR, Linux and Windows hashes identical, contract 0.1.1 merged, launch rehearsal passed."
+  },
+  {
+   "id": "S",
+   "name": "Settling round",
+   "state": "done",
+   "criteria": "Done: contract 0.2.0 applied from CHASSIS, DRIVE and FORGE requests. Spikes S3 (tracks), S4 (soil) and S6 (turret) never ran because TRACKS and COMBAT were not launched."
+  },
+  {
+   "id": "M1",
+   "name": "First light",
+   "state": "demo done, gates partly met",
+   "criteria": "Demo: three wheeled vehicles drive a 520 m course, viewer, kid test drive. Gates met: quarter-car frequency and damping, energy drift, identical hashes on Linux and Windows. Gates open: Impact Matrix never run, figures against a real M998 unverified (sources unreachable), per-tick cost only roughly measured, Godot player not started."
+  },
+  {
+   "id": "S2",
+   "name": "Slice 2: The Design Loop",
+   "state": "proposed (waits for your go)",
+   "criteria": "A tracked carrier, mud that decides who passes, the Impact Matrix running, a Workshop page where a design change moves measured numbers and can be driven. See docs/swarm/SLICE-2.md and card C-016."
+  },
+  {
+   "id": "M2",
+   "name": "Mud and steel",
+   "state": "not started",
+   "criteria": "Tracked vehicles on soft ground; a 2 km course; held-out vehicles within 12% median error; Godot drive mode on Windows."
+  },
+  {
+   "id": "M3",
+   "name": "Turret and targets",
+   "state": "not started",
+   "criteria": "Recoil conserves momentum; traverse and elevation times within 20%; damage changes mobility."
+  },
+  {
+   "id": "M4",
+   "name": "Thinking vehicles",
+   "state": "not started",
+   "criteria": "At least 90% course completion for five vehicles, stuck under 3%, rollover under 1%."
+  },
+  {
+   "id": "M5",
+   "name": "Game loop",
+   "state": "not started",
+   "criteria": "Decided at the M4 checkpoint."
+  }
+ ],
+ "pictures": [
+  {
+   "lane": "VIEWER",
+   "caption": "the start screen your son sees: three big pictures and one huge DRIVE button",
+   "file": "docs/lanes/viewer/media/live-picker.jpg"
+  },
+  {
+   "lane": "VIEWER",
+   "caption": "scout, mule and hauler racing the same course (RTS camera)",
+   "file": "docs/lanes/viewer/media/fleet-rts.png"
+  },
+  {
+   "lane": "ARCH",
+   "caption": "braking from 50 km/h: Mule stops inside the oracle band, Scout and Hauler are brake-limited",
+   "file": "docs/lanes/arch/media/proving-braking-50kmh.png"
+  },
+  {
+   "lane": "ARCH",
+   "caption": "0 to 48 km/h for the three vehicles (shift plateaus visible)",
+   "file": "docs/lanes/arch/media/proving-accel-0-48kmh.png"
+  },
+  {
+   "lane": "GEOMETRY",
+   "caption": "scout, utility truck and hauler at one scale",
+   "file": "docs/lanes/geometry/media/skin-garage-front34.png"
+  },
+  {
+   "lane": "VIEWER",
+   "caption": "the truck at the mud crossing on WORLD's real terrain (rear-quarter follow camera)",
+   "file": "docs/lanes/viewer/media/course-mud-quarter.png"
+  },
+  {
+   "lane": "VIEWER",
+   "caption": "the barricade gap, force bars on the wheels, plots tucked in a corner",
+   "file": "docs/lanes/viewer/media/course-barricade-quarter.png"
+  },
+  {
+   "lane": "VIEWER",
+   "caption": "orbit camera around the truck on the course",
+   "file": "docs/lanes/viewer/media/course-orbit.png"
+  },
+  {
+   "lane": "GEOMETRY",
+   "caption": "the new silhouette: framed glass on leaning walls, front window parallel to the windscreen",
+   "file": "docs/lanes/geometry/media/truck-front34-look.png"
+  },
+  {
+   "lane": "GEOMETRY",
+   "caption": "the parametric utility truck (fictional, HMMWV-like archetype): panel lines, tread, mirrors, canvas",
+   "file": "docs/lanes/geometry/media/truck-look.png"
+  }
+ ],
+ "log": [
+  {
+   "t": "2026-10-08 17:00",
+   "sessions": "1 of 13",
+   "note": "Launch Kit under way. This session's meter reads about $204 after about 20 hours."
+  },
+  {
+   "t": "2026-10-08 18:05",
+   "sessions": "1 of 13",
+   "note": "Owner warned of about $20 of credit left: ARCH stopped and left the repository green. Handoff: docs/architecture/CONTRACT-0.1.1-PLAN.md and docs/swarm/STATE.md."
+  },
+  {
+   "t": "2026-10-08 18:25",
+   "sessions": "1 of 13",
+   "note": "Contract 0.1.1 merged into integration (PR 2) and green on Linux and Windows. Next: the launch rehearsal; no lane launched."
+  },
+  {
+   "t": "2026-10-08 18:55",
+   "sessions": "1 of 13",
+   "note": "Launch rehearsal passed. One small CHASSIS session cloned, branched, wrote its status file, ran the math tests, pushed and opened PR 3; the lane guard and CI passed and ARCH merged it ($0.23 for the whole session). It tried to force-push and was refused, as designed. Fixes made: the launch prompt now says how to sign commits and never to amend; the contract pin is a commit id. Rank 1 is not launched; it waits for your go."
+  },
+  {
+   "t": "2026-10-08 19:55",
+   "sessions": "1 of 13",
+   "note": "Your four answers are applied (C-001 era, C-002 garage, C-003 courses, C-007 models); the page shows each with my reading of it, so please check I read you right. Docs only, about $1 to $1.5 of your remaining $8. Nothing launched."
+  },
+  {
+   "t": "2026-10-10 11:43",
+   "sessions": "9 of 13",
+   "note": "You went to sleep and said run without checking in. Eight lanes launched; 27 lane PRs merged; contract v0.2 applied; integration went red on Windows only (CRLF line endings in baked JSON) and a repo-wide LF fix is in PR 36. Lanes cost about $0.5 to $1.5 each so far."
+  },
+  {
+   "t": "2026-10-10 13:28",
+   "sessions": "9 of 13",
+   "note": "Slice 1 delivered: the truck drives the course with forces drawn, clip and Control Room sent. Lanes about $51 at this point."
+  },
+  {
+   "t": "2026-10-10 16:35",
+   "sessions": "9 of 13",
+   "note": "You ran the Windows package and liked it. START.bat now has no speed limiter; START-KID.bat keeps the 25 km/h cap. Slice 2 proposed (The Design Loop); three new cards: C-016 (slice 2), C-017 (where real published figures come from), C-018 (oracle tolerance class). Nothing new launches without your go."
+  }
+ ],
+ "footer": "Defaults apply to every open card until you answer it."
 }
