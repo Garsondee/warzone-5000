@@ -11,7 +11,7 @@
 //!
 //! Frame: x along the track, forward positive, origin at the contact centre; y left. The glue maps it to the hull.
 
-use w5k_contract::rig::TrackDef;
+use w5k_contract::rig::{PhysRig, TrackDef, WheelKind};
 use w5k_contract::{ContactElement, ContactInput, ContactOutput, Material};
 
 use crate::sample::{SampleGeom, TrackSample};
@@ -53,6 +53,25 @@ impl GearConfig {
             resist_c0: def.resist_c0,
             resist_c1_s_m: def.resist_c1_s_m,
         }
+    }
+}
+
+impl GearConfig {
+    /// From track `track` of a rig: road-wheel positions along the ground run (hull frame -Z is forward, so `x = -z`), centred on their mean;
+    /// the sprocket's pitch radius from its station.
+    pub fn from_rig(rig: &PhysRig, track: usize) -> GearConfig {
+        let def = &rig.tracks[track];
+        let mut xs: Vec<f64> = def
+            .stations
+            .iter()
+            .map(|&i| &rig.stations[i])
+            .filter(|s| s.wheel.kind == WheelKind::RoadWheel)
+            .map(|s| -s.rest_pos_m.z)
+            .collect();
+        xs.sort_by(f64::total_cmp);
+        let mean = xs.iter().sum::<f64>() / xs.len().max(1) as f64;
+        let wheels = xs.iter().map(|x| x - mean).collect();
+        GearConfig::from_track_def(def, wheels, rig.stations[def.sprocket].wheel.radius_m)
     }
 }
 

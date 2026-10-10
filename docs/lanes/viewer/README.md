@@ -10,12 +10,14 @@ Setup (the SessionStart hook does this): `npm ci` in `tools/viewer`. Chromium is
 | The Mule on the strip with the detailed camouflaged truck and the strip's ground | `w5k viewer render replay.w5kr --rig rig.json --skin utility_4x4 --strip standard --out clip.mp4` (`--skin` draws another rig's meshes over the physics rig's skeleton: same joint indices, wheels placed where the simulation put them; `--strip standard` samples WORLD's bump strip as the ground) |
 | The whole course: WORLD's terrain, road, mud and props | `w5k scenario mule-course --out DIR`, `w5k world export content/world/courses/slice.ron --out DIR2`, then `w5k viewer render DIR/replay.w5kr --rig DIR/rig.json --skin utility_4x4 --terrain DIR2/terrain.json --camera quarter --plots inset --out clip.mp4` (a terrain file named in the replay header is found by itself). Cameras: `quarter` (rear-quarter, follows the direction of travel), `chase`, `orbit`; plots: `inset` (small, default in recordings), `full` (the page), `off` |
 | A PNG chart for your evidence | `w5k viewer plot data.csv --out chart.png --title "..." --ylabel "..."` (first column is x, other columns are series; no blanks, no NaN) |
+| The design-impact tornado from VALIDATION's file (a panel per benchmark, a bar per vehicle for each lever) | `w5k validation impact --out DIR`, then `w5k viewer tornado DIR/impact.json --out tornado.png [--theme light\|dark] [--cols N] [--rows 8]` (shapes: `docs/lanes/viewer/charts.md`; real sample: `tools/viewer/samples/impact.json`) |
+| The sinkage ladder beside the soil theory | `w5k viewer ladder ladder.json --out ladder.png [--theme light\|dark]` |
 | The canned replays and rigs | `w5k viewer dump-canned truck\|tank --out dir` |
 
 The replay may be JSON (the debug form) or binary (`W5KR`). The rig is the canned one named in the header (`box_truck`, `box_tank`) or `--rig file.json` (a serialised `RenderRig`; FORGE's compiled rigs come this way).
 Clips and pages are CI artifacts: do not commit videos; a PNG under `docs/lanes/<lane>/media/` is fine.
 
-Tests: `cargo test -p w5k_replay` (codec), `node tools/viewer/test-decoder.mjs <dir>` (JS decoder against the Rust one),
+Tests: `node tools/viewer/test-charts.mjs` (what the tornado and ladder draw, flag and count; no browser), `cargo test -p w5k_replay` (codec), `node tools/viewer/test-decoder.mjs <dir>` (JS decoder against the Rust one),
 `node tools/viewer/smoke.mjs page.html part1,part2` (triangle count, console errors, each joint alone moves the picture; SKIP means the rig has nothing to see there).
 Controls: drag to orbit, wheel to zoom, space to pause, click the scope to seek.
 
