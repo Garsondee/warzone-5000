@@ -1,0 +1,55 @@
+closed-form modes (f_n Hz, zeta):
+  damped [(1.322, 0.2455), (11.738, 0.2774)]
+  undamped [(1.301, -0.0), (11.919, -0.0)]
+  naive wheel-hop (K+KT)/MU: 11.91 Hz
+
+stability limit (explicit/semi-implicit Euler, damped, 5 s from 1 cm step):
+     20 Hz  max|zu|=1.16e+113 m  UNSTABLE
+     30 Hz  max|zu|=1.766e+111 m  UNSTABLE
+     36 Hz  max|zu|=6.403e+96 m  UNSTABLE
+     38 Hz  max|zu|=2.253e+89 m  UNSTABLE
+     40 Hz  max|zu|=2.048e+80 m  UNSTABLE
+     45 Hz  max|zu|=3.775e+48 m  UNSTABLE
+     60 Hz  max|zu|=0.01389 m  ok
+    100 Hz  max|zu|=0.01274 m  ok
+    300 Hz  max|zu|=0.013 m  ok
+   1000 Hz  max|zu|=0.01314 m  ok
+
+undamped frequency + energy drift (zero-road, zs0=5cm, gravity off, 60 s):
+  Hz   f_body err%  f_hop err%  max rel energy error  drift/min%
+    60    +0.082         n/a       24.6987%    -0.03725
+   120    +0.011         n/a        8.1136%    +0.00708
+   180    +0.016         n/a        4.9492%    +0.00012
+   240    +0.004         n/a        3.5700%    +0.00432
+   300    +0.003         n/a        2.7943%    +0.00650
+   480    +0.004         n/a        1.6934%    +0.00221
+   600    -0.000         n/a        1.3412%    +0.00001
+  1000    -0.000         n/a        0.7923%    +0.00012
+
+log-decrement damping ratio of the body mode (damped, 40 mm step, gravity off):
+  closed form zeta_body = 0.2455
+    60 Hz  zeta=0.2475  err=+0.80%
+   120 Hz  zeta=0.2466  err=+0.42%
+   240 Hz  zeta=0.2461  err=+0.22%
+   300 Hz  zeta=0.2460  err=+0.17%
+   600 Hz  zeta=0.2458  err=+0.09%
+
+substep rule: stiffest-mode frequency vs substeps needed for omega*dt <= 1, and 20 steps/period
+  body                             1.32 Hz  20f/60=1  omega*dt<=1 -> 1  omega*dt<=0.5 -> 1
+  hop                             11.74 Hz  20f/60=4  omega*dt<=1 -> 2  omega*dt<=0.5 -> 3
+  hop on bump stop (~2.5x K)      12.83 Hz  20f/60=5  omega*dt<=1 -> 2  omega*dt<=0.5 -> 3
+  spin/slip oscillator 25 Hz      25.00 Hz  20f/60=9  omega*dt<=1 -> 3  omega*dt<=0.5 -> 6
+
+speed hump response, damped, ~50 mm half-sine 0.3 m long at 20 km/h, error vs 1 kHz reference (max|zs|):
+     60 Hz  peak sprung excursion 12.418 mm  err vs 4 kHz -4.09%
+    120 Hz  peak sprung excursion 12.934 mm  err vs 4 kHz -0.10%
+    180 Hz  peak sprung excursion 12.954 mm  err vs 4 kHz +0.05%
+    300 Hz  peak sprung excursion 12.970 mm  err vs 4 kHz +0.17%
+    600 Hz  peak sprung excursion 12.965 mm  err vs 4 kHz +0.14%
+   1000 Hz  peak sprung excursion 12.956 mm  err vs 4 kHz +0.07%
+
+stopped truck on 10% grade (2500 kg, mu=0.8, 4 tyres, 5 s, dt=1/300):
+  coulomb  sigma=   0  displacement 5 s   8.134 mm (static stretch sigma*tan/mu =   0.00 mm)  moved during last 1 s 1616.040 um
+  relax    sigma=0.05  displacement 5 s   6.250 mm (static stretch sigma*tan/mu =   6.25 mm)  moved during last 1 s    0.000 um
+  relax    sigma= 0.2  displacement 5 s  25.000 mm (static stretch sigma*tan/mu =  25.00 mm)  moved during last 1 s   -0.000 um
+  relax    sigma= 0.5  displacement 5 s  62.500 mm (static stretch sigma*tan/mu =  62.50 mm)  moved during last 1 s   -0.609 um
