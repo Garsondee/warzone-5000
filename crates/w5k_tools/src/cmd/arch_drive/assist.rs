@@ -67,6 +67,10 @@ pub(crate) struct AssistTuning {
     pub stuck_dwell_s: Param,
     pub bounds_margin_m: Param,
     pub fall_depth_m: Param,
+    /// Set by `--no-speed-limit`: the throttle is no longer eased and the brake no longer catches an overshoot at the cap.
+    /// Steering keeps its speed-dependent authority (it is scheduled against the cap), so a fast vehicle stays gentle to steer.
+    #[serde(skip)]
+    pub no_speed_limit: bool,
 }
 
 impl AssistTuning {
@@ -164,8 +168,9 @@ impl Assist {
             };
         }
         let (speed, cap) = (obs.speed_m_s.abs(), t.speed_cap_m_s.v);
-        let ease = 1.0 - scalar::smoothstep(t.cap_soft_start.v * cap, cap, speed);
-        let mut brake = raw.brake.max(scalar::clamp((speed - cap) * t.cap_brake_per_m_s.v, 0.0, 1.0));
+        let ease = if t.no_speed_limit { 1.0 } else { 1.0 - scalar::smoothstep(t.cap_soft_start.v * cap, cap, speed) };
+        let over_cap = if t.no_speed_limit { 0.0 } else { (speed - cap) * t.cap_brake_per_m_s.v };
+        let mut brake = raw.brake.max(scalar::clamp(over_cap, 0.0, 1.0));
         self.message = if raw.throttle > PEDAL_EPS && ease < 0.5 { "speed limit" } else { "" }; // const-ok: halfway through the easing
         if raw.throttle < PEDAL_EPS && raw.brake < PEDAL_EPS {
             brake = brake.max(if speed < t.hold_speed_m_s.v { t.hold_brake.v } else { t.idle_brake.v });
@@ -274,6 +279,26 @@ mod tests {
             out = a.apply(&Raw { throttle: 1.0, ..Raw::default() }, &at(cap + 2.0), &t, DT);
         }
         assert!(out.brake > 0.5 && out.throttle < 1e-6, "2 m/s over: throttle {} brake {}", out.throttle, out.brake);
+    }
+
+    #[test]
+    fn with_the_speed_limit_off_a_full_press_is_never_eased_or_braked_above_the_old_cap() {
+        let mut t = tuning();
+        t.no_speed_limit = true;
+        let mut a = Assist::new(true);
+        let cap = t.speed_cap_m_s.v;
+        let mut out = a.apply(&Raw { throttle: 1.0, ..Raw::default() }, &at(2.0 * cap), &t, DT);
+        for _ in 0..120 {
+            out = a.apply(&Raw { throttle: 1.0, ..Raw::default() }, &at(2.0 * cap), &t, DT);
+        }
+        assert!(
+            out.throttle > 0.99 && out.brake < 1e-6,
+            "twice the old cap: throttle {} brake {}",
+            out.throttle,
+            out.brake
+        );
+        assert_ne!(a.message, "speed limit");
+        assert!(t.steer_authority(2.0 * cap) < 0.5, "steering stays gentle at speed");
     }
 
     #[test]

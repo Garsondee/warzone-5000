@@ -90,6 +90,7 @@ impl Skin {
             track_m: first.track_width_m.v,
             ground_clearance_m: h.ground_clearance_m.v,
             wheel,
+            regions_m: None,
         };
         let axles_z = gear.axles.iter().map(|a| a.from_front_m.v - dims.length_m / 2.0).collect();
         Ok(Skin { kind, dims, axles_z, steered: gear.axles.iter().map(|a| a.steered).collect() })
