@@ -6,4 +6,11 @@ BenchWorld(
     fuel_density_kg_m3: Param(v: 832.0, lo: Some(800.0), hi: Some(860.0), prov: Estimate, src: "diesel fuel; petrol is about 745: the bench applies it to every engine and says so"),
     cruise_kmh: Param(v: 50.0, prov: Spec, src: "docs/validation/IMPACT-MATRIX.md, B3: steady 50 km/h cruise on level hard ground"),
     descent_grade_rad: Param(v: 0.21, lo: Some(0.1), hi: Some(0.3), prov: Estimate, src: "a 12 degree mountain road, the steep end of public roads (the switchback road of the proving ground)"),
+    skid_radius_m: Param(v: 10.0, lo: Some(8.0), hi: Some(20.0), prov: Estimate, src: "the skidpad circle of ARCH's proving runner (content/physics/arch/proving.ron), so this bench and that test turn the same circle"),
+    skid_start_speed_m_s: Param(v: 4.0, lo: Some(2.0), hi: Some(8.0), prov: Estimate, src: "as the proving runner: the speed at which the ramp starts, inside the tyres' linear range"),
+    skid_ramp_m_s2: Param(v: 0.15, lo: Some(0.05), hi: Some(0.5), prov: Estimate, src: "as the proving runner: slow enough that each moment is close to a steady turn"),
+    skid_speed_gain_per_m_s: Param(v: 0.5, lo: Some(0.2), hi: Some(1.0), prov: Tuned, src: "as the proving runner: the speed-holding driver's throttle per m/s of error"),
+    skid_warmup_s: Param(v: 3.0, lo: Some(1.0), hi: Some(6.0), prov: Estimate, src: "as the proving runner: the start transient is dropped"),
+    skid_max_s: Param(v: 120.0, prov: Spec, src: "as the proving runner: the ramp reaches 22 m/s in 120 s, above the garage's top speed on a 10 m circle"),
+    skid_slide_out_frac: Param(v: 0.8, lo: Some(0.6), hi: Some(0.95), prov: Estimate, src: "as the proving runner: the run ends when the lateral acceleration falls below this fraction of the best so far"),
 )
