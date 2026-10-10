@@ -9,6 +9,16 @@ use w5k_contract::world::{PropKind, WorldQuery};
 use w5k_math::Vec3;
 use w5k_world::course::{generate, CourseDef};
 
+// Display-only colours and lighting for the preview (never feed the simulation).
+const ASPHALT_RGB: [f64; 3] = [150.0, 150.0, 156.0]; // const-ok: display colour
+const MUD_RGB: [f64; 3] = [105.0, 80.0, 52.0]; // const-ok: display colour
+const GROUND_RGB: [f64; 3] = [95.0, 135.0, 78.0]; // const-ok: display colour
+const HEIGHT_TINT_PER_M: f64 = 5.0; // const-ok: display colour ramp
+const LIGHT_DIR: [f64; 3] = [-0.5, 0.8, -0.4]; // const-ok: display light direction
+const SHADE_GAIN: f64 = 0.7; // const-ok: hill-shade contrast
+const SHADE_AMBIENT: f64 = 0.3; // const-ok: hill-shade ambient
+const CHANNEL_MAX: f64 = 255.0; // const-ok: 8-bit channel
+
 /// Entry point for `w5k world <args>`.
 pub fn run(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
@@ -36,20 +46,20 @@ fn preview(args: &[String]) -> Result<(), String> {
     let (lo, hi) = w.bounds();
     let px = 2usize; // pixels per metre (cells are 1 m)
     let side = ((hi.x - lo.x) as usize + 1) * px;
-    let light = Vec3::new(-0.5, 0.8, -0.4).normalized_or_zero();
+    let light = Vec3::new(LIGHT_DIR[0], LIGHT_DIR[1], LIGHT_DIR[2]).normalized_or_zero();
     let mut img = vec![0u8; side * side * 3];
     for r in 0..side {
         for c in 0..side {
             let (x, z) = (lo.x + c as f64 / px as f64, lo.z + r as f64 / px as f64);
-            let shade = (w.normal(x, z).dot(light) * 0.7 + 0.3).clamp(0.0, 1.0);
+            let shade = (w.normal(x, z).dot(light) * SHADE_GAIN + SHADE_AMBIENT).clamp(0.0, 1.0);
             let name = &w.material_at(x, z).name;
             let base = match name.as_str() {
-                "asphalt" => [150.0, 150.0, 156.0],
-                "mud" => [105.0, 80.0, 52.0],
-                _ => [95.0 + (w.height_m(x, z) - lo.y) * 5.0, 135.0, 78.0],
+                "asphalt" => ASPHALT_RGB,
+                "mud" => MUD_RGB,
+                _ => [GROUND_RGB[0] + (w.height_m(x, z) - lo.y) * HEIGHT_TINT_PER_M, GROUND_RGB[1], GROUND_RGB[2]],
             };
             for k in 0..3 {
-                img[(r * side + c) * 3 + k] = (base[k] * shade).min(255.0) as u8;
+                img[(r * side + c) * 3 + k] = (base[k] * shade).min(CHANNEL_MAX) as u8;
             }
         }
     }
