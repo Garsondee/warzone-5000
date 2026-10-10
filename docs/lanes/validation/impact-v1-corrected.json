@@ -1,0 +1,2611 @@
+{
+  "right_at_1pct": 58,
+  "table_rows": 53,
+  "table_rows_tested": 23,
+  "untested_rows": [
+    {
+      "lever": "Engine peak power",
+      "bench": "B2",
+      "reason": "benchmark has no runner yet"
+    },
+    {
+      "lever": "Engine peak power",
+      "bench": "B3",
+      "reason": "benchmark has no runner yet"
+    },
+    {
+      "lever": "Torque curve shape (peak moved to lower rpm)",
+      "bench": "B6",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "First-gear ratio",
+      "bench": "B2",
+      "reason": "benchmark has no runner yet"
+    },
+    {
+      "lever": "Final-drive ratio (numerically higher)",
+      "bench": "B2",
+      "reason": "benchmark has no runner yet"
+    },
+    {
+      "lever": "Gear count (closer ratios, same span)",
+      "bench": "B3",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Brake thermal mass",
+      "bench": "B5",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Fuel tank capacity",
+      "bench": "B3",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Vehicle mass",
+      "bench": "B8",
+      "reason": "benchmark has no runner yet"
+    },
+    {
+      "lever": "Wheelbase",
+      "bench": "B13",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Frontal area x drag coefficient",
+      "bench": "B2",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Frontal area x drag coefficient",
+      "bench": "B3",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Ride frequency (stiffer springs)",
+      "bench": "B9",
+      "reason": "benchmark has no runner yet"
+    },
+    {
+      "lever": "Damping ratio",
+      "bench": "B10",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Damping ratio",
+      "bench": "B9",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Suspension travel",
+      "bench": "B9",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Tyre pressure (lower)",
+      "bench": "B8",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Tyre pressure (lower)",
+      "bench": "B3",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Tyre width",
+      "bench": "B8",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Track width",
+      "bench": "B14",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Track width",
+      "bench": "B8",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Track width",
+      "bench": "B13",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Track contact length",
+      "bench": "B14",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Track contact length",
+      "bench": "B13",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Track contact length",
+      "bench": "B8",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Turret mass",
+      "bench": "B15",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Turret mass",
+      "bench": "B7",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Traverse drive effort",
+      "bench": "B15",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Stabiliser rejection",
+      "bench": "B16",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    },
+    {
+      "lever": "Gun mass (barrel)",
+      "bench": "B16",
+      "reason": "no lever in the runner (no lever API entry or no vehicle field)"
+    }
+  ],
+  "not_run_benchmarks": [
+    {
+      "id": "B2",
+      "name": "top speed (km/h)"
+    },
+    {
+      "id": "B3",
+      "name": "fuel range (km)"
+    },
+    {
+      "id": "B5",
+      "name": "repeated-stop distance, 5th stop (m)"
+    },
+    {
+      "id": "B8",
+      "name": "soft-ground mobility"
+    },
+    {
+      "id": "B9",
+      "name": "washboard ride roughness (m/s^2 RMS)"
+    },
+    {
+      "id": "B10",
+      "name": "hump settling time (s)"
+    },
+    {
+      "id": "B13",
+      "name": "pivot-turn power or minimum radius at 20 km/h"
+    },
+    {
+      "id": "B14",
+      "name": "ground pressure (kPa) and sinkage in mud (m)"
+    },
+    {
+      "id": "B15",
+      "name": "turret 360-degree traverse time (s)"
+    },
+    {
+      "id": "B16",
+      "name": "gun-laying error while moving (mrad)"
+    }
+  ],
+  "benchmarks": [
+    {
+      "id": "B1",
+      "name": "0-48 km/h time (s)"
+    },
+    {
+      "id": "B4",
+      "name": "braking distance from 50 km/h (m)"
+    },
+    {
+      "id": "B6",
+      "name": "maximum grade held (rise/run)"
+    },
+    {
+      "id": "B7",
+      "name": "side-slope limit (rad)"
+    },
+    {
+      "id": "B11",
+      "name": "vertical step cleared (m)"
+    },
+    {
+      "id": "B12",
+      "name": "skidpad lateral acceleration (g)"
+    }
+  ],
+  "levers": [
+    {
+      "id": "engine_power",
+      "name": "Engine peak power"
+    },
+    {
+      "id": "first_gear",
+      "name": "First-gear ratio"
+    },
+    {
+      "id": "final_drive",
+      "name": "Final-drive ratio"
+    },
+    {
+      "id": "brake_capacity",
+      "name": "Brake torque capacity"
+    },
+    {
+      "id": "mass",
+      "name": "Vehicle mass"
+    },
+    {
+      "id": "com_height",
+      "name": "Centre-of-mass height"
+    },
+    {
+      "id": "track_gauge",
+      "name": "Track gauge"
+    },
+    {
+      "id": "ground_clearance",
+      "name": "Ground clearance"
+    },
+    {
+      "id": "ride_frequency",
+      "name": "Ride frequency"
+    },
+    {
+      "id": "tyre_mu",
+      "name": "Tyre peak friction"
+    },
+    {
+      "id": "centre_diff_limited_slip",
+      "name": "Centre differential"
+    }
+  ],
+  "perturb_pct": 10.0,
+  "deadband_pct": 0.5,
+  "acceptance_pct": 80.0,
+  "entries": [
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "brake_capacity",
+      "bench": "B1",
+      "base": 11.36188892499316,
+      "perturbed": 11.36188892499316,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "brake_capacity",
+      "bench": "B11",
+      "base": 0.1015625,
+      "perturbed": 0.1015625,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "brake_capacity",
+      "bench": "B12",
+      "base": 0.5895624070557357,
+      "perturbed": 0.5895624070557357,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "brake_capacity",
+      "bench": "B4",
+      "base": 18.863875123780815,
+      "perturbed": 18.062511094547233,
+      "delta": -0.042481410843487805,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "brake_capacity",
+      "bench": "B6",
+      "base": 0.375,
+      "perturbed": 0.404296875,
+      "delta": 0.078125,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "brake_capacity",
+      "bench": "B7",
+      "base": 0.5853333333333354,
+      "perturbed": 0.5853333333333354,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B1",
+      "base": 11.36188892499316,
+      "perturbed": 11.304455559339724,
+      "delta": -0.005054913494806113,
+      "observed": "Minus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B11",
+      "base": 0.1015625,
+      "perturbed": 0.109375,
+      "delta": 0.07692307692307693,
+      "observed": "Plus",
+      "allowed": [
+        "Plus",
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B12",
+      "base": 0.5895624070557357,
+      "perturbed": 0.6136007099702937,
+      "delta": 0.040773127029256936,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B4",
+      "base": 18.863875123780815,
+      "perturbed": 18.86055250025356,
+      "delta": -0.00017613684916016945,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B6",
+      "base": 0.375,
+      "perturbed": 0.375,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [
+        "Plus",
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B7",
+      "base": 0.5853333333333354,
+      "perturbed": 0.5853333333333354,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "com_height",
+      "bench": "B1",
+      "base": 11.36188892499316,
+      "perturbed": 11.353602885297603,
+      "delta": -0.0007292836385092603,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "com_height",
+      "bench": "B11",
+      "base": 0.1015625,
+      "perturbed": 0.1015625,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "com_height",
+      "bench": "B12",
+      "base": 0.5895624070557357,
+      "perturbed": 0.5371753991261692,
+      "delta": -0.08885744291462937,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "com_height",
+      "bench": "B4",
+      "base": 18.863875123780815,
+      "perturbed": 19.246066862473697,
+      "delta": 0.020260510429857027,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "com_height",
+      "bench": "B6",
+      "base": 0.375,
+      "perturbed": 0.380859375,
+      "delta": 0.015625,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "com_height",
+      "bench": "B7",
+      "base": 0.5853333333333354,
+      "perturbed": 0.5416666666666735,
+      "delta": -0.07460136674258834,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "engine_power",
+      "bench": "B1",
+      "base": 11.36188892499316,
+      "perturbed": 10.65318411934865,
+      "delta": -0.062375614681951914,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "engine_power",
+      "bench": "B11",
+      "base": 0.1015625,
+      "perturbed": 0.1015625,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [
+        "Plus",
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "engine_power",
+      "bench": "B12",
+      "base": 0.5895624070557357,
+      "perturbed": 0.587850172446951,
+      "delta": -0.0029042465874571924,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "engine_power",
+      "bench": "B4",
+      "base": 18.863875123780815,
+      "perturbed": 18.865744336462768,
+      "delta": 0.0000990895385856657,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "engine_power",
+      "bench": "B6",
+      "base": 0.375,
+      "perturbed": 0.375,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Wrong"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "engine_power",
+      "bench": "B7",
+      "base": 0.5853333333333354,
+      "perturbed": 0.5853333333333354,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "final_drive",
+      "bench": "B1",
+      "base": 11.36188892499316,
+      "perturbed": 11.491161694685436,
+      "delta": 0.011377753342396298,
+      "observed": "Plus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Wrong"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "final_drive",
+      "bench": "B11",
+      "base": 0.1015625,
+      "perturbed": 0.1015625,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [
+        "Plus",
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "final_drive",
+      "bench": "B12",
+      "base": 0.5895624070557357,
+      "perturbed": 0.5888566063407615,
+      "delta": -0.0011971603116605178,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "final_drive",
+      "bench": "B4",
+      "base": 18.863875123780815,
+      "perturbed": 18.83499656588353,
+      "delta": -0.0015308921262355297,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "final_drive",
+      "bench": "B6",
+      "base": 0.375,
+      "perturbed": 0.36328125,
+      "delta": -0.03125,
+      "observed": "Minus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "final_drive",
+      "bench": "B7",
+      "base": 0.5853333333333354,
+      "perturbed": 0.5853333333333354,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "first_gear",
+      "bench": "B1",
+      "base": 11.36188892499316,
+      "perturbed": 11.294352511086446,
+      "delta": -0.005944118478235738,
+      "observed": "Minus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "first_gear",
+      "bench": "B11",
+      "base": 0.1015625,
+      "perturbed": 0.109375,
+      "delta": 0.07692307692307693,
+      "observed": "Plus",
+      "allowed": [
+        "Plus",
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "first_gear",
+      "bench": "B12",
+      "base": 0.5895624070557357,
+      "perturbed": 0.5895624070557357,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "first_gear",
+      "bench": "B4",
+      "base": 18.863875123780815,
+      "perturbed": 18.863848392618934,
+      "delta": -1.4170557059956882e-6,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "first_gear",
+      "bench": "B6",
+      "base": 0.375,
+      "perturbed": 0.375,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Wrong"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "first_gear",
+      "bench": "B7",
+      "base": 0.5853333333333354,
+      "perturbed": 0.5853333333333354,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "ground_clearance",
+      "bench": "B1",
+      "base": 11.36188892499316,
+      "perturbed": 11.349937737857484,
+      "delta": -0.0010518662182470563,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "ground_clearance",
+      "bench": "B11",
+      "base": 0.1015625,
+      "perturbed": 0.109375,
+      "delta": 0.07692307692307693,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "ground_clearance",
+      "bench": "B12",
+      "base": 0.5895624070557357,
+      "perturbed": 0.5901211775025117,
+      "delta": 0.0009477714998255759,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "ground_clearance",
+      "bench": "B4",
+      "base": 18.863875123780815,
+      "perturbed": 18.86021754210543,
+      "delta": -0.0001938934419032989,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "ground_clearance",
+      "bench": "B6",
+      "base": 0.375,
+      "perturbed": 0.375,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "ground_clearance",
+      "bench": "B7",
+      "base": 0.5853333333333354,
+      "perturbed": 0.5853333333333354,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Wrong"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "mass",
+      "bench": "B1",
+      "base": 11.36188892499316,
+      "perturbed": 12.062164094651038,
+      "delta": 0.06163369262636054,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "mass",
+      "bench": "B11",
+      "base": 0.1015625,
+      "perturbed": 0.109375,
+      "delta": 0.07692307692307693,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "mass",
+      "bench": "B12",
+      "base": 0.5895624070557357,
+      "perturbed": 0.5819352149722089,
+      "delta": -0.012937039390989776,
+      "observed": "Minus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "mass",
+      "bench": "B4",
+      "base": 18.863875123780815,
+      "perturbed": 19.614568895814784,
+      "delta": 0.0397953107252923,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "mass",
+      "bench": "B6",
+      "base": 0.375,
+      "perturbed": 0.357421875,
+      "delta": -0.046875,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "mass",
+      "bench": "B7",
+      "base": 0.5853333333333354,
+      "perturbed": 0.5820000000000024,
+      "delta": -0.005694760820044911,
+      "observed": "Minus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "ride_frequency",
+      "bench": "B1",
+      "base": 11.36188892499316,
+      "perturbed": 11.325001643048818,
+      "delta": -0.003246580052652994,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "ride_frequency",
+      "bench": "B11",
+      "base": 0.1015625,
+      "perturbed": 0.109375,
+      "delta": 0.07692307692307693,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "ride_frequency",
+      "bench": "B12",
+      "base": 0.5895624070557357,
+      "perturbed": 0.5933715851940393,
+      "delta": 0.006461026165705821,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "ride_frequency",
+      "bench": "B4",
+      "base": 18.863875123780815,
+      "perturbed": 18.85760478903336,
+      "delta": -0.000332399080587137,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "ride_frequency",
+      "bench": "B6",
+      "base": 0.375,
+      "perturbed": 0.380859375,
+      "delta": 0.015625,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "ride_frequency",
+      "bench": "B7",
+      "base": 0.5853333333333354,
+      "perturbed": 0.5900000000000015,
+      "delta": 0.007972665148062875,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "track_gauge",
+      "bench": "B1",
+      "base": 11.36188892499316,
+      "perturbed": 11.36188892499316,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "track_gauge",
+      "bench": "B11",
+      "base": 0.1015625,
+      "perturbed": 0.1015625,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "track_gauge",
+      "bench": "B12",
+      "base": 0.5895624070557357,
+      "perturbed": 0.6342313849515744,
+      "delta": 0.07576632661996678,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "track_gauge",
+      "bench": "B4",
+      "base": 18.863875123780815,
+      "perturbed": 18.863875123780815,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "track_gauge",
+      "bench": "B6",
+      "base": 0.375,
+      "perturbed": 0.375,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "track_gauge",
+      "bench": "B7",
+      "base": 0.5853333333333354,
+      "perturbed": 0.6333333333333301,
+      "delta": 0.08200455580864673,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "tyre_mu",
+      "bench": "B1",
+      "base": 11.36188892499316,
+      "perturbed": 11.382801811894826,
+      "delta": 0.0018406170875040937,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "tyre_mu",
+      "bench": "B11",
+      "base": 0.1015625,
+      "perturbed": 0.1015625,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "tyre_mu",
+      "bench": "B12",
+      "base": 0.5895624070557357,
+      "perturbed": 0.5962422265512817,
+      "delta": 0.011330131323848937,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "tyre_mu",
+      "bench": "B4",
+      "base": 18.863875123780815,
+      "perturbed": 18.342531143705685,
+      "delta": -0.027637162388649193,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "tyre_mu",
+      "bench": "B6",
+      "base": 0.375,
+      "perturbed": 0.375,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "hauler_4x4",
+      "lever": "tyre_mu",
+      "bench": "B7",
+      "base": 0.5853333333333354,
+      "perturbed": 0.5853333333333354,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "brake_capacity",
+      "bench": "B1",
+      "base": 4.6458377088826825,
+      "perturbed": 4.6458377088826825,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "brake_capacity",
+      "bench": "B11",
+      "base": 0.34375,
+      "perturbed": 0.34375,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "brake_capacity",
+      "bench": "B12",
+      "base": 0.8022648460516546,
+      "perturbed": 0.8022648460516546,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "brake_capacity",
+      "bench": "B4",
+      "base": 11.957621385326647,
+      "perturbed": 11.272337537038837,
+      "delta": -0.057309378362550484,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "brake_capacity",
+      "bench": "B6",
+      "base": 0.64453125,
+      "perturbed": 0.662109375,
+      "delta": 0.02727272727272727,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "brake_capacity",
+      "bench": "B7",
+      "base": 0.7233333333333202,
+      "perturbed": 0.7233333333333202,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B1",
+      "base": 4.6458377088826825,
+      "perturbed": 4.65107832225769,
+      "delta": 0.0011280233411915122,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B11",
+      "base": 0.34375,
+      "perturbed": 0.21875,
+      "delta": -0.36363636363636365,
+      "observed": "Minus",
+      "allowed": [
+        "Plus",
+        "Zero"
+      ],
+      "verdict": "Wrong"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B12",
+      "base": 0.8022648460516546,
+      "perturbed": 0.8008921927102608,
+      "delta": -0.0017109728142138039,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B4",
+      "base": 11.957621385326647,
+      "perturbed": 11.9545229549191,
+      "delta": -0.0002591176211139742,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B6",
+      "base": 0.64453125,
+      "perturbed": 0.7265625,
+      "delta": 0.12727272727272726,
+      "observed": "Plus",
+      "allowed": [
+        "Plus",
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B7",
+      "base": 0.7233333333333202,
+      "perturbed": 0.7233333333333202,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "com_height",
+      "bench": "B1",
+      "base": 4.6458377088826825,
+      "perturbed": 4.648137385353466,
+      "delta": 0.0004949971597988272,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "com_height",
+      "bench": "B11",
+      "base": 0.34375,
+      "perturbed": 0.34375,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "com_height",
+      "bench": "B12",
+      "base": 0.8022648460516546,
+      "perturbed": 0.789477473450522,
+      "delta": -0.015939091266513352,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "com_height",
+      "bench": "B4",
+      "base": 11.957621385326647,
+      "perturbed": 12.124575935765805,
+      "delta": 0.013962187383188931,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "com_height",
+      "bench": "B6",
+      "base": 0.64453125,
+      "perturbed": 0.6328125,
+      "delta": -0.01818181818181818,
+      "observed": "Minus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "com_height",
+      "bench": "B7",
+      "base": 0.7233333333333202,
+      "perturbed": 0.718666666666654,
+      "delta": -0.006451612903225213,
+      "observed": "Minus",
+      "allowed": [
+        "Zero"
+      ],
+      "verdict": "Wrong"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "engine_power",
+      "bench": "B1",
+      "base": 4.6458377088826825,
+      "perturbed": 4.208076580828697,
+      "delta": -0.0942265217781932,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "engine_power",
+      "bench": "B11",
+      "base": 0.34375,
+      "perturbed": 0.3671875,
+      "delta": 0.06818181818181818,
+      "observed": "Plus",
+      "allowed": [
+        "Plus",
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "engine_power",
+      "bench": "B12",
+      "base": 0.8022648460516546,
+      "perturbed": 0.8022845342971269,
+      "delta": 0.000024540830336972884,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "engine_power",
+      "bench": "B4",
+      "base": 11.957621385326647,
+      "perturbed": 11.949070472544761,
+      "delta": -0.0007151014826726477,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "engine_power",
+      "bench": "B6",
+      "base": 0.64453125,
+      "perturbed": 0.650390625,
+      "delta": 0.00909090909090909,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "engine_power",
+      "bench": "B7",
+      "base": 0.7233333333333202,
+      "perturbed": 0.7233333333333202,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "final_drive",
+      "bench": "B1",
+      "base": 4.6458377088826825,
+      "perturbed": 4.56693252908985,
+      "delta": -0.01698405857827725,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "final_drive",
+      "bench": "B11",
+      "base": 0.34375,
+      "perturbed": 0.375,
+      "delta": 0.09090909090909091,
+      "observed": "Plus",
+      "allowed": [
+        "Plus",
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "final_drive",
+      "bench": "B12",
+      "base": 0.8022648460516546,
+      "perturbed": 0.802268813205478,
+      "delta": 4.944942861415318e-6,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "final_drive",
+      "bench": "B4",
+      "base": 11.957621385326647,
+      "perturbed": 12.010826051269348,
+      "delta": 0.0044494355715250485,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "final_drive",
+      "bench": "B6",
+      "base": 0.64453125,
+      "perturbed": 0.65625,
+      "delta": 0.01818181818181818,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "final_drive",
+      "bench": "B7",
+      "base": 0.7233333333333202,
+      "perturbed": 0.7233333333333202,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "first_gear",
+      "bench": "B1",
+      "base": 4.6458377088826825,
+      "perturbed": 4.675339014639233,
+      "delta": 0.006350050863839913,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "first_gear",
+      "bench": "B11",
+      "base": 0.34375,
+      "perturbed": 0.359375,
+      "delta": 0.045454545454545456,
+      "observed": "Plus",
+      "allowed": [
+        "Plus",
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "first_gear",
+      "bench": "B12",
+      "base": 0.8022648460516546,
+      "perturbed": 0.8022648460516569,
+      "delta": 2.9061080803766327e-15,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "first_gear",
+      "bench": "B4",
+      "base": 11.957621385326647,
+      "perturbed": 11.95983743704059,
+      "delta": 0.0001853254625257961,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "first_gear",
+      "bench": "B6",
+      "base": 0.64453125,
+      "perturbed": 0.65625,
+      "delta": 0.01818181818181818,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "first_gear",
+      "bench": "B7",
+      "base": 0.7233333333333202,
+      "perturbed": 0.7233333333333202,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "ground_clearance",
+      "bench": "B1",
+      "base": 4.6458377088826825,
+      "perturbed": 4.64771892064752,
+      "delta": 0.0004049241240693523,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "ground_clearance",
+      "bench": "B11",
+      "base": 0.34375,
+      "perturbed": 0.3359375,
+      "delta": -0.022727272727272728,
+      "observed": "Minus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Wrong"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "ground_clearance",
+      "bench": "B12",
+      "base": 0.8022648460516546,
+      "perturbed": 0.802221847728,
+      "delta": -0.00005359617072371501,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "ground_clearance",
+      "bench": "B4",
+      "base": 11.957621385326647,
+      "perturbed": 11.95995914487996,
+      "delta": 0.00019550372753749214,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "ground_clearance",
+      "bench": "B6",
+      "base": 0.64453125,
+      "perturbed": 0.64453125,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "ground_clearance",
+      "bench": "B7",
+      "base": 0.7233333333333202,
+      "perturbed": 0.7233333333333202,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "mass",
+      "bench": "B1",
+      "base": 4.6458377088826825,
+      "perturbed": 5.000379078632399,
+      "delta": 0.07631376556091175,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "mass",
+      "bench": "B11",
+      "base": 0.34375,
+      "perturbed": 0.34375,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "mass",
+      "bench": "B12",
+      "base": 0.8022648460516546,
+      "perturbed": 0.801887235392902,
+      "delta": -0.0004706807990042772,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "mass",
+      "bench": "B4",
+      "base": 11.957621385326647,
+      "perturbed": 12.529213834838373,
+      "delta": 0.047801517634028366,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "mass",
+      "bench": "B6",
+      "base": 0.64453125,
+      "perturbed": 0.626953125,
+      "delta": -0.02727272727272727,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "mass",
+      "bench": "B7",
+      "base": 0.7233333333333202,
+      "perturbed": 0.7229999999999869,
+      "delta": -0.0004608294930875152,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "ride_frequency",
+      "bench": "B1",
+      "base": 4.6458377088826825,
+      "perturbed": 4.643291624754728,
+      "delta": -0.0005480355293270272,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "ride_frequency",
+      "bench": "B11",
+      "base": 0.34375,
+      "perturbed": 0.1796875,
+      "delta": -0.4772727272727273,
+      "observed": "Minus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "ride_frequency",
+      "bench": "B12",
+      "base": 0.8022648460516546,
+      "perturbed": 0.8026638197055384,
+      "delta": 0.0004973091565052338,
+      "observed": "Zero",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Wrong"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "ride_frequency",
+      "bench": "B4",
+      "base": 11.957621385326647,
+      "perturbed": 11.948269305990394,
+      "delta": -0.0007821019778840787,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "ride_frequency",
+      "bench": "B6",
+      "base": 0.64453125,
+      "perturbed": 0.64453125,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "ride_frequency",
+      "bench": "B7",
+      "base": 0.7233333333333202,
+      "perturbed": 0.7239999999999868,
+      "delta": 0.0009216589861750304,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "track_gauge",
+      "bench": "B1",
+      "base": 4.6458377088826825,
+      "perturbed": 4.6458377088826825,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "track_gauge",
+      "bench": "B11",
+      "base": 0.34375,
+      "perturbed": 0.34375,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "track_gauge",
+      "bench": "B12",
+      "base": 0.8022648460516546,
+      "perturbed": 0.8122744039977854,
+      "delta": 0.012476625387978562,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "track_gauge",
+      "bench": "B4",
+      "base": 11.957621385326647,
+      "perturbed": 11.957621385326647,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "track_gauge",
+      "bench": "B6",
+      "base": 0.64453125,
+      "perturbed": 0.64453125,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "track_gauge",
+      "bench": "B7",
+      "base": 0.7233333333333202,
+      "perturbed": 0.7283333333333196,
+      "delta": 0.006912442396312729,
+      "observed": "Plus",
+      "allowed": [
+        "Zero"
+      ],
+      "verdict": "Wrong"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "tyre_mu",
+      "bench": "B1",
+      "base": 4.6458377088826825,
+      "perturbed": 4.6458377088826825,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "tyre_mu",
+      "bench": "B11",
+      "base": 0.34375,
+      "perturbed": 0.34375,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "tyre_mu",
+      "bench": "B12",
+      "base": 0.8022648460516546,
+      "perturbed": 0.866322133560214,
+      "delta": 0.07984556200339239,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "tyre_mu",
+      "bench": "B4",
+      "base": 11.957621385326647,
+      "perturbed": 11.722455165166195,
+      "delta": -0.019666638755515935,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "tyre_mu",
+      "bench": "B6",
+      "base": 0.64453125,
+      "perturbed": 0.6796875,
+      "delta": 0.05454545454545454,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "mule_4x4",
+      "lever": "tyre_mu",
+      "bench": "B7",
+      "base": 0.7233333333333202,
+      "perturbed": 0.7709999999999816,
+      "delta": 0.06589861751151468,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "brake_capacity",
+      "bench": "B1",
+      "base": 6.168098535273999,
+      "perturbed": 6.168098535273999,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "brake_capacity",
+      "bench": "B11",
+      "base": 0.109375,
+      "perturbed": 0.109375,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "brake_capacity",
+      "bench": "B12",
+      "base": 0.7383102476574762,
+      "perturbed": 0.7383102476574762,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "brake_capacity",
+      "bench": "B4",
+      "base": 13.988424968599787,
+      "perturbed": 13.191683587718018,
+      "delta": -0.05695719015330443,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "brake_capacity",
+      "bench": "B6",
+      "base": 0.31640625,
+      "perturbed": 0.322265625,
+      "delta": 0.018518518518518517,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "brake_capacity",
+      "bench": "B7",
+      "base": 0.6896666666666572,
+      "perturbed": 0.6896666666666572,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B1",
+      "base": 6.168098535273999,
+      "perturbed": 6.189744461243238,
+      "delta": 0.00350933530738057,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B11",
+      "base": 0.109375,
+      "perturbed": 0.1171875,
+      "delta": 0.07142857142857142,
+      "observed": "Plus",
+      "allowed": [
+        "Plus",
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B12",
+      "base": 0.7383102476574762,
+      "perturbed": 0.7377914569392185,
+      "delta": -0.0007026730563522518,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B4",
+      "base": 13.988424968599787,
+      "perturbed": 13.985386853261218,
+      "delta": -0.00021718780673226308,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B6",
+      "base": 0.31640625,
+      "perturbed": 0.31640625,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [
+        "Plus",
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "centre_diff_limited_slip",
+      "bench": "B7",
+      "base": 0.6896666666666572,
+      "perturbed": 0.6896666666666572,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "com_height",
+      "bench": "B1",
+      "base": 6.168098535273999,
+      "perturbed": 6.1400959257258005,
+      "delta": -0.004539909566628626,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "com_height",
+      "bench": "B11",
+      "base": 0.109375,
+      "perturbed": 0.1171875,
+      "delta": 0.07142857142857142,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "com_height",
+      "bench": "B12",
+      "base": 0.7383102476574762,
+      "perturbed": 0.722512030802219,
+      "delta": -0.021397802489376297,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "com_height",
+      "bench": "B4",
+      "base": 13.988424968599787,
+      "perturbed": 14.137775919482124,
+      "delta": 0.010676752473390594,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "com_height",
+      "bench": "B6",
+      "base": 0.31640625,
+      "perturbed": 0.31640625,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "com_height",
+      "bench": "B7",
+      "base": 0.6896666666666572,
+      "perturbed": 0.6846666666666578,
+      "delta": -0.007249879168679823,
+      "observed": "Minus",
+      "allowed": [
+        "Zero"
+      ],
+      "verdict": "Wrong"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "engine_power",
+      "bench": "B1",
+      "base": 6.168098535273999,
+      "perturbed": 5.584052325286856,
+      "delta": -0.09468821009377708,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "engine_power",
+      "bench": "B11",
+      "base": 0.109375,
+      "perturbed": 0.1328125,
+      "delta": 0.21428571428571427,
+      "observed": "Plus",
+      "allowed": [
+        "Plus",
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "engine_power",
+      "bench": "B12",
+      "base": 0.7383102476574762,
+      "perturbed": 0.7627594812720646,
+      "delta": 0.033115121579527514,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "engine_power",
+      "bench": "B4",
+      "base": 13.988424968599787,
+      "perturbed": 14.004732591209944,
+      "delta": 0.0011657940509215866,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "engine_power",
+      "bench": "B6",
+      "base": 0.31640625,
+      "perturbed": 0.345703125,
+      "delta": 0.09259259259259259,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "engine_power",
+      "bench": "B7",
+      "base": 0.6896666666666572,
+      "perturbed": 0.6896666666666572,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "final_drive",
+      "bench": "B1",
+      "base": 6.168098535273999,
+      "perturbed": 6.0060878267726645,
+      "delta": -0.026265907973880582,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "final_drive",
+      "bench": "B11",
+      "base": 0.109375,
+      "perturbed": 0.15625,
+      "delta": 0.42857142857142855,
+      "observed": "Plus",
+      "allowed": [
+        "Plus",
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "final_drive",
+      "bench": "B12",
+      "base": 0.7383102476574762,
+      "perturbed": 0.7563035384152095,
+      "delta": 0.024370907507816248,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "final_drive",
+      "bench": "B4",
+      "base": 13.988424968599787,
+      "perturbed": 14.012509177918417,
+      "delta": 0.0017217241664227892,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "final_drive",
+      "bench": "B6",
+      "base": 0.31640625,
+      "perturbed": 0.33984375,
+      "delta": 0.07407407407407407,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "final_drive",
+      "bench": "B7",
+      "base": 0.6896666666666572,
+      "perturbed": 0.6896666666666572,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "first_gear",
+      "bench": "B1",
+      "base": 6.168098535273999,
+      "perturbed": 6.130746753456196,
+      "delta": -0.006055639611493884,
+      "observed": "Minus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "first_gear",
+      "bench": "B11",
+      "base": 0.109375,
+      "perturbed": 0.1171875,
+      "delta": 0.07142857142857142,
+      "observed": "Plus",
+      "allowed": [
+        "Plus",
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "first_gear",
+      "bench": "B12",
+      "base": 0.7383102476574762,
+      "perturbed": 0.7383087677535871,
+      "delta": -2.0044471735244038e-6,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "first_gear",
+      "bench": "B4",
+      "base": 13.988424968599787,
+      "perturbed": 13.981711004661605,
+      "delta": -0.0004799656825734961,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "first_gear",
+      "bench": "B6",
+      "base": 0.31640625,
+      "perturbed": 0.33984375,
+      "delta": 0.07407407407407407,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "first_gear",
+      "bench": "B7",
+      "base": 0.6896666666666572,
+      "perturbed": 0.6896666666666572,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "ground_clearance",
+      "bench": "B1",
+      "base": 6.168098535273999,
+      "perturbed": 6.157491677223254,
+      "delta": -0.0017196317455188093,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "ground_clearance",
+      "bench": "B11",
+      "base": 0.109375,
+      "perturbed": 0.125,
+      "delta": 0.14285714285714285,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "ground_clearance",
+      "bench": "B12",
+      "base": 0.7383102476574762,
+      "perturbed": 0.7380150628958015,
+      "delta": -0.00039981127528872733,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "ground_clearance",
+      "bench": "B4",
+      "base": 13.988424968599787,
+      "perturbed": 13.99575603403727,
+      "delta": 0.0005240808349717627,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "ground_clearance",
+      "bench": "B6",
+      "base": 0.31640625,
+      "perturbed": 0.31640625,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "ground_clearance",
+      "bench": "B7",
+      "base": 0.6896666666666572,
+      "perturbed": 0.6896666666666572,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [
+        "Zero"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "mass",
+      "bench": "B1",
+      "base": 6.168098535273999,
+      "perturbed": 6.5902358520444535,
+      "delta": 0.06843880887381161,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "mass",
+      "bench": "B11",
+      "base": 0.109375,
+      "perturbed": 0.1171875,
+      "delta": 0.07142857142857142,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "mass",
+      "bench": "B12",
+      "base": 0.7383102476574762,
+      "perturbed": 0.7381178148987828,
+      "delta": -0.00026063942536888807,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "mass",
+      "bench": "B4",
+      "base": 13.988424968599787,
+      "perturbed": 14.95922233967562,
+      "delta": 0.06940004848687459,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "mass",
+      "bench": "B6",
+      "base": 0.31640625,
+      "perturbed": 0.287109375,
+      "delta": -0.09259259259259259,
+      "observed": "Minus",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "mass",
+      "bench": "B7",
+      "base": 0.6896666666666572,
+      "perturbed": 0.6893333333333239,
+      "delta": -0.0004833252779119882,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "ride_frequency",
+      "bench": "B1",
+      "base": 6.168098535273999,
+      "perturbed": 6.181326746500071,
+      "delta": 0.0021446173647231403,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "ride_frequency",
+      "bench": "B11",
+      "base": 0.109375,
+      "perturbed": 0.1171875,
+      "delta": 0.07142857142857142,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "ride_frequency",
+      "bench": "B12",
+      "base": 0.7383102476574762,
+      "perturbed": 0.741709377288169,
+      "delta": 0.004603931262606194,
+      "observed": "Zero",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Wrong"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "ride_frequency",
+      "bench": "B4",
+      "base": 13.988424968599787,
+      "perturbed": 13.953086581842683,
+      "delta": -0.0025262591633031643,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "ride_frequency",
+      "bench": "B6",
+      "base": 0.31640625,
+      "perturbed": 0.31640625,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "ride_frequency",
+      "bench": "B7",
+      "base": 0.6896666666666572,
+      "perturbed": 0.6926666666666569,
+      "delta": 0.004349927501207894,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "track_gauge",
+      "bench": "B1",
+      "base": 6.168098535273999,
+      "perturbed": 6.168098535273999,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "track_gauge",
+      "bench": "B11",
+      "base": 0.109375,
+      "perturbed": 0.109375,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "track_gauge",
+      "bench": "B12",
+      "base": 0.7383102476574762,
+      "perturbed": 0.7503137858388491,
+      "delta": 0.016258122136944372,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "track_gauge",
+      "bench": "B4",
+      "base": 13.988424968599787,
+      "perturbed": 13.988424968599787,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "track_gauge",
+      "bench": "B6",
+      "base": 0.31640625,
+      "perturbed": 0.31640625,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "track_gauge",
+      "bench": "B7",
+      "base": 0.6896666666666572,
+      "perturbed": 0.6959999999999898,
+      "delta": 0.009183180280327776,
+      "observed": "Plus",
+      "allowed": [
+        "Zero"
+      ],
+      "verdict": "Wrong"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "tyre_mu",
+      "bench": "B1",
+      "base": 6.168098535273999,
+      "perturbed": 6.168098535273999,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "tyre_mu",
+      "bench": "B11",
+      "base": 0.109375,
+      "perturbed": 0.1171875,
+      "delta": 0.07142857142857142,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "tyre_mu",
+      "bench": "B12",
+      "base": 0.7383102476574762,
+      "perturbed": 0.7920845683577861,
+      "delta": 0.07283431439686225,
+      "observed": "Plus",
+      "allowed": [
+        "Plus"
+      ],
+      "verdict": "Right"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "tyre_mu",
+      "bench": "B4",
+      "base": 13.988424968599787,
+      "perturbed": 13.924897889233193,
+      "delta": -0.004541403303745409,
+      "observed": "Zero",
+      "allowed": [
+        "Minus"
+      ],
+      "verdict": "Wrong"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "tyre_mu",
+      "bench": "B6",
+      "base": 0.31640625,
+      "perturbed": 0.31640625,
+      "delta": 0.0,
+      "observed": "Zero",
+      "allowed": [],
+      "verdict": "Quiet"
+    },
+    {
+      "vehicle": "scout_4x4",
+      "lever": "tyre_mu",
+      "bench": "B7",
+      "base": 0.6896666666666572,
+      "perturbed": 0.7359999999999854,
+      "delta": 0.06718221362976635,
+      "observed": "Plus",
+      "allowed": [],
+      "verdict": "Unlisted"
+    }
+  ],
+  "right": 56,
+  "scored": 69,
+  "dead_levers": [],
+  "orphan_benchmarks": []
+}

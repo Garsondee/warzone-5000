@@ -48,6 +48,10 @@ Sign: `-` the benchmark decreases, `+` it increases, `~0` essentially no change.
 | Lever | Benchmark | Sign | Why |
 |---|---|---|---|
 | Centre differential (open to limited slip, bias 2: a discrete change, not +10%) | B6 | `+` or `~0` | an open centre differential caps the thrust at twice what the lightly loaded axle can carry; a limited slip passes more: `+` when the grade is limited by that split, `~0` when it is torque-limited |
+| Engine peak power | B11 | `+` or `~0` | a step is cleared by the torque and traction at the corner of the wheel: more wheel torque helps until friction is the limit, then it does not (added 2026-10-10 by VALIDATION, ARCH's physics call; the Mule and Scout step results are momentum-dominated, ARCH gap 4) |
+| First-gear ratio | B11 | `+` or `~0` | same reason: wheel torque at the corner, capped by traction |
+| Final-drive ratio (numerically higher) | B11 | `+` or `~0` | same reason |
+| Centre differential (open to limited slip) | B11 | `+` or `~0` | a limited slip lets the wheel that has the grip at the corner carry more of the thrust |
 | Vehicle mass (armour added) | B1 | `+` | `t ~ m`: about +10% when power-limited |
 | Vehicle mass | B4 | `~0` or `+` | `d = v^2 / (2 mu g)` is independent of mass when tyre-limited; `+` if brake-limited |
 | Vehicle mass | B8 | `-` | higher ground pressure, deeper sinkage, earlier bogging |
@@ -100,7 +104,7 @@ Sign: `-` the benchmark decreases, `+` it increases, `~0` essentially no change.
 The runner reads the regime from the baseline run's labels and applies it before comparing: the `-`/`+` rows above hold **in the regime that the row's "Why" assumes**.
 - **Braking (B4):** `peak_decel_g` at 95% of `mu` or more is tyre-limited: a lever that only changes brake size or mass must give `~0`; below that it is brake-limited and the table's non-zero sign applies.
 - **Side slope (B7):** `mode = slide` (the vehicle slides before it tips): centre-of-mass height, track gauge and ground clearance must give `~0`; `mode = roll` (a wheel lifts): the table's signs apply.
-- **Skidpad (B12):** `limited_by` naming power: the chassis levers (centre-of-mass height, track, ride frequency, tyre friction) must give `~0`.
+- **Skidpad (B12):** a power-limited run is **not** `~0`: cornering drag couples the chassis levers to the power limit, so the table's signs apply to a power-limited run as well (ARCH, 2026-10-10; this replaces my earlier "power-limited gives `~0`" rule, which the physics does not support). CHASSIS is investigating why the Hauler is power-limited at 0.59 g, when the grip bound is near 0.8 g.
 Added 2026-10-10 by VALIDATION after the first runs, from the physics (the tipping formula applies only when tipping happens first), not from the results' direction: the rows without a regime keep their signs.
 
 ## Coverage rule
