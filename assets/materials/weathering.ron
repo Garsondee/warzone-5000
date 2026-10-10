@@ -1,0 +1,32 @@
+#![enable(implicit_some)]
+// Weathering of painted surfaces (reference: assets/reference/w5k_look.py `weathered`; spec: docs/art/WEATHERING.md).
+// All gains are TUNED by eye (card C-004: simple procedural looks); colours are ESTIMATE soil and dust tones, linear albedo is derived by the bake.
+(
+  params: {
+    "wear_freq": Param(v: 14.0, lo: 8.0, hi: 24.0, prov: Tuned, src: "chip size about 7 cm: noise cycles per metre on the node-local position"),
+    "wear_edge_gain": Param(v: 1.2, lo: 0.8, hi: 1.6, prov: Tuned, src: "how strongly sharp edges chip"),
+    "wear_noise_amp": Param(v: 0.6, lo: 0.3, hi: 0.9, prov: Tuned, src: "noise breaks the chipped edge up"),
+    "wear_bias": Param(v: 0.45, lo: 0.4, hi: 0.6, prov: Tuned, src: "must exceed noise_amp / 2 so a face with edge 0 never chips (test L5)"),
+    "wear_soft": Param(v: 0.04, lo: 0.02, hi: 0.1, prov: Tuned, src: "smoothstep half-width; widens with the pixel footprint"),
+    "dirt_freq": Param(v: 5.0, lo: 3.0, hi: 10.0, prov: Tuned, src: "dirt patch size about 20 cm"),
+    "dirt_base": Param(v: 0.6, lo: 0.4, hi: 0.8, prov: Tuned, src: "dirt in a fully enclosed crease"),
+    "dirt_var": Param(v: 0.8, lo: 0.4, hi: 1.2, prov: Tuned, src: "noise variation of the dirt"),
+    "dirt_max": Param(v: 0.85, lo: 0.6, hi: 0.95, prov: Tuned, src: "paint never vanishes completely under dirt"),
+    "splash_height_m": Param(v: 0.45, lo: 0.2, hi: 0.8, prov: Estimate, src: "mud splash line of a truck driven on soft ground reaches about 0.3 to 0.6 m above the ground"),
+    "splash_max": Param(v: 0.7, lo: 0.4, hi: 0.9, prov: Tuned, src: "mud cover at ground level"),
+    "splash_noise_m": Param(v: 0.2, lo: 0.05, hi: 0.4, prov: Tuned, src: "ragged splash line"),
+    "splash_freq": Param(v: 8.0, lo: 4.0, hi: 14.0, prov: Tuned, src: "splash noise cycles per metre"),
+    "dust_lo": Param(v: 0.3, lo: 0.2, hi: 0.5, prov: Tuned, src: "up-normal component where dust starts settling"),
+    "dust_hi": Param(v: 0.9, lo: 0.7, hi: 1.0, prov: Tuned, src: "full dust on upward faces"),
+    "dust_max": Param(v: 0.45, lo: 0.2, hi: 0.7, prov: Tuned, src: "dust is a veil, not a coat"),
+    "dust_mod_base": Param(v: 0.7, lo: 0.5, hi: 0.9, prov: Tuned, src: "noise modulation base"),
+    "dust_mod_var": Param(v: 0.6, lo: 0.2, hi: 1.0, prov: Tuned, src: "noise modulation amplitude"),
+    "dust_freq": Param(v: 3.0, lo: 2.0, hi: 6.0, prov: Tuned, src: "dust patchiness"),
+  },
+  colours: {
+    "bare": "#6B6A66",
+    "dirt": "#3A2E22",
+    "splash": "#4A3B2A",
+    "dust": "#8F8268",
+  },
+)
