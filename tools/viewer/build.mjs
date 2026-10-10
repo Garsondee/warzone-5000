@@ -10,7 +10,7 @@ const read = (p) => fs.readFileSync(p, 'utf8');
 const j = (s) => JSON.stringify(s).replace(/</g, '\\u003c');
 
 // Modules in dependency order; `from 'three'` and `from './x.js'` are rewritten to blob URLs at run time.
-const order = ['replay', 'scope', 'viewer', 'look', 'debug', 'main'];
+const order = ['replay', 'scope', 'world', 'viewer', 'look', 'debug', 'main'];
 const sources = { three: read(path.join(here, 'node_modules/three/build/three.module.min.js')) };
 for (const m of order) sources[m] = read(path.join(here, `src/${m}.js`));
 
