@@ -48,6 +48,8 @@ Design note: `docs/lanes/forge/tracked-design-note.md` (stations and loop order,
 
 ## Mass budget: ARCH's proving run of #176 (decision: keep the new inertia)
 Braking, 0-48, side slope, Mule and Hauler skidpad, Scout and Mule gradeability unchanged to under 1%; Scout skidpad 0.737 to 0.755 g; step climb moves (Scout 0.109 to 0.117 m, Mule 0.344 to 0.305, Hauler 0.102 to 0.117: a momentum-sensitive bench, ignore). **Hauler gradeability 0.369 to 0.416 is DRIVE's launch-transient limit reacting to the new pitch inertia, not a steady-state effect.** The compile report now prints the inertia source and the radii of gyration (roll, pitch, yaw), tagged ESTIMATE; the audit (D2b) will too.
+## Mass as a consequence (card C-020)
+Design note: `docs/lanes/forge/mass-budget-note.md` (D2a component mass budget, D2b design audit, PR plan). Next: D2a-1.
 
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).

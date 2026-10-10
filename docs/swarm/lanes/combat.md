@@ -47,5 +47,8 @@ Needs: ARCH (the port, rig-swap hook, `rig_hash`, projectiles in `w5k_sim`); CHA
 ## Tripwires specific to this lane
 A correction term that makes a conservation test pass (if 1e-6 fails the scheme is wrong, not the tolerance); damage that bypasses penetration; a coefficient or armour figure without a source (`UNVALIDATED(<source>)` and a wide band instead); tuning per vehicle or matchup; a step that can skip a thin plate; armour tested on visual meshes; mutating the world or a rig in place; a servo needing more than 8 substeps; `HashMap`, unseeded randomness, a banned maths call.
 
+## Owner's direction 2026-10-10 (card C-020, `docs/architecture/DESIGN-MODEL.md`)
+- Vulnerability is emergent (milestone M3): components with position, volume, criticality and protection; apertures that cannot be armoured (cooling openings grow with engine power, extra for an engine rated above 100%); the chance a shot reaches a component is its exposed cross-section; damage is a component state. Nothing to build until M3; do not hard-code per-vehicle weak points.
+
 ## Done
 S6 and steps 1 to 3 merged early; M3 deliverables pass in CI on Linux and Windows; theory note written; status file has the handoff note; you have idled. If the real hull, the glue hook or FORGE's armour are missing, say what you wait for and idle.

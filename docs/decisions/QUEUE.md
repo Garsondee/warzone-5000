@@ -136,6 +136,14 @@ Cost of being wrong: the headline demo would show one bogging wheeled truck inst
 Default: (a).
 Answer: (pending)
 
+### C-021  Defaults for the design model's open questions (armour sliders, overrating, tech level, ranges)
+Asked by: ARCH, from the owner's direction C-020 | Date: 2026-10-10 | Status: OPEN, defaults taken
+Options: (a) armour as one slider per facing (front, side, rear, top, turret), engine rating as a slider above 100% that adds an aperture share and a durability penalty, parts gated by an era only later, wide slider ranges and the model does the punishing; (b) one armour slider, rating fixed at 100%; (c) tight slider ranges that keep designs sensible.
+Recommendation: (a): it follows the owner's words (free to build wacky vehicles that can fail; weak points that cannot be armoured) and costs nothing until COMBAT needs it. Every price is an `ESTIMATE` with a band until sourced (C-017).
+Cost of being wrong: low; the sliders and prices are data and can be reshaped without touching the solvers.
+Default: (a), tagged `PROVISIONAL(C-021)`.
+Answer: (pending)
+
 ## Answered cards
 *(the owner's four scoping answers are recorded as ADR-0001 to ADR-0004; the cards below were answered in the Control Room on 2026-10-08.)*
 
@@ -170,3 +178,9 @@ Recommendation: (c): measure first; the burn is reported at every check-in.
 Cost of being wrong: money, or time lost to a lane that stalls.
 Default: (c).
 Answer: See the owner's note on this card in the Control Room database (cards/C-007); the repository carries no model names.
+
+### C-020  How a vehicle design relates to its properties (mass is not a slider)
+Asked by: the owner, unprompted, in chat | Date: 2026-10-10 | Status: ANSWERED (owner, chat, 2026-10-10): vehicle weight must come from the configuration, not a slider: a more powerful engine weighs more, more armour weighs more, a bigger weapon weighs more. It must be possible to build a configuration that does not work (a huge weapon makes the vehicle immobile, dangerous to drive or unusable off road); people are free to make wacky vehicles and the model is just good enough that a high-risk high-reward creation has real chances to fail in a real situation. More engine in a recon vehicle is a bigger target and easier to destroy, and past a point extra speed adds risk for little survivability; an engine can go over 100% at the cost of weak points that cannot be armoured. Some things are sliders, others are emergent properties of the parametric design; think about what else is displayed but not a slider.
+Reading (ARCH; the owner corrects it here): three kinds of quantity (choices, consequences by design, consequences measured); no slider without a price; compile rejects only what the solver cannot represent, everything else is built, simulated and flagged; vulnerability emerges from component exposure plus apertures that need openings (cooling grows with power) and cannot be armoured. Written up in `docs/architecture/DESIGN-MODEL.md`; the Workshop loses its Mass slider now and FORGE builds a component mass budget (stage D2).
+Options: none (owner direction). Open sub-decisions with defaults: C-021.
+Answer: (the owner's message above)

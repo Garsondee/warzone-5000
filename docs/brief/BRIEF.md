@@ -15,6 +15,13 @@ checked against real vehicles. The test of "deep enough" is the **Design Impact 
 design lever must move at least one benchmark by a plausible amount, and every benchmark must have a lever that moves it. A lever that
 changes nothing is a dead lever; an effect nobody can influence is wasted complexity.
 
+## Designs are assemblies; properties emerge (the owner, C-020)
+A design is a list of choices (parts and sizes); mass, balance, ground pressure, speed, vulnerability and the rest are **consequences**, never sliders:
+a bigger engine weighs more, runs hotter and needs openings that cannot be armoured; a bigger gun recoils harder and moves the centre of mass. People
+are free to build wacky vehicles, and the model is honest enough that a high-risk, high-reward build has real chances to fail (immobile, tips over,
+overheats, easy to kill). Only what the solver cannot represent is rejected; the rest is simulated and flagged with its cause.
+See `docs/architecture/DESIGN-MODEL.md`.
+
 ## What "realistic" means here
 - **Validated against real vehicles.** A reference garage of parametric builds that mimic real ones (M998 HMMWV, M113, M4A3 Sherman for
   calibration; M1A1, Leopard 2A5, T-72B, M35, Tiger II held out). Published figures within stated bands; every number carries its

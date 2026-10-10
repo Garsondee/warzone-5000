@@ -48,5 +48,8 @@ A figure from memory; a source you could not open (mark it UNVERIFIED, do not ci
 - Dossiers stay real vehicles: that is where published numbers live. The game never shows real names, so keep the mapping from a dossier to a game vehicle's fictional id in `content/dossier/`, not in the vehicle files.
 - The garage should end up covering every role (recon, personnel carrier, light, medium, heavy and main battle tank, assault gun or tank destroyer, self-propelled artillery, recovery, utility truck), not only assault vehicles. After the first three dossiers, spread the next ones across roles and eras (very late WW2 to today); it is the vehicle builder that is being exercised.
 
+## Owner's direction 2026-10-10 (card C-020, `docs/architecture/DESIGN-MODEL.md`)
+- Mass breakdown and envelope thresholds need sources: dossiers should carry the component masses of the reference vehicles (engine, transmission, armour, weapon) so FORGE's budget can be checked, and each envelope flag's threshold needs a citation or an `ESTIMATE` tag. The Impact Matrix levers `mass`, `com_height`, `tyre_friction` stay as **probes**, not player levers.
+
 ## Done
 M1 acceptance passes in CI, the theory note is written, the status file has the handoff note, you have idled; M2 held-out scoring is a follow-up task.
