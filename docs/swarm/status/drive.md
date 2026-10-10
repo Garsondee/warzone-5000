@@ -2,14 +2,15 @@
 
 *Update with every PR. Keep it under 40 lines. ARCH reads this file at every check-in instead of your whole session.*
 
-**Last updated:** 2026-10-10 | **Branch:** lane/drive/settling | **Contract pinned:** contract-v0.1 (f8f5e5d) | **Phase:** settling
+**Last updated:** 2026-10-10 | **Branch:** lane/drive/build | **Contract pinned:** contract-v0.1 (f8f5e5d) | **Phase:** building
 
 ## Done
 - Spike S-D (`spikes/drive/spike_d.py`, `docs/lanes/drive/spike-d.md`): implicit stick/slip clutch stable 60 Hz to 1 kHz; explicit regularised sign never stable; converter fine with linearised pump torque; no DRIVE substepping needed.
+- Settling PR #9 merged. Owner instruction (STATE.md, 2026-10-10 02:30 UTC): run without waiting for review; ARCH confirmed.
 - Design note `docs/lanes/drive/design-note.md` with the CCRs expected (all additive, none blocking).
 
 ## In progress
-- Settling PR open for review. Nothing else until it is reviewed.
+- Build step 1 (engine) in PR on lane/drive/build. Next: coupling (build order 2).
 
 ## Blocked
 - Nothing.
@@ -21,10 +22,11 @@
 - None. Fuel map shape (quadratic bowl around the BSFC best point) is an ESTIMATE, not a card.
 
 ## Evidence
+- Engine tests (7, named per brief) pass: `cargo test -p w5k_drive`. New: `serde` dep (workspace) and `ron` dev-dep in w5k_drive; `content/physics/drive/engine_tuning.ron` (idle gains, limiter fade, all Params).
 - `python3 -I spikes/drive/spike_d.py` output in `docs/lanes/drive/spike-d-output.txt`. No image yet (no plotter); spike plots to follow with the first bench.
 
 ## Owner instructions received
-- none
+- 2026-10-10: via ARCH, run on without checking in (STATE.md); slice target: M998-class truck powertrain through DrivePort.
 
 ## Handoff note (fill in when you stop)
 - Changed: ... | Unfinished: ... | Surprised me: ... | I would do next: ...

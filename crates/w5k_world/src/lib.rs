@@ -2,5 +2,7 @@
 //!
 //! The obstacle course: heightfield, materials, props, procedural course generator, WorldQuery.
 //!
-//! Status: SKELETON, created by the Launch Kit. Read your lane brief first:
-//! `docs/swarm/lanes/world.md`. Only lane WORLD edits this crate (`docs/swarm/ownership.toml`).
+//! Status: SETTLING. `spike_w` is the throwaway risk spike S-W (docs/lanes/world/spike-w.md); M1 splits it into
+//! `heightfield`, `props`, `noise` and `generator` modules.
+
+pub mod spike_w;
