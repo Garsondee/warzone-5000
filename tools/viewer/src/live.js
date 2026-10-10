@@ -1,0 +1,321 @@
+// The live test-drive page: talks to `w5k drive` (docs/swarm/requests/arch-drive-protocol.md) over same-origin HTTP and a server-sent event
+// stream, draws the vehicle on the course, and sends the pedals. It computes no physics: the server runs the real simulation.
+// Built for a five-year-old driver: big buttons, no small text, no plots. Sound starts on the first key press or click.
+import * as THREE from 'three';
+import { buildRig, poseRig } from './viewer.js';
+import { terrainMesh, propsGroup, roadMesh, heightSampler } from './world.js';
+import { makeLook } from './look.js';
+import { makeEngineSound } from './live-audio.js';
+import { makeInput } from './live-input.js';
+
+const { look: lookData } = JSON.parse(document.getElementById('data').textContent);
+const $ = (id) => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const SKY = 0xbfd4e6;
+// Each vehicle gets its own paint scheme so the three look different in the picker and on the road.
+const SCHEMES = { scout_4x4: 'desert_three', mule_4x4: 'woodland', hauler_4x4: 'nato_three_tone' };
+const names = Object.keys(lookData.schemes);
+const hash = (s) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+const schemeFor = (id) => SCHEMES[id] ?? names[hash(id) % names.length];
+const getJSON = async (p) => { const r = await fetch(p); if (!r.ok) throw new Error(`${p}: ${r.status}`); return r.json(); };
+const postJSON = (p, body) => fetch(p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+const wrap = (a) => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
+
+// ---- scene -------------------------------------------------------------------------------------------------------------------
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = params.get('shadows') !== '0';
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(SKY);
+scene.fog = new THREE.Fog(SKY, 140, 700);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x556644, 1.0));
+const sun = new THREE.DirectionalLight(0xfff4e0, 2.4);
+const SUN_OFFSET = new THREE.Vector3(35, 60, 25);
+sun.castShadow = renderer.shadowMap.enabled;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 220 });
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.06;
+scene.add(sun, sun.target);
+const camera = new THREE.PerspectiveCamera(58, 1, 0.3, 2500);
+function resize() {
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+
+let ground = () => 0;
+function buildWorld(terrain) {
+  const t = terrainMesh(terrain);
+  t.mesh.receiveShadow = true;
+  scene.add(t.mesh);
+  const props = propsGroup(terrain);
+  props.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  scene.add(props);
+  const road = roadMesh(terrain);
+  if (road) { road.receiveShadow = true; scene.add(road); }
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshStandardMaterial({ color: 0x8a9a6a, roughness: 1 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(t.centre[0], t.min - 0.05, t.centre[1]);
+  scene.add(floor);
+  ground = heightSampler(terrain);
+}
+
+// ---- vehicles ----------------------------------------------------------------------------------------------------------------
+const rigPromises = new Map();
+const rigFor = (id) => { if (!rigPromises.has(id)) rigPromises.set(id, getJSON(`/api/rig/${encodeURIComponent(id)}`)); return rigPromises.get(id); };
+let cur = null, loadToken = 0; // cur: { id, built, radius }
+
+function disposeTree(root) {
+  root.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); [].concat(o.material).forEach((m) => m.dispose()); } });
+}
+async function ensureVehicle(id) {
+  const token = ++loadToken; // the latest request wins, whatever order the rigs arrive in
+  const rig = await rigFor(id);
+  if (token !== loadToken) return;
+  const built = buildRig(rig);
+  built.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  makeLook(lookData, built.paint).set({ scheme: schemeFor(id), seed: hash(id) });
+  if (cur) { scene.remove(cur.built.root); disposeTree(cur.built.root); }
+  scene.add(built.root);
+  cur = { id, built, radius: built.radius, joints: new Array(rig.joint_count).fill(0) };
+  snap = true;
+}
+
+// A picture of a vehicle for the picker: its own small renderer, three-quarter view from the front, a soft shadow disc under it.
+function thumbnail(rig, id) {
+  const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true });
+  r.setPixelRatio(1);
+  r.setSize(480, 300);
+  r.setClearColor(0x000000, 0);
+  const s = new THREE.Scene();
+  s.add(new THREE.HemisphereLight(0xffffff, 0x667755, 1.2));
+  const d = new THREE.DirectionalLight(0xfff4e0, 2.4);
+  d.position.set(30, 50, 20);
+  s.add(d);
+  const b = buildRig(rig);
+  poseRig(b, new Array(rig.joint_count).fill(0));
+  makeLook(lookData, b.paint).set({ scheme: schemeFor(id), seed: hash(id) });
+  s.add(b.root);
+  const box = new THREE.Box3().setFromObject(b.root), c = box.getCenter(new THREE.Vector3());
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(1, 40), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 }));
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.scale.set(box.getSize(new THREE.Vector3()).x * 0.75, box.getSize(new THREE.Vector3()).z * 0.62, 1);
+  shadow.position.set(c.x, box.min.y + 0.02, c.z);
+  s.add(shadow);
+  const cam = new THREE.PerspectiveCamera(30, 480 / 300, 0.1, 400);
+  const dist = (b.radius / Math.sin((30 * Math.PI) / 360)) * 0.95, yaw = 2.45, pitch = 0.2;
+  cam.position.set(c.x + dist * Math.cos(pitch) * Math.sin(yaw), c.y + dist * Math.sin(pitch), c.z + dist * Math.cos(pitch) * Math.cos(yaw));
+  cam.lookAt(c);
+  r.render(s, cam);
+  const url = r.domElement.toDataURL('image/png');
+  disposeTree(b.root);
+  r.dispose();
+  r.forceContextLoss();
+  return url;
+}
+
+// ---- picker, banner, HUD -----------------------------------------------------------------------------------------------------
+let vehicles = [], thumbs = 0, wanted = null, wantedAt = 0;
+function openPicker() { document.body.classList.add('picking'); }
+function closePicker() { document.body.classList.remove('picking'); }
+async function choose(id) {
+  sound.start();
+  closePicker();
+  wanted = id; wantedAt = performance.now();
+  try { await postJSON('/api/select', { vehicle: id }); } catch { /* the stream shows what happened */ }
+}
+async function buildPicker() {
+  const cards = $('cards');
+  cards.textContent = '';
+  vehicles.forEach((v, i) => {
+    const b = document.createElement('button');
+    b.className = 'card';
+    b.dataset.id = v.id;
+    b.innerHTML = '<img alt=""><span></span>';
+    b.querySelector('span').textContent = v.name;
+    b.onclick = () => choose(v.id);
+    cards.appendChild(b);
+  });
+  addEventListener('keydown', (e) => { // 1, 2, 3 pick a vehicle while the picker is open
+    const n = Number(e.key);
+    if (document.body.classList.contains('picking') && n >= 1 && n <= vehicles.length) choose(vehicles[n - 1].id);
+  });
+  for (const v of vehicles) {
+    try {
+      const url = thumbnail(await rigFor(v.id), v.id);
+      cards.querySelector(`[data-id="${CSS.escape(v.id)}"] img`).src = url;
+      thumbs++;
+    } catch (e) { console.warn('no picture for', v.id, e); }
+  }
+}
+
+let bannerTimer = 0;
+function showBanner(text) {
+  const b = $('banner');
+  b.textContent = text.charAt(0).toUpperCase() + text.slice(1) + '!';
+  b.classList.remove('on');
+  void b.offsetWidth; // restart the animation
+  b.classList.add('on');
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => b.classList.remove('on'), 2700);
+}
+let shownSpeed = 0, speedMax = 30;
+function showSpeed(kmh, assistOn) {
+  speedMax = assistOn ? 30 : 120; // the kid cap is 25 km/h; without assists the bar covers road speeds
+  shownSpeed += (kmh - shownSpeed) * 0.35;
+  const v = Math.max(0, shownSpeed);
+  $('speedfill').style.clipPath = `inset(0 ${(100 - Math.min(100, (v / speedMax) * 100)).toFixed(1)}% 0 0 round 999px)`;
+  $('speednum').textContent = String(Math.round(v));
+}
+
+// ---- stream ------------------------------------------------------------------------------------------------------------------
+let prev = null, last = null, snap = true, lastFrameAt = 0, started = false, pendingId = null;
+const P = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+function onFrame(f) {
+  const now = performance.now();
+  if (wanted && f.vehicle !== wanted && now - wantedAt < 2000) return; // the old vehicle's last frames after a pick
+  if (f.vehicle === wanted) wanted = null;
+  if ((!cur || cur.id !== f.vehicle) && pendingId !== f.vehicle) { pendingId = f.vehicle; ensureVehicle(f.vehicle).finally(() => { pendingId = null; }); }
+  prev = last;
+  last = { at: now, f, pos: P(f.pos_m), quat: new THREE.Quaternion(f.rot[1], f.rot[2], f.rot[3], f.rot[0]) };
+  if (prev && prev.pos.distanceTo(last.pos) > 12) { prev = null; snap = true; } // a reset or a new vehicle: cut, do not glide across the course
+  lastFrameAt = now;
+  started = true;
+  showSpeed(f.speed_m_s * 3.6, f.assist ? f.assist.on : true);
+  $('limit').classList.toggle('on', !!(f.assist && f.assist.message === 'speed limit'));
+  if (f.message_event) { showBanner(f.message_event); sound.chime(); }
+}
+function openStream() {
+  const es = new EventSource('/api/stream');
+  es.onmessage = (e) => onFrame(JSON.parse(e.data));
+}
+
+// ---- camera ------------------------------------------------------------------------------------------------------------------
+const cam = { mode: 'chase', yaw: 0, look: new THREE.Vector3(), eye: new THREE.Vector3(), ready: false };
+const fwd = new THREE.Vector3(), aim = new THREE.Vector3();
+function updateCamera(dt, pos, quat, speed) {
+  fwd.set(0, 0, -1).applyQuaternion(quat);
+  fwd.y = 0;
+  if (fwd.lengthSq() < 1e-4) fwd.set(0, 0, -1); else fwd.normalize();
+  const behind = Math.atan2(-fwd.x, -fwd.z); // the eye sits on this side of the vehicle
+  if (snap || !cam.ready) { cam.yaw = behind; cam.look.copy(pos); cam.ready = true; snap = false; }
+  const k = (tau) => 1 - Math.exp(-dt / tau);
+  const rts = cam.mode === 'rts';
+  cam.yaw += wrap(behind - cam.yaw) * k(rts ? 1.3 : 0.45); // heading follows gently; a bend does not whip the picture round
+  cam.look.x += (pos.x - cam.look.x) * k(0.1);
+  cam.look.z += (pos.z - cam.look.z) * k(0.1);
+  cam.look.y += (pos.y - cam.look.y) * k(0.35); // bumps do not shake the horizon
+  const r = cur ? cur.radius : 3;
+  const dist = rts ? Math.max(50, 14 * r) : Math.max(7, 2.9 * r) * (1 + Math.min(Math.abs(speed), 12) / 48);
+  const pitch = rts ? 0.96 : 0.3;
+  const c = Math.cos(pitch);
+  aim.copy(cam.look).addScaledVector(fwd, rts ? 18 : 3);
+  aim.y += rts ? 0 : 1.1;
+  cam.eye.set(aim.x + dist * c * Math.sin(cam.yaw), aim.y + dist * Math.sin(pitch), aim.z + dist * c * Math.cos(cam.yaw));
+  cam.eye.y = Math.max(cam.eye.y, ground(cam.eye.x, cam.eye.z) + 1.2); // never under the hill
+  camera.position.copy(cam.eye);
+  camera.lookAt(aim);
+}
+const setCamera = (mode) => { cam.mode = mode; snap = true; document.body.dataset.camera = mode; };
+const toggleCamera = () => setCamera(cam.mode === 'chase' ? 'rts' : 'chase');
+
+// ---- input -------------------------------------------------------------------------------------------------------------------
+const sound = makeEngineSound();
+let wantReset = false;
+const input = makeInput({
+  onReset: () => { wantReset = true; },
+  onCamera: toggleCamera,
+  onGarage: () => (document.body.classList.contains('picking') ? closePicker() : openPicker()),
+  onMute: () => { const m = !sound.muted; sound.setMuted(m); $('sound').classList.toggle('off', m); },
+  onFirstGesture: () => sound.start(),
+});
+for (const [id, name] of [['left', 'left'], ['right', 'right'], ['go', 'go'], ['stop', 'stop'], ['back', 'back']]) input.bindHold($(id), name);
+input.bindTap($('reset'), () => { wantReset = true; });
+input.bindTap($('camera'), toggleCamera);
+input.bindTap($('garage'), openPicker);
+input.bindTap($('sound'), () => { const m = !sound.muted; sound.setMuted(m); $('sound').classList.toggle('off', m); });
+document.addEventListener('gesturestart', (e) => e.preventDefault()); // no pinch-zoom on iPads
+document.addEventListener('visibilitychange', () => { if (document.hidden) { sound.suspend(); input.pads.go = input.pads.stop = input.pads.back = false; } else sound.resume(); });
+
+// The server holds the last input and lets go of the pedals after 0.5 s of silence: send on every change, and every 0.2 s while a pedal is down.
+let lastSent = null, lastSentAt = 0, inflight = false, lastCmd = { throttle: 0, brake: 0, steer: 0, reverse: false };
+function send(now, cmd) {
+  const changed = !lastSent || cmd.throttle !== lastSent.throttle || cmd.brake !== lastSent.brake || cmd.steer !== lastSent.steer || cmd.reverse !== lastSent.reverse;
+  const active = cmd.throttle > 0 || cmd.brake > 0 || cmd.steer !== 0;
+  if (!wantReset && !changed && !(active && now - lastSentAt > 200)) return;
+  if (inflight && !wantReset) return;
+  inflight = true;
+  const body = { ...cmd, reset: wantReset };
+  wantReset = false;
+  lastSent = cmd; lastSentAt = now;
+  postJSON('/api/input', body).catch(() => { lastSent = null; }).finally(() => { inflight = false; });
+}
+
+// ---- loop --------------------------------------------------------------------------------------------------------------------
+const q = new THREE.Quaternion(), pos = new THREE.Vector3();
+let lastDraw = performance.now();
+// The pedals are read and sent on their own 30 Hz timer, not in the draw loop: a slow computer drawing 10 pictures a second must still
+// keep the server's 0.5 s pedal timeout fed.
+let lastT = performance.now();
+function inputTick() {
+  const now = performance.now(), dt = Math.min(0.1, (now - lastT) / 1000);
+  lastT = now;
+  lastCmd = input.read(dt, last ? last.f.speed_m_s : 0);
+  send(now, lastCmd);
+}
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.1, (now - lastDraw) / 1000);
+  lastDraw = now;
+  const speed = last ? last.f.speed_m_s : 0;
+  $('conn').style.display = started && now - lastFrameAt > 1500 ? 'block' : 'none';
+  if (cur && last && last.f.vehicle === cur.id) {
+    let a = 1;
+    if (prev) { const span = last.at - prev.at; a = span > 1 ? Math.min(1, Math.max(0, (now - last.at) / span)) : 1; }
+    const A = prev || last;
+    pos.copy(A.pos).lerp(last.pos, a);
+    q.copy(A.quat).slerp(last.quat, a);
+    const jA = A.f.joints, jB = last.f.joints;
+    for (let i = 0; i < cur.joints.length; i++) cur.joints[i] = jA[i] + (jB[i] - jA[i]) * a;
+    cur.built.root.position.copy(pos);
+    cur.built.root.quaternion.copy(q);
+    poseRig(cur.built, cur.joints);
+    updateCamera(dt, pos, q, speed);
+    sun.position.copy(pos).add(SUN_OFFSET);
+    sun.target.position.copy(pos);
+    sound.update({ rpm: last.f.engine_rpm, throttle: lastCmd.throttle, speed });
+  }
+  renderer.render(scene, camera);
+}
+
+// ---- start -------------------------------------------------------------------------------------------------------------------
+function fatal(text) { const f = $('fatal'); f.textContent = text; f.style.display = 'block'; }
+async function boot() {
+  for (;;) {
+    try {
+      [vehicles, ] = await Promise.all([getJSON('/api/vehicles'), getJSON('/api/world').then(buildWorld)]);
+      break;
+    } catch (e) {
+      fatal('Can’t find the game. Start it with “w5k drive”, then this page will wake up.');
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+  $('fatal').style.display = 'none';
+  vehicles.sort((a, b) => a.mass_kg - b.mass_kg); // small to big: scout, mule, hauler
+  openPicker();
+  openStream();
+  setInterval(inputTick, 33);
+  requestAnimationFrame(loop);
+  await buildPicker();
+}
+window.__live = { // for the browser test only
+  frame: () => (last ? last.f : null), vehicle: () => (cur ? cur.id : null), camera: () => cam.mode, input: () => lastCmd,
+  thumbs: () => thumbs, sound: () => sound.state, picking: () => document.body.classList.contains('picking'), pick: choose, setCamera,
+  vehicles: () => vehicles.map((v) => v.id),
+};
+boot();
