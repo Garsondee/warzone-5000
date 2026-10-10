@@ -132,6 +132,7 @@ pub fn render_rig(id: &str, parts: &[Part], p: &FlagParams) -> RenderRig {
         meshes: vec![],
         material_slots: SLOTS.iter().map(|&(kind, name)| MaterialSlot { name: name.into(), kind }).collect(),
         joint_count: 0,
+        track_runs: Vec::new(),
     };
     let joint = |kind, axis, index| Some(JointBinding { kind, axis, index });
     let (mut wheel_node, mut steer_node) = (vec![0usize; n], vec![None; n]);

@@ -4,6 +4,7 @@
 //! Read the design note: `docs/lanes/drive/design-note.md`. Only lane DRIVE edits this crate (`docs/swarm/ownership.toml`).
 
 pub mod bench;
+pub mod benches;
 pub mod brakes;
 pub mod coupling;
 pub mod driveline;

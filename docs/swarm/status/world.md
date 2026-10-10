@@ -1,6 +1,6 @@
 # Status: WORLD
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/world/stats | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/world/mobility | **Contract pinned:** contract-v0.1 (commit f8f5e5d) | **Phase:** building
 
 ## Done
 - PR 17 settling (merged): spike S-W, design note, CCR text. PR 21 data-driven bump strip (merged).
@@ -34,6 +34,10 @@
 - Owner's visual target (4 reference images, 2026-10-10): `docs/lanes/world/visual-target.md` (observations, what it implies per lane, plan V0 to V8: perspective preview, decimated flat-shaded terrain mesh, rule-based material painting, procedural rocks, road dressing, decor, compound generator, lakes, diorama preset). Next: V0.
 
 - (3) proving-ground fixtures [`lane/world/fixtures`]: `w5k_world::fixture::Fixture::{ramp, side_slope, step, trench}` (closed-form `WorldQuery`s, content in `content/world/fixtures/*.ron`); `set_primary(v)` lets the runner bisect the grade / cross-grade / step height / trench width; `w5k world fixtures --out DIR` draws them. Frame: drive toward -Z, feature starts at z = 0 after a 50 m flat run-in; the side slope falls toward +X. Heightfield limits stated: a step face and trench walls are eased (5 cm; depth / wall_grade).
+
+- SLICE-2 order from ARCH (owner approved): (1) ISO 8608 spectrum fix [this PR `lane/world/spectrum`: fit band 0.06-0.2 cycles/m, ground detail layer with a stated G(n0), roads carry their stated condition, washboard phase ring fix]; (2) mud pit with cited Bekker-Wong parameters; (3) proving-ground fixtures (ramp, side slope, step, trench); (4) `w5k world mobility` (go / slow / no-go map per vehicle); then visual-target V0 onward. NOTE for CHASSIS: `Material.roughness_rms_m` is read by WORLD as the resolved-band (2.5-20 m) roughness of a surface and baked into heights wherever a course has ground detail; a vehicle model must not add that same roughness again.
+
+- (4) `w5k world mobility` [`lane/world/mobility`]: `mobility.rs` (`MobilitySpec` = name, mass, width and the contract's `CapabilityTable`; `classify` gives go / slow / no-go per node; `route` is a directional-edge Dijkstra from the start to the end of the main road reporting length, time, steepest climb and tilt, and what it used), command `w5k world mobility <course.ron> --out DIR [--vehicle spec.ron]` writing `mobility.json` + `mobility.png` (a map per vehicle with the route), three PLACEHOLDER/UNVALIDATED vehicles `content/world/mobility/{scout,mule,hauler}.ron` (the mule takes mass, width, 60% grade, 40% side slope and 0.762 m fording from `content/dossier/m998.ron`, all UNVERIFIED; the per-surface scaling is a guess). Output for `crossing` and `ridge` in `docs/lanes/world/media/mobility-*/`. Tests are physics sentences (grade limit, side slope zig-zag, gap detour, fording, bog, rock step, bridge width and load). Needs from ARCH: measured `CapabilityTable`s to replace the placeholders. Tripwire note: `w5k_tools` is at 99% of its line budget (5980/6000); the next command needs ARCH to raise it or move commands out. Not done: material ids above 6 (sandy_loam, from the mud pit PR #124) are not in the specs yet; they fall back to the vehicle's worst row until the specs list them.
 
 ## Blocked
 - Nothing.
