@@ -128,6 +128,14 @@ Cost of being wrong: lights change colour; no physics changes.
 Default: (a).
 Answer: (pending)
 
+### C-019  What the mud pit is supposed to prove (which vehicles bog in the published clay)
+Asked by: WORLD (`docs/lanes/world/clay-bogging.md`), numbered by ARCH | Date: 2026-10-10 | Status: OPEN, default taken
+Options: (a) keep the published Bekker-Wong clay numbers; on level clay none of Scout, Mule, Hauler bogs (margins 0.114 / 0.104 / 0.061, carrier 0.350) and the 10% pit walls separate them (the Hauler bogs, the Mule and Scout cross, the carrier crosses): reword acceptance sentence 1 of SLICE-2.md to say so; (b) add a second, softer cited soil row so the Mule bogs on level ground (needs a source from VALIDATION); (c) deepen or lengthen the pit until the Mule bogs (tuning the course to get a result).
+Recommendation: (a), tagged `PROVISIONAL(world-clay-acceptance)`: it is what the physics says with the published figures and the sim agrees with the hand calculation. Never tune soil numbers to get a result. Caution recorded: the clay friction-angle band moves the Mule's margin from 5% to 16%, so the Mule is a knife edge.
+Cost of being wrong: the headline demo would show one bogging wheeled truck instead of two; no physics changes.
+Default: (a).
+Answer: (pending)
+
 ## Answered cards
 *(the owner's four scoping answers are recorded as ADR-0001 to ADR-0004; the cards below were answered in the Control Room on 2026-10-08.)*
 

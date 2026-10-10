@@ -62,7 +62,7 @@ Eleven of thirteen lanes do real work; two stay parked on purpose.
 - **C, Workshop** (starts in parallel with B on the wheeled trucks, the carrier joins when B lands). *You see:* you edit a vehicle, the numbers move, you drive it.
 
 ## 6. Acceptance (named as physics sentences; the numbers are starting values)
-1. `the_carrier_finishes_the_course_and_the_mud_pit_unaided`, while the Mule and Hauler bog at a ground pressure within 25% of what `z = (p / (kc/b + kphi))^(1/n)` predicts.
+1. `the_carrier_finishes_the_course_and_the_mud_pit_unaided`, while the Hauler bogs on the pit walls, with sinkage within 25% of what `z = (p / (kc/b + kphi))^(1/n)` predicts. *(Reworded 2026-10-10, `PROVISIONAL(world-clay-acceptance)`, card C-019: with the published clay none of Scout, Mule and Hauler bogs on level ground; the 10% pit walls separate them. Measured: carrier and Mule finish, Hauler stalls at 180 m.)*
 2. `pivot_turn_moment_is_within_25_percent_of_mu_W_L_over_4` (the S3 kill criterion) and the track-speed turn radius equals the kinematic value.
 3. Impact Matrix: at least 80% of expected signs right; every dead lever and orphan effect listed with a written reason.
 4. The proving battery runs for every vehicle with an oracle or a cited source behind every light; a run that ends early says why.
