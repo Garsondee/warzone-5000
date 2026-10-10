@@ -13,7 +13,7 @@
 - Build steps 5-6 in PR #37: driveline tree (open diffs, final drives, modes), `Powertrain: DrivePort`, lumped-vehicle bench (the Mule-class box truck launches, shifts 1-2-3, brakes to a stop). Next: locked/LSD diffs and steering units, fuel map, the named bench tests (0-32 km/h, top speed, hill start), `w5k drive bench`, the the DrivePort implementation (ARCH wants it today so CHASSIS can swap in).
 
 ## Blocked
-- Nothing.
+- Tripwire noted: PR #37 is over 400 non-test lines (steps 3-6 accumulated while earlier PRs awaited merge, and ARCH asked for DrivePort today); commits are separable, history not rewritten. Future steps go in smaller PRs.
 
 ## Next
 - After review: engine tests and `w5k_drive` engine/coupling code (build order 1-2); lumped bench to test the lock with a speed-dependent load.
