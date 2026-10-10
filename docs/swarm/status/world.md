@@ -35,6 +35,8 @@
 
 - SLICE-2 order from ARCH (owner approved): (1) ISO 8608 spectrum fix [this PR `lane/world/spectrum`: fit band 0.06-0.2 cycles/m, ground detail layer with a stated G(n0), roads carry their stated condition, washboard phase ring fix]; (2) mud pit with cited Bekker-Wong parameters; (3) proving-ground fixtures (ramp, side slope, step, trench); (4) `w5k world mobility` (go / slow / no-go map per vehicle); then visual-target V0 onward. NOTE for CHASSIS: `Material.roughness_rms_m` is read by WORLD as the resolved-band (2.5-20 m) roughness of a surface and baked into heights wherever a course has ground detail; a vehicle model must not add that same roughness again.
 
+- V0 perspective preview [`lane/world/view`, from integration, independent of #137]: `render.rs` (camera, near-plane clipping, edge-function rasteriser, z-buffer, banded Lambert, fog, sky, heightfield shadow rays; trees as trunk plus cone, rocks as squashed octahedra, boxes) and `w5k world view <course.ron> --out DIR [--size WxH] [--step N]` writing `view-road.png` and `view-overview.png`. Pictures for slice (road), ridge and crossing (overview) in `docs/lanes/world/media/view/`. Tests: projection, z-buffer order, near clip, fog, Lambert shade of a face square to the sun, pillar shadow length `H / tan(elevation)`, determinism. Not done: props cast no shadows; terrain mesh is the raw grid (V1 decimates and softens road edges, which are visibly stair-stepped at step 2); PROVISIONAL(look-flat) banding and the sun direction are display choices.
+
 ## Blocked
 - Nothing.
 
