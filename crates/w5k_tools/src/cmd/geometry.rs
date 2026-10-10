@@ -11,7 +11,7 @@ use w5k_geo::wheel::{segments_for, wheel, WheelDims};
 use w5k_math::Vec3;
 
 const USAGE: &str =
-    "usage: w5k geometry sheet <wheel|truck> --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2]";
+    "usage: w5k geometry sheet <wheel|truck> --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close] [--size WxH]";
 
 /// Entry point for `w5k geometry <args>`.
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -29,8 +29,22 @@ pub fn run(args: &[String]) -> Result<(), String> {
             let detail: u8 = get("--detail").map_or(Ok(1), |d| d.parse()).map_err(|_| USAGE.to_string())?;
             let parts = subject(what, detail)?;
             std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
-            let path = format!("{out}/{what}-{}.png", get("--mode").unwrap_or_else(|| "look".into()));
-            write_png(&path, 1200, 800, &sheet(&parts, mode, 600, 400))?;
+            let mode_name = get("--mode").unwrap_or_else(|| "look".into());
+            let view = get("--view");
+            let views: Vec<&str> =
+                view.as_deref().map_or(vec!["front34", "side", "front", "top"], |v| v.split(',').collect());
+            let (w, h) = match get("--size").as_deref().and_then(|s| s.split_once('x')) {
+                Some((a, b)) => (a.parse().map_err(|_| USAGE.to_string())?, b.parse().map_err(|_| USAGE.to_string())?),
+                None if views.len() == 1 => (1400, 900), // const-ok: picture size in pixels
+                None => (600, 400),                      // const-ok: picture size in pixels
+            };
+            let path = match &view {
+                Some(v) if views.len() == 1 => format!("{out}/{what}-{v}-{mode_name}.png"),
+                _ => format!("{out}/{what}-{mode_name}.png"),
+            };
+            let cols = if views.len() == 1 { 1 } else { 2 };
+            let (pw, ph) = (cols * w, views.len().div_ceil(cols) * h);
+            write_png(&path, pw as u32, ph as u32, &sheet(&parts, mode, &views, w, h)?)?;
             println!("wrote {path}");
             Ok(())
         }
@@ -109,8 +123,21 @@ fn subject(what: &str, detail: u8) -> Result<Vec<(Mesh, [f64; 3])>, String> {
     }
 }
 
-/// Four views in a 2 x 2 sheet: three-quarter, side, front, top.
-fn sheet(parts: &[(Mesh, [f64; 3])], mode: Mode, w: usize, h: usize) -> Vec<u8> {
+/// Named camera directions (from the vehicle centre towards the eye, in the vehicle frame: -Z is forward) and projection.
+// const-ok: picture camera directions, not physics
+const VIEWS: [(&str, [f64; 3], bool); 8] = [
+    ("front34", [0.9, 0.6, -1.0], true), // const-ok: camera direction
+    ("rear34", [0.9, 0.5, 1.0], true),   // const-ok: camera direction
+    ("side", [1.0, 0.0, 0.0], false),
+    ("front", [0.0, 0.0, -1.0], false),
+    ("rear", [0.0, 0.0, 1.0], false),
+    ("top", [0.0, 1.0, 0.001], false),    // const-ok: camera direction
+    ("low34", [-0.9, -0.15, -1.0], true), // const-ok: camera direction
+    ("close", [1.0, 0.35, -0.55], true),  // const-ok: camera direction
+];
+
+/// One picture per name in `views`: a single view fills the image, four views make a 2 x 2 sheet.
+fn sheet(parts: &[(Mesh, [f64; 3])], mode: Mode, views: &[&str], w: usize, h: usize) -> Result<Vec<u8>, String> {
     let flags = bake(&parts.iter().map(|p| &p.0).collect::<Vec<_>>(), &FlagParams::default_params());
     let items: Vec<Item> = parts
         .iter()
@@ -122,36 +149,33 @@ fn sheet(parts: &[(Mesh, [f64; 3])], mode: Mode, w: usize, h: usize) -> Vec<u8> 
         .map(|p| p.0.bounds())
         .fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(a, b), (l, u)| (a.min(l), b.max(u)));
     let (c, ext) = ((lo + hi) * 0.5, (hi - lo).length());
-    let views = [
-        // const-ok: picture colours and camera framing, not physics
-        (Vec3::new(0.9, 0.6, -1.0), Some(0.5)),
-        (Vec3::new(1.0, 0.0, 0.0), None),
-        (Vec3::new(0.0, 0.0, 1.0), None),
-        // const-ok: picture colours and camera framing, not physics
-        (Vec3::new(0.0, 1.0, 0.001), None),
-    ];
-    let panes: Vec<Vec<u8>> = views
-        .iter()
-        .map(|&(dir, fov)| {
-            let cam = Camera {
-                eye: c + dir.normalized_or_zero() * ext * 1.7, // const-ok: picture colours and camera framing
-                target: c,
-                fov_rad: fov,
-                ortho_half_h_m: ext * 0.40, // const-ok: picture colours and camera framing
-            };
-            // const-ok: picture colours and camera framing, not physics
-            render(&items, &cam, w, h, mode, [0.93, 0.93, 0.92])
-        })
-        .collect();
-    let mut out = vec![0u8; 2 * w * 2 * h * 3];
-    for (i, p) in panes.iter().enumerate() {
-        let (ox, oy) = ((i % 2) * w, (i / 2) * h);
+    let cols = if views.len() == 1 { 1 } else { 2 };
+    let mut out = vec![0u8; cols * w * views.len().div_ceil(cols) * h * 3];
+    for (i, name) in views.iter().enumerate() {
+        let &(_, dir, persp) = VIEWS.iter().find(|v| v.0 == *name).ok_or(format!("unknown view {name}"))?;
+        let single = views.len() == 1;
+        let cam = Camera {
+            eye: c + Vec3::new(dir[0], dir[1], dir[2]).normalized_or_zero() * ext * 1.7, // const-ok: camera framing
+            target: if *name == "close" { c + Vec3::new(0.0, 0.0, -ext * 0.18) } else { c }, // const-ok: camera framing
+            // const-ok: camera field of view in radians
+            fov_rad: persp.then_some(if *name == "close" {
+                0.55 // const-ok: camera field of view
+            } else if single {
+                0.42 // const-ok: camera field of view
+            } else {
+                0.5
+            }), // const-ok: camera framing
+            ortho_half_h_m: ext * if single { 0.30 } else { 0.40 }, // const-ok: camera framing
+        };
+        // const-ok: picture background
+        let pane = render(&items, &cam, w, h, mode, [0.93, 0.93, 0.92]);
+        let (ox, oy) = ((i % cols) * w, (i / cols) * h);
         for y in 0..h {
-            let dst = ((oy + y) * 2 * w + ox) * 3;
-            out[dst..dst + w * 3].copy_from_slice(&p[y * w * 3..(y + 1) * w * 3]);
+            let dst = ((oy + y) * cols * w + ox) * 3;
+            out[dst..dst + w * 3].copy_from_slice(&pane[y * w * 3..(y + 1) * w * 3]);
         }
     }
-    out
+    Ok(out)
 }
 
 fn write_png(path: &str, w: u32, h: u32, rgb: &[u8]) -> Result<(), String> {
