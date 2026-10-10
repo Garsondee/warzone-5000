@@ -66,7 +66,7 @@ paths = ["crates/w5k_geo/**", "crates/w5k_tools/src/cmd/geometry.rs"]
 paths = ["assets/**", "docs/art/**", "crates/w5k_tools/src/cmd/look.rs"]
 
 [lanes.viewer]
-paths = ["crates/w5k_replay/**", "tools/viewer/**", "crates/w5k_tools/src/cmd/viewer.rs"]
+paths = ["crates/w5k_replay/**", "tools/viewer/**", "crates/w5k_tools/src/cmd/viewer.rs", "crates/w5k_tools/src/cmd/viewer/**"]
 
 [lanes.godot]
 paths = ["crates/w5k_godot/**", "game/**", "crates/w5k_tools/src/cmd/godot.rs"]
