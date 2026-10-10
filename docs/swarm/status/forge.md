@@ -32,6 +32,9 @@ The scout's mean damping ratio 0.25 with rebound/bump 1.5 meant only 0.20 on the
 ## Matrix feedback (ARCH, impact-v0)
 Ground clearance: compile report prints approach, departure and ramp breakover angles; the clearance effect and options are in `forge-levers.md`. Brake: the `mass` lever holds brake torque fixed (default; a def field is the alternative, offered in the request file).
 
+## Differentials and brake torque (DRIVE request)
+Provisional extras now carry centre and axle differential kind and bias and the authored axle brake torque; `apply_both` and `set_diff` expose them as levers; the CCR text for `def.rs` is in `forge-levers.md`. Authored torque makes mass lengthen stops.
+
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).
 

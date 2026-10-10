@@ -145,7 +145,10 @@ fn torque_curve_peaks_match_the_def_peaks() {
 
 #[test]
 fn brake_torque_gives_the_stated_service_decel_on_the_axle_loads() {
-    let (d, _, c) = built();
+    // The deceleration spec path: with no authored axle torque the torque is sized from `service_decel_g`.
+    let (d, mut x) = load();
+    x.brake.axle_torque_nm.clear();
+    let c = compile(&d, &x).unwrap();
     let rig = &c.rig;
     let force: f64 =
         rig.drivetrain.brakes.iter().map(|b| b.max_torque_nm / rig.stations[b.station].wheel.radius_m).sum();
@@ -200,7 +203,8 @@ fn every_driven_wheel_has_one_output_pointing_back_and_the_undriven_has_none() {
 
 #[test]
 fn designs_the_physics_cannot_honour_are_rejected_with_a_reason() {
-    let (d0, x) = load();
+    let (d0, mut x) = load();
+    x.brake.axle_torque_nm.clear(); // the tyre-friction rejection belongs to the deceleration-spec path
     let reason = |d: &VehicleDef, x: &Extras| {
         compile(d, x).err().expect("rejected").iter().map(|r| r.to_string()).collect::<Vec<_>>().join(" | ")
     };

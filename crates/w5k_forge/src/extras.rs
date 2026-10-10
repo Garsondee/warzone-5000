@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use w5k_contract::param::Param;
+use w5k_contract::rig::DiffKind;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -33,6 +34,23 @@ pub struct DriveExtras {
     /// Clutch capacity over the engine's torque peak (used when the def says `Clutch`).
     pub clutch_capacity_factor: Param,
     pub clutch_engage_rpm: Param,
+    /// PROVISIONAL(CCR-forge, drivetrain): the centre differential (several driven axles) and the axle differentials. Absent = open.
+    #[serde(default = "open_diff")]
+    pub centre_diff: DiffSpec,
+    #[serde(default = "open_diff")]
+    pub axle_diff: DiffSpec,
+}
+
+/// A differential's kind and, for a limited slip, its torque-bias ratio (>= 1; ignored for open and locked).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DiffSpec {
+    pub kind: DiffKind,
+    pub bias: Param,
+}
+
+fn open_diff() -> DiffSpec {
+    DiffSpec { kind: DiffKind::Open, bias: Param::estimate(1.0, 1.0, 8.0, "an open differential: the bias is unused") }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -43,11 +61,21 @@ pub struct BrakeExtras {
     pub fade_start_k: Param,
     pub fade_end_k: Param,
     pub fade_floor: Param,
+    /// PROVISIONAL(CCR-forge, drivetrain): brake torque at the wheel pair of each axle, N m, front first. When present it is THE spec
+    /// (a real brake has a torque; the deceleration is derived and reported, and falls with mass); when empty the torque is derived
+    /// from `BrakesDef::service_decel_g` as before.
+    #[serde(default)]
+    pub axle_torque_nm: Vec<Param>,
 }
 
 impl Extras {
     pub fn visit_params(&self, f: &mut dyn FnMut(&str, &Param)) {
         let (s, d, b) = (&self.susp, &self.drive, &self.brake);
+        f("drive.centre_diff.bias", &d.centre_diff.bias);
+        f("drive.axle_diff.bias", &d.axle_diff.bias);
+        for (i, p) in b.axle_torque_nm.iter().enumerate() {
+            f(&format!("brake.axle_torque_nm[{i}]"), p);
+        }
         for (n, p) in [
             ("susp.bump_stop_damping_ns_m", &s.bump_stop_damping_ns_m),
             ("susp.bump_stop_progression", &s.bump_stop_progression),
