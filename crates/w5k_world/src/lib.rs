@@ -15,6 +15,7 @@ pub mod fixture;
 pub mod grid;
 pub mod mobility;
 pub mod plot;
+pub mod render;
 pub mod river;
 pub mod stats;
 pub mod strip;
