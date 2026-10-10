@@ -9,7 +9,10 @@ use w5k_replay::ReplayFile;
 pub fn run(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
         Some("dump-canned") => dump_canned(&args[1..]),
-        _ => Err("usage: w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.json and rig.json)".to_string()),
+        _ => {
+            Err("usage: w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.json and rig.json)"
+                .to_string())
+        }
     }
 }
 
