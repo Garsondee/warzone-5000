@@ -20,7 +20,7 @@ Frame blocks are **keyframe every 30 frames (1 s), deltas between**, each block 
 **Budget: <= 100 bytes per vehicle-frame at 30 Hz.** Truck (4 wheels: 4 spin + 4 travel + 2 steer = 10 joints, 4 contacts): pose 6+4 B, joints ~20 B as deltas,
 contacts 4x5 = 20 B, ledger ~16 B, rpm/gear/limiting 4 B = about 70 B. The 14-station tank (31 joints, 14 contacts) is the stress case: ~190 B raw, ~100 B after
 varint deltas; if a rig exceeds the budget the named test fails and tells which field is big. 20 vehicles x 300 s x 30 Hz x 100 B = 18 MB raw; an optional deflate pass
-(`flate2` needs an approved card, so the first version ships without it: the page does not need it) typically halves that again. Replays are CI artifacts, not committed.
+(`flate2` needs an approved card; the first version uses a built-in zero-run packer instead, see the codec's module comment) typically halves that again. Replays are CI artifacts, not committed.
 
 ## 2. How a page receives a replay
 Default **embedded**: the build script inlines rig + replay (base64 of the binary) into the single HTML file, which therefore works from `file://` in a cloud
@@ -39,3 +39,9 @@ test decodes a Rust-written file in node) and `w5k viewer render|plot`.
 2. Per-contact **world position and normal** are not in `ContactFrame`; the viewer reconstructs the patch position from the rig and the pose (wheel node origin projected on the
    terrain). Fine for wheels; for track samples we need the sample positions, which FORGE should expose in the `RenderRig` (a `contact_nodes` list mapping `contact_names` to nodes). **Asking FORGE via an interface request when the debug-draw step starts.**
 3. `ForceTerm` names for the arrow legend: read from `ledger.rs`; if the ledger summary has no per-term application point, vectors are drawn from the CoM (acceptable for M1).
+
+## 5. As built (PR `lane/viewer/build`, step 1)
+The layout above was simplified while writing it: every field of a frame becomes an integer (quantised), the frame is a flat list of integers, and the list is stored as zig-zag
+varints of the **difference from a prediction**: smooth fields (pose, velocities, joints) predict by linear extrapolation from the two previous frames, noisy ones (contacts, ledger) from the previous frame; zero bytes are run-length packed.
+Rotation is smallest-three at 16 bits per component (a 10-bit version, as first sketched, gives 0.14 degrees, 14 times too coarse). Measured on the canned stand-ins: **23 B per vehicle-frame (truck), 36 B (tank)**;
+the stand-ins are smooth, so real simulation output will cost more; the test keeps the 100 B guard. Groups of 30 frames start from zeros (seekable).
