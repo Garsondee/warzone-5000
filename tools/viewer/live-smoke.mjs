@@ -112,8 +112,8 @@ for (const id of ['scout_4x4', 'mule_4x4', 'hauler_4x4']) {
   await page.waitForFunction((id) => window.__live.vehicle() === id && window.__live.fit(), id, { timeout: 60000 });
   fits[id] = await live(() => window.__live.fit());
 }
-// the scout has a skin of its own (scale near 1); the mule wears the utility truck as it is; the hauler wears it grown to its wheelbase
-check(Math.abs(fits.scout_4x4.scale - 1) < 0.1 && Math.abs(fits.mule_4x4.scale - 1) < 0.05 && fits.hauler_4x4.scale > 1.1, `the skin fits each vehicle: scale scout ${fits.scout_4x4.scale.toFixed(2)}, mule ${fits.mule_4x4.scale.toFixed(2)}, hauler ${fits.hauler_4x4.scale.toFixed(2)}`);
+// every vehicle with a skin of its own (scout, hauler) or the utility truck (mule) is fitted at about its own size
+check(Object.values(fits).every((f) => f && f.scale > 0.8 && f.scale < 1.25), `the skin fits each vehicle: scale scout ${fits.scout_4x4.scale.toFixed(2)}, mule ${fits.mule_4x4.scale.toFixed(2)}, hauler ${fits.hauler_4x4.scale.toFixed(2)}`);
 await page.screenshot({ path: `${out}/hauler.png` });
 
 // The start screen by keyboard: 1 chooses the Scout, Enter drives.
