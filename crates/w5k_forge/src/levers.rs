@@ -20,7 +20,7 @@ pub const LEVERS: &[LeverInfo] = &[
     LeverInfo { name: "first_gear", scales: "powertrain.gearbox.forward_ratios[0]", compiled_effect: "gearbox first ratio, x factor" },
     LeverInfo { name: "brake_torque", scales: "brakes.service_decel_g", compiled_effect: "total brake torque capacity, x factor (rejected above the tyre's friction)" },
     LeverInfo { name: "brake_thermal_mass", scales: "brakes.thermal_mass_kj_k", compiled_effect: "brake thermal mass, x factor" },
-    LeverInfo { name: "mass", scales: "hull.mass_kg", compiled_effect: "hull (sprung) mass, x factor; springs, dampers and preloads follow" },
+    LeverInfo { name: "mass", scales: "hull.mass_kg", compiled_effect: "hull (sprung) mass, x factor; springs, dampers and preloads follow; total brake torque is HELD (service_decel_g scales by 1/total-mass ratio)" },
     LeverInfo { name: "com_height", scales: "hull.com_height_m", compiled_effect: "COM height above the ground, x factor" },
     LeverInfo { name: "ground_clearance", scales: "hull.ground_clearance_m", compiled_effect: "hull underside height above the ground, x factor" },
     LeverInfo { name: "wheelbase", scales: "axle positions about the front axle (COM keeps its fraction between the axles; hull length keeps the rear overhang)", compiled_effect: "distance between the first and last station rows, x factor" },
@@ -72,7 +72,14 @@ pub fn apply(def: &VehicleDef, lever: &str, factor: f64) -> Result<VehicleDef, S
         }
         "brake_torque" => scale(&mut d.brakes.service_decel_g, factor),
         "brake_thermal_mass" => scale(&mut d.brakes.thermal_mass_kj_k, factor),
-        "mass" => scale(&mut d.hull.mass_kg, factor),
+        "mass" => {
+            // The brakes are hardware: more mass must not buy more braking torque. The def states brake capability as a deceleration, so
+            // the lever scales it by the inverse of the total-mass ratio to hold the torque constant (a heavier vehicle brakes less hard).
+            let unsprung = w.axles.len() as f64 * 2.0 * w.tyre.unsprung_mass_kg.v;
+            let (before, after) = (d.hull.mass_kg.v + unsprung, d.hull.mass_kg.v * factor + unsprung);
+            scale(&mut d.hull.mass_kg, factor);
+            scale(&mut d.brakes.service_decel_g, before / after);
+        }
         "com_height" => scale(&mut d.hull.com_height_m, factor),
         "ground_clearance" => scale(&mut d.hull.ground_clearance_m, factor),
         "wheelbase" => {

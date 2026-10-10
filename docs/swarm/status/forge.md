@@ -29,6 +29,9 @@ The scout's mean damping ratio 0.25 with rebound/bump 1.5 meant only 0.20 on the
 ## Levers (slice 2, stage A)
 `levers.rs` + `docs/swarm/requests/forge-levers.md` for VALIDATION: 20 levers, each tested on the three trucks. The engine-curve template changed again to a torque-space power law `T = T_pk - c d^k` (concave, one power maximum by construction; both peaks exact); peaks that would need k < 1 are rejected as inconsistent.
 
+## Matrix feedback (ARCH, impact-v0)
+Ground clearance: compile report prints approach, departure and ramp breakover angles; the clearance effect and options are in `forge-levers.md`. Brake: the `mass` lever holds brake torque fixed (default; a def field is the alternative, offered in the request file).
+
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).
 

@@ -171,3 +171,15 @@ fn the_lever_list_has_unique_names() {
     names.dedup();
     assert_eq!(names.len(), LEVERS.len());
 }
+
+#[test]
+fn the_mass_lever_holds_the_brake_torque_so_a_heavier_vehicle_brakes_less_hard() {
+    for id in IDS {
+        let base = compiled(id, "brake_thermal_mass", 1.0).unwrap();
+        let heavy = compiled(id, "mass", 1.3).unwrap();
+        let total = |c: &Compiled| -> f64 { c.rig.drivetrain.brakes.iter().map(|b| b.max_torque_nm).sum() };
+        assert!((total(&heavy) / total(&base) - 1.0).abs() < 1e-9, "{id}: brake torque must not follow the mass");
+        let decel = |c: &Compiled| total(c) / 0.5 / c.rig.stations[0].wheel.radius_m / c.rig.total_mass_kg() / G;
+        assert!(decel(&heavy) < decel(&base) * 0.85, "{id}: the achievable deceleration falls with mass");
+    }
+}
