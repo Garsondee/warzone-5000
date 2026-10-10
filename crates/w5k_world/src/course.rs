@@ -49,6 +49,17 @@ pub struct RoadDef {
     pub max_grade: Param,
     /// Name of a material in `content/world/materials.ron`.
     pub surface: String,
+    /// Stretches where the road itself is mud (a ford, a washed-out section the vehicle must cross).
+    #[serde(default)]
+    pub mud_crossings: Vec<MudCrossing>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MudCrossing {
+    /// Position along the road, 0 = start, 1 = finish.
+    pub at_fraction: Param,
+    pub length_m: Param,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -308,10 +319,12 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
     let mut weight = vec![0.0f64; n * n];
     let mut target = vec![0.0f64; n * n];
     let mut best_d = vec![f64::INFINITY; n * n];
+    let mut arc = vec![0.0f64; n * n];
     let r_cells = (reach / CELL_M).ceil() as i64;
     // Distance to the centreline polyline, with the profile height interpolated at the projection (so neighbouring cells get
     // nearly equal targets even at a bend); the nearest segment wins and ties keep the earlier one.
     for k in 0..nodes.len() - 1 {
+        let seg_start: f64 = ds[..k].iter().sum(); // road arc length at the start of segment k, m
         let ((ax, az), (bx, bz)) = (pts[k], pts[k + 1]);
         let len2 = (bx - ax) * (bx - ax) + (bz - az) * (bz - az);
         for j in (az.min(bz).floor() as i64 - r_cells).max(0)..=(az.max(bz).ceil() as i64 + r_cells).min(n as i64 - 1) {
@@ -323,17 +336,28 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
                 let c = j as usize * n + i as usize;
                 if d < reach && d < best_d[c] {
                     best_d[c] = d;
+                    arc[c] = seg_start + t * ds[k];
                     target[c] = y[k] + t * (y[k + 1] - y[k]);
                     weight[c] = 1.0 - scalar::smoothstep(w2, reach, d);
                 }
             }
         }
     }
+    let total_arc: f64 = ds.iter().sum();
+    let mud_id = materials.id_of("mud").ok_or("material table has no `mud`")?;
+    let mut crossings = Vec::new();
+    for (k, m) in def.road.mud_crossings.iter().enumerate() {
+        m.at_fraction.check(&format!("{}.road.mud_crossings[{k}].at_fraction", def.name))?;
+        m.length_m.check(&format!("{}.road.mud_crossings[{k}].length_m", def.name))?;
+        crossings
+            .push((m.at_fraction.v * total_arc - m.length_m.v * 0.5, m.at_fraction.v * total_arc + m.length_m.v * 0.5));
+    }
     let mut splat = vec![ground.0 as u8; n * n];
     let mut frozen = vec![false; n * n];
     for c in 0..n * n {
         if best_d[c] <= w2 {
-            splat[c] = road_material.0 as u8;
+            let wet = crossings.iter().any(|&(a, b)| arc[c] >= a && arc[c] <= b);
+            splat[c] = if wet { mud_id.0 } else { road_material.0 } as u8;
             frozen[c] = true;
         }
         if weight[c] > 0.0 {
@@ -349,7 +373,6 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
     for v in h.iter_mut() {
         *v = f64::from(*v as f32);
     }
-    let mud_id = materials.id_of("mud").ok_or("material table has no `mud`")?;
     if let Some(m) = &def.mud {
         m.min_drainage_cells.check(&format!("{}.mud.min_drainage_cells", def.name))?;
         m.max_slope.check(&format!("{}.mud.max_slope", def.name))?;
@@ -454,7 +477,7 @@ mod tests {
         CourseDef::from_ron(include_str!("../../../content/world/courses/slice.ron")).expect("slice.ron parses")
     }
 
-    const GOLDEN_SLICE_HASH: u64 = 0xeb7a_3119_94c6_c4dd;
+    const GOLDEN_SLICE_HASH: u64 = 0x2013_5b8d_d833_7db3;
 
     fn hash(c: &Course) -> u64 {
         let mut s = StateHasher::new();
@@ -525,7 +548,11 @@ mod tests {
         let d = def();
         let c = generate(&d).expect("course");
         for &(x, z, y) in &c.road {
-            assert_eq!(c.world.material_id_at(x, z), c.road_material);
+            let m = c.world.material_id_at(x, z);
+            assert!(
+                m == c.road_material || c.world.material_at(x, z).soil.is_some(),
+                "centreline is road or a stated mud crossing"
+            );
             assert!((c.world.height_m(x, z) - y).abs() < 0.05, "centreline sits on the graded profile");
             // bilinear sampling between stamped nodes
         }
@@ -553,7 +580,9 @@ mod tests {
         for k in 0..n * n {
             let is_mud = c.world.splat_at_node(k % n, k / n) == mud;
             count += usize::from(is_mud);
-            if is_mud {
+            let (x, z) = c.world.node_xz(k % n, k / n);
+            let on_road = c.road.iter().any(|r| scalar::hypot(r.0 - x, r.1 - z) <= d.road.width_m.v * 0.5 + 1.0);
+            if is_mud && !on_road {
                 assert!(spread[k], "mud outside the rule's reach at node {k}");
             }
             if rule[k] && c.world.splat_at_node(k % n, k / n) != c.road_material.0 as u8 {
@@ -628,5 +657,30 @@ mod tests {
         assert!(!hit(0.0), "the gap must be open");
         assert!(hit(b.gap_m.v * 0.5 + 0.4) && hit(-(b.gap_m.v * 0.5 + 0.4)), "both blocks must stand in the way");
         assert!(!hit(b.gap_m.v * 0.5 - 0.3), "the gap is as wide as stated");
+    }
+
+    #[test]
+    fn road_is_mud_exactly_where_the_crossing_says() {
+        let d = def();
+        let c = generate(&d).expect("course");
+        let m = &d.road.mud_crossings[0];
+        let mut arc = vec![0.0];
+        for w in c.road.windows(2) {
+            arc.push(arc[arc.len() - 1] + scalar::hypot(w[1].0 - w[0].0, w[1].1 - w[0].1));
+        }
+        let total = arc[arc.len() - 1];
+        let (a, b) = (m.at_fraction.v * total - m.length_m.v * 0.5, m.at_fraction.v * total + m.length_m.v * 0.5);
+        let (mut inside, mut outside) = (0, 0);
+        for (p, s) in c.road.iter().zip(&arc) {
+            let soft = c.world.material_at(p.0, p.1).soil.is_some();
+            if *s > a + 1.5 && *s < b - 1.5 {
+                assert!(soft, "road at arc {s} should be mud");
+                inside += 1;
+            } else if *s < a - 1.5 || *s > b + 1.5 {
+                assert!(!soft, "road at arc {s} should be firm");
+                outside += 1;
+            }
+        }
+        assert!(inside > 15 && outside > 300);
     }
 }

@@ -15,6 +15,8 @@
 
 - `w5k world export` + `docs/swarm/requests/world-viewer-terrain.md` (format `w5k-terrain-1`, no contract change: `WorldHeader.terrain` already exists). ARCH asks: (1) terrain in the replay header, then (2) land #41 and a mud/barricade section.
 
+- Road mud crossing (25 m at 35% of the road, `road.mud_crossings` in the course RON) so the truck crosses soft ground on the road; test `road_is_mud_exactly_where_the_crossing_says`. The slice golden hash changed deliberately (course content added), constant updated in the same PR.
+
 ## Blocked
 - Nothing.
 

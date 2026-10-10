@@ -23,6 +23,10 @@ CourseDef(
         shoulder_m: Param(v: 5.0, prov: Spec, src: "course design: blend from road to terrain"),
         max_grade: Param(v: 0.08, prov: Spec, src: "course design: road grade limit, 8 percent"),
         surface: "asphalt",
+        mud_crossings: [MudCrossing(
+            at_fraction: Param(v: 0.35, prov: Spec, src: "course design: a washed-out stretch before the barricade"),
+            length_m: Param(v: 25.0, prov: Spec, src: "course design: long enough for the truck to feel the soil law"),
+        )],
     ),
     mud: Some(MudDef(
         min_drainage_cells: Param(v: 260.0, prov: Spec, src: "course design: upslope cells draining through a cell before it is boggy"),
