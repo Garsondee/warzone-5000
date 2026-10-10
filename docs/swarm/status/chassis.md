@@ -13,8 +13,7 @@
 
 - Build step 2: `suspension` (all spring kinds, damper, dry friction, bump stop, hard limit) + `tuning.ron` Params (this PR).
 
-- Contract-v0.2 merged into the build branch; tyre uses `speed_floor_m_s` and `aligning_trail_frac` from `TyreDef`.
-- Build step 3: `tyre` (`ContactElement`: patch-stretch relaxation, friction circle, rolling resistance, aligning moment) + `slip_damping_time_s` Param.
+- Build step 3: `tyre` (patch stretch, friction circle, rolling resistance, aligning moment; contract-v0.2 `TyreDef` fields).
 
 - Build step 4: `hull` (6-DoF body, wrench accumulation, angular-momentum state carrying the gyroscopic term).
 
@@ -36,7 +35,7 @@
 
 ## Owner instructions received
 - 2026-10-10 (owner, in chat): "go ahead with the hull".
-- ARCH (2026-10-10): CCR-1..3 accepted in principle; keep tyre extras local, loaded from RON, tagged PROVISIONAL(CCR-chassis-1..3); rolling-resistance fade speed must be a `Param`.
+- ARCH (2026-10-10): CCR-1..3 landed in contract-v0.2 (applied); rolling-resistance fade speed is a `Param` (done).
 
 ## Handoff note (fill in when you stop)
 - (fill in at M1)
