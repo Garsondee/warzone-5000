@@ -56,7 +56,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some("view") => view(&args[1..]),
         Some("fixtures") => fixtures(&args[1..]),
         Some("mobility") => mobility(&args[1..]),
-        _ => Err("usage: w5k world preview|export|stats|view|mobility <course.ron> --out DIR [--step N] [--size WxH] [--vehicle spec.ron] | w5k world fixtures --out DIR"
+        _ => Err("usage: w5k world preview|export|stats|view|mobility <course.ron> --out DIR [--step N] [--size WxH] [--mesh TOL_M] [--vehicle spec.ron] | w5k world fixtures --out DIR"
             .to_string()),
     }
 }
@@ -64,12 +64,16 @@ pub fn run(args: &[String]) -> Result<(), String> {
 /// A heightfield mesh for the viewers: every `step`-th node of the grid (heights rounded to the millimetre, the viewer never sees more
 /// than it can draw), the material id per node and names, and the props. Plan x runs along `x_m`, z along `z_m`; `+Y` is up.
 fn export(args: &[String]) -> Result<(), String> {
-    let (mut file, mut out, mut step) = (None, None, 2usize);
+    let (mut file, mut out, mut step, mut mesh_tol) = (None, None, 2usize, None);
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--out" => out = it.next().map(PathBuf::from),
             "--step" => step = it.next().and_then(|v| v.parse().ok()).ok_or("--step needs a whole number")?,
+            "--mesh" => {
+                mesh_tol =
+                    Some(it.next().and_then(|v| v.parse::<f64>().ok()).ok_or("--mesh needs a tolerance in metres")?)
+            }
             _ => file = Some(a.clone()),
         }
     }
@@ -108,7 +112,18 @@ fn export(args: &[String]) -> Result<(), String> {
             serde_json::json!({"id": p.id.0, "kind": format!("{:?}", p.kind), "shape": shape, "pos_m": [mm(t.x), mm(t.y), mm(t.z)], "rot_wxyz": [q.w, q.x, q.y, q.z]})
         })
         .collect();
-    let doc = serde_json::json!({
+    // The decimated mesh (V1): `vertices_m` is x, y, z per vertex, `indices` three per triangle (counter-clockwise seen from above).
+    let mesh = mesh_tol.map(|tol| {
+        let m = w5k_world::mesh::build(w, tol);
+        let (worst, _) = w5k_world::mesh::check(w, &m);
+        serde_json::json!({
+            "tolerance_m": tol, "max_error_m": mm(worst), "triangles": m.triangles.len(),
+            "vertices_m": m.vertices.iter().flatten().map(|&v| mm(v)).collect::<Vec<_>>(),
+            "indices": m.triangles.iter().flatten().collect::<Vec<_>>(),
+            "face_materials": m.material,
+        })
+    });
+    let mut doc = serde_json::json!({
         "format": "w5k-terrain-1",
         "course": def.name,
         "seed": def.seed,
@@ -124,6 +139,9 @@ fn export(args: &[String]) -> Result<(), String> {
         "road_m": course.road.iter().step_by(step).map(|r| [mm(r.0), mm(r.2), mm(r.1)]).collect::<Vec<_>>(),
         "props": props,
     });
+    if let Some(m) = mesh {
+        doc["mesh"] = m;
+    }
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     let path = out.join("terrain.json");
     std::fs::write(&path, serde_json::to_string(&doc).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
@@ -141,12 +159,16 @@ fn export(args: &[String]) -> Result<(), String> {
 }
 
 fn view(args: &[String]) -> Result<(), String> {
-    let (mut file, mut out, mut step, mut size) = (None, None, None, (960usize, 540usize));
+    let (mut file, mut out, mut step, mut size, mut mesh_tol) = (None, None, None, (960usize, 540usize), None);
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--out" => out = it.next().map(PathBuf::from),
             "--step" => step = Some(it.next().and_then(|v| v.parse().ok()).ok_or("--step needs a whole number")?),
+            "--mesh" => {
+                mesh_tol =
+                    Some(it.next().and_then(|v| v.parse::<f64>().ok()).ok_or("--mesh needs a tolerance in metres")?)
+            }
             "--size" => {
                 let v = it
                     .next()
@@ -162,8 +184,20 @@ fn view(args: &[String]) -> Result<(), String> {
     let course = generate(&def)?;
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     let step = step.unwrap_or_else(|| (course.world.n() / VIEW_NODES_ACROSS).max(1));
+    let mesh = mesh_tol.map(|tol| w5k_world::mesh::build(&course.world, tol));
+    if let Some(m) = &mesh {
+        println!(
+            "mesh: {} triangles, {} vertices within {} m of every node",
+            m.triangles.len(),
+            m.vertices.len(),
+            m.tolerance_m
+        );
+    }
     for (name, cam) in w5k_world::render::stock_cameras(&course) {
-        let cv = w5k_world::render::render(&course, &cam, size.0, size.1, step);
+        let cv = match &mesh {
+            Some(m) => w5k_world::render::render_mesh(&course, &cam, size.0, size.1, m),
+            None => w5k_world::render::render(&course, &cam, size.0, size.1, step),
+        };
         let path = out.join(format!("view-{name}.png"));
         let f = std::fs::File::create(&path).map_err(|e| e.to_string())?;
         let mut enc = png::Encoder::new(std::io::BufWriter::new(f), cv.w as u32, cv.h as u32);
@@ -172,7 +206,7 @@ fn view(args: &[String]) -> Result<(), String> {
         enc.set_color(png::ColorType::Rgb);
         enc.set_depth(png::BitDepth::Eight);
         enc.write_header().map_err(|e| e.to_string())?.write_image_data(&cv.rgb).map_err(|e| e.to_string())?;
-        println!("wrote {} ({} x {} px, mesh step {step})", path.display(), cv.w, cv.h);
+        println!("wrote {} ({} x {} px)", path.display(), cv.w, cv.h);
     }
     Ok(())
 }
@@ -959,6 +993,34 @@ mod tests {
             assert!(uses.iter().any(|u| u == "bridge:Road"), "{} uses the road bridge", v["vehicle"]);
         }
         assert!(std::fs::metadata(dir.join("mobility.png")).expect("png").len() > 5_000);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn export_with_a_mesh_tolerance_adds_a_decimated_mesh_that_stays_within_it() {
+        let dir = std::env::temp_dir().join(format!("w5k-world-meshexport-{}", std::process::id()));
+        let course = format!("{}/../../content/world/courses/slice.ron", env!("CARGO_MANIFEST_DIR"));
+        let args = [
+            course,
+            "--out".into(),
+            dir.to_str().expect("utf8").into(),
+            "--step".into(),
+            "4".into(),
+            "--mesh".into(),
+            "0.5".into(),
+        ];
+        export(&args).expect("export");
+        let doc: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("terrain.json")).expect("read")).expect("json");
+        let m = &doc["mesh"];
+        let tris = m["triangles"].as_u64().expect("count") as usize;
+        assert_eq!(m["indices"].as_array().expect("indices").len(), 3 * tris);
+        assert_eq!(m["face_materials"].as_array().expect("materials").len(), tris);
+        assert!(
+            m["max_error_m"].as_f64().expect("error") <= 0.5 + 1e-3,
+            "within the stated tolerance (to the millimetre)"
+        );
+        assert!(tris < 100_000, "decimated: {tris} triangles");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

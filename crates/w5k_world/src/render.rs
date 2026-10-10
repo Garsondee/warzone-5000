@@ -11,6 +11,7 @@ use w5k_contract::world::{PropKind, PropShape, WorldQuery};
 use w5k_math::{scalar, Vec3};
 
 use crate::course::Course;
+use crate::mesh::TerrainMesh;
 use crate::plot::Canvas;
 
 // Display-only look: colours, light and fog.
@@ -293,15 +294,43 @@ pub fn render(course: &Course, cam: &Camera, w: usize, h: usize, step: usize) ->
             }
         }
     }
+    draw_props(&mut fr, world);
+    fr.cv
+}
+
+/// As [`render`], but the terrain is the decimated `mesh` (one flat face per triangle, coloured by the face's material).
+pub fn render_mesh(course: &Course, cam: &Camera, w: usize, h: usize, mesh: &TerrainMesh) -> Canvas {
+    let world = &course.world;
+    let mut fr = Frame::new(cam, w, h);
+    let (y_lo, y_hi) = (world.bounds().0.y, world.bounds().1.y);
+    for (t, &id) in mesh.triangles.iter().zip(&mesh.material) {
+        let v = t.map(|i| {
+            let p = mesh.vertices[i as usize];
+            Vec3::new(p[0], p[1], p[2])
+        });
+        let c = (v[0] + v[1] + v[2]) * (1.0 / 3.0); // const-ok: centroid
+        if let Some(s) = world.water_surface_m(c.x, c.z) {
+            fr.triangle(v.map(|p| Vec3::new(p.x, s, p.z)), WATER_RGB);
+        } else {
+            let name = &world.materials().materials[usize::from(id)].name;
+            let dark = in_shadow(world, c, fr.light, y_hi);
+            fr.triangle_shadowed(v, ground_colour(name, c.y, y_lo), dark);
+        }
+    }
+    draw_props(&mut fr, world);
+    fr.cv
+}
+
+fn draw_props(fr: &mut Frame, world: &crate::grid::GridWorld) {
     for p in world.props() {
         let (pos, rot) = (p.transform.pos, p.transform);
         match (p.kind, p.shape) {
             (PropKind::Tree, PropShape::Cylinder { radius_m, height_m }) => {
-                prism(&mut fr, pos, radius_m, radius_m, 0.0, CANOPY_START * height_m, TRUNK_RGB);
-                prism(&mut fr, pos, CANOPY_OVER_TRUNK * radius_m, 0.0, CANOPY_START * height_m, height_m, LEAF_RGB);
+                prism(fr, pos, radius_m, radius_m, 0.0, CANOPY_START * height_m, TRUNK_RGB);
+                prism(fr, pos, CANOPY_OVER_TRUNK * radius_m, 0.0, CANOPY_START * height_m, height_m, LEAF_RGB);
             }
             (_, PropShape::Cylinder { radius_m, height_m }) => {
-                prism(&mut fr, pos, radius_m, radius_m, 0.0, height_m, OTHER_RGB)
+                prism(fr, pos, radius_m, radius_m, 0.0, height_m, OTHER_RGB)
             }
             (_, PropShape::Sphere { radius_m }) => {
                 let yaw = f64::from(p.id.0) * GOLDEN_ANGLE_RAD;
@@ -327,7 +356,6 @@ pub fn render(course: &Course, cam: &Camera, w: usize, h: usize, step: usize) ->
             }
         }
     }
-    fr.cv
 }
 
 /// A vertical prism or cone frustum from `y0` to `y1` above `base` with bottom and top radii.
