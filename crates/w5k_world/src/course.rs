@@ -156,7 +156,7 @@ const STAND_NOISE_EDGES: (f64, f64) = (-0.15, 0.35); // const-ok: shape of the c
 const STANDS_SALT: u64 = 0x7EEE; // const-ok: noise stream label
 
 /// A rock's centre sits this fraction of its radius above the ground, so it is partly buried and presents a rounded face.
-const BURIAL: f64 = 0.4; // const-ok: how deep rocks sit in the ground
+pub const BURIAL: f64 = 0.4; // const-ok: how deep rocks sit in the ground
 
 /// Headroom on a cliff zone's axis limit over the face grade plus the hills' own slope.
 const CLIFF_LIMIT_SLACK: f64 = 1.1; // const-ok: margin so the clamp never shaves the face it is told to allow
