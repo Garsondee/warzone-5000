@@ -195,6 +195,16 @@ impl PhysRig {
                 "substeps must be 1..={MAX_SUBSTEPS} (a rig that needs more is a numerically unstable design)"
             ));
         }
+        if let Some(f) = self.integration.f_max_hz {
+            if !(f > 0.0 && finite(f)) {
+                e.push("integration.f_max_hz must be positive and finite".into());
+            } else if f64::from(self.integration.substeps) * TICK_HZ < SAMPLES_PER_PERIOD * f {
+                e.push(format!(
+                    "integration.substeps ({}) does not cover f_max_hz {f:.1} Hz (the rule needs substeps * {TICK_HZ} >= {SAMPLES_PER_PERIOD} * f_max)",
+                    self.integration.substeps
+                ));
+            }
+        }
         names_unique(self.stations.iter().map(|s| s.name.as_str()), "station", &mut e);
         names_unique(self.tracks.iter().map(|t| t.name.as_str()), "track", &mut e);
         names_unique(self.articulation.iter().map(|j| j.name.as_str()), "joint", &mut e);
