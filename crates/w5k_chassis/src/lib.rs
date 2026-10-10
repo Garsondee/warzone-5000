@@ -4,3 +4,5 @@
 //!
 //! Status: SKELETON, created by the Launch Kit. Read your lane brief first:
 //! `docs/swarm/lanes/chassis.md`. Only lane CHASSIS edits this crate (`docs/swarm/ownership.toml`).
+
+pub mod quarter_car;
