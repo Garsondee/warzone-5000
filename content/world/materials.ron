@@ -46,4 +46,11 @@
         rolling_coeff: Param(v: 0.08, lo: 0.04, hi: 0.15, prov: Estimate, src: "UNVALIDATED stand-in; the water's own drag is the water model's job, not this number"),
         roughness_rms_m: Param(v: 0.05, lo: 0.02, hi: 0.1, prov: Estimate, src: "UNVALIDATED stand-in"),
     ),
+    MaterialDef(
+        name: "planks",
+        mu_peak: Param(v: 0.5, lo: 0.3, hi: 0.7, prov: Estimate, src: "UNVALIDATED stand-in; weathered wooden decking, slick when wet"),
+        mu_slide: Param(v: 0.4, lo: 0.25, hi: 0.6, prov: Estimate, src: "UNVALIDATED stand-in"),
+        rolling_coeff: Param(v: 0.02, lo: 0.01, hi: 0.05, prov: Estimate, src: "UNVALIDATED stand-in"),
+        roughness_rms_m: Param(v: 0.02, lo: 0.01, hi: 0.05, prov: Estimate, src: "UNVALIDATED stand-in; gaps and cupped boards"),
+    ),
 ]
