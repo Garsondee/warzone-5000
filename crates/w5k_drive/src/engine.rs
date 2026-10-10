@@ -54,6 +54,7 @@ pub struct Engine {
     demand: f64,
     idle_i: f64,
     torque_nm: f64,
+    running: bool,
 }
 
 impl Engine {
@@ -93,6 +94,7 @@ impl Engine {
             demand: 0.0,
             idle_i: 0.0,
             torque_nm: 0.0,
+            running: true,
         })
     }
 
@@ -108,6 +110,13 @@ impl Engine {
     /// Torque the engine produced in the last step, N m (positive drives).
     pub fn torque_nm(&self) -> f64 {
         self.torque_nm
+    }
+    /// Key on or off. A stopped engine has no idle controller and burns no fuel; it still drags (compression) until it stops.
+    pub fn set_running(&mut self, on: bool) {
+        self.running = on;
+    }
+    pub fn is_running(&self) -> bool {
+        self.running
     }
     pub fn set_omega_rad_s(&mut self, w: f64) {
         self.omega = w.max(0.0);
@@ -161,7 +170,8 @@ impl Engine {
     /// A coupling uses this to choose its torque before the flywheel moves.
     pub fn prepare(&mut self, dt_s: f64, throttle: f64) -> EnginePrep {
         let thr_cmd = clamp(throttle, 0.0, 1.0);
-        let thr_idle = if self.free_output {
+        let thr_cmd = if self.running { thr_cmd } else { 0.0 };
+        let thr_idle = if self.free_output || !self.running {
             0.0
         } else {
             let err = self.idle_w - self.omega;

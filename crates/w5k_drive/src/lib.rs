@@ -3,10 +3,16 @@
 //! Powertrain and brakes: engine map, clutch or converter, gearbox, diffs, tracked steering units, brakes with heat, fuel.
 //! Read the design note: `docs/lanes/drive/design-note.md`. Only lane DRIVE edits this crate (`docs/swarm/ownership.toml`).
 
+pub mod bench;
 pub mod brakes;
 pub mod coupling;
+pub mod driveline;
 pub mod engine;
 pub mod gearbox;
+pub mod powertrain;
+
+/// Brake temperature before the first step (replaced by `DriveInputs::ambient_k` from the first step on): ISA sea level.
+pub(crate) const AMBIENT_FALLBACK_K: f64 = w5k_contract::ports::DEFAULT_AMBIENT_K;
 
 #[cfg(test)]
 mod testkit {
