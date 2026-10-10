@@ -1,0 +1,8 @@
+// Automatic shift-logic settings shared by every gearbox.
+ShiftTuning(
+    light_throttle_shift_scale: Param(v: 0.7, lo: Some(0.5), hi: Some(0.95), prov: Estimate, src: "an automatic shifts at this fraction of its full-throttle rpm on a closed throttle, rising linearly to 1 at full throttle (economy shift map)"),
+    kickdown_throttle: Param(v: 0.9, lo: Some(0.8), hi: Some(1.0), prov: Estimate, src: "pedal position above which the automatic drops a gear for acceleration if the engine can take it"),
+    hysteresis_margin_rpm: Param(v: 150.0, lo: Some(50.0), hi: Some(400.0), prov: Estimate, src: "a shift is refused if it would land within this many rpm of the opposite shift point (prevents hunting)"),
+    min_gear_dwell_s: Param(v: 1.0, lo: Some(0.3), hi: Some(3.0), prov: Estimate, src: "least time between two shifts"),
+    reverse_engage_max_speed_m_s: Param(v: 1.0, lo: Some(0.2), hi: Some(3.0), prov: Estimate, src: "reverse (and drive from reverse) engages only below this road speed, as a synchro or lock-out does"),
+)
