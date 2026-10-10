@@ -9,6 +9,7 @@ pub mod bench;
 pub mod hull;
 pub mod modes;
 pub mod quarter_car;
+pub mod soil_wheel;
 pub mod steering;
 pub mod suspension;
 pub mod tuning;
