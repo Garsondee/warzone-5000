@@ -1,17 +1,19 @@
 # Status: VALIDATION
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/validation/build | **Contract pinned:** contract-v0.1 | **Phase:** building
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/validation/harness | **Contract pinned:** contract-v0.1 | **Phase:** building
 
 ## Done
 - Spike S9 (`docs/lanes/validation/spike-s9.md`), design note with CCR text (`design-note.md`), theory note stub (`docs/theory/validation.md`).
 
 ## In progress
-- PR #14 (settling) merged. PR #16: dossier loader and M998 dossier (22 entries: 18 scored, all Secondary/UNVERIFIED, 4 Cross).
+- PR #14 (settling) and #16 (dossier loader, M998 dossier) merged.
+- Harness v0 PR: verdict classes, replay measurement, scoring, `w5k validation dashboard --out DIR` (self-contained HTML). Image: `docs/lanes/validation/media/dashboard-v0.png`.
 
 ## Blocked
 - Nothing blocking. Primary sources are unreachable from lane sessions (proxy denies army.mil, DTIC, archive.org, Wikipedia, globalsecurity.org).
 
 ## Next
+0. Harness v0 follow-ups: run on CHASSIS's Mule replay when it lands (`--replay FILE --top-speed-run` only for a real top-speed drive); scenario scripts (standing start, braking, gradient bisection).
 1. (done in PR #16) dossier loader plus M998 dossier.
 2. Scenario measurement on the stand-in model; verdicts with the double-power negative control.
 3. M113A3 and M4A3 dossiers (about 14 and 12 quantities reachable: under the 25 target).

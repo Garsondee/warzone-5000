@@ -2,9 +2,10 @@ import { buildRig, applyVehicle, poseRig, sample, makeScene } from './viewer.js'
 import { decodeReplay } from './replay.js';
 import { makeDebug, updateHud } from './debug.js';
 import { makeScope } from './scope.js';
+import { makeLook } from './look.js';
 import * as THREE from 'three';
 
-const { rig, replay: b64 } = JSON.parse(document.getElementById('data').textContent);
+const { rig, replay: b64, look: lookData } = JSON.parse(document.getElementById('data').textContent);
 const replay = decodeReplay(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
 const canvas = document.getElementById('c');
 const W = canvas.clientWidth || innerWidth, H = canvas.clientHeight || innerHeight;
@@ -12,6 +13,15 @@ const { renderer, scene, camera } = makeScene(canvas, W, H);
 camera.setViewOffset(W, H, 0, 110, W, H); // lift the picture above the scope panel
 const built = buildRig(rig);
 scene.add(built.root);
+// Camo: the livery in the replay header (scheme id, seed) if there is one, else the first scheme.
+const livery = replay.header.vehicles[0].livery;
+const camo = makeLook(lookData, built.paint);
+camo.set({ scheme: livery && camo.schemes.includes(livery.camo) ? livery.camo : camo.schemes.includes('woodland') ? 'woodland' : camo.schemes[0], seed: livery ? Number(BigInt.asUintN(32, BigInt(livery.seed))) : 1 });
+const schemeEl = document.getElementById('scheme'), seedEl = document.getElementById('seed'), camoEl = document.getElementById('t_camo');
+camo.schemes.forEach((s) => schemeEl.add(new Option(s, s)));
+schemeEl.value = camo.state.scheme; seedEl.value = camo.state.seed;
+const relook = () => { camo.set({ scheme: schemeEl.value, seed: Number(seedEl.value) || 0, on: camoEl.checked }); renderAt(t); };
+schemeEl.onchange = seedEl.onchange = camoEl.onchange = relook;
 const debug = makeDebug(scene, built, replay.header);
 const scope = makeScope(document.getElementById('scope'), replay, (tt) => { t = tt; renderAt(t); });
 for (const k of Object.keys(debug.flags)) document.getElementById('t_' + k).onchange = (e) => { debug.flags[k] = e.target.checked; renderAt(t); };
@@ -19,7 +29,7 @@ const duration = (replay.frames.length - 1) * replay.header.frame_dt_s;
 
 // Camera state: orbit (drag to turn, wheel to zoom) around the vehicle, or chase (behind the hull, follows its heading).
 let freeze = false;
-const cam = { mode: 'orbit', yaw: 0.6, pitch: 0.35, dist: 14 };
+const cam = { mode: 'orbit', yaw: 0.6, pitch: 0.35, dist: Math.max(6, 3.2 * built.radius) }; // frame the whole vehicle
 const look = new THREE.Vector3(), eye = new THREE.Vector3(), back = new THREE.Vector3();
 function placeCamera() {
   const p = built.root.position;
@@ -102,8 +112,9 @@ function worldShift(name, delta) {
 }
 const jointAt = (name, t) => { const j = built.nodes.find((n) => n.def.name === name).def.joint; const s = sample(replay, t); return s.f0.vehicles[0].joints[j.index]; };
 window.__v = {
+  setLook: (o) => { camo.set(o); renderAt(t); }, schemes: camo.schemes,
   setDebug: (on) => { debug.group.visible = on; }, only, jointPixels, worldShift, meshCount, jointAt, setFreeze: (f) => { freeze = f; },
-  renderAt, duration, poseOf, setCamera: (m) => Object.assign(cam, m),
+  renderAt, duration, poseOf, setCamera: (m) => { Object.assign(cam, m); if (m.mode) ui('cam').value = m.mode; },
   nodeNames: built.nodes.map((n) => n.def.name),
   triangles: built.triangles, expectedTriangles: rig.meshes.reduce((s, m) => s + m.indices.length / 3, 0),
   renderer: gl.getParameter(gl.VERSION), frames: replay.frames.length,

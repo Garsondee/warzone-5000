@@ -2,23 +2,20 @@
 
 *Update with every PR. Keep it under 40 lines. ARCH reads this file at every check-in instead of your whole session.*
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/chassis/build | **Contract pinned:** f8f5e5d (0.1.1) | **Phase:** settling round, awaiting review
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/chassis/build | **Contract pinned:** 80adac2 (0.2.0) | **Phase:** build (M1)
 
 ## Done
-- Spike S1 (`spikes/chassis/s1`, `docs/lanes/chassis/spike-s1.md`): stable above ~50 Hz for the 12 Hz hop mode; frequency error under 0.1%, damping under 1%, drift under 0.04%/min; rule `ceil(20 f_max/60)` confirmed; relaxation-length friction holds a 10% grade, Coulomb sign(v) creeps.
-- Design note `docs/lanes/chassis/design-note.md` with the glue API and three CCRs (text only).
-
-- Build step 1: `quarter_car` bench with its four oracle tests (this PR).
-
-- Build step 2: `suspension` (all spring kinds, damper, dry friction, bump stop, hard limit) + `tuning.ron` Params (this PR).
-
-- Build step 3: `tyre` (patch stretch, friction circle, rolling resistance, aligning moment; contract-v0.2 `TyreDef` fields).
-
-- Build step 4: `hull` (6-DoF body, wrench accumulation, angular-momentum state carrying the gyroscopic term).
+- Spike S1 + design note (PR #7): substep rule `ceil(20 f_max/60)`; relaxation-length friction holds a 10% grade.
+- Steps 1-4 merged (#13, #30): `quarter_car`, `suspension`, `tyre`, `hull`, each with its oracle tests; `tuning.ron` Params.
+- Step 5a (PR A): `wheeled` assembly + `steering` (Ackermann). Tests: ride height, axle loads, braking distance, braking load transfer,
+  Ackermann radius, step steer, hump without bottoming. Contract now 0.2.0 (`80adac2`).
+- Step 5b (PR B, stacked on A; split to stay under 400 lines): `w5k chassis strip` drives FORGE's Mule on WORLD's DataStrip (stand-in
+  powertrain), writes replay + CSV; plots and a clip frame in `docs/lanes/chassis/media/`.
 
 ## In progress
-- Next PR: `wheeled` assembly (four stations on the bump strip).
-- Not yet used: `TyreDef.kappa_peak` / `alpha_peak_rad` (curve is linear to the circle cap). Watch: spin <-> patch-stretch coupling is a ~25 Hz oscillator at ~4 substeps (stable, w dt ~0.7); recheck in the assembly.
+- Next: the ledger (step 6), `steady_turn_lateral_load_transfer_matches_m_ay_h_over_track`, DRIVE's real DrivePort when it lands.
+- Simplifications to revisit: unsprung inertia uses the previous substep's hull acceleration (translation only); `kappa_peak`/`alpha_peak_rad` unused;
+  the viewer draws the strip flat until WORLD exports terrain.
 
 ## Blocked
 - Nothing.
