@@ -1,0 +1,48 @@
+{
+  "id": "desert_three",
+  "pattern": {
+    "octaves": 3,
+    "lacunarity": 2.0,
+    "gain": 0.5
+  },
+  "scale_m": 0.7,
+  "seed_salt": 13,
+  "colours": [
+    {
+      "name": "sand",
+      "linear": [
+        0.45078578283822346,
+        0.32314320911295075,
+        0.162029375639111
+      ],
+      "coverage": 0.5,
+      "prov": "Estimate",
+      "band_de": 6.0,
+      "src": "light sand of three-colour desert schemes, hand-read"
+    },
+    {
+      "name": "tan_brown",
+      "linear": [
+        0.25415209433082675,
+        0.15292615199615017,
+        0.06480326669290577
+      ],
+      "coverage": 0.3,
+      "prov": "Estimate",
+      "band_de": 6.0,
+      "src": "tan-brown, hand-read"
+    },
+    {
+      "name": "olive_drab",
+      "linear": [
+        0.1559264637078274,
+        0.14412847085805777,
+        0.0595112381629812
+      ],
+      "coverage": 0.2,
+      "prov": "Estimate",
+      "band_de": 6.0,
+      "src": "olive-drab accent, hand-read"
+    }
+  ]
+}

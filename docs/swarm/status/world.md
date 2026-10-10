@@ -7,7 +7,7 @@
 - Design note `docs/lanes/world/design-note.md`; CCR text `docs/swarm/requests/world-ccr-materials-props.md`.
 
 ## In progress
-- Opening the settling PR into `integration`.
+- PR 17 (settling) merged. Branch `lane/world/build`: data-driven bump strip (`strip.rs`, `content/world/strips/standard.ron`, `content/world/materials.ron`), matches the stand-in to 1e-12 (`data_strip_matches_the_stand_in_strip_everywhere`). Materials are UNVALIDATED stand-ins until the cited soil table (next).
 
 ## Blocked
 - Nothing.

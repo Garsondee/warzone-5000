@@ -7,4 +7,6 @@ ChassisTuning(
         src: "numerical floor for the polytropic gas volume; a hydropneumatic strut never reaches 5% of its rest volume before the hard stop"),
     rolling_fade_speed_m_s: Param(v: 0.2, lo: 0.05, hi: 0.5, prov: Estimate,
         src: "speed over which rolling resistance fades to zero at standstill (tanh scale), so a parked truck is not pushed backwards; PROVISIONAL(CCR-chassis-1)"),
+    slip_damping_time_s: Param(v: 0.005, lo: 0.001, hi: 0.02, prov: Estimate,
+        src: "damping on the rate of tyre patch stretch, as a fraction of the stretch stiffness; 5 ms gives a stopped 2.5 t truck a damping ratio of about 0.05 on its tyres"),
 )

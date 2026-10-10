@@ -1,0 +1,11 @@
+// Preview colours by material slot kind, for pictures and the GLB export only (lane LOOK owns the real materials). Linear-ish RGB, 0 to 1.
+// Provenance ESTIMATE: any plausible olive-drab vehicle palette will do.
+[
+    (Paint, (0.30, 0.34, 0.22)),
+    (Metal, (0.45, 0.46, 0.47)),
+    (Rubber, (0.10, 0.10, 0.10)),
+    (Glass, (0.30, 0.45, 0.55)),
+    (Canvas, (0.50, 0.46, 0.34)),
+    (Optics, (0.85, 0.80, 0.55)),
+    (Track, (0.18, 0.17, 0.15)),
+]
