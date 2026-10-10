@@ -43,5 +43,21 @@ The truck drives straight at 2 m/s at a vertical step, and the runner bisects (t
 
 The stand-in world's step is the contract's `Plateau` feature with a 2 cm ramp (the nearest to a vertical face it offers).
 
+## Skidpad
+A truck on a circle needs a centripetal force `m v^2 / R` from its tyres, so the lateral acceleration is `a_y = v^2 / R` and cannot exceed `mu g` (the tyres' friction) or `g t / (2 h)` (the roll limit: the same ratio as the side-slope test, since centripetal acceleration in the truck's frame acts like a tilt of `atan(a_y / g)`). The runner sets the steer command to the Ackermann angle of a 10 m circle (`atan(wheelbase / R)` as a share of full lock), then CHASSIS's `bench::skidpad` creeps the speed up at 0.15 m/s per second so each moment is close to a steady turn. Understeer gradient `K` is the slope of `delta - L/R` against `a_y` over the linear range (positive means the driver must add steering as speed rises: the truck understeers). The result echoes `mu`, `radius_m` (turned at the limit, `v / yaw rate`), `track_m`, `cg_height_m` and the static `front_load_fraction`.
+
+Two things this test taught about measuring a limit. First, a truck that understeers never spins: at its grip limit it ploughs wide, speed keeps rising and `a_y` stays flat (the Mule: plateau at 0.84 g for 70 s), so the bench's "slid out" rule never fires and the limit has to be read as a plateau. Second, the instant before a real spin-out `v * yaw rate` stops measuring the path (the tail swings round and reads 0.2 g of grip that is not there: the Scout's raw maximum is 0.98 g on a 0.85 surface). So the limit is the best **median** over 3 s, which ignores anything shorter than 1.5 s. The result also says how the run ended (`limited_by`): `slide-out`, `grip plateau`, or `power` (the Hauler's engine cannot push it past 7 m/s on a 10 m circle because a slid tyre's drag eats the 100 kW: its 0.58 g is a lower bound, not its grip).
+
+Measured: Mule 0.84 g (understeer gradient +0.012 rad/g), Scout 0.78 g (+0.019), Hauler 0.58 g, power-limited (+0.016). All understeer, as a front-heavy light truck should.
+
+![Lateral acceleration against time on the skidpad](media/proving-skidpad.png)
+
+*Straight rise as the speed ramps, then a flat top. The Scout's jump to 0.98 g at 101 s is the spin-out transient that the median rejects; the Hauler's top is flat because its speed stopped rising.*
+
+## Gradeability
+Two things can stop a truck on a slope of angle `a`. **Traction**: the driven wheels can push with at most `mu f m g cos a` (`f` = share of the weight on driven wheels) against a gravity pull of `m g sin a`, so `tan a <= mu f`: 0.85 to 0.9 for these all-wheel-drive trucks. **Torque**: the wheels push with `F = T / r` and must beat gravity plus rolling resistance, `F = m g (sin a + c cos a)`; solve for `a`. The runner tilts gravity about the lateral axis (the same trick as the side-slope test, an inclined plane without a ramp mesh), holds the truck with the parking brake, releases it with full throttle in drive, and counts it as holding if it has climbed 1 m after 5 s. A bisection to 0.01 finds the steepest grade it can start on. `wheel_torque_crawl_nm` is the most the driveline can put on all wheels together: peak engine torque times the converter's stall multiplication (an upper bound) times first gear and the gearbox efficiency, down through the differentials (each splits what it passes) and final drives.
+
+Measured against `min(mu f, torque)`: Mule 0.63 (bound 0.90 by traction), Hauler 0.38 (bound 0.71 by torque), Scout 0.28 (bound 0.38 by torque). The Hauler gets only 53 % of its torque bound and the Scout 73 %: the converter does not deliver the stall torque the bound assumes, and the engine is not at its torque peak at crawl speed. A negative control (half the tyre friction) must make every truck climb no more than half as much traction allows; a test checks it.
+
 ## Determinism and early ends
 Every test is run twice and the two final state hashes and results must be identical. A run that rolls over, produces a NaN, cannot reach its entry speed or does not stop in time is written with `ended_early` set and no measurements (the scorer makes the whole test red). A test with no runner yet says `not implemented` and writes nothing.
