@@ -6,7 +6,8 @@ use w5k_contract::def::{SuspensionKind, TrackedDef, VehicleDef};
 use w5k_contract::rig::*;
 use w5k_math::{scalar, Transform, Vec3};
 
-use crate::compile::{axle_loads, hull_body, need, powertrain_parts, Compiled, J_PER_KJ, MAX_SUBSTEPS};
+use crate::budget::{hull_body, sprung};
+use crate::compile::{axle_loads, need, powertrain_parts, Compiled, J_PER_KJ, MAX_SUBSTEPS};
 use crate::extras::Extras;
 
 const PITCH_TOLERANCE: f64 = 0.01; // const-ok: coherence tolerance between the sprocket diameter and its teeth count
@@ -50,7 +51,6 @@ pub(crate) fn tracked(def: &VehicleDef, t: &TrackedDef, ex: &Extras) -> Result<C
     // ---- frame, as in the wheeled compile (datum at the hull box centre, +Z back)
     let z_of = |from_front: f64| from_front - 0.5 * h.length_m.v;
     let ride_height = h.ground_clearance_m.v + 0.5 * h.height_m.v;
-    let com = Vec3::new(0.0, h.com_height_m.v - ride_height, z_of(h.com_from_front_m.v));
     let (n, d_rw, th) = (usize::from(t.road_wheels_per_side), t.road_wheel_diameter_m.v, tx.belt_thickness_m.v);
     let r_rw = 0.5 * d_rw;
     let (z_spr, z_idl) = (z_of(tx.sprocket_from_front_m.v), z_of(tx.idler_from_front_m.v));
@@ -61,7 +61,9 @@ pub(crate) fn tracked(def: &VehicleDef, t: &TrackedDef, ex: &Extras) -> Result<C
     }
     let z_c = 0.5 * (z_spr + z_idl);
     let z_road: Vec<f64> = (0..n).map(|k| z_c + dir * (k as f64 - 0.5 * (n - 1) as f64) * spacing).collect();
-    let loads = axle_loads(&z_road, com.z, h.mass_kg.v * g)?;
+    let sprung_mass = sprung(def, ex, ride_height, &[z_spr, z_spr])?; // one final drive per sprocket
+    let (m_sprung, com) = (sprung_mass.mass_kg, sprung_mass.com_m);
+    let loads = axle_loads(&z_road, com.z, m_sprung * g)?;
 
     // ---- the wheels of one side in loop order: (kind, name, z, centre height above ground, radius)
     let teeth = tx.sprocket_teeth.v.round();
@@ -211,7 +213,7 @@ pub(crate) fn tracked(def: &VehicleDef, t: &TrackedDef, ex: &Extras) -> Result<C
             });
         }
     }
-    let f_max_hz = scalar::sqrt((omega_max * omega_max).max(k_series_sum / h.mass_kg.v)) / scalar::TAU;
+    let f_max_hz = scalar::sqrt((omega_max * omega_max).max(k_series_sum / m_sprung)) / scalar::TAU;
     let substeps = ((SAMPLES_PER_PERIOD * f_max_hz / TICK_HZ).ceil() as u32).max(1);
     if substeps > MAX_SUBSTEPS {
         return Err(format!("numerically unstable design: the stiffest mode ({f_max_hz:.1} Hz) needs {substeps} substeps per tick, above {MAX_SUBSTEPS}"));
@@ -260,7 +262,7 @@ pub(crate) fn tracked(def: &VehicleDef, t: &TrackedDef, ex: &Extras) -> Result<C
     report.push(format!("belt: {per_side} wheels a side in loop order, perimeter {belt_length:.2} m (contact {:.2} m), {:.0} links of {:.3} m", t.ground_contact_length_m.v, belt_length / t.pitch_m.v, t.pitch_m.v));
 
     // ---- drivetrain: engine, coupling, gearbox as wheeled; a steer unit over the two sprockets; brakes on the sprockets
-    let (hull, size) = hull_body(h, com);
+    let (hull, size) = hull_body(h, &sprung_mass);
     let (engine, coupling, gearbox) = powertrain_parts(def, ex)?;
     let su_def = pt.steering_unit.as_ref().ok_or("a tracked def needs `powertrain.steering_unit` (kind and ratio)")?;
     let sl = &tx.steer_law;
@@ -282,9 +284,8 @@ pub(crate) fn tracked(def: &VehicleDef, t: &TrackedDef, ex: &Extras) -> Result<C
             efficiency: pt.driveline_efficiency.v,
         })
         .collect();
-    let total_mass = h.mass_kg.v
-        + m_u * (2 * n) as f64
-        + t.track_mass_per_side_kg.v * 2.0 * t.ground_contact_length_m.v / belt_length;
+    let total_mass =
+        m_sprung + m_u * (2 * n) as f64 + t.track_mass_per_side_kg.v * 2.0 * t.ground_contact_length_m.v / belt_length;
     let (br, bx) = (&def.brakes, &ex.brake);
     let pair_torque = match bx.axle_torque_nm.as_slice() {
         [] => total_mass * br.service_decel_g.v * g * r_spr, // sized from the design deceleration at the sprocket pitch radius
@@ -386,5 +387,5 @@ pub(crate) fn tracked(def: &VehicleDef, t: &TrackedDef, ex: &Extras) -> Result<C
         integration: IntegrationDef { substeps, f_max_hz: Some(f_max_hz) },
     };
     rig.validate().map_err(|e| format!("the compiled rig fails PhysRig::validate(): {e:?}"))?;
-    Ok(Compiled { rig, report, hull_size_m: size })
+    Ok(Compiled { rig, report, hull_size_m: size, mass_items: sprung_mass.items })
 }

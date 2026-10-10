@@ -4,11 +4,12 @@
 use std::fmt;
 
 use w5k_contract::combat::CombatDef;
-use w5k_contract::def::{CouplingSliders, HullDef, RunningGearDef, SuspensionKind, VehicleDef, WheeledDef};
+use w5k_contract::def::{CouplingSliders, RunningGearDef, SuspensionKind, VehicleDef, WheeledDef};
 use w5k_contract::param::Param;
 use w5k_contract::rig::*;
-use w5k_math::{scalar, Mat3, Transform, Vec3};
+use w5k_math::{scalar, Transform, Vec3};
 
+use crate::budget::{hull_body, sprung, MassItem};
 use crate::curve::torque_curve_through_peaks;
 use crate::extras::{DiffSpec, Extras};
 
@@ -55,6 +56,8 @@ pub struct Compiled {
     pub report: Vec<String>,
     /// Hull box size (width, height, length), m: the render rig builder needs it.
     pub hull_size_m: Vec3,
+    /// The lumps of the sprung mass (structure, engine, ...): empty when the extras carry no mass budget.
+    pub mass_items: Vec<MassItem>,
 }
 
 /// Static vertical load on each axle from statics: loads are linear in the axle position, `N_i = a + b z_i`, with `sum N = W` and
@@ -104,9 +107,11 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
     // ---- frame: datum at the hull box centre, +Z back (the front of the hull is at z = -L/2)
     let z_of = |from_front: f64| from_front - 0.5 * h.length_m.v;
     let ride_height = h.ground_clearance_m.v + 0.5 * h.height_m.v;
-    let com = Vec3::new(0.0, h.com_height_m.v - ride_height, z_of(h.com_from_front_m.v));
     let axle_z: Vec<f64> = w.axles.iter().map(|a| z_of(a.from_front_m.v)).collect();
-    let loads = axle_loads(&axle_z, com.z, h.mass_kg.v * g)?;
+    let drive_z: Vec<f64> = w.axles.iter().zip(&axle_z).filter(|(a, _)| a.driven).map(|(_, z)| *z).collect();
+    let sprung_mass = sprung(def, ex, ride_height, &drive_z)?;
+    let (m_sprung, com) = (sprung_mass.mass_kg, sprung_mass.com_m);
+    let loads = axle_loads(&axle_z, com.z, m_sprung * g)?;
     report.push(format!(
         "datum: hull box centre; ride height {ride_height:.3} m; COM {:.3} m above the ground, {:.3} m from the front",
         h.com_height_m.v, h.com_from_front_m.v
@@ -252,7 +257,7 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
         ));
     }
     // The hull's heave on the series spring-tyre rates is the other candidate for the stiffest mode.
-    omega_max = omega_max.max(scalar::sqrt(k_series_sum / h.mass_kg.v));
+    omega_max = omega_max.max(scalar::sqrt(k_series_sum / m_sprung));
     let f_max_hz = omega_max / scalar::TAU;
     // The contract's rule: `substeps * TICK_HZ >= SAMPLES_PER_PERIOD * f_max`.
     let substeps = ((SAMPLES_PER_PERIOD * f_max_hz / TICK_HZ).ceil() as u32).max(1);
@@ -263,8 +268,8 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
         "stiffest mode {f_max_hz:.1} Hz (wheel hop with the bump stop fully engaged at full bump travel) -> {substeps} substeps per tick"
     ));
 
-    let (hull, size) = hull_body(h, com);
-    let total_mass = h.mass_kg.v + ty.unsprung_mass_kg.v * stations.len() as f64;
+    let (hull, size) = hull_body(h, &sprung_mass);
+    let total_mass = m_sprung + ty.unsprung_mass_kg.v * stations.len() as f64;
 
     let (engine, coupling, gearbox) = powertrain_parts(def, ex)?;
     let en = &pt.engine;
@@ -315,7 +320,7 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
         let share: Vec<f64> = if w.axles.len() == 2 {
             vec![br.front_share.v, 1.0 - br.front_share.v]
         } else {
-            loads.iter().map(|l| l / (h.mass_kg.v * g)).collect()
+            loads.iter().map(|l| l / (m_sprung * g)).collect()
         };
         share.iter().map(|sh| sh * force * r).collect()
     } else if b.axle_torque_nm.len() == w.axles.len() {
@@ -406,22 +411,7 @@ fn wheeled(def: &VehicleDef, w: &WheeledDef, ex: &Extras) -> Result<Compiled, St
         integration: IntegrationDef { substeps, f_max_hz: Some(f_max_hz) },
     };
     rig.validate().map_err(|e| format!("the compiled rig fails PhysRig::validate(): {e:?}"))?;
-    Ok(Compiled { rig, report, hull_size_m: size })
-}
-
-/// A uniform box moved to the COM with the parallel-axis theorem: the hull body and the box size (width, height, length).
-pub(crate) fn hull_body(h: &HullDef, com: Vec3) -> (BodyDef, Vec3) {
-    let size = Vec3::new(h.width_m.v, h.height_m.v, h.length_m.v);
-    let k = h.mass_kg.v / 12.0; // const-ok: solid box inertia 1/12
-    let box_i = Mat3::diagonal(
-        k * (size.y * size.y + size.z * size.z),
-        k * (size.x * size.x + size.z * size.z),
-        k * (size.x * size.x + size.y * size.y),
-    );
-    let shift =
-        Mat3::diagonal(1.0, 1.0, 1.0).scaled(com.dot(com)).add(&Mat3::outer(com, com).scaled(-1.0)).scaled(h.mass_kg.v);
-    let hull = BodyDef { name: "hull".into(), mass_kg: h.mass_kg.v, com_m: com, inertia_kg_m2: box_i.add(&shift) };
-    (hull, size)
+    Ok(Compiled { rig, report, hull_size_m: size, mass_items: sprung_mass.items })
 }
 
 /// Engine, coupling and gearbox from the sliders (shared by the wheeled and tracked compiles).

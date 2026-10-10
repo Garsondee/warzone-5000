@@ -23,7 +23,7 @@ pub const LEVERS: &[LeverInfo] = &[
     LeverInfo { name: "first_gear", scales: "powertrain.gearbox.forward_ratios[0]", compiled_effect: "gearbox first ratio, x factor" },
     LeverInfo { name: "brake_torque", scales: "brakes.service_decel_g", compiled_effect: "total brake torque capacity, x factor (rejected above the tyre's friction)" },
     LeverInfo { name: "brake_thermal_mass", scales: "brakes.thermal_mass_kj_k", compiled_effect: "brake thermal mass, x factor" },
-    LeverInfo { name: "mass", scales: "hull.mass_kg", compiled_effect: "hull (sprung) mass, x factor; springs, dampers and preloads follow; total brake torque is HELD (service_decel_g scales by 1/total-mass ratio)" },
+    LeverInfo { name: "mass", scales: "hull.mass_kg", compiled_effect: "hull (sprung) mass, x factor, when the vehicle has no mass budget; with one (`apply_both`) the STRUCTURE mass x factor (a probe: the parts follow their own choices); springs, dampers and preloads follow; brake torque is held" },
     LeverInfo { name: "com_height", scales: "hull.com_height_m", compiled_effect: "COM height above the ground, x factor" },
     LeverInfo { name: "ground_clearance", scales: "hull.ground_clearance_m", compiled_effect: "hull underside height above the ground, x factor" },
     LeverInfo { name: "wheelbase", scales: "axle positions about the front axle (COM keeps its fraction between the axles; hull length keeps the rear overhang)", compiled_effect: "distance between the first and last station rows, x factor" },
@@ -197,8 +197,49 @@ pub fn apply_both(def: &VehicleDef, ex: &Extras, lever: &str, factor: f64) -> Re
                     .into(),
             )
         }
+        // With a mass budget the def's `hull.mass_kg` is unused: the probe perturbs the STRUCTURE mass (the parts follow their own choices).
+        "mass" if x.mass_budget.is_some() => {
+            if let Some(b) = x.mass_budget.as_mut() {
+                scale(&mut b.structure_mass_kg, factor);
+            }
+        }
         "centre_diff_bias" => scale_bias(&mut x.drive.centre_diff.bias),
         "axle_diff_bias" => scale_bias(&mut x.drive.axle_diff.bias),
+        // With a budget the COM comes from the parts' positions, so the geometric probes move the parts' positions too.
+        "com_height" if x.mass_budget.is_some() => {
+            // Every part's height above the ground x factor: the mass-weighted COM height scales by exactly the factor.
+            if let Some(b) = x.mass_budget.as_mut() {
+                for p in [
+                    &mut b.structure_pos.height_m,
+                    &mut b.engine_pos.height_m,
+                    &mut b.transmission_pos.height_m,
+                    &mut b.fuel_pos.height_m,
+                    &mut b.crew_pos.height_m,
+                    &mut b.final_drive_height_m,
+                ] {
+                    scale(p, factor);
+                }
+            }
+            return Ok((apply(def, lever, factor)?, x));
+        }
+        "wheelbase" if x.mass_budget.is_some() => {
+            // Parts keep their place relative to the axles: their distance back from the front axle scales with the span.
+            let front = match &def.running_gear {
+                RunningGearDef::Wheeled(w) => w.axles.first().map(|a| a.from_front_m.v).ok_or("no axles")?,
+                RunningGearDef::Tracked(_) => 0.0,
+            };
+            if let Some(b) = x.mass_budget.as_mut() {
+                for p in
+                    [&mut b.structure_pos, &mut b.engine_pos, &mut b.transmission_pos, &mut b.fuel_pos, &mut b.crew_pos]
+                {
+                    let v = front + (p.from_front_m.v - front) * factor;
+                    p.from_front_m.v = v;
+                    p.from_front_m.lo = p.from_front_m.lo.map(|l| l.min(v));
+                    p.from_front_m.hi = p.from_front_m.hi.map(|h| h.max(v));
+                }
+            }
+            return Ok((apply(def, lever, factor)?, x));
+        }
         _ => return Ok((apply(def, lever, factor)?, x)),
     }
     // The def is untouched by an extras lever; `brake_torque` with authored torque must not also move the def's deceleration.
