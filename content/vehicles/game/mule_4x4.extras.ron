@@ -1,63 +1,5 @@
 (
-    tyre: (
-        vertical_stiffness_n_m: (
-            v: 230000.0,
-            lo: Some(161000.0),
-            hi: Some(322000.0),
-            prov: Estimate,
-            src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
-        ),
-        vertical_damping_ns_m: (
-            v: 1800.0,
-            lo: Some(1260.0),
-            hi: Some(2520.0),
-            prov: Estimate,
-            src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
-        ),
-        slip_stiffness: (
-            v: 12.0,
-            lo: Some(8.399999999999999),
-            hi: Some(16.799999999999997),
-            prov: Estimate,
-            src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
-        ),
-        relaxation_length_m: (
-            v: 0.35,
-            lo: Some(0.24499999999999997),
-            hi: Some(0.48999999999999994),
-            prov: Estimate,
-            src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
-        ),
-        wheel_inertia_kg_m2: (
-            v: 2.2,
-            lo: Some(1.54),
-            hi: Some(3.08),
-            prov: Estimate,
-            src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
-        ),
-    ),
     susp: (
-        rebound_to_bump: (
-            v: 1.5,
-            lo: Some(1.2),
-            hi: Some(3.0),
-            prov: Estimate,
-            src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
-        ),
-        bump_stop_engage_frac: (
-            v: 0.75,
-            lo: Some(0.5),
-            hi: Some(0.9),
-            prov: Estimate,
-            src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
-        ),
-        bump_stop_rate_n_m: (
-            v: 150000.0,
-            lo: Some(105000.0),
-            hi: Some(210000.0),
-            prov: Estimate,
-            src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
-        ),
         bump_stop_damping_ns_m: (
             v: 800.0,
             lo: Some(560.0),
@@ -69,45 +11,6 @@
             v: 1.0,
             lo: Some(0.0),
             hi: Some(3.0),
-            prov: Estimate,
-            src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
-        ),
-    ),
-    steer: (
-        max_steer_rad: (
-            v: 0.55,
-            lo: Some(0.45),
-            hi: Some(0.65),
-            prov: Estimate,
-            src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
-        ),
-        ackermann: (
-            v: 1.0,
-            lo: Some(0.7),
-            hi: Some(1.0),
-            prov: Estimate,
-            src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
-        ),
-    ),
-    engine: (
-        idle_torque_frac: (
-            v: 0.55,
-            lo: Some(0.4),
-            hi: Some(0.8),
-            prov: Estimate,
-            src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
-        ),
-        drag_const_nm: (
-            v: 15.0,
-            lo: Some(10.5),
-            hi: Some(21.0),
-            prov: Estimate,
-            src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
-        ),
-        drag_per_rpm_nm: (
-            v: 0.006,
-            lo: Some(0.0042),
-            hi: Some(0.0084),
             prov: Estimate,
             src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
         ),
@@ -199,12 +102,5 @@
         hi: Some(1.1),
         prov: Estimate,
         src: "archetype: light 4x4 military truck class; design-sheet estimate, replaced by the dossier numbers when VALIDATION delivers them",
-    ),
-    substep_omega_dt_limit: (
-        v: 1.0,
-        lo: Some(0.5),
-        hi: Some(2.0),
-        prov: Estimate,
-        src: "PROVISIONAL(S1): CHASSIS\' spike S1 settles the rule",
     ),
 )

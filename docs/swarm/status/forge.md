@@ -11,6 +11,7 @@
 - PR A (#18, merged): `curve.rs` (engine curve through the two peaks, promoted from spike S5), `extras.rs` (PROVISIONAL(CCR-forge) sidecar types), the first truck `content/vehicles/game/mule_4x4.ron` + `.extras.ron` (fictional "Mule 4x4", all ESTIMATE with bands, M998-like archetype, no real figures from memory).
 - PR B (this branch `lane/forge/compile`, stacked on A): `compile.rs`, the wheeled compile of the truck to `PhysRig` (validated) with the report; 15 physics-sentence tests incl. determinism and a 1000-def fuzz.
 - PR C (`lane/forge/render`, stacked on B): `render.rs`, the `RenderRig` for the same stations; tests for joint layout and the 1 mm wheel-radius agreement; image `docs/lanes/forge/media/mule-side-view.png` and the compile report `mule-compile-report.txt`.
+- 2026-10-10: merged contract-v0.2 (pin 80adac2); extras sidecar slimmed to what def.rs still cannot state; compile reads W1-W4 from the def (a missing optional is a rejection naming the field) and uses the contract substep rule (4 substeps for the Mule).
 - Next: `w5k forge compile <def> --out DIR` command, then hull mass items and the tracked compile.
 
 ## Merge order for ARCH
