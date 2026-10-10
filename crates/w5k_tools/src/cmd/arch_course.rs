@@ -25,6 +25,8 @@ use w5k_replay::ReplayFile;
 use w5k_world::course::{generate, CourseDef};
 use w5k_world::grid::GridWorld;
 
+use super::arch_chassis::AnyChassis;
+
 const USAGE: &str = "usage: w5k scenario mule-course [--scenario FILE.ron] --out DIR";
 const DEFAULT_SCENARIO: &str = "content/physics/arch/mule_course.ron";
 const KN_PER_N: f64 = 1e-3; // const-ok: unit conversion for the CSV traces
@@ -46,6 +48,8 @@ pub(crate) struct MuleCourse {
     brake_deadband_m_s: Param,
     lookahead_base_m: Param,
     lookahead_per_m_s: Param,
+    /// Tracked rigs steer with their sprocket speeds, not a steering angle: the steer demand is this gain times the bearing of the lookahead point.
+    tracked_bearing_gain_per_rad: Param,
     curvature_window_m: Param,
     final_decel_m_s2: Param,
     finish_stop_margin_m: Param,
@@ -70,6 +74,7 @@ impl MuleCourse {
             ("brake_deadband_m_s", &self.brake_deadband_m_s),
             ("lookahead_base_m", &self.lookahead_base_m),
             ("lookahead_per_m_s", &self.lookahead_per_m_s),
+            ("tracked_bearing_gain_per_rad", &self.tracked_bearing_gain_per_rad),
             ("curvature_window_m", &self.curvature_window_m),
             ("final_decel_m_s2", &self.final_decel_m_s2),
             ("finish_stop_margin_m", &self.finish_stop_margin_m),
@@ -350,19 +355,27 @@ fn simulate(
     world: &dyn WorldQuery,
     path: &RoadPath,
 ) -> Result<RunResult, String> {
-    // Geometry the pursuit needs: wheelbase and the rear (unsteered) reference axle, from the rig's stations.
-    let unsteered: Vec<f64> = rig.stations.iter().filter(|s| s.steer.is_none()).map(|s| s.rest_pos_m.z).collect();
-    let steered: Vec<(f64, f64)> =
-        rig.stations.iter().filter_map(|s| s.steer.as_ref().map(|d| (s.rest_pos_m.z, d.max_angle_rad))).collect();
-    if unsteered.is_empty() || steered.is_empty() {
-        return Err(format!("{}: the pursuit driver needs both steered and unsteered axles", rig.id));
-    }
-    let z_ref = unsteered.iter().sum::<f64>() / unsteered.len() as f64;
-    let z_front = steered.iter().map(|s| s.0).sum::<f64>() / steered.len() as f64;
-    let wheelbase_m = z_ref - z_front;
-    let max_steer_rad = steered.iter().map(|s| s.1).fold(0.0, f64::max);
-    if wheelbase_m <= 0.0 || max_steer_rad <= 0.0 {
-        return Err(format!("{}: wheelbase {wheelbase_m} m or steer lock {max_steer_rad} rad is not positive", rig.id));
+    // Geometry the pursuit needs. A wheeled rig steers by Ackermann angle about its unsteered axle (wheelbase, steer lock, the rear reference
+    // axle); a tracked rig by sprocket speed, pursuing from its hull datum.
+    let tracked = !rig.tracks.is_empty();
+    let (mut z_ref, mut wheelbase_m, mut max_steer_rad) = (0.0, 1.0, 1.0);
+    if !tracked {
+        let unsteered: Vec<f64> = rig.stations.iter().filter(|s| s.steer.is_none()).map(|s| s.rest_pos_m.z).collect();
+        let steered: Vec<(f64, f64)> =
+            rig.stations.iter().filter_map(|s| s.steer.as_ref().map(|d| (s.rest_pos_m.z, d.max_angle_rad))).collect();
+        if unsteered.is_empty() || steered.is_empty() {
+            return Err(format!("{}: the pursuit driver needs both steered and unsteered axles", rig.id));
+        }
+        z_ref = unsteered.iter().sum::<f64>() / unsteered.len() as f64;
+        let z_front = steered.iter().map(|s| s.0).sum::<f64>() / steered.len() as f64;
+        wheelbase_m = z_ref - z_front;
+        max_steer_rad = steered.iter().map(|s| s.1).fold(0.0, f64::max);
+        if wheelbase_m <= 0.0 || max_steer_rad <= 0.0 {
+            return Err(format!(
+                "{}: wheelbase {wheelbase_m} m or steer lock {max_steer_rad} rad is not positive",
+                rig.id
+            ));
+        }
     }
 
     let route_end_m = sc.route_end_m.as_ref().map_or(path.length_m(), |p| p.v.min(path.length_m()));
@@ -370,8 +383,7 @@ fn simulate(
     let yaw0 = path.heading_at(0.0, sc.lookahead_base_m.v);
     let axle_offset = Quat::from_yaw(yaw0).rotate(Vec3::new(0.0, 0.0, z_ref));
     let (x0, z0) = (path.pts[0].0 - axle_offset.x, path.pts[0].1 - axle_offset.z);
-    let mut chassis = WheeledChassis::new(rig, tuning, world, x0, z0, yaw0)
-        .map_err(|e| format!("CHASSIS refused {}: {e:?}", rig.id))?;
+    let mut chassis = AnyChassis::new(rig, tuning, world, x0, z0, yaw0)?;
     let mut drive = Powertrain::new(&rig.drivetrain, &Tunings::shipped())
         .map_err(|e| format!("DRIVE refused the drivetrain of {}: {e}", rig.id))?;
 
@@ -399,8 +411,8 @@ fn simulate(
         track: String::from("t_s,s_m,cross_track_mm,steer_x10,height_m\n"),
         loads: String::from("t_s"),
     };
-    for s in &chassis.stations {
-        let _ = write!(r.loads, ",{}_kn", s.name);
+    for (name, _) in chassis.wheel_loads() {
+        let _ = write!(r.loads, ",{name}_kn");
     }
     r.loads.push('\n');
     let mut progress: Vec<f64> = Vec::new();
@@ -411,9 +423,9 @@ fn simulate(
         // --- the scripted driver -------------------------------------------------------------------------------------------------
         let v = chassis.forward_speed_m_s();
         let datum = chassis.datum_m();
-        let fwd = chassis.hull.rot.rotate(Vec3::FORWARD);
-        let rgt = chassis.hull.rot.rotate(Vec3::RIGHT);
-        let rear = datum + chassis.hull.rot.rotate(Vec3::new(0.0, 0.0, z_ref));
+        let fwd = chassis.hull().rot.rotate(Vec3::FORWARD);
+        let rgt = chassis.hull().rot.rotate(Vec3::RIGHT);
+        let rear = datum + chassis.hull().rot.rotate(Vec3::new(0.0, 0.0, z_ref));
         let (idx, s_fix, cross_m) = path.locate(rear.x, rear.z, hint);
         hint = idx;
         s_now = s_fix;
@@ -424,7 +436,11 @@ fn simulate(
         let (dx, dz) = (tx - rear.x, tz - rear.z);
         let (ex, ey) = (dx * fwd.x + dz * fwd.z, dx * rgt.x + dz * rgt.z);
         let curvature = 2.0 * ey / (ex * ex + ey * ey).max(PLAN_EPS); // pure pursuit, positive = right
-        let steer = scalar::clamp(scalar::atan(wheelbase_m * curvature) / max_steer_rad, -1.0, 1.0);
+        let steer = if chassis.is_tracked() {
+            scalar::clamp(sc.tracked_bearing_gain_per_rad.v * scalar::atan2(ey, ex), -1.0, 1.0)
+        } else {
+            scalar::clamp(scalar::atan(wheelbase_m * curvature) / max_steer_rad, -1.0, 1.0)
+        };
 
         let kappa = path.upcoming_curvature(s_now, sc.curvature_window_m.v);
         let v_corner = if kappa > PLAN_EPS { scalar::sqrt(sc.max_lateral_accel_m_s2.v / kappa) } else { f64::INFINITY };
@@ -441,7 +457,7 @@ fn simulate(
 
         if n % every == 0 {
             let tel = drive.telemetry();
-            let (t0, vy) = (chassis.time_s, chassis.hull.vel_m_s.y);
+            let (t0, vy) = (chassis.time_s(), chassis.hull().vel_m_s.y);
             let vert_accel = prev_vy.map_or(0.0, |(pt, pv)| (vy - pv) / (t0 - pt));
             prev_vy = Some((t0, vy));
             r.samples.push(Sample {
@@ -450,21 +466,21 @@ fn simulate(
                 speed_m_s: v,
                 target_m_s: target,
                 cross_track_m: cross_m,
-                steer_angle_rad: chassis.stations.iter().map(|s| s.steer_rad.abs()).fold(0.0, f64::max),
-                lat_accel_m_s2: v * chassis.hull.omega_rad_s().y,
+                steer_angle_rad: chassis.steer_angle_rad(),
+                lat_accel_m_s2: v * chassis.hull().omega_rad_s().y,
                 vert_accel_m_s2: vert_accel,
                 gear: tel.gear,
                 fuel_kg: tel.fuel_used_kg,
-                tyre_limit: chassis.stations.iter().any(|s| s.report.contact.saturated),
+                tyre_limit: chassis.at_traction_limit(),
             });
         }
 
         // --- the physics ---------------------------------------------------------------------------------------------------------
         chassis.tick(dt, &inputs, world, &mut drive);
         if !chassis.is_finite() {
-            return Err(format!("non-finite state at t = {:.3} s", chassis.time_s));
+            return Err(format!("non-finite state at t = {:.3} s", chassis.time_s()));
         }
-        let t = chassis.time_s;
+        let t = chassis.time_s();
         let tel = drive.telemetry();
         r.max_speed_m_s = r.max_speed_m_s.max(v.abs());
         r.max_cross_track_m = r.max_cross_track_m.max(cross_m);
@@ -476,7 +492,7 @@ fn simulate(
         if n % every == 0 {
             r.frames.push(Frame {
                 t_s: t,
-                vehicles: vec![vehicle_frame(&chassis, rig, &tel)],
+                vehicles: vec![chassis.frame(rig, &tel)],
                 events: Vec::new(),
                 projectiles: Vec::new(),
             });
@@ -498,8 +514,8 @@ fn simulate(
                 datum.y
             );
             let _ = write!(r.loads, "{t:.4}");
-            for s in &chassis.stations {
-                let _ = write!(r.loads, ",{:.3}", s.report.contact.fz_n * KN_PER_N);
+            for (_, fz_n) in chassis.wheel_loads() {
+                let _ = write!(r.loads, ",{:.3}", fz_n * KN_PER_N);
             }
             r.loads.push('\n');
         }
@@ -538,7 +554,7 @@ fn simulate(
 const GEAR_PLOT_SCALE: f64 = 1e3; // const-ok: draws the gear number on the rpm axis as 1000 rpm per gear
 const PEDAL_PLOT_SCALE: f64 = 10.0; // const-ok: draws a 0..1 pedal on the km/h axis as 0..10
 
-fn state_hash(chassis: &WheeledChassis, drive: &Powertrain) -> u64 {
+fn state_hash(chassis: &AnyChassis, drive: &Powertrain) -> u64 {
     let mut h = StateHasher::new();
     chassis.hash_state(&mut h);
     drive.hash_state(&mut h);
