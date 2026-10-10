@@ -21,6 +21,8 @@ const USAGE: &str = "usage:
   w5k viewer fake-fleet <replay> --out fleet.w5kr [--n 3] [--offset S]   (test data: the first vehicle repeated n times, each S seconds behind the last)
   w5k viewer pack-skin <utility_4x4|scout_4x4|rig.json> --out tools/viewer/dist/skins/<id>.skin   (the compact skin file the test-drive page fetches)
   w5k viewer plot   <data.csv> --out chart.png [--title T] [--xlabel X] [--ylabel Y] [--width W] [--height H]
+  w5k viewer tornado <impact.json> --out tornado.png [--theme light|dark] [--cols N] [--rows N]   (design impact: a panel per benchmark, a bar pair per lever; shape in docs/lanes/viewer/charts.md)
+  w5k viewer ladder  <ladder.json> --out ladder.png [--theme light|dark]   (sinkage up a ladder of load or track width, beside the soil theory)
   w5k viewer dump-canned <truck|tank> --out <dir>   (writes replay.w5kr, replay.json and rig.json)";
 
 /// Entry point for `w5k viewer <args>`.
@@ -30,6 +32,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         Some("render") => render(&args[1..], true),
         Some("page") => render(&args[1..], false),
         Some("plot") => plot(&args[1..]),
+        Some(kind @ ("tornado" | "ladder")) => chart(kind, &args[1..]),
         Some("fake-fleet") => fake_fleet(&args[1..]),
         Some("pack-skin") => pack_skin(&args[1..]),
         _ => Err(USAGE.to_string()),
@@ -194,6 +197,14 @@ fn plot(args: &[String]) -> Result<(), String> {
     node("plot.mjs", args)
 }
 
+/// The evidence charts (`tornado`, `ladder`): `chart.mjs` validates the JSON, draws it in headless Chromium and writes a PNG.
+fn chart(kind: &str, args: &[String]) -> Result<(), String> {
+    args.first().ok_or(USAGE)?;
+    let mut all = vec![kind.to_string()];
+    all.extend_from_slice(args);
+    node("chart.mjs", &all)
+}
+
 fn dump_canned(args: &[String]) -> Result<(), String> {
     let which = args.first().ok_or("dump-canned needs truck or tank")?;
     let out = opt(args, "--out").map(PathBuf::from).ok_or("dump-canned needs --out <dir>")?;
@@ -333,5 +344,56 @@ mod tests {
             skin_files(),
             "dist/index.html lists other skins than dist/skins holds: run `node tools/viewer/build.mjs --live`"
         );
+    }
+
+    fn sample(name: &str) -> serde_json::Value {
+        let path = viewer_dir().join("samples").join(name);
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{} is missing ({e})", path.display()));
+        serde_json::from_str(&text).unwrap_or_else(|e| panic!("{name} is not JSON: {e}"))
+    }
+
+    fn ids(list: &serde_json::Value) -> Vec<&str> {
+        list.as_array().expect("a list").iter().map(|v| v["id"].as_str().expect("an id")).collect()
+    }
+
+    /// The shape VALIDATION will write is the shape the tornado draws: every cell names a lever and a benchmark that are listed, once,
+    /// and carries the two measured values (docs/lanes/viewer/charts.md).
+    #[test]
+    fn every_cell_of_the_impact_sample_names_a_listed_lever_and_benchmark_once_with_both_values() {
+        let impact = sample("impact-stub.json");
+        assert_eq!(impact["schema"], "w5k-impact-1");
+        let (levers, benches) = (ids(&impact["levers"]), ids(&impact["benchmarks"]));
+        let mut seen = std::collections::BTreeSet::new();
+        for cell in impact["cells"].as_array().expect("cells") {
+            let (l, b) = (cell["lever"].as_str().expect("lever"), cell["benchmark"].as_str().expect("benchmark"));
+            assert!(levers.contains(&l) && benches.contains(&b), "cell {l}/{b} names an unlisted lever or benchmark");
+            assert!(seen.insert((l, b)), "cell {l}/{b} appears twice");
+            assert!(
+                cell["minus"].is_number() && cell["plus"].is_number(),
+                "cell {l}/{b} needs numbers `minus` and `plus`"
+            );
+        }
+        assert_eq!(
+            seen.len(),
+            levers.len() * benches.len(),
+            "the sample should cover every lever against every benchmark"
+        );
+    }
+
+    #[test]
+    fn the_ladder_sample_gives_every_rung_a_load_a_simulated_and_a_predicted_sinkage() {
+        let ladder = sample("ladder-stub.json");
+        assert_eq!(ladder["schema"], "w5k-ladder-1");
+        for v in ladder["vehicles"].as_array().expect("vehicles") {
+            let rungs = v["rungs"].as_array().expect("rungs");
+            assert!(rungs.len() >= 2, "{} needs a ladder of at least two rungs", v["id"]);
+            for r in rungs {
+                assert!(
+                    r["x"].is_number() && r["sim"].is_number() && r["theory"].is_number(),
+                    "{} has a rung without x, sim and theory",
+                    v["id"]
+                );
+            }
+        }
     }
 }
