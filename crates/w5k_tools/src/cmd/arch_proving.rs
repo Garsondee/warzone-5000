@@ -13,6 +13,7 @@
 
 mod facts;
 mod longitudinal;
+mod mobility;
 mod sim;
 
 use std::collections::BTreeMap;
@@ -67,6 +68,14 @@ scenario_file!(
     decel_window_s,
     accel_target_kmh,
     accel_max_s,
+    tilt_rate_rad_s,
+    tilt_max_rad,
+    step_speed_m_s,
+    step_distance_m,
+    step_ramp_m,
+    step_max_s,
+    step_search_max_m,
+    step_resolution_m,
 );
 
 /// What a test needs: the vehicle's rig, the chassis tuning and the driver numbers.
@@ -108,8 +117,12 @@ pub(crate) fn flat_world() -> Box<dyn WorldQuery> {
 
 type Runner = fn(&Ctx) -> Result<Outcome, String>;
 
-const RUNNERS: &[(&str, Runner)] =
-    &[("braking_50kmh", longitudinal::braking), ("accel_0_48kmh", longitudinal::acceleration)];
+const RUNNERS: &[(&str, Runner)] = &[
+    ("braking_50kmh", longitudinal::braking),
+    ("accel_0_48kmh", longitudinal::acceleration),
+    ("side_slope_rollover", mobility::side_slope),
+    ("step_climb", mobility::step_climb),
+];
 
 /// The contract the result was produced against, e.g. `contract-v0.2`.
 fn contract_pin() -> String {
@@ -395,10 +408,66 @@ mod tests {
         assert_eq!((r.test.as_str(), r.vehicle.as_str()), ("braking_50kmh", "mule_4x4"));
         let _ = std::fs::remove_file(&out);
         let _ = std::fs::remove_file(out.with_extension("replay.w5kr"));
-        let e = run(&args("side_slope_rollover", &out), &root()).expect_err("no runner yet");
+        let e = run(&args("skidpad", &out), &root()).expect_err("no runner yet");
         assert!(e.contains("not implemented"), "{e}");
         assert!(!out.exists(), "a test that cannot run must not leave a file");
         let e = run(&args("teleport", &out), &root()).expect_err("unknown");
         assert!(e.contains("unknown test"), "{e}");
+    }
+
+    #[test]
+    fn the_side_slope_angle_is_the_smaller_of_the_rigid_tipping_and_sliding_angles_and_never_above_it() {
+        for v in GARAGE {
+            let r = Fixture::load(v).run("side_slope_rollover");
+            r.check().expect("valid");
+            w5k_validate::oracle::score_side_slope(&r).expect("VALIDATION's scorer accepts the result");
+            let (t, h, mu) = (r.inputs["track_m"], r.inputs["cg_height_m"], r.inputs["mu"]);
+            let (tip, slide) = (scalar::atan(t / (2.0 * h)), scalar::atan(mu));
+            let a = r.measured["slope_angle_rad"];
+            assert_eq!(r.labels["mode"], if tip < slide { "roll" } else { "slide" }, "{v}: tip {tip}, slide {slide}");
+            assert!(a <= 1.03 * tip.min(slide), "{v}: {a} rad is above the rigid bound {}", tip.min(slide)); // const-ok: the scorer's slack
+            assert!(a >= 0.75 * tip.min(slide), "{v}: {a} rad is far below the bound {}", tip.min(slide));
+            // const-ok: the spec's green band
+        }
+    }
+
+    #[test]
+    fn the_first_wheel_lifts_at_the_angle_chassiss_own_tilt_table_reports() {
+        let f = Fixture::load(GARAGE[2]);
+        let mut drive =
+            w5k_drive::powertrain::Powertrain::new(&f.rig.drivetrain, &w5k_drive::powertrain::Tunings::shipped())
+                .expect("drive");
+        let table = w5k_chassis::bench::TiltTable {
+            rate_rad_s: f.cfg.tilt_rate_rad_s.v,
+            settle_s: f.cfg.settle_s.v,
+            max_angle_rad: f.cfg.tilt_max_rad.v,
+        };
+        let bench = w5k_chassis::bench::tilt_table(&f.rig, &f.tuning, flat_world().as_ref(), &mut drive, &table)
+            .expect("bench");
+        let ours = f.run("side_slope_rollover");
+        assert_eq!(ours.labels["mode"], "roll");
+        let (a, b) = (ours.measured["slope_angle_rad"], bench.lift_angle_rad.expect("the bench lifts"));
+        assert!((a - b).abs() < 0.02, "runner {a} rad, bench {b} rad"); // const-ok: about one degree
+    }
+
+    #[test]
+    fn no_truck_climbs_a_step_above_one_wheel_radius_and_the_scout_and_hauler_stop_near_the_traction_limit() {
+        for v in GARAGE {
+            let r = Fixture::load(v).run("step_climb");
+            r.check().expect("valid");
+            w5k_validate::oracle::score_step(&r).expect("VALIDATION's scorer accepts the result");
+            let (radius, mu, h) = (r.inputs["wheel_radius_m"], r.inputs["mu"], r.measured["step_height_m"]);
+            assert!(h <= radius, "{v}: climbed {h} m with a wheel of radius {radius} m");
+            // A rigid wheel on the corner of a step needs the contact force to be able to point straight up: the corner normal leans
+            // by theta with cos(theta) = (r - h) / r, and friction can recover atan(mu) of it, so h <= r (1 - 1 / sqrt(1 + mu^2)).
+            let traction_limit = radius * (1.0 - 1.0 / scalar::sqrt(1.0 + mu * mu));
+            if v != GARAGE[1] {
+                // const-ok: the Mule's momentum at 2 m/s carries it past the quasi-static limit (see arch-proving-gaps.md); the others do not
+                assert!(
+                    h >= 0.5 * traction_limit && h <= 1.5 * traction_limit,
+                    "{v}: {h} m against the traction limit {traction_limit} m"
+                );
+            }
+        }
     }
 }

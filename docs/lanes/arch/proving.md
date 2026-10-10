@@ -27,5 +27,21 @@ The test: park (drive selected, parking brake) for 1.5 s, release, throttle to t
 
 *The plateaus and small dips are gear shifts with the torque cut (the Hauler's slow 2-3 shift is visible at 7 to 8 s): drag and shift pauses are why real trucks sit at two to three times the energy bound.*
 
+## Side-slope rollover
+A parked rigid truck on a cross-slope of angle `theta` has two ways to fail. It **tips** when the weight line passes the downhill wheels' contact line: `tan(theta) = (t/2) / h` (track `t`, centre-of-mass height `h`). It **slides** when gravity along the slope beats friction: `tan(theta) = mu`. The smaller angle wins. A real truck has suspension and tyre compliance, so its body leans downhill as the table tilts, which moves the centre of mass toward the low side and makes it tip *earlier*: `atan(t/2h)` is an upper bound, never a target.
+
+The runner parks the truck on the plane and rotates gravity about the forward axis at 0.02 rad/s (rotating gravity is the same physics as tilting the ground, and what CHASSIS's `bench::tilt_table` does; a graphics analogy is rotating the light and the camera together instead of the model). It stops at the first of two events: an uphill wheel carries no load (`mode = roll`), or every loaded tyre patch is at its friction limit (`mode = slide`). CHASSIS's bench reports only the lift, so the slide needs this loop; a test checks that the two agree on the lift angle. Inputs echoed: `track_m` (twice the mean wheel offset), `cg_height_m` (whole-vehicle centre of mass above the ground, hull plus unsprung masses), `mu`.
+
+Measured: Hauler lifts at 33.6 degrees (rigid bound 39.1, 86 %: the tall 1.26 m centre of mass and soft springs), Mule slides at 42.2 degrees (`atan(0.90)` = 42.0), Scout slides at 40.6 degrees (`atan(0.85)` = 40.2). A slide that starts at `atan(mu)` to within half a degree is the friction clamp working.
+
+![Uphill load against table angle](media/proving-side-slope.png)
+
+*The load on the uphill pair falls from 50 % toward zero as the table tilts. The Hauler's line reaches zero (a wheel lifts); the other two lines stop with 7 to 10 % still on the uphill wheels because the truck starts to slide first.*
+
+## Step climb
+The truck drives straight at 2 m/s at a vertical step, and the runner bisects (to 1 cm) the highest step it gets its rear axle over. Spec bound: a rigid wheel cannot climb more than its radius `r`. A better quasi-static estimate: a wheel against a step corner is pushed by the corner along the line from the corner to the wheel centre, which leans from the vertical by `theta` with `cos(theta) = (r - h) / r`. Friction at the corner can tilt the contact force back toward the vertical by at most `atan(mu)`. The wheel can climb only if the total force can point straight up, so `theta <= atan(mu)`, giving `h <= r (1 - 1 / sqrt(1 + mu^2))`: about a quarter of a radius for `mu = 0.85`. Measured: Hauler 0.10 m (limit 0.125 m), Scout 0.11 m (0.083 m) at 2 m/s. The Mule clears 0.34 m, well past the quasi-static limit; at 0.5 m/s it clears 0.125 m, so the extra is momentum (the heightfield tyre contact lets a moving wheel be thrown up the face), not extra friction.
+
+The stand-in world's step is the contract's `Plateau` feature with a 2 cm ramp (the nearest to a vertical face it offers).
+
 ## Determinism and early ends
 Every test is run twice and the two final state hashes and results must be identical. A run that rolls over, produces a NaN, cannot reach its entry speed or does not stop in time is written with `ended_early` set and no measurements (the scorer makes the whole test red). A test with no runner yet says `not implemented` and writes nothing.
