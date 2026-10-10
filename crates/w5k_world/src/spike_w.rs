@@ -11,6 +11,7 @@ pub const N: usize = 2001;
 pub const CELL_M: f64 = 1.0;
 pub const HALF_M: f64 = 1000.0; // const-ok: spike placeholder, the generator reads these from CourseDef
 const PROP_CELL_M: f64 = 16.0; // const-ok: spike placeholder, the generator reads these from CourseDef
+const MUD_BELOW_M: f64 = -12.0; // const-ok: spike placeholder for the drainage rule
 const PROP_N: usize = 126; // const-ok: ceil(2000 / 16) + 1 cells per side
 
 // ---- noise: value noise from an integer hash, a pure function of (seed, lattice point) ----
@@ -89,9 +90,7 @@ impl SpikeWorld {
                 let road = (x - 0.3 * z).abs() < 4.0; // const-ok: spike stripe
                 splat[j * N + i] = if road {
                     2
-                } else if h < -12.0 {
-                    // const-ok: spike placeholder
-                    // const-ok: spike placeholder, the generator reads these from CourseDef
+                } else if h < MUD_BELOW_M {
                     1
                 } else {
                     0
