@@ -1,0 +1,9 @@
+// PLACEHOLDER light-truck wheel dimensions, PROVISIONAL(C-002) (the M998 dossier has not landed; nothing is quoted from memory).
+// Provenance ESTIMATE, band +-25% each, reason: only used for pictures and tests until FORGE passes the real tyre Params.
+WheelDims(
+    outer_radius_m: 0.40,
+    width_m: 0.28,
+    rim_radius_m: 0.24,
+    lug_depth_m: 0.02,
+    lugs_around: 28,
+)
