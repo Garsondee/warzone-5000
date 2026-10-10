@@ -13,9 +13,12 @@
   powertrain), writes replay + CSV; plots and a clip frame in `docs/lanes/chassis/media/`.
 
 ## In progress
-- Next: the ledger (step 6), `steady_turn_lateral_load_transfer_matches_m_ay_h_over_track`, DRIVE's real DrivePort when it lands.
-- Simplifications to revisit: unsprung inertia uses the previous substep's hull acceleration (translation only); `kappa_peak`/`alpha_peak_rad` unused;
-  the viewer draws the strip flat until WORLD exports terrain.
+- #59 merged (modes + ledger). #69: `bench` (tilt table, skidpad) + the steady-turn load-transfer test + a fix: the tyre's lateral
+  force now carries its patch-to-hub moment (rolled too little before; the tilt table caught it). Next: ARCH's call (Scout/Hauler when FORGE lands them).
+- **Parameters I would not trust yet:** tyre curve linear to the friction-circle cap (no slide drop: `mu_slide`, `kappa_peak`, `alpha_peak_rad` unused),
+  so locked braking and the cornering limit read high; no tyre load sensitivity; roll centre fixed at wheel-centre height by the sliding-strut
+  kinematics (real trucks: near the ground or at the spring seat); single-ray contact; `relaxation_length_m`, `slip_damping_time_s` are estimates.
+- **6x6:** expressible today with independent axles; walking beams / inboard leaves (`LinkageDef`) are refused until linkages land (about one PR).
 
 ## Blocked
 - Nothing.
