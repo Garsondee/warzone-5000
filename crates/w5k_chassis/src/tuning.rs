@@ -13,6 +13,9 @@ pub struct ChassisTuning {
     pub min_gas_volume_frac: Param,
     pub rolling_fade_speed_m_s: Param,
     pub slip_damping_time_s: Param,
+    pub tyre_mu_load_sensitivity: Param,
+    pub tyre_stiffness_load_sensitivity: Param,
+    pub skidpad_window_s: Param,
 }
 
 impl ChassisTuning {
@@ -24,6 +27,8 @@ impl ChassisTuning {
         TyreTuning {
             rolling_fade_speed_m_s: self.rolling_fade_speed_m_s.v,
             slip_damping_time_s: self.slip_damping_time_s.v,
+            mu_load_sensitivity: self.tyre_mu_load_sensitivity.v,
+            stiffness_load_sensitivity: self.tyre_stiffness_load_sensitivity.v,
         }
     }
 
@@ -43,8 +48,14 @@ mod tests {
     fn shipped_tuning_file_loads_and_every_value_is_inside_its_band() {
         let t = ChassisTuning::from_ron(include_str!("../../../content/physics/chassis/tuning.ron"))
             .expect("tuning.ron parses");
-        for p in [&t.friction_smoothing_m_s, &t.min_gas_volume_frac, &t.rolling_fade_speed_m_s, &t.slip_damping_time_s]
-        {
+        for p in [
+            &t.friction_smoothing_m_s,
+            &t.min_gas_volume_frac,
+            &t.rolling_fade_speed_m_s,
+            &t.slip_damping_time_s,
+            &t.tyre_mu_load_sensitivity,
+            &t.tyre_stiffness_load_sensitivity,
+        ] {
             let (lo, hi) = p.band();
             assert!(p.v >= lo && p.v <= hi && !p.src.is_empty());
         }

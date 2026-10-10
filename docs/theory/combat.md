@@ -37,3 +37,12 @@ Momentum is a sum over bodies of mass times velocity, but each body's velocity d
 (semi-implicit Euler) ignores that change and leaks about `10^-3` of the impulse; a fourth-order step (RK4) leaks `10^-8`. Splitting hull and gun into two solves with a one-step
 delay is worse: the explicit coupling goes unstable when the gun is heavy compared with the hull (the same reason a boat pulling a heavy barge by an elastic rope oscillates).
 So the hull and the chain are solved together, as one mass matrix `M(q)`, a 9 by 9 system: a small cousin of the articulated-body solve in character rigs.
+
+## A shell is a particle with drag (ballistics kernel)
+A point mass feels gravity and air drag: `a = g - (rho Cd A / 2m) |v| v`. Drag grows with the square of speed, so a fast shell sheds speed quickly and a slow one hardly at all;
+the speed at which drag equals weight is the **terminal velocity** `vt = sqrt(2 m g / (rho Cd A))`, and a dropped body approaches it as `vt tanh(g t / vt)` (the test). With no
+drag the path is a parabola with range `v^2 sin 2 theta / g`, apex `v^2 sin^2 theta / 2g` and flight time `2 v sin theta / g`: the exact answers the integrator must reproduce. The
+drag coefficient is not constant: it rises sharply as the shell nears the speed of sound (a shock wave forms) and falls again above it, so it is a table against **Mach number**
+(speed over the speed of sound), like a response curve you interpolate in a shader. The step is **RK4**: it samples the slope four times per step and combines them, so halving the
+step cuts the error sixteen-fold (a fixed-step particle system, but a better one than the Euler step games use). The Cd table shipped is a stand-in shape, `UNVALIDATED`, until a published
+table is opened.
