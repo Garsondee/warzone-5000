@@ -9,7 +9,7 @@ Reproduce with `python3 -I spikes/world/clay_bogging.py`. Soil: the clay row of 
 4. **Bogging** is `Rc > H`; the margin `(H - Rc) / W` is the slope (rise over run) the vehicle could still climb in that soil. A pit wall of grade `g` costs `g` of the margin.
 
 ## Which Bekker for a tyre?
-A tyre either stays round (a *rigid* wheel, Wong's closed form `z = (3W / (b (3-n)(kc/b+kphi) sqrt(D)))^(2/(2n+1))`) or flattens to a footprint at its inflation pressure (the elastic case). It stays round when its inflation pressure exceeds the pressure the soil can carry at the resulting sinkage, which it does here (180 to 400 kPa inflation against 105 to 157 kPa under the wheel), and it is also what CHASSIS' `soil_wheel.rs` computes. (Using the inflation pressure as the soil pressure instead would say every wheeled truck bogs on flat clay, 15 times over: wrong regime.)
+A tyre either stays round (a *rigid* wheel, Wong's closed form `z = (3W / (b (3-n)(kc/b+kphi) sqrt(D)))^(2/(2n+1))`) or flattens to a footprint at its inflation pressure (the elastic case). It stays round when its inflation pressure exceeds the pressure the soil can carry at the resulting sinkage, which it does here (180 to 400 kPa inflation against 105 to 157 kPa under the wheel), and it is also what CHASSIS' `soil_wheel.rs` computes. (Using the inflation pressure as the soil pressure instead would say every wheeled truck bogs on flat clay (the Hauler's resistance would be twice its weight): wrong regime.)
 
 ## Result (phi 13 degrees)
 | vehicle | pressure under the soil | sinkage | Rc / W | thrust H / W | margin / W |
