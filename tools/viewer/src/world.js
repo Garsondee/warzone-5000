@@ -4,7 +4,7 @@ import * as THREE from 'three';
 
 const GROUND = { asphalt: 0x4a4a4c, dirt: 0x7d8a58, mud: 0x4b3a28, gravel: 0x8a8a84, sand: 0xc2b280 };
 const ROAD_WIDTH_M = 6; // PROVISIONAL: the file has no road width yet (docs/swarm/requests/viewer-world-road-width.md); the slice course is two 6 m lanes
-const PROP = { Tree: 0x5c4630, Barricade: 0xb9582c };
+const PROP = { Tree: 0x5c4630, Barricade: 0xb9582c, Rock: 0x7a7a74 };
 
 export function terrainMesh(t) {
   if (t.format !== 'w5k-terrain-1') throw new Error(`unknown terrain format ${t.format}`);
