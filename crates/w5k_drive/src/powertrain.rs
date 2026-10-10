@@ -121,6 +121,18 @@ impl Powertrain {
     }
 }
 
+impl Powertrain {
+    /// Reduction from the gearbox output to the first driven shaft (transfer case, differentials, final drive).
+    pub fn driveline_ratio(&self) -> f64 {
+        self.driveline.overall_ratio()
+    }
+
+    /// Ratio of forward gear `g` (1-based), engine speed over gearbox output speed.
+    pub fn gear_ratio(&self, g: usize) -> Option<f64> {
+        self.gearbox.forward_ratio(g)
+    }
+}
+
 impl DrivePort for Powertrain {
     fn output_count(&self) -> usize {
         self.driveline.output_count()

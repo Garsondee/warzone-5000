@@ -198,6 +198,11 @@ impl Gearbox {
         tq * self.efficiency * self.ratio_of(gear) >= margin * self.load_nm
     }
 
+    /// Forward ratio of gear `g` (1-based).
+    pub fn forward_ratio(&self, g: usize) -> Option<f64> {
+        g.checked_sub(1).and_then(|i| self.forward.get(i)).copied()
+    }
+
     pub fn gear(&self) -> i8 {
         self.gear
     }
