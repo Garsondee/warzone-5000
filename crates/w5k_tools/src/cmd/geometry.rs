@@ -48,8 +48,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
             let cols = if views.len() == 1 { 1 } else { 2 };
             let (pw, ph) = (cols * w, subjects.len() * views.len().div_ceil(cols) * h);
             let mut pixels = Vec::new();
-            for name in &subjects {
-                pixels.extend(sheet(&subject(name, detail)?, mode, &views, w, h)?);
+            let all = subjects.iter().map(|name| subject(name, detail)).collect::<Result<Vec<_>, _>>()?;
+            // one scale for every tile, the largest vehicle's, so that sizes can be compared
+            let min_ext = all.iter().map(|p| extent(p)).fold(0.0, f64::max);
+            for parts in &all {
+                pixels.extend(sheet(parts, mode, &views, w, h, min_ext)?);
             }
             write_png(&path, pw as u32, ph as u32, &pixels)?;
             println!("wrote {path}");
@@ -178,8 +181,25 @@ const VIEWS: [(&str, [f64; 3], bool); 9] = [
     ("gun", [0.8, 0.45, -1.0], true),     // const-ok: camera direction
 ];
 
+/// The diagonal of the box around the parts that count for the camera framing.
+fn extent(parts: &[(Mesh, [f64; 3], bool)]) -> f64 {
+    let (lo, hi) = parts
+        .iter()
+        .filter(|p| p.2)
+        .map(|p| p.0.bounds())
+        .fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(a, b), (l, u)| (a.min(l), b.max(u)));
+    (hi - lo).length()
+}
+
 /// One picture per name in `views`: a single view fills the image, four views make a 2 x 2 sheet.
-fn sheet(parts: &[(Mesh, [f64; 3], bool)], mode: Mode, views: &[&str], w: usize, h: usize) -> Result<Vec<u8>, String> {
+fn sheet(
+    parts: &[(Mesh, [f64; 3], bool)],
+    mode: Mode,
+    views: &[&str],
+    w: usize,
+    h: usize,
+    min_ext: f64,
+) -> Result<Vec<u8>, String> {
     let flags = bake(&parts.iter().map(|p| &p.0).collect::<Vec<_>>(), &FlagParams::default_params());
     let items: Vec<Item> = parts
         .iter()
@@ -191,7 +211,7 @@ fn sheet(parts: &[(Mesh, [f64; 3], bool)], mode: Mode, views: &[&str], w: usize,
         .filter(|p| p.2)
         .map(|p| p.0.bounds())
         .fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(a, b), (l, u)| (a.min(l), b.max(u)));
-    let (c, ext) = ((lo + hi) * 0.5, (hi - lo).length());
+    let (c, ext) = ((lo + hi) * 0.5, (hi - lo).length().max(min_ext));
     let cols = if views.len() == 1 { 1 } else { 2 };
     let mut out = vec![0u8; cols * w * views.len().div_ceil(cols) * h * 3];
     for (i, name) in views.iter().enumerate() {
