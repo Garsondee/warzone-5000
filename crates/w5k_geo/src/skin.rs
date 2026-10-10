@@ -84,6 +84,7 @@ impl Skin {
             "hauler_4x4" => {
                 Some(Skin::from_spec(TruckKind::Hauler, include_str!("../shapes/placeholder_hauler_4x4.ron")))
             }
+            "apc_6x6" => Some(Skin::from_spec(TruckKind::Apc, include_str!("../shapes/placeholder_apc_6x6.ron"))),
             _ => None,
         }
     }

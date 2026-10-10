@@ -1,0 +1,18 @@
+// Stand-in dimensions of the 6x6 armoured carrier for pictures and tests, PROVISIONAL(C-002) until FORGE has a definition for it
+// (`skin::Skin::from_def`). Read off a side-view drawing (the tyre's diameter as the scale, 1.2 m) and completed by assumption: the hull box
+// 6.3 x 2.8 x 1.37 m above the underside (0.60 m off the ground, so the roof is 1.97 m up), axles 0.83, 2.43 and 4.03 m from the front (the
+// front overhang is short, the rear long), track 2.34 m, tyre 1.2 m across by 0.38 m (the width and the track are assumed: a side view
+// cannot show them). Provenance ESTIMATE, band +-5% each. The rim and the lugs are the utility wheel's proportions at this radius.
+SkinSpec(
+    dims: (
+        length_m: 6.3,
+        width_m: 2.8,
+        height_m: 1.37,
+        wheelbase_m: 3.2,
+        track_m: 2.34,
+        ground_clearance_m: 0.60,
+        wheel: (outer_radius_m: 0.60, width_m: 0.38, rim_radius_m: 0.366, lug_depth_m: 0.029, lugs_around: 28),
+    ),
+    axles_from_front_m: [0.83, 2.43, 4.03],
+    steered: [true, true, false],
+)

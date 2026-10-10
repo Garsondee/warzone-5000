@@ -1,0 +1,75 @@
+// Parametric 6x6 armoured personnel carrier hull: a fictional wheeled carrier of about 19 tonnes in the class of the drawn "SPW Kitfuchs" (a side
+// view by kacper444, used for proportions only; the front, the rear, the fittings and the width are this lane's invention). Lane GEOMETRY. One
+// shell, everything else anchored to it (see utility_4x4.ron for the conventions: fractions of the hull box, x of W from the centre line, y of H
+// from the underside, z of L from the front; `_m` sizes are metres; `Upper`/`Top`/`Belt`/`Front`/`Rear` are surface anchors). Provenance ESTIMATE
+// for every number, bands +-15% for fractions and +-50% for the small absolute sizes, reason: an original design in the class.
+// The shell is a slab-sided box with a wedge nose: the lower body is cut by an arch for each axle (the wheels stand in notches, so the hull
+// sides read between and above the tyres), the glacis rises at about 49 degrees to a flat roof, the rear is a vertical face, and a rounded
+// housing sits on the roof at the tail. The roof carries a `Ring` socket for a turret, so the same hull takes a ring mount or a turret.
+(
+    body: (
+        // (z, lower half-width, belt height, upper half-width, top height, tilt, underside): the lines plan of the shell. The belt is the top of the
+        // wheel notches plus a wall; the glacis is the top line rising from the nose face to the roof between z = 0.012 and 0.115.
+        stations: [
+            (z: 0.000, w: 0.88, yb: 0.36, wu: 0.88, yt: 0.40, tilt: 0.00, yo: 0.10),   // the nose face, the underside raised (approach angle)
+            (z: 0.012, w: 0.96, yb: 0.42, wu: 0.96, yt: 0.46, tilt: 0.00, yo: 0.04),
+            (z: 0.030, w: 1.00, yb: 0.52, wu: 1.00, yt: 0.56, tilt: 0.02, yo: 0.00),   // full width as the first arch begins
+            (z: 0.115, w: 1.00, yb: 0.57, wu: 1.00, yt: 1.00, tilt: 0.04, yo: 0.00),   // the top of the glacis: the front edge of the roof
+            (z: 0.890, w: 1.00, yb: 0.57, wu: 1.00, yt: 1.00, tilt: 0.04, yo: 0.00),
+            (z: 0.992, w: 1.00, yb: 0.57, wu: 0.99, yt: 1.00, tilt: 0.04, yo: 0.02),
+            (z: 1.000, w: 0.94, yb: 0.55, wu: 0.94, yt: 0.99, tilt: 0.04, yo: 0.10),   // the tail face, the underside raised (departure angle)
+        ],
+        // the cuts between the three regions of the shell: the glacis, the crew compartment under the turret, the troop compartment; `regions_m`
+        // of the dimensions sets them in metres, and a longer troop compartment (more axles) stretches only the last
+        cab_f: (0.115, 0.56),
+        lip_proud_m: 0.03,
+        lower_chamfer_m: 0.05,
+        sill_chamfer_m: 0.07,
+        upper_chamfer_m: 0.05,
+        arch_gap_m: 0.05,
+        well_gap_m: 0.05,
+        arch_samples: 16,
+        min_wall_m: 0.10,
+        min_notch_m: 0.002,
+    ),
+    parts: [
+        // ---- the wheel arches' lips
+        (name: "arch_lip", role: Hull, slot: Paint, fitting: false, mirror: false, shape: ArchLip(inner_m: -0.01, width_m: 0.09, embed_m: 0.02, proud_m: 0.03, corner_m: 0.015)),
+        // ---- the nose: a bumper bar, tow hooks, lamps and an air-intake grille on the lower plate; a windscreen and a window on the glacis
+        (name: "bumper_front", role: Hull, slot: Metal, fitting: false, mirror: false, shape: Block(x: Frac(-0.46, 0.46), y: Frac(0.07, 0.19), z: Front(-0.07, 0.10), corner_m: 0.02)),
+        (name: "tow_hook", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Frac(0.26, 0.31), y: Frac(0.12, 0.20), z: Front(-0.11, 0.05), corner_m: 0.015)),
+        (name: "headlamp", role: Hull, slot: Optics, fitting: true, mirror: true, shape: Cyl(axis: Z, x: Frac(0.34, 0.40), y: Frac(0.28, 0.37), z: Front(-0.05, 0.05), radius_m: 0.07)),
+        (name: "lamp_guard", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Frac(0.325, 0.415), y: Frac(0.375, 0.395), z: Front(-0.08, 0.05), corner_m: 0.008)),
+        (name: "grille", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.12, 0.12), y: Frac(0.17, 0.33), z: Front(-0.04, 0.05), corner_m: 0.012)),
+        (name: "windscreen", role: Hull, slot: Glass, fitting: true, mirror: false, shape: Windscreen(from_f: 0.03, to_f: 0.115, margin_m: 0.10, inset_m: 0.62, thickness_m: 0.016, proud_m: 0.003, corner_m: 0.03, bezel: Some(Bezel(width_m: 0.04, proud_m: 0.016)))),
+        (name: "window_front", role: Hull, slot: Glass, fitting: true, mirror: true, shape: Pane(x: Upper(-0.016, 0.003), front: Pillar(from_f: 0.03, to_f: 0.115, pillar_m: 0.09), rear_f: 0.165, bottom: 0.62, top_offset_m: 0.07, corner_m: 0.025, bezel: Some(Bezel(width_m: 0.035, proud_m: 0.014)))),
+        (name: "mirror_arm", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Cyl(axis: X, x: Upper(-0.03, 0.22), y: Top(-0.50, -0.50), z: Frac(0.125, 0.125), radius_m: 0.012)),
+        (name: "mirror_head", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Upper(0.20, 0.23), y: Top(-0.64, -0.36), z: Frac(0.118, 0.134), corner_m: 0.012)),
+        // ---- the roof: the driver's and the commander's hatches, two troop hatches, and the rear housing; the turret goes on the ring socket
+        (name: "hatch_driver", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.27, -0.13), y: Top(-0.02, 0.07), z: Frac(0.15, 0.215), corner_m: 0.012)),
+        (name: "hatch_commander", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(0.13, 0.27), y: Top(-0.02, 0.07), z: Frac(0.15, 0.215), corner_m: 0.012)),
+        (name: "hatch_troop", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Frac(0.05, 0.27), y: Top(-0.02, 0.055), z: Frac(0.60, 0.74), corner_m: 0.012)),
+        (name: "rear_housing", role: Hull, slot: Paint, fitting: false, mirror: false, shape: Loft(corner_m: 0.20, sections: [
+            (0.886, 0.78, 0.84, 1.40), (0.90, 0.84, 0.84, 1.42), (0.99, 0.84, 0.84, 1.42), (1.0, 0.80, 0.84, 1.38),
+        ])),
+        (name: "antenna_a", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Y, x: Frac(0.34, 0.34), y: Top(-0.03, 1.50), z: Frac(0.66, 0.66), radius_m: 0.008)),
+        (name: "antenna_b", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Y, x: Frac(-0.34, -0.34), y: Top(-0.03, 1.06), z: Frac(0.735, 0.735), radius_m: 0.008)),
+        (name: "antenna_c", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Y, x: Frac(0.30, 0.30), y: Top(-0.03, 1.20), z: Frac(0.785, 0.785), radius_m: 0.008)),
+        (name: "antenna_base", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Y, x: Frac(0.34, 0.34), y: Top(-0.03, 0.09), z: Frac(0.66, 0.66), radius_m: 0.05)),
+        // ---- the sides: a rib along the wall, the crew doors, a stowage bin behind the second arch
+        (name: "side_rib", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Upper(-0.02, 0.018), y: Frac(0.755, 0.78), z: Frac(0.165, 0.885), corner_m: 0.008)),
+        (name: "door", role: Hull, slot: Paint, fitting: true, mirror: true, shape: Block(x: Upper(-0.02, 0.014), y: Frac(0.60, 0.97), z: Frac(0.30, 0.375), corner_m: 0.012)),
+        (name: "door_handle", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: Upper(0.01, 0.03), y: Frac(0.74, 0.76), z: Frac(0.35, 0.37), corner_m: 0.006)),
+        (name: "stowage_bin", role: Hull, slot: Paint, fitting: true, mirror: true, shape: Block(x: Upper(-0.02, 0.10), y: Frac(0.60, 0.78), z: Frac(0.755, 0.855), corner_m: 0.015)),
+        // ---- the tail: two doors with vision blocks, lamps, a bumper and a step
+        (name: "rear_door", role: Hull, slot: Paint, fitting: true, mirror: true, shape: Block(x: Frac(0.012, 0.40), y: Frac(0.14, 0.92), z: Rear(-0.03, 0.02), corner_m: 0.015)),
+        (name: "rear_vision", role: Hull, slot: Glass, fitting: true, mirror: true, shape: Block(x: Frac(0.12, 0.30), y: Frac(0.55, 0.68), z: Rear(0.0, 0.035), corner_m: 0.01)),
+        (name: "rear_lamp", role: Hull, slot: Optics, fitting: true, mirror: true, shape: Block(x: Frac(0.41, 0.47), y: Frac(0.14, 0.22), z: Rear(-0.02, 0.035), corner_m: 0.008)),
+        (name: "bumper_rear", role: Hull, slot: Metal, fitting: false, mirror: false, shape: Block(x: Frac(-0.46, 0.46), y: Frac(0.06, 0.14), z: Rear(-0.10, 0.08), corner_m: 0.02)),
+        (name: "step_rear", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: Frac(-0.24, 0.24), y: Frac(-0.02, 0.05), z: Rear(-0.04, 0.30), corner_m: 0.01)),
+    ],
+    knuckle_radius_m: 0.09,
+    sockets: [
+        (name: "roof", kind: Ring, size_m: 0.95, x: Frac(0.0, 0.0), y: Top(-0.02, -0.02), z: Frac(0.42, 0.42), normal: (0.0, 1.0, 0.0), reference: (0.0, 0.0, -1.0)),
+    ],
+)

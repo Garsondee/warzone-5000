@@ -559,6 +559,8 @@ pub enum TruckKind {
     Hauler,
     /// The tracked carrier's hull (a template of the same machinery, with no wheel arches: `carrier.rs`).
     Carrier,
+    /// The 6x6 armoured personnel carrier: a slab-sided hull with a wedge nose and a roof socket for a turret (`shapes/apc_6x6.ron`).
+    Apc,
 }
 
 impl TruckKind {
@@ -568,6 +570,7 @@ impl TruckKind {
             TruckKind::Scout => "scout_4x4",
             TruckKind::Hauler => "hauler_4x4",
             TruckKind::Carrier => "carrier_tracked",
+            TruckKind::Apc => "apc_6x6",
         }
     }
 
@@ -577,6 +580,7 @@ impl TruckKind {
             TruckKind::Scout => include_str!("../shapes/scout_4x4.ron"),
             TruckKind::Hauler => include_str!("../shapes/hauler_4x4.ron"),
             TruckKind::Carrier => include_str!("../shapes/carrier_tracked.ron"),
+            TruckKind::Apc => include_str!("../shapes/apc_6x6.ron"),
         }
     }
 }

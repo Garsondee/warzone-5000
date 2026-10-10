@@ -1,0 +1,37 @@
+// Remote weapon station (lane GEOMETRY): an enclosed turret for a vehicle's roof ring. A collar fixed to the roof, a turntable that yaws on it and
+// carries the housing (a box whose front face leans back), a sight head, an ammunition bin, a smoke-launcher bank each side, and a cradle of two
+// uprights on the front face that holds a gun's trunnion. Metres. Provenance ESTIMATE for every number, bands +-25%, reason: an original design
+// in the proportions of a vehicle remote weapon station, drawn from a side view (the turret of a 6x6 carrier by kacper444, proportions only).
+(
+    // outer diameter of the collar: the mount's size, what a roof socket gates
+    ring_m: 0.90,
+    collar_height_m: 0.08,
+    collar_width_m: 0.10,
+    turntable_m: 0.05,
+    // the housing: full width, length, height above the turntable, the z of its centre from the ring's (positive = back), how far the front face
+    // leans back from its foot to the roof of the housing, and the height of the vertical part of the front face (the foot)
+    housing_w_m: 1.10,
+    housing_l_m: 1.30,
+    housing_h_m: 0.55,
+    housing_z_m: 0.10,
+    front_slope_m: 0.30,
+    front_foot_m: 0.26,
+    // the gun's pivot: its height above the turntable and its z from the ring's; the clear width between the uprights; the uprights
+    cradle_width_m: 0.34,
+    cradle_height_m: 0.30,
+    cradle_z_m: -0.50,
+    upright_thickness_m: 0.04,
+    upright_length_m: 0.14,
+    // size of the sight head on the roof of the housing and its (x, z), then size and centre (x, y, z) of the ammunition bin on its right flank and of the smoke bank
+    // on each flank (the left-hand one is the mirror image)
+    sight_m: (0.30, 0.20, 0.40),
+    sight_at_m: (0.25, -0.05),
+    bin_m: (0.28, 0.32, 0.55),
+    bin_at_m: (0.69, 0.28, 0.25),
+    smoke_m: (0.14, 0.18, 0.40),
+    smoke_at_m: (0.62, 0.42, -0.20),
+    // parts that join overlap by this much, so nothing floats
+    overlap_m: 0.01,
+    corner_m: 0.015,
+    band_m: 0.03,
+)
