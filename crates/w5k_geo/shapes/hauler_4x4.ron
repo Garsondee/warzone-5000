@@ -52,7 +52,7 @@
         (name: "cargo_b", role: Hull, slot: Paint, fitting: true, mirror: false, shape: Block(x: Frac(0.04, 0.40), y: Top(-0.02, 1.10), z: Frac(0.50, 0.66), corner_m: 0.03)),
         (name: "exhaust_stack", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Y, x: Frac(0.44, 0.44), y: Top(-0.02, 1.55), z: Frac(0.296, 0.296), radius_m: 0.07)),
         (name: "fuel_tank", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Cyl(axis: Z, x: Lower(0.15, 0.15), y: Frac(0.20, 0.20), z: Frac(0.40, 0.62), radius_m: 0.27)),
-        (name: "antenna", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Y, x: Frac(-0.44, -0.44), y: Top(-0.03, 0.40), z: Frac(0.07, 0.07), radius_m: 0.008)),
+        (name: "antenna", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Y, x: Frac(-0.38, -0.38), y: Top(-0.03, 0.55), z: Frac(0.15, 0.15), radius_m: 0.008)),
     ],
     knuckle_radius_m: 0.12,
     sockets: [],
