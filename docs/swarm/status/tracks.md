@@ -1,34 +1,32 @@
 # Status: TRACKS
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/tracks/skid | **Contract pinned:** contract-v0.2 (0.2.0) | **Phase:** building (PR 3 of 4)
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/tracks/bog | **Contract pinned:** contract-v0.3 = 0982843 (0.3.0) | **Phase:** stage A and B kernel built (4 stacked PRs); integration waits on others
 
 ## Done
-- Spikes S3 and S4 written up and passing their kill criteria without tuning: `docs/lanes/tracks/spike-s3.md` (pivot +4.6% of `mu W L / 4`), `spike-s4.md` (drawbar thrust within 0.4% of the closed form, three soils with n != 1, 210 ns per sample).
-- PR 1 (settling): soil laws (`soil.rs`), tuning and reference soils as RON (`content/physics/tracks/`), `w5k tracks bench plate`, design note with CCRs (`docs/lanes/tracks/design-note.md`), theory note (`docs/theory/tracks.md`).
-
-- PR 2 (`lane/tracks/contact`, stacked on PR 116): `TrackSample: ContactElement` and `TrackedRunningGear` with seven oracle tests (`tests/contact.rs`).
-
-- PR 3 (`lane/tracks/skid`, stacked): plan-view skid model (`plan.rs`), the S3 and S4 tests, `w5k tracks bench thrust|pivot` with charts, damping reworked (see spike-s3 finding 3).
+- Spikes S3 and S4 pass their kill criteria without tuning: pivot +4.6% of `mu W L / 4`; drawbar thrust within 0.4% of Wong's closed form on three soils with n != 1; 210 ns per sample (`docs/lanes/tracks/spike-s3.md`, `spike-s4.md`).
+- PR 116 settling: soil laws, reference soils and tuning as RON, design note with CCRs, theory note. PR 120: `TrackSample` and `TrackedRunningGear`. PR 125: plan-view skid model, S3/S4 tests, thrust and pivot benches. PR 4 (`lane/tracks/bog`): belly drag with a smooth onset, the ladder bench and charts, track-versus-tyre float test, `BellyGeom::from_rig`. PRs 120, 125 and 4 are stacked on 116.
+- Rigid-wheel Bekker (`soil::rigid_wheel_*`) is a free function: CHASSIS's tyre can fill `sinkage_m` today (11 t on clay: tracks 0.9 mm, four tyres 112 mm).
 
 ## In progress
-- PR 4: belly drag, the ladder bench, track-vs-tyre float test. (Split because the kernel is over 400 non-test lines; the working code exists and is being cut into reviewable pieces.)
+- PR `lane/tracks/ladder-json`: `w5k tracks bench ladder` also writes VIEWER's `w5k-ladder-1` JSON (drawn: `media/ladder_viewer_snow.png`), plus the glue note `docs/lanes/tracks/glue-note.md` and the whole-vehicle wrapper `TrackedVehicleGear` (`vehicle.rs`, `tests/vehicle.rs`). Waiting for review and for the glue.
 
 ## Blocked
-- Nothing. Published-number checks (Wong's examples) wait on card C-017.
+- The tracked vehicle itself needs CHASSIS's tracked hull on the integrator and ARCH's glue calling `TrackedRunningGear` (interface: design note, "The object the glue calls"), WORLD's cited soil table and DRIVE's steering unit. Published-number checks (Wong's examples) wait on card C-017.
 
 ## Next
-- Open PRs 2 to 4 in order; `sinkage_m` for CHASSIS's tyre through `soil::rigid_wheel_*` (interface request not needed: free functions in my crate).
+- Adapt to review changes. Once the glue exists: the M113 and Sherman crossing the mixed course, mobility limits against the dossiers, the ladder on WORLD's mud.
 
 ## Cards needed / PROVISIONAL decisions in force
-- C-017 (sources): every soil number and the Wong oracles are UNVALIDATED. Default (c): carry on.
+- C-017 (sources): every soil number and Wong oracle is UNVALIDATED. Default (c): carry on.
+- TRACKS-D1 (bog criterion), PROVISIONAL: bogged when the net drawbar pull at 50% slip is below 10% of the weight (`bog_pull_fraction`); Wong's zero-pull definition (0) is never reached by the reference tank in snow below 150 t. The owner can pick another fraction and the ladder redraws.
 - PROVISIONAL(shoe_mu_scale_soft): grousers scale soil strength; a rubber pad on soil uses the soil's own strength.
 
 ## Evidence
-- `cargo test -p w5k_terramech`: `plate_sinkage_matches_bekker_closed_form`, `shear_curve_slope_at_zero_displacement_is_tau_max_over_k`, `compaction_resistance_for_n_equal_one_is_half_b_p_z`, `pivot_turn_moment_equals_mu_w_l_over_4_on_firm_ground`, `stopped_track_on_a_grade_does_not_creep`, `drawbar_thrust_matches_the_closed_form_shear_integral_for_three_soils`.
-- Image: `docs/lanes/tracks/media/plate_sinkage.png`.
+- `cargo test -p w5k_terramech` (30 tests), e.g. `pivot_turn_moment_equals_mu_w_l_over_4_on_firm_ground`, `drawbar_thrust_matches_the_closed_form_shear_integral_for_three_soils`, `belly_drag_ramps_smoothly_with_sinkage_over_clearance`, `heavier_tank_sinks_deeper_and_bogs_beyond_a_ground_pressure_threshold`, `track_floats_where_a_tyre_of_the_same_weight_sinks`.
+- Images in `docs/lanes/tracks/media/`: plate_sinkage, thrust_slip, pivot_response, ladder_sinkage, ladder_pull.
 
 ## Owner instructions received
-- None direct. Slice 2 stage A and B assigned by ARCH (`docs/swarm/SLICE-2.md`).
+- None direct. Stage A and B of slice 2 assigned by ARCH (`docs/swarm/SLICE-2.md`).
 
 ## Handoff note (fill in when you stop)
-- Changed: ... | Unfinished: ... | Surprised me: a long footprint turns 1.7x wider than the belts say | I would do next: ...
+- Changed: the kernel only; no contract or other lane touched. | Unfinished: integration into a vehicle, mobility limits against dossiers (M2), published-number validation. | Surprised me: a long footprint turns 1.7x wider than the belts say; Bekker's `kc/b` makes a narrow plate sink slightly LESS at the same pressure (the brief's "width effect in kc/b" has the sign backwards: width floats through pressure). | I would do next: the tracked glue test on the real rig, then the grouser model once `grouser_height_m` exists.

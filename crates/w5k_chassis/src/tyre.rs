@@ -19,10 +19,6 @@ pub struct TyreTuning {
     pub rolling_fade_speed_m_s: f64,
     /// Time constant of the damping on the patch-stretch rate, s: takes the energy out of a stopped vehicle's rock on its tyres.
     pub slip_damping_time_s: f64,
-    /// Load sensitivity of the peak friction and of the slip stiffnesses (`k` in `s = 1 / (1 + k (Fz / Fz0 - 1))`), dimensionless, 0..1.
-    /// PROVISIONAL(CCR-chassis-4): a per-tyre `TyreDef` field once the CCR lands; one shared value until then.
-    pub mu_load_sensitivity: f64,
-    pub stiffness_load_sensitivity: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -132,7 +128,7 @@ impl ContactElement for Tyre {
                 let length = scalar::sqrt(2.0 * self.free_radius_m * sinkage).max(d.patch_length_m);
                 soil_wheel::shear_strength_n(s, self.width_m * length, fz)
             }
-            None => i.ground.mu_peak * d.mu_scale * self.load_factor(self.tuning.mu_load_sensitivity, fz) * fz,
+            None => i.ground.mu_peak * d.mu_scale * self.load_factor(d.mu_load_sensitivity, fz) * fz,
         };
         // Soil shear needs displacement to build (Janosi-Hanamoto's K): the patch stretch relaxes over at least that distance.
         let sigma = soil.map_or(d.relaxation_length_m, |s| d.relaxation_length_m.max(s.shear_k_m));
@@ -150,7 +146,7 @@ impl ContactElement for Tyre {
         // Force from the stretch plus a little damping on its rate (the rate of a settled stretch is zero).
         let rate_x = slip_vel_x - a * self.stretch_x_m;
         let rate_y = slip_vel_y - a * self.stretch_y_m;
-        let stiff = self.load_factor(self.tuning.stiffness_load_sensitivity, fz);
+        let stiff = self.load_factor(d.stiffness_load_sensitivity, fz);
         let kx = d.slip_stiffness * stiff * fz / sigma;
         let ky = d.cornering_stiffness_per_rad * stiff * fz / sigma;
         let mut fx = kx * (self.stretch_x_m + self.tuning.slip_damping_time_s * rate_x);
@@ -209,12 +205,7 @@ mod tests {
     use w5k_contract::testing::standard_materials;
     use w5k_contract::Material;
 
-    const FADE: TyreTuning = TyreTuning {
-        rolling_fade_speed_m_s: 0.2,
-        slip_damping_time_s: 0.005,
-        mu_load_sensitivity: 0.0,
-        stiffness_load_sensitivity: 0.0,
-    };
+    const FADE: TyreTuning = TyreTuning { rolling_fade_speed_m_s: 0.2, slip_damping_time_s: 0.005 };
     const DT: f64 = 1.0 / 240.0;
 
     fn tyre_def() -> TyreDef {
@@ -361,10 +352,10 @@ mod tests {
     fn a_tyre_at_twice_its_static_load_grips_mu_2fz0_over_1_plus_k() {
         let g = ground(0.8, 0.0);
         let k = 0.15;
-        let tuning = TyreTuning { mu_load_sensitivity: k, stiffness_load_sensitivity: 0.3, ..FADE };
+        let def = TyreDef { mu_load_sensitivity: k, stiffness_load_sensitivity: 0.3, ..tyre_def() };
         let fz0 = 250e3 * PEN; // the static load is the 5 kN of PEN
         let peak = |pen: f64| {
-            let mut t = Tyre::new(&tyre_def(), 0.4, tuning).with_nominal_load(fz0);
+            let mut t = Tyre::new(&def, 0.4, FADE).with_nominal_load(fz0);
             let mut o = ContactOutput::default();
             for _ in 0..600 {
                 o = t.step(&input(&g, pen, 20.0, 0.0, 0.0)); // locked: at the friction limit

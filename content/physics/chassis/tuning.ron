@@ -9,10 +9,6 @@ ChassisTuning(
         src: "speed over which rolling resistance fades to zero at standstill (tanh scale), so a parked truck is not pushed backwards; PROVISIONAL(CCR-chassis-1)"),
     slip_damping_time_s: Param(v: 0.005, lo: 0.001, hi: 0.02, prov: Estimate,
         src: "damping on the rate of tyre patch stretch, as a fraction of the stretch stiffness; 5 ms gives a stopped 2.5 t truck a damping ratio of about 0.05 on its tyres"),
-    tyre_mu_load_sensitivity: Param(v: 0.15, lo: 0.05, hi: 0.3, prov: Estimate,
-        src: "peak friction per unit load falls as load rises: 10 to 20% at twice the rated load for truck tyres (Pacejka, Tire and Vehicle Dynamics, 3rd ed., ch. 4, the pDy2 term); PROVISIONAL(CCR-chassis-4)"),
-    tyre_stiffness_load_sensitivity: Param(v: 0.3, lo: 0.1, hi: 0.5, prov: Estimate,
-        src: "cornering stiffness grows less than proportionally with load (degressive, it peaks near twice the rated load: Pacejka ch. 4, pKy1/pKy2); PROVISIONAL(CCR-chassis-4)"),
     skidpad_window_s: Param(v: 1.5, lo: 0.5, hi: 3.0, prov: Estimate,
         src: "skidpad bench: moving-average window of the lateral acceleration for the limit and the slide-out test; longer than a gear shift's lurch (about 1 s with DRIVE's automatic), short against the speed ramp"),
 )
