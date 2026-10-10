@@ -1,0 +1,15 @@
+#![enable(implicit_some)]
+// Camo scheme woodland: procedural, node-local, no UVs. Spec: docs/art/CAMO-ALGORITHM.md. Names describe the look, not an army (card C-002).
+// Colour values are ESTIMATE: hand-read from published scheme descriptions, to be checked against colour-standard chips (docs/art/ART-DIRECTION.md).
+(
+    id: "woodland",
+    pattern: Blob(octaves: 3, lacunarity: 2.0, gain: 0.5),
+    scale_m: Param(v: 0.4, lo: 0.5, hi: 1.6, prov: Tuned, src: "blob size read off the character of the scheme; the owner can retune by eye"),
+    seed_salt: 11,
+    colours: [
+        (name: "light_green", srgb: "#6B7A4A", coverage: Param(v: 0.30, lo: 0.25, hi: 0.35, prov: Estimate, src: "typical share of the scheme by area, from published descriptions"), prov: Estimate, band_de: 6.0, src: "light leaf green of temperate woodland schemes, hand-read"),
+        (name: "olive", srgb: "#3D4A2B", coverage: Param(v: 0.30, lo: 0.25, hi: 0.35, prov: Estimate, src: "typical share of the scheme by area, from published descriptions"), prov: Estimate, band_de: 6.0, src: "dark olive, hand-read"),
+        (name: "brown", srgb: "#5A4630", coverage: Param(v: 0.28, lo: 0.23, hi: 0.33, prov: Estimate, src: "typical share of the scheme by area, from published descriptions"), prov: Estimate, band_de: 6.0, src: "earth brown, hand-read"),
+        (name: "black", srgb: "#1F201C", coverage: Param(v: 0.12, lo: 0.08, hi: 0.16, prov: Estimate, src: "typical share of the scheme by area, from published descriptions"), prov: Estimate, band_de: 6.0, src: "near-black"),
+    ],
+)
