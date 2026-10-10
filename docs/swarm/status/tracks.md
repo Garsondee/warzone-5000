@@ -1,6 +1,6 @@
 # Status: TRACKS
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/tracks/bog | **Contract pinned:** contract-v0.2 (0.2.0) | **Phase:** stage A and B kernel built (4 stacked PRs); integration waits on others
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/tracks/bog | **Contract pinned:** contract-v0.3 = 0982843 (0.3.0) | **Phase:** stage A and B kernel built (4 stacked PRs); integration waits on others
 
 ## Done
 - Spikes S3 and S4 pass their kill criteria without tuning: pivot +4.6% of `mu W L / 4`; drawbar thrust within 0.4% of Wong's closed form on three soils with n != 1; 210 ns per sample (`docs/lanes/tracks/spike-s3.md`, `spike-s4.md`).
