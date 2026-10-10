@@ -24,5 +24,8 @@ max_lines = 7000
 [crates.w5k_sim]
 max_lines = 5000
 
+# 2026-10-10 (ARCH): raised from 6000 to the default. w5k_tools holds every lane's CLI launcher (cmd/<lane>.rs, with their tests) and
+# ARCH's scenario commands (drive server, compare, proving); eight lanes were feeding it. At 90% again: split ARCH's arch_* modules
+# into their own crate rather than raising this again.
 [crates.w5k_tools]
-max_lines = 6000
+max_lines = 8000
