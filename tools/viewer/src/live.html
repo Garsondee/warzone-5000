@@ -36,16 +36,23 @@ html,body{margin:0;height:100%;overflow:hidden;background:#bfd4e6;font-family:sy
 #conn,#fatal{position:fixed;left:50%;transform:translateX(-50%);padding:.4em 1em;border-radius:999px;background:#0008;color:#fff;font-weight:700;font-size:calc(var(--u)*.26);line-height:1.3;display:none}
 #conn{bottom:calc(var(--edge) + var(--u)*1.7)}
 #fatal{top:40%;max-width:80vw;text-align:center;border-radius:1em;padding:1em 1.4em}
-#picker{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:3vmin;background:rgba(18,28,46,.58);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px)}
+#picker{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:4.5vmin;background:rgba(18,28,46,.58);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px)}
 body.picking #picker{display:flex}
 body.picking .btn,body.picking #speed,body.picking #limit{display:none}
 #picker h1{margin:0;color:#fff;font-weight:800;font-size:clamp(28px,7vmin,80px);line-height:1.1;text-shadow:0 .5vmin 1.5vmin #000a}
-#cards{display:flex;flex-wrap:wrap;gap:3vmin;justify-content:center;max-width:96vw}
+#cards{display:flex;flex-wrap:wrap;gap:3vmin;justify-content:center;max-width:96vw;padding:1.5vmin 0}
 .card{width:min(29vw,62vmin);min-width:150px;border:0;border-radius:4vmin;padding:0 0 1.6vmin;background:linear-gradient(#cfe6ff,#e9f3d8);color:#16324f;cursor:pointer;box-shadow:0 1vmin 0 #0007,0 2vmin 4vmin #0006;font-weight:800;font-size:clamp(22px,5.4vmin,64px);line-height:1.1;overflow:hidden}
 .card img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;background:linear-gradient(#bcd7f3,#dfeccb)}
 .card span{display:block;margin-top:1vmin}
-.card:hover,.card:focus-visible{transform:scale(1.05);outline:.8vmin solid #fff}
-.card:active{transform:scale(.98)}
+.card:not(.sel){filter:saturate(.75) brightness(.93)}
+.card.sel{transform:scale(1.05);outline:1.2vmin solid #ffd23f;filter:none}
+.card:hover,.card:focus-visible{outline:.8vmin solid #fff}
+.card.sel:hover,.card.sel:focus-visible{outline:1.2vmin solid #ffd23f}
+.card:active{transform:scale(.99)}
+#drive{display:flex;align-items:center;gap:.35em;border:0;border-radius:.55em;background:#2fbf5b;color:#fff;font-weight:800;font-size:clamp(36px,10vmin,120px);line-height:1;padding:.22em .8em;cursor:pointer;box-shadow:0 1.2vmin 0 #1b7a39,0 2.4vmin 4vmin #0007;letter-spacing:.03em}
+#drive svg{width:.85em;height:.85em;fill:currentColor}
+#drive:hover,#drive:focus-visible{filter:brightness(1.1);outline:.8vmin solid #fff}
+#drive:active{transform:translateY(1vmin);box-shadow:0 .2vmin 0 #1b7a39}
 </style>
 <canvas id="c"></canvas>
 <button class="btn" id="left" aria-label="Turn left"><svg viewBox="0 0 24 24"><polygon points="17,2.5 4,12 17,21.5"/></svg></button>
@@ -62,7 +69,7 @@ body.picking .btn,body.picking #speed,body.picking #limit{display:none}
 <div id="banner"></div>
 <div id="conn">Reconnecting…</div>
 <div id="fatal"></div>
-<div id="picker"><h1>Pick your truck!</h1><div id="cards"></div></div>
+<div id="picker"><h1>Let’s drive!</h1><div id="cards"></div><button id="drive" aria-label="Drive"><svg viewBox="0 0 24 24"><polygon points="5,2 22,12 5,22"/></svg>DRIVE!</button></div>
 <script id="data" type="application/json">__DATA__</script>
 <script type="module">__BOOT__</script>
 </html>

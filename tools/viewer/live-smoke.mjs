@@ -22,12 +22,20 @@ check(true, `the page found the game: vehicles ${await live(() => window.__live.
 const cards = await page.$$eval('.card', (cs) => cs.map((c) => ({ name: c.textContent.trim(), w: c.querySelector('img').naturalWidth, box: c.getBoundingClientRect().toJSON() })));
 check(cards.length === 3 && cards.every((c) => c.w > 0), `three picture cards with pictures: ${cards.map((c) => c.name).join(' / ')}`);
 check(cards.every((c) => c.box.width >= 150 && c.box.height >= 150), `cards are big (smallest ${Math.round(Math.min(...cards.map((c) => c.box.width)))} x ${Math.round(Math.min(...cards.map((c) => c.box.height)))} px)`);
-check(await live(() => window.__live.picking()), 'the picker is open at the start');
+check(await live(() => window.__live.picking()), 'the start screen is open at the start');
+await page.waitForTimeout(1500);
+check((await live(() => window.__live.frame())) === null && (await live(() => !window.__live.streaming())), 'nothing is driving before DRIVE: no stream, no moving truck');
+check((await live(() => window.__live.selected())) === 'mule_4x4', 'the Mule is chosen to begin with');
+const db = await page.$eval('#drive', (b) => b.getBoundingClientRect().toJSON());
+check(db.width >= 200 && db.height >= 90, `the DRIVE button is huge (${Math.round(db.width)} x ${Math.round(db.height)} px)`);
 await page.screenshot({ path: `${out}/picker.png` });
-
+await page.click('.card[data-id="scout_4x4"]');
+check((await live(() => window.__live.selected())) === 'scout_4x4' && (await live(() => window.__live.picking())) && (await live(() => !window.__live.streaming())), 'tapping a picture only chooses it (the Scout is highlighted, nothing starts)');
 await page.click('.card[data-id="mule_4x4"]');
+
+await page.click('#drive');
 await until(() => !window.__live.picking() && window.__live.frame() && window.__live.vehicle() === 'mule_4x4');
-check(true, 'picked the Mule: the picker closed and frames arrive for it');
+check(true, 'DRIVE: the start screen closed and frames arrive for the Mule');
 const p0 = await live(() => window.__live.frame().pos_m);
 
 // Keyboard: up arrow = go.
@@ -107,6 +115,14 @@ for (const id of ['scout_4x4', 'mule_4x4', 'hauler_4x4']) {
 // the scout has a skin of its own (scale near 1); the mule wears the utility truck as it is; the hauler wears it grown to its wheelbase
 check(Math.abs(fits.scout_4x4.scale - 1) < 0.1 && Math.abs(fits.mule_4x4.scale - 1) < 0.05 && fits.hauler_4x4.scale > 1.1, `the skin fits each vehicle: scale scout ${fits.scout_4x4.scale.toFixed(2)}, mule ${fits.mule_4x4.scale.toFixed(2)}, hauler ${fits.hauler_4x4.scale.toFixed(2)}`);
 await page.screenshot({ path: `${out}/hauler.png` });
+
+// The start screen by keyboard: 1 chooses the Scout, Enter drives.
+await page.click('#garage');
+await page.keyboard.press('1');
+check((await live(() => window.__live.selected())) === 'scout_4x4', 'the 1 key chooses the first vehicle on the start screen');
+await page.keyboard.press('Enter');
+await page.waitForFunction(() => !window.__live.picking() && window.__live.vehicle() === 'scout_4x4', null, { timeout: 60000 });
+check(true, 'Enter drives the chosen vehicle');
 
 // The garage button opens the picker again.
 await page.click('#garage');

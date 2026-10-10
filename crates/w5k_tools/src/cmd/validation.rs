@@ -22,8 +22,9 @@ fn root() -> PathBuf {
 pub fn run(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
         Some("dashboard") => dashboard(&args[1..]),
+        Some("terrain") => terrain(&args[1..]),
         _ => Err(
-            "usage: w5k validation dashboard --out DIR [--replay FILE] [--def FILE] [--dossier FILE] [--top-speed-run]"
+            "usage: w5k validation terrain --stats FILE [--reference-grade X] | dashboard --out DIR [--replay FILE] [--def FILE] [--dossier FILE] [--top-speed-run]"
                 .into(),
         ),
     }
@@ -63,5 +64,34 @@ fn dashboard(args: &[String]) -> Result<(), String> {
     let target = Path::new(out).join("index.html");
     std::fs::write(&target, html).map_err(|e| format!("{}: {e}", target.display()))?;
     println!("wrote {}", target.display());
+    Ok(())
+}
+
+/// `w5k validation terrain --stats stats.json [--reference-grade 0.6]`: traffic lights for WORLD's stats, one line each.
+fn terrain(args: &[String]) -> Result<(), String> {
+    let path = flag(args, "--stats").ok_or("--stats FILE is required")?;
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+    let stats = w5k_validate::terrain::from_json(&text)?;
+    let grade = match flag(args, "--reference-grade") {
+        Some(g) => g.parse::<f64>().map_err(|e| format!("--reference-grade: {e}"))?,
+        None => {
+            let d = Dossier::load(&root().join("content/dossier/m998.ron"))?;
+            d.quantities
+                .iter()
+                .find(|q| q.id == "mobility.max_grade_ratio")
+                .map(|q| q.param.v)
+                .ok_or("m998 dossier has no grade")?
+        }
+    };
+    for c in w5k_validate::terrain::score(&stats, grade) {
+        println!(
+            "{:<12} {:<28} {}{}  {}",
+            c.light.word(),
+            c.name,
+            c.scope,
+            if c.provisional { " [provisional]" } else { "" },
+            c.note
+        );
+    }
     Ok(())
 }
