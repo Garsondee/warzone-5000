@@ -50,7 +50,7 @@ pub struct Wheel {
 
 /// Circle segments for a `detail` level: 0 coarse, 1 default, 2 reference.
 pub fn segments_for(detail: u8) -> u32 {
-    [24, 64, 128][usize::from(detail.min(2))] // const-ok: tessellation levels (docs/lanes/geometry/design-note.md section 7)
+    [24, 48, 128][usize::from(detail.min(2))] // const-ok: tessellation levels (docs/lanes/geometry/design-note.md section 7)
 }
 
 /// Revolve a closed profile of (rho, x) points about the X axis; angle 0 is straight down (-Y).

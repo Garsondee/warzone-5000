@@ -10,6 +10,7 @@
 pub mod bvh;
 pub mod cavity;
 pub mod edge;
+pub mod export;
 pub mod flags;
 pub mod loft;
 pub mod mass;
