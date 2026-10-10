@@ -1,0 +1,12 @@
+#![enable(implicit_some)]
+// Trench crossing: a ditch `width_m` across (along the drive) and `depth_m` deep, walls at `wall_grade`. The runner bisects `width_m`
+// for the widest ditch crossed.
+FixtureDef(
+    name: "trench",
+    kind: Trench(
+        width_m: Param(v: 1.0, lo: 0.1, hi: 6.0, prov: Spec, src: "proving-ground default; the runner bisects it"),
+        depth_m: Param(v: 1.0, prov: Spec, src: "course design: deep enough that a wheel falls in"),
+        wall_grade: Param(v: 4.0, prov: Spec, src: "course design: steep walls (76 degrees), eased over depth / wall_grade"),
+    ),
+    surface: "asphalt",
+)
