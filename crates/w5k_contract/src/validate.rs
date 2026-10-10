@@ -280,6 +280,15 @@ impl PhysRig {
                         {
                             e.push(format!("{w}: tyre stiffness, grip, slip stiffness, cornering stiffness, relaxation length and patch length must be positive"));
                         }
+                        if !((0.0..=1.0).contains(&t.mu_load_sensitivity)
+                            && (0.0..=1.0).contains(&t.stiffness_load_sensitivity)
+                            && t.nominal_load_n >= 0.0
+                            && finite(t.nominal_load_n))
+                        {
+                            e.push(format!(
+                                "{w}: load sensitivities must be in 0..1 and the nominal load finite and >= 0"
+                            ));
+                        }
                         // The free wheel must overlap the ground by a plausible static deflection.
                         let deflection = s.wheel.radius_m - self.ride_height_m - s.rest_pos_m.y;
                         if self.ride_height_m > 0.0
@@ -521,6 +530,13 @@ impl PhysRig {
             .all(|x| *x >= 0.0 && finite(*x))
             {
                 e.push(format!("{w}: thickness, running resistance and wheel contact values must be finite and >= 0"));
+            }
+            if !(t.grouser_height_m >= 0.0
+                && finite(t.grouser_height_m)
+                && t.belt_stiffness_n_m >= 0.0
+                && finite(t.belt_stiffness_n_m))
+            {
+                e.push(format!("{w}: grouser height and belt stiffness must be finite and >= 0"));
             }
             if matches!(t.shoe_mu_scale_soft, Some(m) if !(m > 0.0)) || !(t.shoe_mu_scale > 0.0) {
                 e.push(format!("{w}: shoe friction scales must be positive"));

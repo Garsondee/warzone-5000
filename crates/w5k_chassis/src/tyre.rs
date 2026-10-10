@@ -196,6 +196,9 @@ mod tests {
             aligning_trail_frac: 0.3,
             kappa_peak: 0.0,
             alpha_peak_rad: 0.0,
+            mu_load_sensitivity: 0.0,
+            stiffness_load_sensitivity: 0.0,
+            nominal_load_n: 0.0,
         }
     }
 

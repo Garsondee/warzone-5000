@@ -194,6 +194,7 @@ pub fn unpack(bytes: &[u8]) -> Result<RenderRig, String> {
         meshes,
         material_slots: header.material_slots,
         joint_count: header.joint_count,
+        track_runs: Vec::new(),
     })
 }
 
