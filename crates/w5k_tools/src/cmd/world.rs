@@ -17,6 +17,8 @@ const GRAVEL_RGB: [f64; 3] = [140.0, 132.0, 118.0]; // const-ok: display colour
 const WATER_RGB: [f64; 3] = [40.0, 90.0, 150.0]; // const-ok: display colour
 const WATER_DEEP_RGB: [f64; 3] = [15.0, 40.0, 100.0]; // const-ok: display colour
 const WATER_DEPTH_FULL_M: f64 = 2.5; // const-ok: depth at which the water colour is darkest
+const PLANKS_RGB: [f64; 3] = [120.0, 90.0, 55.0]; // const-ok: display colour
+const TRACK_RGB: [u8; 3] = [200, 170, 110]; // const-ok: display colour of a track's centreline
 const MUD_RGB: [f64; 3] = [105.0, 80.0, 52.0]; // const-ok: display colour
 const GROUND_RGB: [f64; 3] = [95.0, 135.0, 78.0]; // const-ok: display colour
 const HEIGHT_TINT_PER_M: f64 = 5.0; // const-ok: display colour ramp
@@ -93,6 +95,8 @@ fn export(args: &[String]) -> Result<(), String> {
         "material_ids": mats,
         "materials": w.materials().materials.iter().map(|m| m.name.clone()).collect::<Vec<_>>(),
         "water_m": water,
+        "bridges": course.bridges.iter().map(|b| serde_json::json!({"kind": format!("{:?}", b.kind), "a_m": [mm(b.a.0), mm(b.a.1)], "b_m": [mm(b.b.0), mm(b.b.1)], "deck_len_m": b.deck_len_m, "width_m": b.width_m, "deck_y_m": mm(b.deck_y_m), "load_limit_kg": b.load_limit_kg})).collect::<Vec<_>>(),
+        "extra_roads_m": course.extra_roads.iter().map(|r| r.iter().step_by(step).map(|p| [mm(p.0), mm(p.2), mm(p.1)]).collect::<Vec<_>>()).collect::<Vec<_>>(),
         "road_m": course.road.iter().step_by(step).map(|r| [mm(r.0), mm(r.2), mm(r.1)]).collect::<Vec<_>>(),
         "props": props,
     });
@@ -150,6 +154,7 @@ fn preview(args: &[String]) -> Result<(), String> {
                     "asphalt" => ASPHALT_RGB,
                     "mud" => MUD_RGB,
                     "gravel" => GRAVEL_RGB,
+                    "planks" => PLANKS_RGB,
                     _ => [GROUND_RGB[0] + (w.height_m(x, z) - lo.y) * HEIGHT_TINT_PER_M, GROUND_RGB[1], GROUND_RGB[2]],
                 }
             };
@@ -174,6 +179,11 @@ fn preview(args: &[String]) -> Result<(), String> {
             PropKind::Tree => dot(p.transform.pos.x, p.transform.pos.z, 2, [20, 70, 30]),
             PropKind::Barricade | PropKind::Wall => dot(p.transform.pos.x, p.transform.pos.z, 3, [200, 60, 40]),
             _ => dot(p.transform.pos.x, p.transform.pos.z, 3, [90, 90, 120]),
+        }
+    }
+    for road in &course.extra_roads {
+        for p in road.iter().step_by(2) {
+            dot(p.0, p.1, 1, TRACK_RGB);
         }
     }
     let (s, f) = (course.road[0], course.road[course.road.len() - 1]);

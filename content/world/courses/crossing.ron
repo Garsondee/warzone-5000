@@ -1,0 +1,69 @@
+#![enable(implicit_some)]
+// The crossing course: a river across the way and four ways over it. Drive toward -Z from the bottom of the map; the finish is on the far bank.
+//   1. the road bridge: wide and strongly rated, on the main road, a long way round (west),
+//   2. the wooden bridge: on a narrow track, short, 2.8 m wide and rated for light vehicles only,
+//   3. the ford: a 0.6 m deep stretch in the east, cross-country,
+//   4. swimming: the channel is 2.5 m deep with banks at grade 0.35, so anything that floats may cross anywhere else.
+// Bridge load ratings are course data (the survey reads them); nothing collapses (NOT-MODELLED).
+CourseDef(
+    name: "crossing",
+    seed: 51,
+    size_cells: 401,
+    hills: HillsDef(
+        amplitude_m: Param(v: 3.0, prov: Spec, src: "course design: gentle undulation"),
+        wavelength_m: Param(v: 120.0, prov: Spec, src: "course design"),
+        warp_m: Param(v: 30.0, prov: Spec, src: "course design"),
+        octaves: 4,
+        max_grade: Param(v: 0.15, prov: Spec, src: "course design"),
+    ),
+    road: RoadDef(
+        waypoints: [(-150.0, 170.0), (-120.0, 60.0), (-60.0, -170.0), (130.0, -170.0)],
+        width_m: Param(v: 6.0, prov: Spec, src: "course design: two lanes"),
+        shoulder_m: Param(v: 4.0, prov: Spec, src: "course design"),
+        max_grade: Param(v: 0.08, prov: Spec, src: "course design: 8 percent"),
+        surface: "asphalt",
+        bridges: [BridgeDef(
+            after_waypoint: 1,
+            river: 0,
+            at_fraction: Param(v: 0.17, prov: Spec, src: "course design: the long way round, west"),
+            kind: Road,
+            width_m: Param(v: 8.0, prov: Spec, src: "course design: a road bridge, two lanes and a verge"),
+            load_limit_kg: Param(v: 60000.0, prov: Spec, src: "course design: PROVISIONAL(route-bridge) rated for the heaviest vehicle (80 t class vehicles excluded)"),
+            rail_height_m: Param(v: 1.0, prov: Spec, src: "course design: concrete parapet"),
+        )],
+    ),
+    extra_roads: [RoadDef(
+        waypoints: [(-135.0, 115.0), (-2.0, 50.0), (60.0, -150.0), (125.0, -165.0)],
+        width_m: Param(v: 3.2, prov: Spec, src: "course design: a track, one vehicle wide"),
+        shoulder_m: Param(v: 2.0, prov: Spec, src: "course design"),
+        max_grade: Param(v: 0.10, prov: Spec, src: "course design: 10 percent"),
+        surface: "dirt",
+        bridges: [BridgeDef(
+            after_waypoint: 1,
+            river: 0,
+            at_fraction: Param(v: 0.5, prov: Spec, src: "course design: the short way, mid-course"),
+            kind: Wooden,
+            width_m: Param(v: 2.8, prov: Spec, src: "course design: a rickety plank bridge, no passing"),
+            load_limit_kg: Param(v: 6000.0, prov: Spec, src: "course design: PROVISIONAL(route-bridge) rated for light vehicles only (UNVALIDATED)"),
+            rail_height_m: Param(v: 0.6, prov: Spec, src: "course design: low timber rail"),
+        )],
+    )],
+    rivers: [RiverDef(
+        start: (-200.0, -15.0),
+        end: (200.0, 15.0),
+        meander_amplitude_m: Param(v: 18.0, prov: Spec, src: "course design"),
+        meander_wavelength_m: Param(v: 160.0, prov: Spec, src: "course design"),
+        width_m: Param(v: 16.0, prov: Spec, src: "course design: at least 2 x depth / bank grade"),
+        depth_m: Param(v: 2.5, prov: Spec, src: "course design"),
+        bank_grade: Param(v: 0.35, prov: Spec, src: "course design"),
+        freeboard_m: Param(v: 1.0, prov: Spec, src: "course design"),
+        valley_half_m: Param(v: 25.0, prov: Spec, src: "course design"),
+        valley_blend_m: Param(v: 45.0, prov: Spec, src: "course design"),
+        surface_slope: Param(v: 0.002, prov: Spec, src: "course design"),
+        fords: [FordDef(
+            at_fraction: Param(v: 0.82, prov: Spec, src: "course design: the east, away from both bridges"),
+            length_m: Param(v: 18.0, prov: Spec, src: "course design"),
+            depth_m: Param(v: 0.6, prov: Spec, src: "course design: wadable by a light 4x4"),
+        )],
+    )],
+)
