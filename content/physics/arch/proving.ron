@@ -17,4 +17,12 @@ Proving(
     decel_window_s: Param(v: 0.25, lo: 0.1, hi: 0.5, prov: Estimate, src: "peak deceleration is averaged over this window so one tick of pitch ringing does not read as a friction spike"),
     accel_target_kmh: Param(v: 48.0, prov: Spec, src: "docs/validation/proving-ground.md section 3a: time from rest to 48 km/h (13.33 m/s)"),
     accel_max_s: Param(v: 60.0, prov: Spec, src: "stop rule: a truck that has not reached 48 km/h in 60 s is reported as ended early"),
+    tilt_rate_rad_s: Param(v: 0.02, lo: 0.005, hi: 0.05, prov: Estimate, src: "tilt table: slow enough to stay quasi-static (the body rolls at about 1.5 Hz, so 0.02 rad/s tilts 0.013 rad per roll period); the value CHASSIS's own bench tests use"),
+    tilt_max_rad: Param(v: 1.2, lo: 0.9, hi: 1.4, prov: Estimate, src: "tilt table: gives up at 69 degrees, far beyond the rigid tipping angle of any garage truck (about 45 degrees)"),
+    step_speed_m_s: Param(v: 2.0, prov: Spec, src: "docs/validation/proving-ground.md section 3g: step approached at 2 m/s (walking pace)"),
+    step_distance_m: Param(v: 15.0, lo: 8.0, hi: 30.0, prov: Estimate, src: "step test: distance from the start to the step, enough for the controller to settle at walking pace"),
+    step_ramp_m: Param(v: 0.02, lo: 0.005, hi: 0.05, prov: Estimate, src: "step test: the contract's stand-in plateau rises over this horizontal distance (a smoothstep), the nearest it offers to a vertical face; 2 cm is small against a 0.4 m wheel"),
+    step_max_s: Param(v: 40.0, prov: Spec, src: "stop rule: a truck that has not got its rear axle over the step in 40 s counts as stopped by it"),
+    step_search_max_m: Param(v: 1.0, lo: 0.5, hi: 2.0, prov: Estimate, src: "step test: upper end of the bisection bracket, well above one wheel radius (0.4 to 0.6 m for the garage trucks)"),
+    step_resolution_m: Param(v: 0.01, prov: Spec, src: "step test: the bisection stops when the bracket is 1 cm wide"),
 )

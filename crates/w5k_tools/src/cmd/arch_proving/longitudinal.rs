@@ -8,7 +8,7 @@ use super::facts::Facts;
 use super::sim::Sim;
 use super::{flat_world, Ctx, Outcome};
 
-fn ticks(seconds: f64) -> u64 {
+pub fn ticks(seconds: f64) -> u64 {
     (seconds * TICK_HZ).round() as u64
 }
 
