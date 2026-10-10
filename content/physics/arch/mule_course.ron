@@ -1,0 +1,26 @@
+#![enable(implicit_some)]
+// ARCH glue scenario: the Mule 4x4 with DRIVE's real powertrain (engine, converter, automatic gearbox, differentials, brakes) drives WORLD's
+// slice course along the road centreline. A scripted driver: speed controller (throttle and brake pedals) plus pure-pursuit steering.
+// Every number here belongs to the scripted driver or the stopping rules, not to the truck (the truck's numbers live in its own RON).
+MuleCourse(
+    vehicle: "content/vehicles/game/mule_4x4.ron",
+    extras: "content/vehicles/game/mule_4x4.extras.ron",
+    course: "content/world/courses/slice.ron",
+    chassis_tuning: "content/physics/chassis/tuning.ron",
+    cruise_speed_m_s: Param(v: 12.0, lo: 3.0, hi: 16.0, prov: Tuned, src: "driver: 43 km/h cruise on a graded 6 m road; enough to take the box through its first gears, still inside the cornering cap below"),
+    max_lateral_accel_m_s2: Param(v: 2.0, lo: 1.0, hi: 3.5, prov: Tuned, src: "driver: comfortable cornering limit well under the roll limit of a 0.8 m centre of mass on a 1.8 m track; speed is capped to sqrt(a_lat / curvature)"),
+    speed_gain_per_m_s: Param(v: 0.5, lo: 0.2, hi: 1.0, prov: Tuned, src: "driver: throttle per m/s of speed error (same value as the CHASSIS strip scenario)"),
+    brake_gain_per_m_s: Param(v: 0.4, lo: 0.1, hi: 1.0, prov: Tuned, src: "driver: brake pedal per m/s of overspeed"),
+    brake_deadband_m_s: Param(v: 0.5, lo: 0.1, hi: 1.5, prov: Tuned, src: "driver: overspeed tolerated before the brake pedal is touched (stops throttle/brake chatter on a descent)"),
+    lookahead_base_m: Param(v: 4.0, lo: 2.0, hi: 8.0, prov: Tuned, src: "driver: pure-pursuit lookahead at standstill, about one wheelbase"),
+    lookahead_per_m_s: Param(v: 0.8, lo: 0.3, hi: 2.0, prov: Tuned, src: "driver: extra lookahead per m/s of speed (0.8 s of travel), keeps the pursuit damped"),
+    curvature_window_m: Param(v: 12.0, lo: 5.0, hi: 25.0, prov: Tuned, src: "driver: distance ahead over which the upcoming path curvature is estimated for the speed cap"),
+    final_decel_m_s2: Param(v: 1.5, lo: 0.8, hi: 3.0, prov: Tuned, src: "driver: planned deceleration for the final approach, gentle enough to be well inside the brakes and tyres"),
+    finish_stop_margin_m: Param(v: 1.0, lo: 0.2, hi: 3.0, prov: Tuned, src: "driver: aims to be stopped this far before the end of the route"),
+    stopped_below_m_s: Param(v: 0.05, prov: Spec, src: "scenario end: the truck counts as stopped below 5 cm/s"),
+    stall_window_s: Param(v: 8.0, lo: 4.0, hi: 20.0, prov: Spec, src: "stop rule: if the truck makes less than stall_progress_m along the road in this time the run ends as stalled"),
+    stall_progress_m: Param(v: 1.0, lo: 0.2, hi: 3.0, prov: Spec, src: "stop rule: progress along the road below which the truck counts as stalled"),
+    off_road_limit_m: Param(v: 6.0, lo: 3.0, hi: 12.0, prov: Spec, src: "stop rule: the run ends if the hull datum is further than this from the centreline (the road is 6 m wide with a 5 m shoulder)"),
+    max_seconds: Param(v: 300.0, prov: Spec, src: "scenario length cap"),
+    frame_every_ticks: 2,
+)
