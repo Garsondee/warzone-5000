@@ -3,6 +3,8 @@
 use w5k_terramech::reference::reference_soils;
 use w5k_terramech::soil;
 
+const PA_PER_KPA: f64 = 1e3; // const-ok: unit conversion at the display edge
+const MM_PER_M: f64 = 1e3; // const-ok: unit conversion at the display edge
 const USAGE: &str = "usage: w5k tracks bench plate --out DIR   (plate pressure-sinkage of the reference soils, CSV)";
 
 /// Entry point for `w5k tracks <args>`.
@@ -34,8 +36,7 @@ fn plate(args: &[String]) -> Result<(), String> {
         csv += &format!("{kpa}");
         for m in &soils {
             let s = m.soil.ok_or("reference soil without soil data")?;
-            csv += &format!(",{:.2}", soil::sinkage_m(&s, b_m, f64::from(kpa) * 1e3) * 1e3);
-            // const-ok: kPa in, mm out (display edge)
+            csv += &format!(",{:.2}", soil::sinkage_m(&s, b_m, f64::from(kpa) * PA_PER_KPA) * MM_PER_M);
         }
         csv.push('\n');
     }
