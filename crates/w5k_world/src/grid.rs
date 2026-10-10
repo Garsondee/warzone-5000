@@ -80,6 +80,8 @@ pub struct GridWorld {
     cell_start: Vec<u32>,
     cell_items: Vec<u32>,
     corrugation: Option<Corrugation>,
+    /// Water surface height per node, `NAN` where there is none.
+    water: Option<Vec<f32>>,
 }
 
 fn prop_n_for(half_m: f64) -> usize {
@@ -107,6 +109,7 @@ impl GridWorld {
             cell_start: vec![0; prop_n * prop_n + 1],
             cell_items: Vec::new(),
             corrugation: None,
+            water: None,
         }
     }
 
@@ -115,11 +118,38 @@ impl GridWorld {
         self.corrugation = Some(c);
     }
 
+    /// Attach a water surface (`NAN` = no water at that node).
+    pub fn set_water(&mut self, surface: Vec<f32>) {
+        assert_eq!(surface.len(), self.n * self.n);
+        self.water = Some(surface);
+    }
+
+    /// Water surface height at node `(i, j)`, if the node has water.
+    pub fn water_at_node(&self, i: usize, j: usize) -> Option<f64> {
+        self.water.as_ref().map(|w| f64::from(w[j * self.n + i])).filter(|v| v.is_finite())
+    }
+
+    /// Height of the water surface at `(x, z)`, `Some` only where the ground is below it (WORLD-only until CCR W-6 adds it to
+    /// `WorldQuery`). Depth is this minus `height_m`.
+    pub fn water_surface_m(&self, x: f64, z: f64) -> Option<f64> {
+        let w = self.water.as_ref()?;
+        let max = (self.n - 1) as f64; // const-ok: grid extent in cells
+        let i = (((x + self.half_m) / CELL_M).round().clamp(0.0, max)) as usize;
+        let j = (((z + self.half_m) / CELL_M).round().clamp(0.0, max)) as usize;
+        let level = f64::from(w[j * self.n + i]);
+        (level.is_finite() && self.height_m(x, z) < level).then_some(level)
+    }
+
     /// Hash of the washboard layer (0 when there is none), for determinism checks.
     pub fn corrugation_hash(&self) -> u64 {
         let mut h = StateHasher::new();
         if let Some(c) = &self.corrugation {
             c.hash_into(&mut h);
+        }
+        if let Some(w) = &self.water {
+            for v in w {
+                h.write_u32(v.to_bits());
+            }
         }
         h.finish()
     }
