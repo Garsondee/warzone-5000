@@ -43,7 +43,16 @@ rising with airflow (vehicle speed). The temperature is the water level in a buc
 coefficient falls (fade), so the same pedal brakes less exactly when it is needed most; a long descent is the test. A brake must also never push a stopped shaft backwards:
 it is solved as "the torque that leaves the shaft stopped, clamped to capacity" so a held shaft stays held.
 
-## Why tracked vehicles need a steering unit and cars do not (planned)
+## Why tracked vehicles need a steering unit and cars do not
 A car steers by turning wheels and lets an open differential absorb the speed difference between the inside and outside wheels. A tracked vehicle cannot turn its tracks;
-it must drive one side slower than the other, so it needs a mechanism (clutch-brake, controlled or double differential, hydrostatic drive) that deliberately creates that
-speed or torque difference. Not implemented yet.
+it must drive one side slower than the other, so it needs a mechanism that deliberately creates that difference. Four families, and what each one fixes:
+- **Controlled differential** (brake steering): an open differential feeds both tracks equal torque; braking the inside track makes it slow and, because the differential
+  keeps the *sum* of the two speeds, the outside track speeds up. The turn radius is whatever the brake gives you, and the brake pays in heat.
+- **Clutch-brake** (Sherman, T-34): both tracks are driven straight through. A little stick disengages the inside clutch (the track coasts, the tank drifts wide); more stick
+  brakes it (a tight turn). It wastes the power it brakes away, and a stuck-on clutch makes it a tank that cannot go straight.
+- **Double differential** (Tiger II, Merritt-Brown): a second differential adds a speed difference proportional to the demand, so each gear has a fixed turn radius
+  (the *ratio* of the track speeds is fixed). No power is thrown away: the slow track's power flows to the fast track.
+- **Hydrostatic**: a pump and motor fix a speed *difference* (rad/s) regardless of the vehicle speed, so the turn radius grows with the speed, and, being fed from the engine
+  side, it works with the gearbox in neutral (a pivot turn on the spot).
+In the code the first steers through the sprocket brakes; the clutch-brake locks the two sides and frees the inner clutch (brakes after half stick); the other two are an implicit
+servo on the speed difference (the same constraint-solving trick as the clutch and the locked differential), limited by the unit's torque capacity.

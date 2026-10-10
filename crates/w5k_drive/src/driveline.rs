@@ -9,7 +9,7 @@
 //! slower side, up to a bias ratio, in proportion to how far the speeds differ: a torque bias, never a speed constraint.
 
 use serde::{Deserialize, Serialize};
-use w5k_contract::rig::{DiffKind, DriveModeDef, DriveNode, DrivetrainDef};
+use w5k_contract::rig::{DiffKind, DriveModeDef, DriveNode, DrivetrainDef, SteerLaw, SteerUnitKind};
 use w5k_contract::Param;
 use w5k_math::scalar::clamp;
 
@@ -20,11 +20,18 @@ use crate::coupling::Downstream;
 pub struct DrivelineTuning {
     /// Speed difference across a limited-slip differential at which it reaches its full bias, rad/s (below it the bias ramps in linearly).
     pub lsd_full_bias_speed_rad_s: Param,
+    /// A kinematic steering unit (double differential) whose law gives no ratio: the fractional speed difference between the outputs at full
+    /// demand, `(v_outer - v_inner) / (v_outer + v_inner)`.
+    pub default_steer_diff_ratio: Param,
+    /// A steering demand below this fraction of full is treated as straight ahead (a dead band on the stick).
+    pub steer_dead_band: Param,
 }
 
 impl DrivelineTuning {
     pub fn check(&self) -> Result<(), String> {
-        self.lsd_full_bias_speed_rad_s.check("lsd_full_bias_speed_rad_s")
+        self.lsd_full_bias_speed_rad_s.check("lsd_full_bias_speed_rad_s")?;
+        self.default_steer_diff_ratio.check("default_steer_diff_ratio")?;
+        self.steer_dead_band.check("steer_dead_band")
     }
 }
 
@@ -59,6 +66,15 @@ struct Link {
     b: Group,
 }
 
+/// The steering unit of a tracked vehicle: which outputs are [left, right] and the law that turns a demand into a speed or torque difference.
+#[derive(Clone, Debug)]
+struct Steer {
+    kind: SteerUnitKind,
+    law: SteerLaw,
+    left: usize,
+    right: usize,
+}
+
 #[derive(Clone, Debug)]
 pub struct Driveline {
     leaves: Vec<Leaf>,
@@ -70,12 +86,16 @@ pub struct Driveline {
     mode: usize,
     driving: bool,
     lsd_ramp_rad_s: f64,
+    steer: Option<Steer>,
+    default_diff_ratio: f64,
+    dead_band: f64,
 }
 
 struct Walk<'a> {
     finals: &'a [(f64, f64)],
     leaves: Vec<Leaf>,
     links: Vec<Link>,
+    steer: Option<Steer>,
 }
 
 impl Walk<'_> {
@@ -124,7 +144,29 @@ impl Walk<'_> {
                 }
                 Ok(())
             }
-            _ => Err("tracked steering units are not implemented yet".into()),
+            DriveNode::SteerUnit { kind, ratio: r, law, children } => {
+                let outs: Vec<usize> = children
+                    .iter()
+                    .filter_map(|c| if let DriveNode::Output(i) = c { Some(*i) } else { None })
+                    .collect();
+                if !(*r > 0.0) || outs.len() != 2 || children.len() != 2 || self.steer.is_some() {
+                    return Err("a steering unit needs ratio > 0 and exactly two Output children [left, right], and there can be only one".into());
+                }
+                let start = self.leaves.len();
+                for child in children {
+                    self.node(child, share * 0.5, ratio * r, eta)?;
+                }
+                // a clutch-brake unit drives both sides straight through from one shaft (equal speeds) until its clutches are released
+                if *kind == SteerUnitKind::ClutchBrake {
+                    let total: f64 = self.leaves[start..].iter().map(|l| l.share).sum();
+                    let g = |l: &Leaf| Group(vec![(l.output, l.share / total * 2.0, 1.0)]);
+                    let link =
+                        Link { kind: LinkKind::Locked, a: g(&self.leaves[start]), b: g(&self.leaves[start + 1]) };
+                    self.links.push(link);
+                }
+                self.steer = Some(Steer { kind: *kind, law: law.clone(), left: outs[0], right: outs[1] });
+                Ok(())
+            }
         }
     }
 }
@@ -195,9 +237,9 @@ impl Driveline {
         if finals.iter().any(|&(r, e)| !(r > 0.0 && e > 0.0 && e <= 1.0)) {
             return Err("every output needs final_drive_ratio > 0 and efficiency in (0, 1]".into());
         }
-        let mut walk = Walk { finals: &finals, leaves: Vec::new(), links: Vec::new() };
+        let mut walk = Walk { finals: &finals, leaves: Vec::new(), links: Vec::new(), steer: None };
         walk.node(&def.driveline, 1.0, 1.0, 1.0)?;
-        let Walk { mut leaves, links, .. } = walk;
+        let Walk { mut leaves, links, steer, .. } = walk;
         if leaves.len() != def.outputs.len() {
             return Err("driveline must reach every output exactly once".into());
         }
@@ -235,6 +277,9 @@ impl Driveline {
             mode,
             driving: true,
             lsd_ramp_rad_s: tuning.lsd_full_bias_speed_rad_s.v,
+            steer,
+            default_diff_ratio: tuning.default_steer_diff_ratio.v,
+            dead_band: tuning.steer_dead_band.v,
         })
     }
 
@@ -299,7 +344,7 @@ impl Driveline {
 
     /// Split the driveline input torque `t_in` over the shafts (`out[i] = share ratio eta t_in`; a declutched shaft gets 0), then apply the
     /// differential locks and torque biases. `shafts` carries each output's state, as for [`Driveline::reflect`].
-    pub fn distribute(&mut self, dt: f64, t_in: f64, shafts: &[Downstream], out: &mut [f64]) {
+    pub fn distribute(&mut self, dt: f64, t_in: f64, shafts: &[Downstream], steer: f64, gear: i8, out: &mut [f64]) {
         self.driving = t_in >= 0.0;
         out.iter_mut().for_each(|o| *o = 0.0);
         for l in self.active().collect::<Vec<_>>() {
@@ -311,6 +356,86 @@ impl Driveline {
         for link in self.tree_links.iter().chain(self.mode_links.get(self.mode).into_iter().flatten()) {
             if live(link) {
                 link.apply(dt, shafts, out, self.lsd_ramp_rad_s);
+            }
+        }
+        self.apply_steer(dt, shafts, steer, gear, out);
+    }
+
+    /// The steering demand after the dead band and the unit's detents: signed, +1 = full right.
+    fn demand(&self, st: &Steer, steer: f64) -> f64 {
+        let a = steer.abs().min(1.0);
+        if a < self.dead_band {
+            return 0.0;
+        }
+        let a = st.law.detents.iter().copied().min_by(|x, y| (x - a).abs().total_cmp(&(y - a).abs())).unwrap_or(a);
+        a * steer.signum()
+    }
+
+    /// The `[left, right]` demand (0..1) the steering brakes should follow, for units that steer by braking: a controlled differential brakes
+    /// the inner output in proportion to the demand; a clutch-brake unit first frees the inner clutch (half the stick) and then brakes it.
+    /// `None` for a vehicle without such a unit.
+    pub fn steer_brake_demand(&self, steer: f64) -> Option<[f64; 2]> {
+        let st = self.steer.as_ref()?;
+        let s = self.demand(st, steer);
+        let level = match st.kind {
+            SteerUnitKind::ControlledDifferential => s.abs(),
+            SteerUnitKind::ClutchBrake => clamp(2.0 * s.abs() - 1.0, 0.0, 1.0),
+            _ => 0.0,
+        };
+        Some(if s > 0.0 { [0.0, level] } else { [level, 0.0] })
+    }
+
+    /// The steering law's explicit `[left, right]` brake indices, if the rig names them.
+    pub fn steer_brakes(&self) -> Option<[usize; 2]> {
+        self.steer.as_ref().and_then(|st| st.law.steer_brakes)
+    }
+
+    /// The `[left, right]` output indices of the steering unit, if there is one.
+    pub fn steer_outputs(&self) -> Option<[usize; 2]> {
+        self.steer.as_ref().map(|st| [st.left, st.right])
+    }
+
+    fn apply_steer(&self, dt: f64, sh: &[Downstream], steer: f64, gear: i8, out: &mut [f64]) {
+        let Some(st) = &self.steer else { return };
+        let s = self.demand(st, steer);
+        match st.kind {
+            SteerUnitKind::ControlledDifferential => {} // steers through its brakes (`steer_brake_demand`)
+            SteerUnitKind::ClutchBrake => {
+                // the inner clutch slips open as the stick passes half way: its drive torque falls to zero and the outer side carries it all
+                let (inner, outer) = if s > 0.0 { (st.right, st.left) } else { (st.left, st.right) };
+                let moved = out[inner] * (1.0 - clamp(1.0 - 2.0 * s.abs(), 0.0, 1.0));
+                out[inner] -= moved;
+                out[outer] += moved;
+            }
+            SteerUnitKind::DoubleDifferential | SteerUnitKind::Hydrostatic => {
+                if gear == 0 && !st.law.works_in_neutral {
+                    return; // a unit fed from the gearbox output cannot steer with the gearbox in neutral
+                }
+                let (l, r) = (&sh[st.left], &sh[st.right]);
+                let target = match st.law.diff_speed_rad_s {
+                    Some(v) if st.kind == SteerUnitKind::Hydrostatic => v * s,
+                    _ => {
+                        let idx = usize::from(gear.unsigned_abs().max(1) - 1);
+                        let d = st
+                            .law
+                            .diff_ratio_by_gear
+                            .get(idx)
+                            .or(st.law.diff_ratio_by_gear.last())
+                            .copied()
+                            .unwrap_or(self.default_diff_ratio);
+                        d * s * (l.omega_rad_s + r.omega_rad_s)
+                    }
+                };
+                // the antisymmetric torque pair that leaves the speed difference at its target at the end of the step (an implicit servo)
+                let jl = l.inertia_kg_m2 + dt * l.ext_slope_nm_s_rad;
+                let jr = r.inertia_kg_m2 + dt * r.ext_slope_nm_s_rad;
+                let (al, ar) = ((out[st.left] + l.ext_torque_nm) / jl, (out[st.right] + r.ext_torque_nm) / jr);
+                let mut lambda = ((target - (l.omega_rad_s - r.omega_rad_s)) / dt - (al - ar)) / (1.0 / jl + 1.0 / jr);
+                if st.law.max_steer_torque_nm > 0.0 {
+                    lambda = clamp(lambda, -st.law.max_steer_torque_nm, st.law.max_steer_torque_nm);
+                }
+                out[st.left] += lambda;
+                out[st.right] -= lambda;
             }
         }
     }
@@ -362,7 +487,7 @@ mod tests {
         let mut w = vec![0.0; 4];
         let mut out = vec![0.0; 4];
         for _ in 0..(secs / DT) as usize {
-            d.distribute(DT, t_in, &shafts(&w, loads), &mut out);
+            d.distribute(DT, t_in, &shafts(&w, loads), 0.0, 1, &mut out);
             for i in 0..4 {
                 w[i] += DT * (out[i] + loads[i]) / 2.0;
             }
@@ -380,7 +505,7 @@ mod tests {
         let mut out = vec![0.0; d.output_count()];
         let ws: Vec<f64> = (0..out.len()).map(|i| 10.0 + 3.0 * i as f64).collect(); // unequal wheel speeds, as in a turn
         let sh = shafts(&ws, &[0.0; 4]);
-        d.distribute(DT, 100.0, &sh, &mut out);
+        d.distribute(DT, 100.0, &sh, 0.0, 1, &mut out);
         // the shafts of one axle get the same torque, and torque x speed in = torque x speed out for any wheel speeds
         assert!((out[0] - out[1]).abs() < 1e-9 && out[0] > 0.0, "{out:?}");
         let carrier = d.reflect(&sh).omega_rad_s;
@@ -407,8 +532,8 @@ mod tests {
         let (mut a, mut b) = (open, locked);
         let (mut oa, mut ob) = (vec![0.0; 4], vec![0.0; 4]);
         let sh = shafts(&[5.0, 20.0, 12.0, 12.0], &loads);
-        a.distribute(DT, 400.0, &sh, &mut oa);
-        b.distribute(DT, 400.0, &sh, &mut ob);
+        a.distribute(DT, 400.0, &sh, 0.0, 1, &mut oa);
+        b.distribute(DT, 400.0, &sh, 0.0, 1, &mut ob);
         assert!((oa.iter().sum::<f64>() - ob.iter().sum::<f64>()).abs() < 1e-9);
     }
 
@@ -417,13 +542,15 @@ mod tests {
         let mut d = Driveline::new(&truck_with_front(DiffKind::LimitedSlip, 2.5), &tuning()).unwrap();
         let mut out = vec![0.0; 4];
         // front-left is the slow wheel (it has the grip), front-right is spinning
-        d.distribute(DT, 400.0, &shafts(&[10.0, 40.0, 25.0, 25.0], &[0.0; 4]), &mut out);
+        d.distribute(DT, 400.0, &shafts(&[10.0, 40.0, 25.0, 25.0], &[0.0; 4]), 0.0, 1, &mut out);
         let open = {
             let mut o = vec![0.0; 4];
             Driveline::new(&truck(), &tuning()).unwrap().distribute(
                 DT,
                 400.0,
                 &shafts(&[10.0, 40.0, 25.0, 25.0], &[0.0; 4]),
+                0.0,
+                1,
                 &mut o,
             );
             o
@@ -432,9 +559,9 @@ mod tests {
         assert!(out[0] <= out[1] * 2.5 + 1e-9, "and never beyond the bias ratio: {out:?}");
         assert!((out[0] + out[1] - open[0] - open[1]).abs() < 1e-9, "a bias moves torque, it does not create it");
         // equal speeds: open behaviour; a small speed difference: part of the bias (it ramps in)
-        d.distribute(DT, 400.0, &shafts(&[25.0, 25.0, 25.0, 25.0], &[0.0; 4]), &mut out);
+        d.distribute(DT, 400.0, &shafts(&[25.0, 25.0, 25.0, 25.0], &[0.0; 4]), 0.0, 1, &mut out);
         assert!((out[0] - out[1]).abs() < 1e-9);
-        d.distribute(DT, 400.0, &shafts(&[24.7, 25.3, 25.0, 25.0], &[0.0; 4]), &mut out);
+        d.distribute(DT, 400.0, &shafts(&[24.7, 25.3, 25.0, 25.0], &[0.0; 4]), 0.0, 1, &mut out);
         assert!(out[0] > out[1] && out[0] < out[1] * 2.0, "{out:?}");
     }
 
@@ -466,11 +593,11 @@ mod tests {
         let mut d = Driveline::new(&truck(), &tuning()).unwrap();
         let mut out = vec![0.0; d.output_count()];
         let sh = shafts(&[10.0; 4], &[0.0; 4]);
-        d.distribute(DT, 100.0, &sh, &mut out);
+        d.distribute(DT, 100.0, &sh, 0.0, 1, &mut out);
         let eta: f64 = d.leaves.iter().map(|l| l.share * l.ratio * l.efficiency).sum::<f64>() * 100.0;
         assert!((out.iter().sum::<f64>() - eta).abs() < 1e-9);
         let mut back = vec![0.0; out.len()];
-        d.distribute(DT, -100.0, &sh, &mut back);
+        d.distribute(DT, -100.0, &sh, 0.0, 1, &mut back);
         assert!(
             back.iter().zip(&out).all(|(b, o)| b.abs() > o.abs()),
             "overrunning transmits more torque magnitude for the same input"
@@ -480,7 +607,7 @@ mod tests {
     #[test]
     fn rejects_what_it_cannot_model_with_a_reason() {
         let tank = box_tank().0.drivetrain;
-        assert!(Driveline::new(&tank, &tuning()).unwrap_err().contains("steering"));
+        assert!(Driveline::new(&tank, &tuning()).is_ok());
         let mut def = truck_with_front(DiffKind::LimitedSlip, 0.5);
         assert!(Driveline::new(&def, &tuning()).unwrap_err().contains("bias"));
         def = truck_with_front(DiffKind::Locked, 0.0);

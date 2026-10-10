@@ -1,4 +1,6 @@
 // Driveline settings shared by every differential.
 DrivelineTuning(
     lsd_full_bias_speed_rad_s: Param(v: 3.0, lo: Some(0.5), hi: Some(10.0), prov: Estimate, src: "a torque-sensing or viscous limited-slip differential builds its bias over a few rad/s of speed difference across it; below that it behaves as an open differential"),
+    default_steer_diff_ratio: Param(v: 0.35, lo: Some(0.1), hi: Some(0.8), prov: Estimate, src: "fractional speed difference between the outer and inner track at full steering demand for a kinematic unit whose law gives none (a tank's tightest regenerative radius is about 3 track widths)"),
+    steer_dead_band: Param(v: 0.04, lo: Some(0.0), hi: Some(0.15), prov: Estimate, src: "stick dead band, fraction of full deflection, below which the vehicle is steered straight"),
 )
