@@ -13,3 +13,5 @@ workspace = true
 w5k_math.workspace = true
 w5k_contract.workspace = true
 w5k_geo.workspace = true
+serde.workspace = true
+ron.workspace = true

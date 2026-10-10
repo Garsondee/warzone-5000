@@ -1,0 +1,58 @@
+<!doctype html><meta charset=utf-8><body style="margin:0;background:#000">
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+const glsl = await (await fetch('/camo.glsl')).text();
+const params = await (await fetch('/params.json')).json();
+const mk = (w, h) => { const r = new THREE.WebGLRenderer({preserveDrawingBuffer:true, antialias:false}); r.setSize(w, h, false); r.setPixelRatio(1); document.body.appendChild(r.domElement); return r; };
+const U = () => ({ uCdf:{value:params.cdf}, uSeed:{value:params.seed}, uPal:{value:params.pal.map(c=>new THREE.Vector3(...c))}, uCov:{value:new THREE.Vector3(...params.cov)},
+  uBare:{value:new THREE.Vector3(...params.bare)}, uDirt:{value:new THREE.Vector3(...params.dirt)}, uScale:{value:params.scale} });
+const toSrgb = `vec3 w5k_srgb(vec3 c){ return mix(c*12.92, 1.055*pow(max(c,vec3(0.0)),vec3(1.0/2.4))-0.055, step(vec3(0.0031308), c)); }`;
+const read = (r, w, h) => { const gl = r.getContext(); const b = new Uint8Array(w*h*4); gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,b); return Array.from(b); };
+window.run = {};
+// 1. hash bytes: pixel (x,y) shows hash3(x-128, y-128, 7, seed) top 24 bits.
+window.run.hash = () => {
+  const W=256, r = mk(W,W), sc = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+  const m = new THREE.ShaderMaterial({ glslVersion: THREE.GLSL3, uniforms:U(), vertexShader:`void main(){gl_Position=vec4(position.xy,0.,1.);}`,
+    fragmentShader:`precision highp float; precision highp int; out vec4 o;\n${glsl}\nvoid main(){ ivec3 i=ivec3(ivec2(gl_FragCoord.xy)-ivec2(128),7); uint h=w5k_hash3(i,uSeed);
+      o=vec4(float(h>>24)/255.0, float((h>>16)&255u)/255.0, float((h>>8)&255u)/255.0, 1.0);}` });
+  sc.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2), m)); r.render(sc, cam); return read(r,W,W);
+};
+// 2. albedo-only pass on a flat tile: x,z in 0..4 m (a top-down ortho camera), edge = x/4, cavity = z/4, at y=0.3.
+window.run.tile = (W, fp) => {
+  const r = mk(W,W), sc = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+  const m = new THREE.ShaderMaterial({ glslVersion: THREE.GLSL3, uniforms:U(), vertexShader:`void main(){gl_Position=vec4(position.xy,0.,1.);}`,
+    fragmentShader:`precision highp float; precision highp int; out vec4 o;\n${glsl}\n${toSrgb}\nvoid main(){ vec2 uv=gl_FragCoord.xy/${W}.0; vec3 p=vec3(uv.x*4.0,0.3,uv.y*4.0);
+      o=vec4(w5k_srgb(w5k_albedo(p, uv.x, uv.y, ${fp.toFixed(6)})),1.0);}` });
+  sc.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2), m)); r.render(sc, cam); return read(r,W,W);
+};
+// 3. lit bevelled block through MeshStandardMaterial.onBeforeCompile; returns ms/frame under software GL and a PNG.
+function block() {
+  const H=[0.8,0.4,0.3], R=0.07, N=72, pos=[], nor=[], edg=[], cav=[], idx=[];
+  const ax = (h) => { const a=[]; for(let i=0;i<=N;i++){ let t=i/N; a.push(-h + 2*h*t); } [0.3,0.7].forEach(f=>{a.push(-h+R*f); a.push(h-R*f);}); return [...new Set(a)].sort((x,y)=>x-y); };
+  const faces = [[0,1,2,1],[0,1,2,-1],[1,2,0,1],[1,2,0,-1],[2,0,1,1],[2,0,1,-1]];
+  for (const [u,v,w,s] of faces) { const U_=ax(H[u]), V_=ax(H[v]), base=pos.length/3;
+    for (const b of V_) for (const a of U_) { const p=[0,0,0]; p[u]=a; p[v]=b; p[w]=s*H[w];
+      const c=p.map((x,i)=>Math.max(-H[i]+R,Math.min(H[i]-R,x))); const d=p.map((x,i)=>x-c[i]); const l=Math.hypot(...d)||1;
+      const n = l<1e-9 ? [0,0,0].map((_,i)=>i===w?s:0) : d.map(x=>x/l); const q=c.map((x,i)=>x+n[i]*R);
+      pos.push(...q); nor.push(...n); edg.push(Math.min(1, Math.max(0, (1 - Math.max(...n.map(Math.abs))) / 0.29)));
+      cav.push(Math.max(0, 1 - (q[1]+H[1])/0.25) * 0.9); }
+    const nu=U_.length; for(let j=0;j<V_.length-1;j++) for(let i=0;i<nu-1;i++){ const a=base+j*nu+i,b=a+1,c=a+nu,d=c+1; if(s*(u===0&&v===1||u===1&&v===2||u===2&&v===0?1:1)>0){idx.push(a,b,c,b,d,c);} else {idx.push(a,c,b,b,c,d);} } }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));
+  g.setAttribute('aEdge',new THREE.Float32BufferAttribute(edg,1)); g.setAttribute('aCavity',new THREE.Float32BufferAttribute(cav,1)); g.setIndex(idx); return g;
+}
+window.run.block = (W, H_, withCamo, frames, yaw) => {
+  const r = mk(W,H_); r.outputColorSpace = THREE.SRGBColorSpace; const sc = new THREE.Scene(); sc.background=new THREE.Color(0x8fa0b0);
+  const cam = new THREE.PerspectiveCamera(35, W/H_, 0.1, 50); cam.position.set(1.9,1.2,2.5); cam.lookAt(0,0,0);
+  const mat = new THREE.MeshStandardMaterial({ color:0x808080, roughness:0.9, metalness:0 }); const uu = U();
+  if (withCamo) mat.onBeforeCompile = (s) => { Object.assign(s.uniforms, uu);
+    s.vertexShader = 'attribute float aEdge; attribute float aCavity; varying vec3 vLP; varying float vE; varying float vC;\n' + s.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvLP=position; vE=aEdge; vC=aCavity;');
+    s.fragmentShader = 'varying vec3 vLP; varying float vE; varying float vC;\n' + glsl + '\n' + s.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\ndiffuseColor.rgb = w5k_albedo(vLP, vE, vC, length(fwidth(vLP)));'); };
+  const mesh = new THREE.Mesh(block(), mat); mesh.rotation.y = yaw; sc.add(mesh);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(20,20), new THREE.MeshStandardMaterial({color:0x2a2a26, roughness:1})); ground.rotation.x=-Math.PI/2; ground.position.y=-0.401; sc.add(ground);
+  const sun = new THREE.DirectionalLight(0xfff2e0, 2.6); sun.position.set(3,5,2); sc.add(sun); sc.add(new THREE.HemisphereLight(0xa8c0e0, 0x3a3328, 1.0));
+  r.render(sc, cam); const gl=r.getContext(); const t0=performance.now(); for(let i=0;i<frames;i++){ mesh.rotation.y=yaw+i*0.01; r.render(sc,cam); gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(4)); }
+  const ms=(performance.now()-t0)/frames; mesh.rotation.y=yaw; r.render(sc,cam); return { ms, png: r.domElement.toDataURL('image/png') };
+};
+window.ready = true;
+</script>

@@ -254,6 +254,8 @@ dependencies = [
 name = "w5k_drive"
 version = "0.1.0"
 dependencies = [
+ "ron",
+ "serde",
  "w5k_contract",
  "w5k_math",
 ]
@@ -262,6 +264,8 @@ dependencies = [
 name = "w5k_forge"
 version = "0.1.0"
 dependencies = [
+ "ron",
+ "serde",
  "w5k_contract",
  "w5k_geo",
  "w5k_math",
