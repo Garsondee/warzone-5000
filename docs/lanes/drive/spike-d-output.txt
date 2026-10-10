@@ -1,0 +1,38 @@
+clutch launch, Je=0.35 Jo=1.20 cap=450  (chatter = sign flips of clutch torque in 2nd half; neg_slip = min(we-wo), <0 is energy creation)
+form                      dt chatter end slip  neg_slip    wo(3s)
+explicit_tanh            60Hz      75 -13.6905   -25.079   276.898
+explicit_tanh           120Hz     147  11.6463   -11.986   271.177
+explicit_tanh           240Hz     314   2.6813    -5.450   272.395
+explicit_tanh           480Hz     600  -0.2731    -2.283   273.062
+explicit_tanh          1000Hz    1093   1.6910    -0.734   271.941
+semi_implicit_tanh       60Hz      76  32.4680   -24.050   269.701
+semi_implicit_tanh      120Hz     157   0.0543   -10.925   275.407
+semi_implicit_tanh      240Hz     238  -0.4096    -4.619   272.286
+semi_implicit_tanh      480Hz     262   0.2029     0.043   271.744
+semi_implicit_tanh     1000Hz       0   0.1122     0.098   271.910
+implicit_stickslip       60Hz       0   0.0000     0.000   273.806
+implicit_stickslip      120Hz       0   0.0000     0.000   272.194
+implicit_stickslip      240Hz       0   0.0000     0.000   272.194
+implicit_stickslip      480Hz       0   0.0000     0.000   272.194
+implicit_stickslip     1000Hz       0   0.0000     0.000   272.129
+reference wo(3s) at 20 kHz: 272.003
+
+converter, K=14 rpm/sqrt(Nm), stall ratio 2.2 (explicit vs linearised-implicit pump torque)
+  implicit=False   60Hz  pump speed ripple in 2nd half 0.0000 rad/s  wt(3s)=688.735 (ref 629.942)
+  implicit=False  120Hz  pump speed ripple in 2nd half 0.0000 rad/s  wt(3s)=644.450 (ref 629.942)
+  implicit=False  240Hz  pump speed ripple in 2nd half 0.0000 rad/s  wt(3s)=632.840 (ref 629.942)
+  implicit=False  480Hz  pump speed ripple in 2nd half 0.0000 rad/s  wt(3s)=631.021 (ref 629.942)
+  implicit=True    60Hz  pump speed ripple in 2nd half 0.0000 rad/s  wt(3s)=636.662 (ref 629.942)
+  implicit=True   120Hz  pump speed ripple in 2nd half 0.0000 rad/s  wt(3s)=633.819 (ref 629.942)
+  implicit=True   240Hz  pump speed ripple in 2nd half 0.0000 rad/s  wt(3s)=632.099 (ref 629.942)
+  implicit=True   480Hz  pump speed ripple in 2nd half 0.0000 rad/s  wt(3s)=631.087 (ref 629.942)
+
+stall torque multiplication check: TR(0)=2.2, turbine/pump torque at first step = 2.2
+
+shift torque interruption (implicit clutch): speed lost vs analytic LOAD*t/Jo
+   120 Hz, interrupt 0.3 s: lost 15.000 rad/s, analytic 15.000
+   120 Hz, interrupt 0.6 s: lost 30.000 rad/s, analytic 30.000
+   240 Hz, interrupt 0.3 s: lost 15.000 rad/s, analytic 15.000
+   240 Hz, interrupt 0.6 s: lost 30.000 rad/s, analytic 30.000
+   480 Hz, interrupt 0.3 s: lost 15.000 rad/s, analytic 15.000
+   480 Hz, interrupt 0.6 s: lost 30.000 rad/s, analytic 30.000
