@@ -1,0 +1,60 @@
+{
+  "id": "woodland",
+  "pattern": {
+    "octaves": 3,
+    "lacunarity": 2.0,
+    "gain": 0.5
+  },
+  "scale_m": 0.4,
+  "seed_salt": 11,
+  "colours": [
+    {
+      "name": "light_green",
+      "linear": [
+        0.14702726649759498,
+        0.19461783044157582,
+        0.06847816984440017
+      ],
+      "coverage": 0.3,
+      "prov": "Estimate",
+      "band_de": 6.0,
+      "src": "light leaf green of temperate woodland schemes, hand-read"
+    },
+    {
+      "name": "olive",
+      "linear": [
+        0.0466650863368801,
+        0.06847816984440017,
+        0.024157632448504756
+      ],
+      "coverage": 0.3,
+      "prov": "Estimate",
+      "band_de": 6.0,
+      "src": "dark olive, hand-read"
+    },
+    {
+      "name": "brown",
+      "linear": [
+        0.1022417330881013,
+        0.06124605423161761,
+        0.0295568344378088
+      ],
+      "coverage": 0.28,
+      "prov": "Estimate",
+      "band_de": 6.0,
+      "src": "earth brown, hand-read"
+    },
+    {
+      "name": "black",
+      "linear": [
+        0.013702083047289686,
+        0.014443843596092545,
+        0.011612245179743887
+      ],
+      "coverage": 0.12,
+      "prov": "Estimate",
+      "band_de": 6.0,
+      "src": "near-black"
+    }
+  ]
+}
