@@ -9,9 +9,14 @@
 @media (prefers-color-scheme:dark){:root{color-scheme:dark;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--grid:#2c2c2a;--accent:#3987e5;--stage:#2a3036;--stage2:#3a424a}}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--surface);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
-#app{display:grid;grid-template-columns:minmax(300px,380px) 1fr;height:100%}
-aside{padding:20px 22px;overflow:auto;border-right:1px solid var(--grid)}
+#app{display:grid;grid-template-columns:minmax(280px,350px) 1fr minmax(300px,340px);height:100%}
+aside{display:contents}
+#controls,#results{grid-row:1;padding:20px 22px;overflow:auto;min-height:0}
+#controls{grid-column:1;border-right:1px solid var(--grid)}
+#stage{grid-column:2}
+#results{grid-column:3;border-left:1px solid var(--grid)}
 h1{font-size:20px;margin:0 0 4px}
+h2{font-size:15px;margin:0 0 2px}
 .sub{color:var(--ink2);margin:0 0 16px}
 #bases{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
 #bases button{font:inherit;padding:6px 12px;border-radius:8px;border:1px solid var(--grid);background:transparent;color:var(--ink);cursor:pointer}
@@ -22,23 +27,42 @@ h1{font-size:20px;margin:0 0 4px}
 .lever .val{color:var(--ink2);font-variant-numeric:tabular-nums;white-space:nowrap}
 .lever input[type=range]{width:100%;accent-color:var(--accent);margin:6px 0 0}
 .lever button{font:inherit;font-size:13px;border:0;background:none;color:var(--accent);cursor:pointer;padding:0}
-#status{min-height:1.4em;margin:6px 0 14px;color:var(--ink2)}
+#status{min-height:1.4em;margin:0 0 12px;color:var(--ink2)}
 #status.error{color:var(--ink)}
 #status.error::before{content:"\2715  ";color:var(--bad);font-weight:700}
+#board{width:100%;border-collapse:collapse;margin:0 0 16px;font-size:14px;font-variant-numeric:tabular-nums}
+#board caption{caption-side:top;text-align:left;color:var(--ink2);padding:0 0 4px}
+#board th{font-weight:400;text-align:left;padding:7px 8px 7px 0}
+#board th small{display:block;color:var(--ink2);font-size:13px}
+#board td{padding:7px 0;text-align:right;white-space:nowrap;vertical-align:top}
+#board tr{border-top:1px solid var(--grid)}
+#board.stale{opacity:.45}
+.better::before{content:"\2713  ";color:#0ca30c;font-weight:700}
+.worse::before{content:"\2715  ";color:var(--bad);font-weight:700}
+#drive{width:100%;font:inherit;font-size:18px;font-weight:700;padding:12px;border:0;border-radius:12px;background:#2fbf5b;color:#fff;cursor:pointer}
+#drive:disabled{opacity:.4;cursor:default}
 details{margin-top:14px;color:var(--ink2)}
 details pre{white-space:pre-wrap;font:12px/1.45 ui-monospace,Consolas,monospace;margin:8px 0 0}
 #stage{position:relative;background:radial-gradient(120% 100% at 50% 30%,var(--stage2),var(--stage))}
 #c{position:absolute;inset:0;width:100%;height:100%;display:block}
-@media (max-width:760px){#app{grid-template-columns:1fr;grid-template-rows:auto 55vh}aside{border-right:0;border-bottom:1px solid var(--grid)}}
+@media (max-width:1100px){#app{grid-template-columns:minmax(300px,380px) 1fr}aside{display:block;overflow:auto;border-right:1px solid var(--grid)}#controls,#results{padding:20px 22px 0;overflow:visible;border:0}#results{padding-top:6px}}
+@media (max-width:760px){#app{grid-template-columns:1fr;grid-template-rows:42vh 1fr}#stage{grid-column:1;grid-row:1}aside{grid-column:1;grid-row:2;border-right:0;border-top:1px solid var(--grid)}}
 </style>
 <div id="app">
   <aside>
-    <h1>Workshop</h1>
-    <p class="sub">Change a design lever; the vehicle is rebuilt around it.</p>
-    <div id="bases" role="group" aria-label="Base vehicle"></div>
-    <div id="levers"></div>
-    <div id="status" role="status" aria-live="polite"></div>
-    <details><summary>What the compile made of it</summary><pre id="report"></pre></details>
+    <div id="controls">
+      <h1>Workshop</h1>
+      <p class="sub">Change a design lever; the vehicle is rebuilt and re-measured.</p>
+      <div id="bases" role="group" aria-label="Base vehicle"></div>
+      <div id="levers"></div>
+    </div>
+    <div id="results">
+      <h2>Proving ground</h2>
+      <div id="status" role="status" aria-live="polite"></div>
+      <table id="board" class="stale" aria-label="Proving ground scoreboard"><caption>as authored → this design</caption><tbody></tbody></table>
+      <button id="drive" type="button" disabled>DRIVE</button>
+      <details><summary>What the compile made of it</summary><pre id="report"></pre></details>
+    </div>
   </aside>
   <div id="stage"><canvas id="c"></canvas></div>
 </div>
