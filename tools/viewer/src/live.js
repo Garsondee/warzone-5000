@@ -385,5 +385,6 @@ window.__live = { // for the browser test only
   frame: () => (last ? last.f : null), vehicle: () => (cur ? cur.id : null), camera: () => cam.mode, input: () => lastCmd,
   thumbs: () => thumbs, fit: () => (cur ? cur.fit : null), sound: () => sound.state, picking, pick: startDrive, selected: () => selected, streaming: () => streaming, setCamera,
   vehicles: () => vehicles.map((v) => v.id),
+  belts: () => (cur ? cur.built.belts.map((b) => ({ links: b.run.links, length_m: b.length_m, skipped: b.skipped })) : []),
 };
 boot();

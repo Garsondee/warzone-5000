@@ -15,7 +15,7 @@ const j = (s) => JSON.stringify(s).replace(/</g, '\\u003c');
 const workshop = process.argv.includes('--workshop');
 const live = process.argv.includes('--live') || workshop;
 // Modules in dependency order; `from 'three'` and `from './x.js'` are rewritten to blob URLs at run time.
-const order = workshop ? ['world', 'viewer', 'look', 'skin', 'workshop'] : live ? ['world', 'viewer', 'look', 'skin', 'live-audio', 'live-input', 'live'] : ['replay', 'scope', 'world', 'viewer', 'look', 'debug', 'main'];
+const order = workshop ? ['world', 'tracks', 'viewer', 'look', 'skin', 'workshop'] : live ? ['world', 'tracks', 'viewer', 'look', 'skin', 'live-audio', 'live-input', 'live'] : ['replay', 'scope', 'world', 'tracks', 'viewer', 'look', 'debug', 'main'];
 const sources = { three: read(path.join(here, 'node_modules/three/build/three.module.min.js')) };
 for (const m of order) sources[m] = read(path.join(here, `src/${m}.js`));
 

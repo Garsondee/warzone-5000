@@ -127,6 +127,12 @@ check(true, 'Enter drives the chosen vehicle');
 // The garage button opens the picker again.
 await page.click('#garage');
 check(await live(() => window.__live.picking()), 'the garage button reopens the picker');
+
+// The tracked carrier: its two belts are links on the taut band round the wheels (src/tracks.js), built from the rig's track_runs.
+await live(() => window.__live.pick('carrier_tracked'));
+await page.waitForFunction(() => window.__live.vehicle() === 'carrier_tracked' && window.__live.frame(), null, { timeout: 60000 });
+const belts = await live(() => window.__live.belts());
+check(belts.length === 2 && belts.every((b) => b.links > 3 && b.length_m > 5 && b.length_m < 20 && Array.isArray(b.skipped)), `the carrier's belts are built: ${JSON.stringify(belts.map((b) => [b.links, +b.length_m.toFixed(2)]))} (links, metres)`);
 check(errors.length === 0, `no console errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
 await browser.close();
 process.exit(failed ? 1 : 0);
