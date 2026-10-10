@@ -6,6 +6,7 @@
 - Spike S9 (`docs/lanes/validation/spike-s9.md`), design note with CCR text (`design-note.md`), theory note stub (`docs/theory/validation.md`).
 
 ## In progress
+- Impact Matrix v1 (`docs/lanes/validation/impact-v1.md`, tornado JSON `impact-v1.json`): 41 of 57 (72%) on the integration head after #147; 16 wrong signs with causes. PR open; then idle.
 - Capability export for WORLD's mobility map (`w5k validation capability`, `docs/swarm/requests/validation-world-capability-table.md`, files in `docs/lanes/validation/capability/`). PR open; WORLD to confirm the shape.
 - **Reply to ARCH (lane sessions cannot send messages): the proving-ground spec PR is #57.** Runner target: result JSON `w5k.proving.result.v1` (spec section 2); the runner must echo in `inputs` the numbers the sim actually used (mass_kg, mu, track_m, cg_height_m, wheel_radius_m, power_w ...); required keys per test are in the spec and `proving::TESTS`.
 - Impact Matrix runner `w5k validation impact` (slice 2 stage A): 11 levers via FORGE's lever API, 6 benchmarks, three vehicles, 41 of 57 signs right (72%; 79% at a 1% no-change threshold); findings in `docs/lanes/validation/impact-v0.md`. PR open.

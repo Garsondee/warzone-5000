@@ -32,17 +32,19 @@ const PERCENT: f64 = 100.0; // const-ok: unit conversion for display
 /// A benchmark the proving runner can measure today: matrix id, proving test, result key.
 pub struct Bench {
     pub id: &'static str,
+    /// What the runner measures, for charts (B1 is timed 0-48 km/h although the table says 0-32).
+    pub name: &'static str,
     pub test: &'static str,
     pub key: &'static str,
 }
 
 pub const BENCHES: &[Bench] = &[
-    Bench { id: "B1", test: "accel_0_48kmh", key: "t_0_48_s" }, // the table says 0-32 km/h; the runner times 0-48
-    Bench { id: "B4", test: "braking_50kmh", key: "stop_distance_m" },
-    Bench { id: "B6", test: "gradeability", key: "max_grade_ratio" },
-    Bench { id: "B7", test: "side_slope_rollover", key: "slope_angle_rad" },
-    Bench { id: "B11", test: "step_climb", key: "step_height_m" },
-    Bench { id: "B12", test: "skidpad", key: "max_lat_accel_g" },
+    Bench { id: "B1", name: "0-48 km/h time (s)", test: "accel_0_48kmh", key: "t_0_48_s" }, // the table says 0-32 km/h; the runner times 0-48
+    Bench { id: "B4", name: "braking distance from 50 km/h (m)", test: "braking_50kmh", key: "stop_distance_m" },
+    Bench { id: "B6", name: "maximum grade held (rise/run)", test: "gradeability", key: "max_grade_ratio" },
+    Bench { id: "B7", name: "side-slope limit (rad)", test: "side_slope_rollover", key: "slope_angle_rad" },
+    Bench { id: "B11", name: "vertical step cleared (m)", test: "step_climb", key: "step_height_m" },
+    Bench { id: "B12", name: "skidpad lateral acceleration (g)", test: "skidpad", key: "max_lat_accel_g" },
 ];
 
 /// A design lever: `forge` is the name in FORGE's lever API (`w5k_forge::levers::apply_both`), `row` how the table names it.
@@ -163,8 +165,24 @@ fn regime_override(bench: &str, lever: &str, label: &str) -> Option<Vec<Sign>> {
     zero.then(|| vec![Sign::Zero])
 }
 
+/// A named id for charts.
+#[derive(Debug, Serialize)]
+pub struct Named {
+    pub id: String,
+    pub name: String,
+}
+
+/// The perturbation, the no-change threshold and the acceptance target, in percent (for the tornado chart's captions).
+const PERTURB_PCT: f64 = 10.0; // const-ok: the +10% perturbation of IMPACT-MATRIX.md
+const ACCEPTANCE_PCT: f64 = 80.0; // const-ok: ARCH's target for right signs
+
 #[derive(Debug, Serialize)]
 pub struct Report {
+    pub benchmarks: Vec<Named>,
+    pub levers: Vec<Named>,
+    pub perturb_pct: f64,
+    pub deadband_pct: f64,
+    pub acceptance_pct: f64,
     pub entries: Vec<Entry>,
     /// Scored entries that agreed with the table, out of all scored entries.
     pub right: usize,
@@ -243,7 +261,20 @@ pub fn evaluate(table: &[Expected], levers: &[Lever], obs: &Observations) -> Rep
         })
         .map(String::from)
         .collect();
-    Report { entries, right, scored, dead_levers, orphan_benchmarks }
+    let benchmarks = BENCHES.iter().map(|b| Named { id: b.id.into(), name: b.name.into() }).collect();
+    let levers = levers.iter().map(|l| Named { id: l.id.into(), name: l.row.into() }).collect();
+    Report {
+        benchmarks,
+        levers,
+        perturb_pct: PERTURB_PCT,
+        deadband_pct: PERCENT * EPS,
+        acceptance_pct: ACCEPTANCE_PCT,
+        entries,
+        right,
+        scored,
+        dead_levers,
+        orphan_benchmarks,
+    }
 }
 
 fn sign_word(s: Sign) -> &'static str {
