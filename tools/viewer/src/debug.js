@@ -69,11 +69,13 @@ export function makeDebug(scene, built, header) {
   };
 }
 
-export function updateHud(el, ledgerEl, frame, t) {
+export function updateHud(el, ledgerEl, frame, t, steerJoints = []) {
   const v = frame.vehicles[0];
   const speed = Math.hypot(v.lin_vel_m_s.x, v.lin_vel_m_s.y, v.lin_vel_m_s.z);
   const gear = v.gear === 0 ? 'N' : v.gear < 0 ? `R${-v.gear}` : String(v.gear);
   el.textContent = `${(speed * 3.6).toFixed(0)} km/h   ${v.engine_rpm.toFixed(0)} rpm   gear ${gear}   limit: ${v.limiting}   t ${t.toFixed(1)} s`;
+  // Steering: a positive joint angle yaws the nose left (UNITS-AND-FRAMES), so right-positive degrees are the negated joint value.
+  if (steerJoints.length) el.textContent += '   steer ' + steerJoints.map((j) => `${j.side} ${(-v.joints[j.i] * 180 / Math.PI).toFixed(1)}`).join(' ') + ' deg (+ right)';
   const top = Math.max(1, ...v.ledger_n);
   ledgerEl.innerHTML = v.ledger_n.map((n, k) => (n > 0.5 ? `<div class="row"><span>${FORCE_TERMS[k] ?? 'term ' + k}</span><i style="width:${(n / top) * 90}px"></i><b>${n >= 1000 ? (n / 1000).toFixed(1) + ' kN' : n.toFixed(0) + ' N'}</b></div>` : '')).join('');
 }
