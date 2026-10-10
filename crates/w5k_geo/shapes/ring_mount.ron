@@ -1,0 +1,30 @@
+// Ring mount (lane GEOMETRY, card C-004): a collar fixed to the roof, a turntable that yaws on it, a cradle of two uprights that holds a
+// gun's trunnion, and two shield wings either side of the gun. Metres, degrees only in this file. Provenance ESTIMATE for every number,
+// bands +-25%, reason: an original design in the proportions of a vehicle ring mount; nothing is quoted from memory.
+(
+    // outer diameter of the collar: the mount's size, what a roof socket gates
+    ring_m: 0.80,
+    // the collar is a stepped ring: this high and this wide (radially)
+    collar_height_m: 0.07,
+    collar_width_m: 0.10,
+    // the turntable sits inside the collar's top face: this thick
+    turntable_m: 0.045,
+    // clear width between the uprights: the widest trunnion block the mount takes; the pivot's height above the turntable and its z
+    // from the ring centre (negative = forward)
+    cradle_width_m: 0.30,
+    cradle_height_m: 0.26,
+    cradle_z_m: -0.06,
+    upright_thickness_m: 0.03,
+    upright_length_m: 0.14,
+    // shield wings: width, height, thickness, how far each is swept back from the gun (degrees), and the z of their inner edges
+    shield_width_m: 0.30,
+    shield_height_m: 0.46,
+    shield_thickness_m: 0.02,
+    shield_sweep_deg: 25.0,
+    shield_z_m: -0.22,
+    // parts that join overlap by this much, so nothing floats
+    overlap_m: 0.01,
+    // bevel of every edge and the vertex rows beside it (the flag bands of spike S-G, scaled to the size of the parts)
+    corner_m: 0.008,
+    band_m: 0.02,
+)
