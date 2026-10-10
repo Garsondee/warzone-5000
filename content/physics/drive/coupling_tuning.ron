@@ -1,0 +1,8 @@
+// Coupling settings shared by every clutch and converter.
+CouplingTuning(
+    clutch_engage_band_rpm: Param(v: 300.0, lo: Some(100.0), hi: Some(800.0), prov: Estimate, src: "an automatic (centrifugal) clutch goes from open to full capacity over a few hundred rpm above its engage speed"),
+    converter_coupling_speed_ratio: Param(v: 0.85, lo: Some(0.8), hi: Some(0.95), prov: Estimate, src: "speed ratio at which a converter's torque ratio reaches 1 (the coupling point); textbook range 0.8-0.9"),
+    lockup_hysteresis_speed_ratio: Param(v: 0.05, lo: Some(0.02), hi: Some(0.15), prov: Estimate, src: "lock-up releases this far below the speed ratio at which it locked (a Schmitt trigger against hunting)"),
+    lockup_engage_time_s: Param(v: 0.4, lo: Some(0.1), hi: Some(1.0), prov: Estimate, src: "lock-up clutch capacity ramps in over this time (a smooth apply, no jerk)"),
+    lockup_capacity_over_peak_torque: Param(v: 1.5, lo: Some(1.1), hi: Some(2.5), prov: Estimate, src: "lock-up clutch capacity as a multiple of peak engine torque (must hold the engine, with margin)"),
+)

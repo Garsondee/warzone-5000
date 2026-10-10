@@ -29,6 +29,14 @@ impl EngineTuning {
     }
 }
 
+/// What the engine would deliver this step (see [`Engine::prepare`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EnginePrep {
+    pub torque_nm: f64,
+    /// How fast the closed-throttle drag grows with speed, N m per rad/s.
+    pub drag_slope_nm_s_rad: f64,
+}
+
 #[derive(Clone, Debug)]
 pub struct Engine {
     curve: Vec<(f64, f64)>,
@@ -143,8 +151,15 @@ impl Engine {
     }
 
     /// Advance the flywheel by `dt_s` against an external `load_nm` (positive resists). Returns the engine torque used.
-    /// The drag is linear in speed, so it is solved implicitly: the closed-throttle spin-down is stable at any step.
     pub fn step(&mut self, dt_s: f64, throttle: f64, load_nm: f64) -> f64 {
+        let prep = self.prepare(dt_s, throttle);
+        self.advance(dt_s, &prep, load_nm, 0.0);
+        prep.torque_nm
+    }
+
+    /// First half of a step: run the idle controller and the throttle lag and say what the engine would deliver at the current speed.
+    /// A coupling uses this to choose its torque before the flywheel moves.
+    pub fn prepare(&mut self, dt_s: f64, throttle: f64) -> EnginePrep {
         let thr_cmd = clamp(throttle, 0.0, 1.0);
         let thr_idle = if self.free_output {
             0.0
@@ -161,12 +176,19 @@ impl Engine {
             target
         };
         let thr = self.demand;
-        let t = self.torque_at(self.omega, thr);
-        let slope = (1.0 - thr) * self.drag_per_rad_s; // d(-T)/dw from the linear drag term
-        let dw = dt_s * (t - load_nm) / self.inertia / (1.0 + dt_s * slope / self.inertia);
+        EnginePrep {
+            torque_nm: self.torque_at(self.omega, thr),
+            drag_slope_nm_s_rad: (1.0 - thr) * self.drag_per_rad_s,
+        }
+    }
+
+    /// Second half: move the flywheel against `load_nm` (positive resists), where the load rises by `load_slope` per rad/s of speed
+    /// (the coupling's linearisation, solved implicitly together with the drag so a stiff load cannot blow the step up).
+    pub fn advance(&mut self, dt_s: f64, prep: &EnginePrep, load_nm: f64, load_slope_nm_s_rad: f64) {
+        let stiffness = prep.drag_slope_nm_s_rad + load_slope_nm_s_rad;
+        let dw = dt_s * (prep.torque_nm - load_nm) / self.inertia / (1.0 + dt_s * stiffness / self.inertia);
         self.omega = (self.omega + dw).max(0.0);
-        self.torque_nm = t;
-        t
+        self.torque_nm = prep.torque_nm;
     }
 
     pub fn hash_state(&self, h: &mut StateHasher) {
