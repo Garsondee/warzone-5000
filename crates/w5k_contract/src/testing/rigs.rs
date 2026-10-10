@@ -158,6 +158,10 @@ fn tyre() -> TyreDef {
         rolling_coeff: 0.015,
         inflation_pa: 240_000.0,
         patch_length_m: 0.18,
+        speed_floor_m_s: 0.0,
+        aligning_trail_frac: 0.0,
+        kappa_peak: 0.0,
+        alpha_peak_rad: 0.0,
     }
 }
 
@@ -439,7 +443,7 @@ pub fn box_truck() -> (PhysRig, RenderRig) {
             },
         ],
         muzzles: vec![],
-        integration: IntegrationDef { substeps: 4 },
+        integration: IntegrationDef { substeps: 4, f_max_hz: None },
     };
 
     let lay = Layout::of(&rig);
@@ -720,7 +724,7 @@ pub fn box_tank() -> (PhysRig, RenderRig) {
                 cycle: FireCycle::Single { reload_s: 6.0 },
             },
         }],
-        integration: IntegrationDef { substeps: 6 },
+        integration: IntegrationDef { substeps: 6, f_max_hz: None },
     };
 
     let lay = Layout::of(&rig);
@@ -802,6 +806,16 @@ pub fn dummy_vehicle_def() -> VehicleDef {
         steered,
         driven: true,
         anti_roll_n_m: Some(e(8_000.0, 2_000.0, 20_000.0)),
+        max_steer_deg: None,
+        ackermann: None,
+        tyres_per_side: 1,
+        dual_spacing_m: None,
+        hub_reduction: None,
+        portal_drop_m: None,
+        layout: AxleLayout::Independent,
+        brake_share: None,
+        tyre: None,
+        unsprung_mass_kg: None,
     };
     VehicleDef {
         id: "box_truck".into(),
@@ -826,6 +840,11 @@ pub fn dummy_vehicle_def() -> VehicleDef {
                 cornering_stiffness_per_rad: e(8.0, 5.0, 12.0),
                 rolling_coeff: e(0.015, 0.01, 0.03),
                 unsprung_mass_kg: e(55.0, 40.0, 90.0),
+                vertical_stiffness_n_m: None,
+                vertical_damping_ns_m: None,
+                slip_stiffness: None,
+                relaxation_length_m: None,
+                wheel_inertia_kg_m2: None,
             },
         }),
         suspension: SuspensionSliders {
@@ -835,11 +854,14 @@ pub fn dummy_vehicle_def() -> VehicleDef {
             damping_ratio: e(0.3, 0.2, 0.5),
             bump_travel_m: e(0.12, 0.08, 0.2),
             droop_travel_m: e(0.12, 0.08, 0.2),
+            rebound_to_bump: None,
+            bump_stop_engage_frac: None,
+            bump_stop_rate_n_m: None,
         },
         powertrain: PowertrainDef {
             engine: EngineSliders {
                 kind: EngineKind::Diesel,
-                peak_power_w: e(110_000.0, 90_000.0, 140_000.0),
+                peak_power_w: e(95_000.0, 80_000.0, 120_000.0),
                 peak_power_rpm: e(3_500.0, 3_000.0, 4_000.0),
                 peak_torque_nm: e(300.0, 250.0, 350.0),
                 peak_torque_rpm: e(2_500.0, 2_000.0, 3_000.0),
@@ -848,6 +870,12 @@ pub fn dummy_vehicle_def() -> VehicleDef {
                 inertia_kg_m2: e(0.35, 0.2, 0.6),
                 bsfc_best_g_kwh: e(240.0, 200.0, 280.0),
                 torque_curve: None,
+                idle_torque_frac: None,
+                drag_const_nm: None,
+                drag_per_rpm_nm: None,
+                response_time_s: None,
+                idle_fuel_kg_s: None,
+                free_turbine: false,
             },
             coupling: CouplingSliders::TorqueConverter { stall_ratio: e(2.0, 1.6, 2.6), lockup: true },
             gearbox: GearboxSliders {
@@ -858,6 +886,7 @@ pub fn dummy_vehicle_def() -> VehicleDef {
                 upshift_rpm: e(4_000.0, 3_500.0, 4_400.0),
                 downshift_rpm: e(1_600.0, 1_200.0, 2_000.0),
                 shift_time_s: e(0.4, 0.2, 0.8),
+                design: None,
             },
             final_drive_ratio: e(3.73, 3.0, 4.6),
             transfer_case_ratio: Some(e(1.0, 1.0, 1.0)),
@@ -930,6 +959,76 @@ mod tests {
         let (spec, measured, estimate, tuned) = d.provenance_counts();
         assert_eq!((spec, measured, tuned), (0, 0, 0));
         assert!(estimate > 40);
+    }
+
+    #[test]
+    fn contract_0_1_sliders_without_the_new_fields_still_load_with_defaults() {
+        let q = "Param(v: 1.0, prov: Estimate)";
+        let axle: AxleDef =
+            ron::from_str(&format!("(from_front_m: {q}, track_width_m: {q}, steered: true, driven: false)"))
+                .expect("axle");
+        assert_eq!(axle.tyres_per_side, 1);
+        assert_eq!(axle.layout, AxleLayout::Independent);
+        assert!(axle.tyre.is_none() && axle.max_steer_deg.is_none() && axle.brake_share.is_none());
+        let tyre: TyreSliders = ron::from_str(&format!(
+            "(outer_diameter_m: {q}, section_width_m: {q}, inflation_pa: {q}, mu_peak_ref: {q}, cornering_stiffness_per_rad: {q}, rolling_coeff: {q}, unsprung_mass_kg: {q})"
+        ))
+        .expect("tyre");
+        assert!(tyre.slip_stiffness.is_none() && tyre.wheel_inertia_kg_m2.is_none());
+        let gearbox: GearboxSliders = ron::from_str(&format!(
+            "(forward_ratios: [{q}], reverse_ratios: [{q}], efficiency: {q}, automatic: true, upshift_rpm: {q}, downshift_rpm: {q}, shift_time_s: {q})"
+        ))
+        .expect("gearbox");
+        assert!(gearbox.design.is_none());
+    }
+
+    #[test]
+    fn a_contract_0_1_tyre_def_loads_and_a_default_tyre_serialises_unchanged() {
+        let t = tyre();
+        let json = serde_json::to_string(&t).expect("serialise");
+        for k in ["speed_floor_m_s", "aligning_trail_frac", "kappa_peak", "alpha_peak_rad"] {
+            assert!(!json.contains(k), "{k} is 0 and must not change rig_hash");
+        }
+        let back: TyreDef = serde_json::from_str(&json).expect("parse");
+        assert_eq!(back, t);
+        let set = TyreDef { speed_floor_m_s: 0.1, ..t };
+        assert!(serde_json::to_string(&set).expect("serialise").contains("speed_floor_m_s"));
+    }
+
+    #[test]
+    fn the_stand_in_engine_peak_power_is_consistent_with_its_torque_peak() {
+        let d = dummy_vehicle_def();
+        let e = &d.powertrain.engine;
+        // Power at the torque peak is torque x omega; the power peak lies above it but cannot exceed the peak torque at the power-peak speed.
+        let p_at_torque_peak = e.peak_torque_nm.v * scalar::rpm_to_rad_s(e.peak_torque_rpm.v);
+        let p_ceiling = e.peak_torque_nm.v * scalar::rpm_to_rad_s(e.peak_power_rpm.v);
+        assert!(e.peak_power_w.v >= p_at_torque_peak);
+        assert!(e.peak_power_w.v <= p_ceiling);
+        assert!(e.peak_power_w.v <= 100_000.0);
+    }
+
+    #[test]
+    fn drive_inputs_default_to_sea_level_ambient_and_engine_on() {
+        let i = crate::ports::DriveInputs::default();
+        assert!((i.ambient_k - crate::ports::DEFAULT_AMBIENT_K).abs() < 1e-12); // const-ok: test tolerance
+        assert!(i.engine_on);
+    }
+
+    #[test]
+    fn a_designed_gearbox_needs_no_explicit_ratios_and_new_params_are_visited() {
+        let mut d = dummy_vehicle_def();
+        d.powertrain.gearbox.forward_ratios.clear();
+        assert!(d.check().is_err(), "no ratios and no design is an error");
+        let p = |v: f64| Param::estimate(v, v * 0.9, v * 1.1, "test");
+        d.powertrain.gearbox.design =
+            Some(GearDesign { gears: 5, launch_grade: p(0.6), top_speed_m_s: p(30.0), top_gear_ratio: p(0.8) });
+        d.check().unwrap_or_else(|e| panic!("{e:?}"));
+        let before = d.provenance_counts().2;
+        if let RunningGearDef::Wheeled(w) = &mut d.running_gear {
+            w.axles[0].layout = AxleLayout::Tandem { group: 2, pivot_frac: p(0.5) };
+            w.axles[0].tyre = Some(w.tyre.clone());
+        }
+        assert!(d.provenance_counts().2 > before + 3, "the new optional params are visited");
     }
 
     #[test]
@@ -1054,6 +1153,18 @@ mod validation_tests {
             "opposite to the recoil axis",
         );
         breaks("too many substeps", truck.clone(), |r| r.integration.substeps = 1000, "substeps");
+        breaks(
+            "f_max the substeps cannot cover",
+            truck.clone(),
+            |r| r.integration.f_max_hz = Some(40.0),
+            "does not cover f_max_hz",
+        );
+        breaks(
+            "non-positive f_max",
+            truck.clone(),
+            |r| r.integration.f_max_hz = Some(0.0),
+            "f_max_hz must be positive",
+        );
         breaks("no ride height", truck.clone(), |r| r.ride_height_m = 0.0, "ride_height_m");
         breaks("wheel buried in the ground", truck.clone(), |r| r.ride_height_m = 0.5, "overlaps");
         breaks(
