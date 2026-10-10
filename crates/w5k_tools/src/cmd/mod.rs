@@ -2,6 +2,7 @@ pub mod ai;
 pub mod arch;
 pub mod arch_compare;
 pub mod arch_course;
+pub mod arch_drive;
 pub mod chassis;
 pub mod combat;
 pub mod drive;

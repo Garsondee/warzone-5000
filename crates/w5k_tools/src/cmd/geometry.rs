@@ -7,13 +7,14 @@ use w5k_geo::mesh::Mesh;
 use w5k_geo::mount::{ring_mount, RingMountDims};
 use w5k_geo::part::Part;
 use w5k_geo::raster::{render, Camera, Item, Mode};
+use w5k_geo::skin::Skin;
 use w5k_geo::truck::{utility_4x4, utility_assembly, utility_hull, utility_truck, UtilityDims};
 use w5k_geo::weapon::{gun_module, GunDims};
 use w5k_geo::wheel::{segments_for, wheel, WheelDims};
 use w5k_math::Vec3;
 
 const USAGE: &str =
-    "usage: w5k geometry sheet <wheel|truck|hull|truck6|truck-ring|truck-mg|truck-ac25>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close,gun] [--size WxH]";
+    "usage: w5k geometry sheet <wheel|truck|scout|hull|truck6|truck-ring|truck-mg|truck-ac25>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close,gun] [--size WxH]";
 
 /// Entry point for `w5k geometry <args>`.
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -48,28 +49,32 @@ pub fn run(args: &[String]) -> Result<(), String> {
             let cols = if views.len() == 1 { 1 } else { 2 };
             let (pw, ph) = (cols * w, subjects.len() * views.len().div_ceil(cols) * h);
             let mut pixels = Vec::new();
-            for name in &subjects {
-                pixels.extend(sheet(&subject(name, detail)?, mode, &views, w, h)?);
+            let all = subjects.iter().map(|name| subject(name, detail)).collect::<Result<Vec<_>, _>>()?;
+            // one scale for every tile, the largest vehicle's, so that sizes can be compared
+            let min_ext = all.iter().map(|p| extent(p)).fold(0.0, f64::max);
+            for parts in &all {
+                pixels.extend(sheet(parts, mode, &views, w, h, min_ext)?);
             }
             write_png(&path, pw as u32, ph as u32, &pixels)?;
             println!("wrote {path}");
             Ok(())
         }
-        (Some("export"), Some(what)) if what == "truck" => {
+        (Some("export"), Some(what)) if skin_id(what).is_some() => {
             let out = get("--out").ok_or(USAGE)?;
             let detail: u8 = get("--detail").map_or(Ok(1), |d| d.parse()).map_err(|_| USAGE.to_string())?;
-            let (dims, parts) = (UtilityDims::placeholder(), utility_4x4(&UtilityDims::placeholder(), detail));
-            let rig = render_rig("utility_4x4", &parts, &FlagParams::default_params());
+            let skin = skin_id(what).and_then(Skin::for_id).ok_or(USAGE)?;
+            let (id, parts) = (skin.kind.id(), skin.parts(detail));
+            let rig = render_rig(id, &parts, &FlagParams::default_params());
             rig.validate().map_err(|e| e.join("; "))?;
             std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
             std::fs::write(
-                format!("{out}/utility_4x4.renderrig.json"),
+                format!("{out}/{id}.renderrig.json"),
                 serde_json::to_string(&rig).map_err(|e| e.to_string())?,
             )
             .map_err(|e| e.to_string())?;
-            std::fs::write(format!("{out}/utility_4x4.glb"), glb(&rig)).map_err(|e| e.to_string())?;
-            let table = dimension_table(&dims, &parts, rig.triangle_count());
-            std::fs::write(format!("{out}/utility_4x4.dimensions.md"), &table).map_err(|e| e.to_string())?;
+            std::fs::write(format!("{out}/{id}.glb"), glb(&rig)).map_err(|e| e.to_string())?;
+            let table = dimension_table(&skin.dims, &parts, rig.triangle_count());
+            std::fs::write(format!("{out}/{id}.dimensions.md"), &table).map_err(|e| e.to_string())?;
             print!("{table}");
             Ok(())
         }
@@ -106,7 +111,16 @@ fn dimension_table(d: &UtilityDims, parts: &[Part], triangles: usize) -> String 
         // const-ok: percent
         s += &format!("| {name} | {got:.3} | {want:.3} | {:+.2}% |\n", (got / want - 1.0) * 100.0);
     }
-    s + &format!("\nTriangles in the rig: {triangles} (budget 40,000 for a wheeled vehicle).\n")
+    s + &format!("\nTriangles in the rig: {triangles} (budget 50,000 for a wheeled vehicle).\n")
+}
+
+/// The skin id of a subject name (`truck` is the utility truck), if it is a skin.
+fn skin_id(subject: &str) -> Option<&'static str> {
+    match subject {
+        "truck" => Some("utility_4x4"),
+        "scout" => Some("scout_4x4"),
+        _ => None,
+    }
 }
 
 /// Parts as (mesh, base colour, counts for the camera framing: a tall antenna should not move the view).
@@ -121,6 +135,14 @@ fn subject(what: &str, detail: u8) -> Result<Vec<(Mesh, [f64; 3], bool)>, String
                 (w.rim, [0.55, 0.57, 0.52], true),  // const-ok: picture colours and camera framing
                 (w.nuts, [0.7, 0.7, 0.7], true),    // const-ok: picture colours and camera framing
             ])
+        }
+        "scout" => {
+            let skin = Skin::for_id("scout_4x4").ok_or("no scout skin")?;
+            Ok(skin
+                .parts(detail)
+                .iter()
+                .map(|p| (p.in_hull_frame(), slot_colour(p.slot), p.name != "antenna"))
+                .collect())
         }
         "truck" | "hull" | "truck6" | "truck-ring" | "truck-mg" | "truck-ac25" => {
             let d = UtilityDims::placeholder();
@@ -168,8 +190,25 @@ const VIEWS: [(&str, [f64; 3], bool); 9] = [
     ("gun", [0.8, 0.45, -1.0], true),     // const-ok: camera direction
 ];
 
+/// The diagonal of the box around the parts that count for the camera framing.
+fn extent(parts: &[(Mesh, [f64; 3], bool)]) -> f64 {
+    let (lo, hi) = parts
+        .iter()
+        .filter(|p| p.2)
+        .map(|p| p.0.bounds())
+        .fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(a, b), (l, u)| (a.min(l), b.max(u)));
+    (hi - lo).length()
+}
+
 /// One picture per name in `views`: a single view fills the image, four views make a 2 x 2 sheet.
-fn sheet(parts: &[(Mesh, [f64; 3], bool)], mode: Mode, views: &[&str], w: usize, h: usize) -> Result<Vec<u8>, String> {
+fn sheet(
+    parts: &[(Mesh, [f64; 3], bool)],
+    mode: Mode,
+    views: &[&str],
+    w: usize,
+    h: usize,
+    min_ext: f64,
+) -> Result<Vec<u8>, String> {
     let flags = bake(&parts.iter().map(|p| &p.0).collect::<Vec<_>>(), &FlagParams::default_params());
     let items: Vec<Item> = parts
         .iter()
@@ -181,7 +220,7 @@ fn sheet(parts: &[(Mesh, [f64; 3], bool)], mode: Mode, views: &[&str], w: usize,
         .filter(|p| p.2)
         .map(|p| p.0.bounds())
         .fold((Vec3::splat(f64::MAX), Vec3::splat(f64::MIN)), |(a, b), (l, u)| (a.min(l), b.max(u)));
-    let (c, ext) = ((lo + hi) * 0.5, (hi - lo).length());
+    let (c, ext) = ((lo + hi) * 0.5, (hi - lo).length().max(min_ext));
     let cols = if views.len() == 1 { 1 } else { 2 };
     let mut out = vec![0u8; cols * w * views.len().div_ceil(cols) * h * 3];
     for (i, name) in views.iter().enumerate() {
