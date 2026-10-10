@@ -106,6 +106,24 @@ fn belt_reaction_rate(
     r * r * per_load
 }
 
+/// The optional rig features a tracked vehicle may use: the ones this chassis implements (swinging arms, strut dry friction, the hard bump
+/// limit; track running resistance is the gear's) and the ones DRIVE consumes behind the `DrivePort` (steering unit and brakes, brake lag,
+/// driveline brake, band-brake reverse factor, differential split, drive modes, free turbine). Anything else is refused, never ignored.
+const TRACKED_SUPPORTED: [&str; 12] = [
+    feature::SWING_ARM,
+    feature::DRY_FRICTION,
+    feature::HARD_BUMP_LIMIT,
+    feature::TRACK_RESISTANCE,
+    feature::STEER_LAW,
+    feature::BRAKE_STEERING,
+    feature::BRAKE_LAG,
+    feature::BRAKE_DRIVELINE_SITE,
+    feature::BRAKE_REVERSE_FACTOR,
+    feature::DIFF_SPLIT_OR_EFFICIENCY,
+    feature::DRIVE_MODES,
+    feature::FREE_TURBINE,
+];
+
 /// One road wheel: a travel coordinate on a straight strut (`bump_dir`) or a torsion arm, its own unsprung mass, its suspension.
 #[derive(Clone, Debug)]
 pub struct RoadWheel {
@@ -185,7 +203,7 @@ impl TrackedChassis {
         z_m: f64,
         yaw_rad: f64,
     ) -> Result<Self, ChassisRefusal> {
-        if let Some(f) = rig.required_features().into_iter().find(|f| *f != feature::TRACK_RESISTANCE) {
+        if let Some(f) = rig.required_features().into_iter().find(|f| !TRACKED_SUPPORTED.contains(f)) {
             return Err(ChassisRefusal::Feature(f.to_string()));
         }
         if rig.tracks.is_empty() {

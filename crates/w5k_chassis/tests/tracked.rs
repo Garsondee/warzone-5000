@@ -143,3 +143,37 @@ fn tank_accelerates_at_twice_the_sprocket_force_over_its_effective_mass() {
     println!("a {a:.3} m/s2 against (2 T / r - (c0 + c1 v) W) / m_eff = {expect:.3} (m_eff {m:.0} kg, resistance {resist:.0} N, v {v_mid:.2} m/s)");
     assert!(a > 0.0 && (a / expect - 1.0).abs() < 0.1);
 }
+
+#[test]
+fn forges_compiled_carrier_builds_and_rests_at_its_design_ride_height() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../content/vehicles/game/");
+    let def =
+        w5k_forge::compile::parse_def(&std::fs::read_to_string(format!("{dir}carrier_tracked.ron")).unwrap()).unwrap();
+    let ex =
+        w5k_forge::compile::parse_extras(&std::fs::read_to_string(format!("{dir}carrier_tracked.extras.ron")).unwrap())
+            .unwrap();
+    let r = w5k_forge::compile::compile(&def, &ex).unwrap_or_else(|e| panic!("{e:?}")).rig;
+    println!("carrier features {:?}", r.required_features());
+    let w = FlatPlane::new();
+    let t = w5k_terramech::Tuning::shipped();
+    let belly = w5k_terramech::belly::BellyGeom::from_rig(&r, &t);
+    let mut c =
+        TrackedChassis::new(&r, &tuning(), t, belly, &w, 0.0, 0.0, 0.0).unwrap_or_else(|e| panic!("refused: {e:?}"));
+    let mut d = ConstantTorquePowertrain::new(r.drivetrain.outputs.len(), 8000.0, 40000.0);
+    let parked = DriveInputs { gear: GearRequest::Neutral, parking_brake: true, ..DriveInputs::default() };
+    for _ in 0..(5.0 * TICK_HZ) as usize {
+        c.tick(1.0 / TICK_HZ, &parked, &w, &mut d);
+        assert!(c.is_finite());
+    }
+    let sag = c.datum_m().y - r.ride_height_m;
+    let pen = c.wheels.iter().map(|w| w.penetration_m).sum::<f64>() / c.wheels.len() as f64;
+    let travel: Vec<f64> = c.wheels.iter().map(|w| w.travel_m).collect();
+    println!(
+        "datum {sag:.4} m off the ride height; mean belt penetration {pen:.4} m; travel {travel:.4?}; v {:.5}",
+        c.hull.vel_m_s.length()
+    );
+    // FORGE bakes the belt's static penetration into the design pose, so the datum rests at the ride height itself, springs at preload
+    assert!(sag.abs() < 0.005, "datum {sag} m off");
+    assert!(travel.iter().all(|t| t.abs() < 0.005), "the springs sit at their preload");
+    assert!(c.hull.vel_m_s.length() < 1e-3);
+}

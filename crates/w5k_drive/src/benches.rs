@@ -26,6 +26,13 @@ pub struct BenchWorld {
     pub fuel_density_kg_m3: Param,
     pub cruise_kmh: Param,
     pub descent_grade_rad: Param,
+    pub skid_radius_m: Param,
+    pub skid_start_speed_m_s: Param,
+    pub skid_ramp_m_s2: Param,
+    pub skid_speed_gain_per_m_s: Param,
+    pub skid_warmup_s: Param,
+    pub skid_max_s: Param,
+    pub skid_slide_out_frac: Param,
 }
 
 impl BenchWorld {
@@ -39,6 +46,13 @@ impl BenchWorld {
             ("fuel_density_kg_m3", &w.fuel_density_kg_m3),
             ("cruise_kmh", &w.cruise_kmh),
             ("descent_grade_rad", &w.descent_grade_rad),
+            ("skid_radius_m", &w.skid_radius_m),
+            ("skid_start_speed_m_s", &w.skid_start_speed_m_s),
+            ("skid_ramp_m_s2", &w.skid_ramp_m_s2),
+            ("skid_speed_gain_per_m_s", &w.skid_speed_gain_per_m_s),
+            ("skid_warmup_s", &w.skid_warmup_s),
+            ("skid_max_s", &w.skid_max_s),
+            ("skid_slide_out_frac", &w.skid_slide_out_frac),
         ] {
             p.check(n)?;
         }

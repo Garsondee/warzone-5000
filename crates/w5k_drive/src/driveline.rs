@@ -289,6 +289,16 @@ impl Driveline {
         self.active().next().map_or(1.0, |l| l.ratio)
     }
 
+    /// The driveline-input speed implied by the *slowest* driven shaft (smallest magnitude, sign kept). A spinning wheel runs faster than
+    /// the ground under it and inflates the mean the carrier turns at, so the shift logic reads the slowest wheel, which is the best
+    /// available proxy for the road speed.
+    pub fn slowest_input_speed(&self, shafts: &[Downstream]) -> f64 {
+        self.active()
+            .map(|l| l.ratio * shafts[l.output].omega_rad_s)
+            .min_by(|a, b| a.abs().total_cmp(&b.abs()))
+            .unwrap_or(0.0)
+    }
+
     pub fn output_count(&self) -> usize {
         self.outputs
     }
