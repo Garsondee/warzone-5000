@@ -11,5 +11,7 @@ pub mod corrugation;
 pub mod course;
 pub mod features;
 pub mod grid;
+pub mod plot;
 pub mod river;
+pub mod stats;
 pub mod strip;
