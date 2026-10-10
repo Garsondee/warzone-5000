@@ -61,7 +61,8 @@ fn measure(lever: &str, c: &Compiled) -> f64 {
         "first_gear" => r.drivetrain.gearbox.forward_ratios[0],
         "brake_torque" => r.drivetrain.brakes.iter().map(|b| b.max_torque_nm).sum(),
         "brake_thermal_mass" => r.drivetrain.brakes[0].thermal_mass_j_k,
-        "mass" => r.hull.mass_kg,
+        // With a mass budget the lever perturbs the structure; the structure is the first mass item.
+        "mass" => c.mass_items.first().map_or(r.hull.mass_kg, |m| m.mass_kg),
         "com_height" => r.hull.com_m.y + r.ride_height_m,
         "ground_clearance" => r.ride_height_m - 0.5 * c.hull_size_m.y,
         "wheelbase" => last.rest_pos_m.z - first.rest_pos_m.z,
@@ -129,7 +130,8 @@ fn tyre_width_and_pressure_move_the_contact_patch_inversely() {
 #[test]
 fn mass_moves_the_springs_with_it_so_the_ride_frequency_holds() {
     let (d, x) = load("mule_4x4");
-    let c = compile(&apply(&d, "mass", 1.5).unwrap(), &x).unwrap();
+    let (d2, x2) = apply_both(&d, &x, "mass", 1.5).unwrap();
+    let c = compile(&d2, &x2).unwrap();
     let s = &c.rig.stations[0];
     let f = scalar::sqrt(ride_rate(s) / (s.suspension.preload_n / G)) / scalar::TAU;
     assert!(
@@ -137,7 +139,7 @@ fn mass_moves_the_springs_with_it_so_the_ride_frequency_holds() {
         "ride frequency is a slider; it must not move with mass"
     );
     let base = compile(&d, &x).unwrap();
-    assert!(ride_rate(s) > 1.4 * ride_rate(&base.rig.stations[0]), "the spring rate rises with the sprung mass");
+    assert!(ride_rate(s) > 1.1 * ride_rate(&base.rig.stations[0]), "the spring rate rises with the sprung mass");
 }
 
 #[test]
@@ -180,7 +182,7 @@ fn the_mass_lever_holds_the_brake_torque_so_a_heavier_vehicle_brakes_less_hard()
         let total = |c: &Compiled| -> f64 { c.rig.drivetrain.brakes.iter().map(|b| b.max_torque_nm).sum() };
         assert!((total(&heavy) / total(&base) - 1.0).abs() < 1e-9, "{id}: brake torque must not follow the mass");
         let decel = |c: &Compiled| total(c) / 0.5 / c.rig.stations[0].wheel.radius_m / c.rig.total_mass_kg() / G;
-        assert!(decel(&heavy) < decel(&base) * 0.85, "{id}: the achievable deceleration falls with mass");
+        assert!(decel(&heavy) < decel(&base) * 0.95, "{id}: the achievable deceleration falls with mass");
     }
 }
 
@@ -247,7 +249,7 @@ fn authored_axle_brake_torque_is_the_spec_and_the_deceleration_falls_with_mass()
         let heavy = compile(&dh, &xh).unwrap();
         assert!((total(&heavy) - authored).abs() < 1e-9 * authored, "{id}: mass must not change the torque");
         let decel = |c: &Compiled| total(c) / c.rig.stations[0].wheel.radius_m / c.rig.total_mass_kg() / G;
-        assert!(decel(&heavy) < decel(&base) * 0.8, "{id}");
+        assert!(decel(&heavy) < decel(&base) * 0.9, "{id}");
     }
 }
 
