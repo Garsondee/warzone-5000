@@ -65,6 +65,18 @@ pub struct RockFieldDef {
     pub surface: String,
 }
 
+/// A disc of soft ground (sand, deep mud): the surface material changes, the shape of the ground does not. The soil law of the material
+/// (Bekker-Wong parameters in `content/world/materials.ron`) does the rest.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SoftPatchDef {
+    pub x_m: f64,
+    pub z_m: f64,
+    pub radius_m: Param,
+    /// Name of a soft material in the table.
+    pub surface: String,
+}
+
 /// Cells within `r_m` of any cell flagged in `mask` (a disc dilation).
 pub fn dilate(mask: &[bool], n: usize, r_m: f64) -> Vec<bool> {
     let r = (r_m / CELL_M).ceil() as i64;

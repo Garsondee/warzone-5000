@@ -295,7 +295,7 @@ mod tests {
         let again: StripDef = ron::from_str(&ron::to_string(&def).expect("serialise")).expect("re-parse");
         assert_eq!(def, again);
         assert!(DataStrip::bake(&def, standard_material_table().expect("table")).is_ok());
-        assert_eq!(standard_material_table().expect("table").materials.len(), 5);
+        assert_eq!(standard_material_table().expect("table").materials.len(), 7);
     }
 
     #[test]
@@ -313,5 +313,41 @@ mod tests {
         assert!((hit.distance_m - (5.0 - 0.2)).abs() < 1e-9);
         let slanted = w.raycast(Vec3::new(0.0, 1.0, -30.0), Vec3::new(0.0, -0.2, -1.0), 30.0).expect("hit");
         assert!((slanted.point.y - w.height_m(0.0, slanted.point.z)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn material_ron_round_trips_and_every_param_checks() {
+        let defs: Vec<MaterialDef> =
+            ron::from_str(include_str!("../../../content/world/materials.ron")).expect("parse");
+        assert!(defs.len() >= 7);
+        for d in &defs {
+            assert!(d.bake().is_ok(), "{} must bake", d.name);
+            let again: MaterialDef = ron::from_str(&ron::to_string(d).expect("serialise")).expect("re-parse");
+            assert_eq!(*d, again, "{} round trip", d.name);
+        }
+    }
+
+    /// The union of the published classes of Bekker-Wong soil parameters (sands, loams, clays; Wong, Theory of Ground Vehicles, soil
+    /// parameter tables and the WES literature), widened to cover sources that disagree. UNVALIDATED until VALIDATION opens the table.
+    #[test]
+    fn soil_params_are_inside_their_published_bands() {
+        let table = standard_material_table().expect("table");
+        let mut soft = 0;
+        for m in &table.materials {
+            let Some(s) = m.soil else { continue };
+            soft += 1;
+            assert!((0.3..=1.5).contains(&s.n), "{}: sinkage exponent n {}", m.name, s.n);
+            assert!((1e2..=4e4).contains(&s.kc_pa_m_n1), "{}: kc {}", m.name, s.kc_pa_m_n1);
+            assert!((1e5..=5e6).contains(&s.kphi_pa_m_n), "{}: kphi {}", m.name, s.kphi_pa_m_n);
+            assert!((0.0..=7e4).contains(&s.cohesion_pa), "{}: cohesion {}", m.name, s.cohesion_pa);
+            assert!(
+                (5.0..=45.0).contains(&w5k_math::scalar::rad_to_deg(s.friction_angle_rad)),
+                "{}: friction angle",
+                m.name
+            );
+            assert!((0.003..=0.06).contains(&s.shear_k_m), "{}: shear modulus K {}", m.name, s.shear_k_m);
+            assert!(m.mu_peak <= 1.0 && m.mu_slide <= m.mu_peak, "{}: friction ordering", m.name);
+        }
+        assert!(soft >= 2, "at least mud and sand");
     }
 }

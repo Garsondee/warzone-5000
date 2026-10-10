@@ -1,0 +1,10 @@
+[package]
+name = "replay_peek"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+w5k_replay = { path = "../../../crates/w5k_replay" }

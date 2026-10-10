@@ -9,11 +9,12 @@ use w5k_geo::part::Part;
 use w5k_geo::raster::{render, Camera, Item, Mode};
 use w5k_geo::skin::Skin;
 use w5k_geo::truck::{utility_4x4, utility_assembly, utility_hull, utility_truck, UtilityDims};
+use w5k_geo::weapon::{gun_module, GunDims};
 use w5k_geo::wheel::{segments_for, wheel, WheelDims};
 use w5k_math::Vec3;
 
 const USAGE: &str =
-    "usage: w5k geometry sheet <wheel|truck|scout|hauler|hull|truck6|truck-ring>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close,gun] [--size WxH]";
+    "usage: w5k geometry sheet <wheel|truck|scout|hauler|hull|truck6|truck-ring|truck-mg|truck-ac25>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close,gun] [--size WxH]";
 
 /// Entry point for `w5k geometry <args>`.
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -110,7 +111,7 @@ fn dimension_table(d: &UtilityDims, parts: &[Part], triangles: usize) -> String 
         // const-ok: percent
         s += &format!("| {name} | {got:.3} | {want:.3} | {:+.2}% |\n", (got / want - 1.0) * 100.0);
     }
-    s + &format!("\nTriangles in the rig: {triangles} (budget 40,000 for a wheeled vehicle).\n")
+    s + &format!("\nTriangles in the rig: {triangles} (budget 50,000 for a wheeled vehicle).\n")
 }
 
 /// The skin id of a subject name (`truck` is the utility truck), if it is a skin.
@@ -144,14 +145,16 @@ fn subject(what: &str, detail: u8) -> Result<Vec<(Mesh, [f64; 3], bool)>, String
                 .map(|p| (p.in_hull_frame(), slot_colour(p.slot), p.name != "antenna"))
                 .collect())
         }
-        "truck" | "hull" | "truck6" | "truck-ring" => {
+        "truck" | "hull" | "truck6" | "truck-ring" | "truck-mg" | "truck-ac25" => {
             let d = UtilityDims::placeholder();
             let z = d.wheelbase_m / 2.0;
             let parts = match what {
                 "hull" => utility_hull(&d, &[-z, z], detail).parts,
                 // front steer axle and a rear tandem 1.2 m apart
                 "truck6" => utility_truck(&d, &[-z, z - 1.2, z], &[true, false, false], detail), // const-ok: tandem spacing for the picture
-                "truck-ring" => mounted(&d, detail)?,
+                "truck-ring" => mounted(&d, None, detail)?,
+                "truck-mg" => mounted(&d, Some("machine_gun_12_7"), detail)?,
+                "truck-ac25" => mounted(&d, Some("autocannon_25"), detail)?,
                 _ => utility_4x4(&d, detail),
             };
             Ok(parts.iter().map(|p| (p.in_hull_frame(), slot_colour(p.slot), p.name != "antenna")).collect())
@@ -160,11 +163,17 @@ fn subject(what: &str, detail: u8) -> Result<Vec<(Mesh, [f64; 3], bool)>, String
     }
 }
 
-/// The 4x4 with the ring mount on its roof socket.
-fn mounted(d: &UtilityDims, detail: u8) -> Result<Vec<Part>, String> {
+/// The 4x4 with the ring mount on its roof socket and, if one is named, that gun on the mount's trunnion.
+fn mounted(d: &UtilityDims, gun: Option<&str>, detail: u8) -> Result<Vec<Part>, String> {
     let z = d.wheelbase_m / 2.0;
     let mut asm = utility_assembly(d, &[-z, z], &[true, false], detail);
     asm.attach("roof", &ring_mount(&RingMountDims::standard(), detail), 0.0, "ring").map_err(|e| e.to_string())?;
+    if let Some(name) = gun {
+        let cradle =
+            asm.socket("trunnion.ring").and_then(|s| s.hint("cradle_w_m")).ok_or("the mount publishes no cradle")?;
+        let dims = GunDims::preset(name).ok_or(format!("no gun preset {name}"))?;
+        asm.attach("trunnion.ring", &gun_module(&dims, cradle, detail), 0.0, "gun").map_err(|e| e.to_string())?;
+    }
     Ok(asm.parts)
 }
 
