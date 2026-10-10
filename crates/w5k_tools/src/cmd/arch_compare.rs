@@ -5,7 +5,9 @@
 //! never capped by what the vehicle can do, so a weaker vehicle simply falls behind the target. Each vehicle is simulated on its own
 //! (own state, own double-run determinism check). Outputs in DIR: `replay.w5kr` (all vehicles in `vehicles[]`, frames at the common
 //! step, a vehicle that has stopped holds its last pose with zero velocity, the replay lasts as long as the longest run),
-//! `rig_<name>.json` per vehicle for the viewer, `*_<name>.csv` traces.
+//! `rig_<name>.json` per vehicle for the viewer, `*_<name>.csv` traces, and the report (see `report.rs`).
+
+mod report;
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -175,8 +177,9 @@ pub fn course_compare(args: &[String]) -> Result<(), String> {
             write(format!("{kind}_{}.csv", r.stem), text)?;
         }
     }
+    report::write_all(&setup, &runs, out)?;
     println!(
-        "wrote {}/replay.w5kr ({} vehicles, {} frames), rig_*.json and the traces",
+        "wrote {}/replay.w5kr ({} vehicles, {} frames), rig_*.json, traces and the report",
         out.display(),
         runs.len(),
         replay.frames.len()

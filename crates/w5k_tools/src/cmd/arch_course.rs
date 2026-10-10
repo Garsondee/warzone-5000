@@ -168,11 +168,31 @@ impl RoadPath {
     }
 }
 
+/// One trace sample (one per replay frame, taken before the tick): what `course-compare` computes its report from.
+#[derive(Clone, Debug)]
+pub(crate) struct Sample {
+    pub t_s: f64,
+    pub s_m: f64,
+    pub speed_m_s: f64,
+    pub target_m_s: f64,
+    pub cross_track_m: f64,
+    pub steer_angle_rad: f64,
+    /// Centripetal acceleration `v * yaw rate` (positive = turning left), m/s^2.
+    pub lat_accel_m_s2: f64,
+    /// Rate of change of the hull datum's vertical velocity between samples, m/s^2 (0 on flat ground at constant speed).
+    pub vert_accel_m_s2: f64,
+    pub gear: i8,
+    pub fuel_kg: f64,
+    /// Any tyre patch at its friction or shear limit.
+    pub tyre_limit: bool,
+}
+
 /// What a finished run leaves behind.
 #[derive(Clone)]
 pub(crate) struct RunResult {
     pub frame_every_ticks: u32,
     pub frames: Vec<Frame>,
+    pub samples: Vec<Sample>,
     pub hashes: Vec<u64>,
     pub final_hash: u64,
     pub stop_reason: String,
@@ -362,6 +382,7 @@ fn simulate(
     let mut r = RunResult {
         frame_every_ticks: sc.frame_every_ticks.max(1),
         frames: Vec::new(),
+        samples: Vec::new(),
         hashes: Vec::new(),
         final_hash: 0,
         stop_reason: format!("ran the full {} s", sc.max_seconds.v),
@@ -383,6 +404,7 @@ fn simulate(
     }
     r.loads.push('\n');
     let mut progress: Vec<f64> = Vec::new();
+    let mut prev_vy: Option<(f64, f64)> = None;
     let mut hint = 0usize;
     let mut s_now = 0.0;
     for n in 0..ticks {
@@ -416,6 +438,26 @@ fn simulate(
             scalar::clamp((v - target - sc.brake_deadband_m_s.v) * sc.brake_gain_per_m_s.v, 0.0, 1.0)
         };
         let inputs = DriveInputs { throttle, brake, steer, gear: GearRequest::Auto, ..DriveInputs::default() };
+
+        if n % every == 0 {
+            let tel = drive.telemetry();
+            let (t0, vy) = (chassis.time_s, chassis.hull.vel_m_s.y);
+            let vert_accel = prev_vy.map_or(0.0, |(pt, pv)| (vy - pv) / (t0 - pt));
+            prev_vy = Some((t0, vy));
+            r.samples.push(Sample {
+                t_s: t0,
+                s_m: s_now,
+                speed_m_s: v,
+                target_m_s: target,
+                cross_track_m: cross_m,
+                steer_angle_rad: chassis.stations.iter().map(|s| s.steer_rad.abs()).fold(0.0, f64::max),
+                lat_accel_m_s2: v * chassis.hull.omega_rad_s().y,
+                vert_accel_m_s2: vert_accel,
+                gear: tel.gear,
+                fuel_kg: tel.fuel_used_kg,
+                tyre_limit: chassis.stations.iter().any(|s| s.report.contact.saturated),
+            });
+        }
 
         // --- the physics ---------------------------------------------------------------------------------------------------------
         chassis.tick(dt, &inputs, world, &mut drive);
