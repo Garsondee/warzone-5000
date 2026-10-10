@@ -4,3 +4,5 @@
 //!
 //! Status: SKELETON, created by the Launch Kit. Read your lane brief first:
 //! `docs/swarm/lanes/validation.md`. Only lane VALIDATION edits this crate (`docs/swarm/ownership.toml`).
+
+pub mod dossier;

@@ -17,7 +17,7 @@ use crate::world::Material;
 // ---------------------------------------------------------------------------------------------------------------- DrivePort
 
 /// What the driver asks of the powertrain this step.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DriveInputs {
     pub throttle: f64,
     pub brake: f64,
@@ -29,6 +29,29 @@ pub struct DriveInputs {
     pub clutch: Option<f64>,
     /// The selected driveline state (index into `DrivetrainDef::modes`).
     pub drive_mode: u8,
+    /// Contract 0.2 (DRIVE). Ambient air temperature, K, for brake and engine cooling. The glue passes a world value when it has one.
+    pub ambient_k: f64,
+    /// Contract 0.2 (DRIVE). Key on: false stops the engine (turbine or idle-off); the default is true, so a caller that never sets it is unchanged.
+    pub engine_on: bool,
+}
+
+/// ISA sea-level air temperature, K: the default of [`DriveInputs::ambient_k`].
+pub const DEFAULT_AMBIENT_K: f64 = 288.15; // const-ok: ISA sea level default, overridable
+
+impl Default for DriveInputs {
+    fn default() -> Self {
+        DriveInputs {
+            throttle: 0.0,
+            brake: 0.0,
+            steer: 0.0,
+            gear: GearRequest::default(),
+            parking_brake: false,
+            clutch: None,
+            drive_mode: 0,
+            ambient_k: DEFAULT_AMBIENT_K,
+            engine_on: true,
+        }
+    }
 }
 
 /// The state of one driven output shaft (wheel hub or sprocket) as the powertrain sees it.
@@ -60,6 +83,13 @@ pub struct DriveTelemetry {
     pub shifting: bool,
     /// The selected driveline state.
     pub drive_mode: u8,
+    /// Contract 0.2 (DRIVE). Heat dissipated in the clutch or converter so far, J (cumulative).
+    pub clutch_heat_j: f64,
+    /// Contract 0.2. The net torque of each output of the last step (the `torque_nm_out` values), N m, one per output, for the ledger.
+    /// Empty if the implementation does not report it.
+    pub output_torque_nm: Vec<f64>,
+    /// Contract 0.2. Fuel burnt so far, kg (cumulative; the integral of `fuel_rate_kg_s`).
+    pub fuel_used_kg: f64,
 }
 
 /// Powertrain port. One call per substep; `torque_nm_out` is filled with the net torque (drive minus brake) each output shaft
