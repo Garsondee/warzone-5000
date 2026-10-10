@@ -9,9 +9,10 @@ use std::collections::BinaryHeap;
 
 use serde::{Deserialize, Serialize};
 use w5k_contract::param::Param;
-use w5k_contract::world::MaterialId;
-use w5k_math::scalar;
+use w5k_contract::world::{MaterialId, PropId, PropKind, PropRef, PropShape, WorldQuery};
+use w5k_math::{scalar, Pcg32, Transform, Vec3};
 
+use crate::features::{barricade_blocks, cell_slope, mud_mask, poisson_disc, BarricadeDef, MudDef, TreesDef};
 use crate::grid::{warped_fbm, GridWorld, CELL_M};
 use crate::strip::standard_material_table;
 
@@ -59,6 +60,12 @@ pub struct CourseDef {
     pub size_cells: usize,
     pub hills: HillsDef,
     pub road: RoadDef,
+    #[serde(default)]
+    pub mud: Option<MudDef>,
+    #[serde(default)]
+    pub trees: Option<TreesDef>,
+    #[serde(default)]
+    pub barricade: Option<BarricadeDef>,
 }
 
 impl CourseDef {
@@ -74,6 +81,11 @@ pub struct Course {
     pub ground: MaterialId,
     pub road_material: MaterialId,
 }
+
+/// Salt separating the tree-stand noise from the hills noise (same seed, different field).
+/// Noise values at which a stand fades from empty to full density.
+const STAND_NOISE_EDGES: (f64, f64) = (-0.15, 0.35); // const-ok: shape of the clumping
+const STANDS_SALT: u64 = 0x7EEE; // const-ok: noise stream label
 
 /// The profile is graded to this fraction of the stated road grade; sampled bilinearly the road can add a sliver of slope.
 const PROFILE_MARGIN: f64 = 0.9; // const-ok: safety factor on the stated grade
@@ -330,10 +342,105 @@ pub fn generate(def: &CourseDef) -> Result<Course, String> {
     }
     // The centreline cells are exactly the profile (they have weight 1); keep the shoulders inside the terrain grade limit.
     limit_grades(&mut h, n, axis_terrain, &frozen);
-    let road = pts.iter().zip(&y).map(|(&(i, j), &yy)| (i * CELL_M - half, j * CELL_M - half, yy)).collect();
+    let road: Vec<(f64, f64, f64)> =
+        pts.iter().zip(&y).map(|(&(i, j), &yy)| (i * CELL_M - half, j * CELL_M - half, yy)).collect();
 
+    // Round to the stored precision first: every later rule (drainage, slope) must see exactly what a query sees.
+    for v in h.iter_mut() {
+        *v = f64::from(*v as f32);
+    }
+    let mud_id = materials.id_of("mud").ok_or("material table has no `mud`")?;
+    if let Some(m) = &def.mud {
+        m.min_drainage_cells.check(&format!("{}.mud.min_drainage_cells", def.name))?;
+        m.max_slope.check(&format!("{}.mud.max_slope", def.name))?;
+        m.spread_m.check(&format!("{}.mud.spread_m", def.name))?;
+        for (c, wet) in mud_mask(&h, n, m).into_iter().enumerate() {
+            if wet && !frozen[c] {
+                splat[c] = mud_id.0 as u8;
+            }
+        }
+    }
     let heights: Vec<f32> = h.iter().map(|&v| v as f32).collect();
-    let world = GridWorld::from_arrays(n, heights, splat, materials);
+    let mut world = GridWorld::from_arrays(n, heights, splat.clone(), materials);
+
+    // 3. Props.
+    let mut props: Vec<PropRef> = Vec::new();
+    if let Some(t) = &def.trees {
+        for (l, p) in [
+            ("min_spacing_m", &t.min_spacing_m),
+            ("density", &t.density),
+            ("max_slope", &t.max_slope),
+            ("road_clearance_m", &t.road_clearance_m),
+            ("stand_wavelength_m", &t.stand_wavelength_m),
+            ("trunk_radius_m", &t.trunk_radius_m),
+            ("height_m", &t.height_m),
+            ("break_impulse_ns", &t.break_impulse_ns),
+        ] {
+            p.check(&format!("{}.trees.{l}", def.name))?;
+        }
+        let clear = (t.road_clearance_m.v / CELL_M).ceil() as i64;
+        let mut near_road = vec![false; n * n];
+        for c in (0..n * n).filter(|&c| frozen[c]) {
+            let (i, j) = ((c % n) as i64, (c / n) as i64);
+            for dj in -clear..=clear {
+                for di in -clear..=clear {
+                    let (ni, nj) = (i + di, j + dj);
+                    if ni >= 0
+                        && nj >= 0
+                        && ni < n as i64
+                        && nj < n as i64
+                        && scalar::hypot(di as f64, dj as f64) * CELL_M <= t.road_clearance_m.v
+                    {
+                        near_road[nj as usize * n + ni as usize] = true;
+                    }
+                }
+            }
+        }
+        let accept = |x: f64, z: f64| -> f64 {
+            let (i, j) = (((x + half) / CELL_M).round() as usize, ((z + half) / CELL_M).round() as usize);
+            let c = j.min(n - 1) * n + i.min(n - 1);
+            if splat[c] != ground.0 as u8 || near_road[c] || cell_slope(&h, n, c % n, c / n) > t.max_slope.v {
+                0.0
+            } else {
+                // Stands, not an even scatter: thin the density by a slow noise field so trees clump and leave clearings.
+                t.density.v
+                    * scalar::smoothstep(
+                        STAND_NOISE_EDGES.0,
+                        STAND_NOISE_EDGES.1,
+                        warped_fbm(def.seed ^ STANDS_SALT, x, z, t.stand_wavelength_m.v, 0.0, 2),
+                    )
+            }
+        };
+        let mut rng = Pcg32::derive(def.seed, &[3]); // stage 3: trees
+        for (k, (x, z)) in poisson_disc(&mut rng, half - 1.0, t.min_spacing_m.v, &accept).into_iter().enumerate() {
+            props.push(PropRef {
+                id: PropId(k as u32),
+                kind: PropKind::Tree,
+                shape: PropShape::Cylinder { radius_m: t.trunk_radius_m.v, height_m: t.height_m.v },
+                transform: Transform::from_pos(Vec3::new(x, world.height_m(x, z), z)),
+                break_impulse_ns: t.break_impulse_ns.v,
+            });
+        }
+    }
+    if let Some(b) = &def.barricade {
+        for (l, p) in [
+            ("at_fraction", &b.at_fraction),
+            ("gap_m", &b.gap_m),
+            ("block_height_m", &b.block_height_m),
+            ("block_depth_m", &b.block_depth_m),
+        ] {
+            p.check(&format!("{}.barricade.{l}", def.name))?;
+        }
+        let last = road.len() - 1;
+        let k = ((b.at_fraction.v * last as f64).round() as usize).clamp(1, last - 1);
+        let (p0, p1) = (road[k - 1], road[k + 1]);
+        let len = scalar::hypot(p1.0 - p0.0, p1.1 - p0.1);
+        let ids = props.len() as u32;
+        props.extend(barricade_blocks(ids, road[k], ((p1.0 - p0.0) / len, (p1.1 - p0.1) / len), w2, b, &|x, z| {
+            world.height_m(x, z)
+        }));
+    }
+    world.set_props(props);
     Ok(Course { world, road, ground, road_material })
 }
 
@@ -347,6 +454,8 @@ mod tests {
         CourseDef::from_ron(include_str!("../../../content/world/courses/slice.ron")).expect("slice.ron parses")
     }
 
+    const GOLDEN_SLICE_HASH: u64 = 0xeb7a_3119_94c6_c4dd;
+
     fn hash(c: &Course) -> u64 {
         let mut s = StateHasher::new();
         let w = &c.world;
@@ -355,6 +464,10 @@ mod tests {
                 s.write_u32((w.height_at_node(i, j) as f32).to_bits());
                 s.write_u8(w.splat_at_node(i, j));
             }
+        }
+        for p in w.props() {
+            s.write_u32(p.id.0);
+            s.write_vec3(p.transform.pos);
         }
         s.finish()
     }
@@ -375,6 +488,8 @@ mod tests {
         let d = def();
         let (a, b) = (generate(&d).expect("a"), generate(&d).expect("b"));
         assert_eq!(hash(&a), hash(&b));
+        // Bit-identical on every platform: this constant is checked on Linux and Windows CI.
+        assert_eq!(hash(&a), GOLDEN_SLICE_HASH, "slice hash was {:#018x}", hash(&a));
         let mut other = d;
         other.seed += 1;
         assert_ne!(hash(&a), hash(&generate(&other).expect("c")));
@@ -418,5 +533,100 @@ mod tests {
         assert!(scalar::hypot(first.0 - d.road.waypoints[0].0, first.1 - d.road.waypoints[0].1) < 1.0);
         let wl = d.road.waypoints[d.road.waypoints.len() - 1];
         assert!(scalar::hypot(last.0 - wl.0, last.1 - wl.1) < 1.0);
+    }
+
+    fn nodes(c: &Course) -> Vec<f64> {
+        let n = c.world.n();
+        (0..n * n).map(|k| c.world.height_at_node(k % n, k / n)).collect()
+    }
+
+    #[test]
+    fn mud_appears_only_where_the_drainage_rule_puts_it() {
+        use crate::features::{drainage_rule_mask, mud_mask};
+        let d = def();
+        let c = generate(&d).expect("course");
+        let (m, n) = (d.mud.as_ref().expect("mud"), c.world.n());
+        let h = nodes(&c);
+        let (rule, spread) = (drainage_rule_mask(&h, n, m), mud_mask(&h, n, m));
+        let mud = c.world.materials().id_of("mud").expect("mud").0 as u8;
+        let mut count = 0;
+        for k in 0..n * n {
+            let is_mud = c.world.splat_at_node(k % n, k / n) == mud;
+            count += usize::from(is_mud);
+            if is_mud {
+                assert!(spread[k], "mud outside the rule's reach at node {k}");
+            }
+            if rule[k] && c.world.splat_at_node(k % n, k / n) != c.road_material.0 as u8 {
+                assert!(is_mud, "rule cell without mud at node {k}");
+            }
+        }
+        assert!(count > 500, "the slice should have mud ({count} cells)");
+    }
+
+    #[test]
+    fn no_tree_overlaps_a_road_or_a_building() {
+        let d = def();
+        let c = generate(&d).expect("course");
+        let clearance = d.trees.as_ref().expect("trees").road_clearance_m.v;
+        let w2 = d.road.width_m.v * 0.5;
+        let trees: Vec<_> = c.world.props().iter().filter(|p| p.kind == PropKind::Tree).collect();
+        assert!(trees.len() > 300);
+        for t in &trees {
+            let (x, z) = (t.transform.pos.x, t.transform.pos.z);
+            assert_ne!(c.world.material_id_at(x, z), c.road_material);
+            let near = c.road.iter().map(|r| scalar::hypot(r.0 - x, r.1 - z)).fold(f64::INFINITY, f64::min);
+            assert!(near >= w2 + clearance - 2.0, "tree {near} m from the road centre");
+            for o in c.world.props().iter().filter(|o| o.kind != PropKind::Tree) {
+                let (lo, hi) = (o.transform.pos - Vec3::new(8.0, 0.0, 8.0), o.transform.pos + Vec3::new(8.0, 0.0, 8.0));
+                assert!(x < lo.x || x > hi.x || z < lo.z || z > hi.z, "tree beside a barricade block");
+            }
+        }
+    }
+
+    #[test]
+    fn trees_keep_their_minimum_spacing() {
+        let d = def();
+        let c = generate(&d).expect("course");
+        let r = d.trees.as_ref().expect("trees").min_spacing_m.v;
+        let t: Vec<_> = c.world.props().iter().filter(|p| p.kind == PropKind::Tree).map(|p| p.transform.pos).collect();
+        for (a, pa) in t.iter().enumerate() {
+            for pb in &t[a + 1..] {
+                assert!(scalar::hypot(pa.x - pb.x, pa.z - pb.z) >= r - 1e-9);
+            }
+        }
+    }
+
+    #[test]
+    fn every_prop_lies_inside_the_bounds() {
+        let c = generate(&def()).expect("course");
+        let (lo, hi) = c.world.bounds();
+        for p in c.world.props() {
+            let q = p.transform.pos;
+            assert!(
+                q.x >= lo.x && q.x <= hi.x && q.z >= lo.z && q.z <= hi.z && q.y >= lo.y && q.y <= hi.y,
+                "prop {:?} at {q:?}",
+                p.id
+            );
+        }
+    }
+
+    #[test]
+    fn barricade_stands_across_the_road_and_leaves_the_stated_gap() {
+        let d = def();
+        let c = generate(&d).expect("course");
+        let b = d.barricade.as_ref().expect("barricade");
+        let blocks: Vec<_> = c.world.props().iter().filter(|p| p.kind == PropKind::Barricade).collect();
+        assert_eq!(blocks.len(), 2);
+        // Stand on the road centreline 15 m before the barricade and look along the road: the middle is open, the sides are not.
+        let k = ((b.at_fraction.v * (c.road.len() - 1) as f64).round() as usize).clamp(1, c.road.len() - 2);
+        let (p, q) = (c.road[k - 1], c.road[k + 1]);
+        let len = scalar::hypot(q.0 - p.0, q.1 - p.1);
+        let t = Vec3::new((q.0 - p.0) / len, 0.0, (q.1 - p.1) / len);
+        let side = Vec3::new(-t.z, 0.0, t.x);
+        let at = |off: f64| Vec3::new(c.road[k].0, c.road[k].2 + 0.5, c.road[k].1) - t * 8.0 + side * off;
+        let hit = |off: f64| c.world.raycast(at(off), t, 16.0).and_then(|h| h.prop).is_some();
+        assert!(!hit(0.0), "the gap must be open");
+        assert!(hit(b.gap_m.v * 0.5 + 0.4) && hit(-(b.gap_m.v * 0.5 + 0.4)), "both blocks must stand in the way");
+        assert!(!hit(b.gap_m.v * 0.5 - 0.3), "the gap is as wide as stated");
     }
 }

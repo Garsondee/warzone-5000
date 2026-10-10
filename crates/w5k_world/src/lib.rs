@@ -6,5 +6,6 @@
 //! `heightfield`, `props`, `noise` and `generator` modules.
 
 pub mod course;
+pub mod features;
 pub mod grid;
 pub mod strip;
