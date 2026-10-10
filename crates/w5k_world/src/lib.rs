@@ -9,6 +9,7 @@ pub mod bridge;
 pub mod cliff;
 pub mod corrugation;
 pub mod course;
+pub mod detail;
 pub mod features;
 pub mod grid;
 pub mod plot;

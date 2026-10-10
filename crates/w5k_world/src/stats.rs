@@ -211,6 +211,19 @@ pub fn psd(z: &[f64], dx_m: f64, segment_len: usize) -> Option<Psd> {
 }
 
 impl Psd {
+    /// Mean of several estimates made with the same segment length and spacing (more segments, less scatter).
+    pub fn average(all: &[Psd]) -> Option<Psd> {
+        let first = all.first()?;
+        if all.iter().any(|p| p.g_m3.len() != first.g_m3.len()) {
+            return None;
+        }
+        let segs: usize = all.iter().map(|p| p.segments).sum();
+        let g_m3 = (0..first.g_m3.len())
+            .map(|k| all.iter().map(|p| p.g_m3[k] * p.segments as f64).sum::<f64>() / segs as f64)
+            .collect();
+        Some(Psd { n_cyc_per_m: first.n_cyc_per_m.clone(), g_m3, segments: segs, segment_m: first.segment_m })
+    }
+
     /// `G(n0)`: the mean PSD within a factor of 1.25 of the ISO reference frequency, m^3 (`None` if the segments are too short to reach it).
     pub fn gd_n0(&self) -> Option<f64> {
         let (lo, hi) = (N0_CYC_PER_M / 1.25, N0_CYC_PER_M * 1.25); // const-ok: averaging band around n0
@@ -279,10 +292,11 @@ pub fn profile_along(world: &dyn WorldQuery, line: &[(f64, f64)], dx_m: f64) -> 
     out
 }
 
-/// The largest power-of-two segment (at least 256 samples) that fits at least twice, so Welch has something to average.
+/// The largest power-of-two segment (at least 128 samples) that is at most a third of the line, so Welch has something to average.
 pub fn segment_for(samples: usize) -> usize {
-    let mut n = 256; // const-ok: smallest useful segment
-    while n * 2 * 2 <= samples && n < 4096 {
+    // Several overlapping segments to average: a segment at most a third of the line, at least 128 samples.
+    let mut n = 128; // const-ok: smallest useful segment
+    while n * 2 * 3 <= samples && n < 4096 {
         // const-ok: largest segment
         n *= 2;
     }

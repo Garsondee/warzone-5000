@@ -143,7 +143,15 @@ fn the_roof_ring_and_a_gun_fit_the_carrier_like_the_trucks_and_the_hull_is_uncha
     for p in &bare.parts {
         let q = armed.parts.iter().find(|q| q.name == p.name).unwrap_or_else(|| panic!("{} is gone", p.name));
         assert_eq!(p.mesh.v.len(), q.mesh.v.len());
-        assert!(p.mesh.v.iter().zip(&q.mesh.v).all(|(a, b)| a.as_array() == b.as_array()), "{} moved", p.name);
+        assert!(
+            p.mesh
+                .v
+                .iter()
+                .zip(&q.mesh.v)
+                .all(|(a, b)| a.as_array().map(f64::to_bits) == b.as_array().map(f64::to_bits)),
+            "{} moved",
+            p.name
+        );
     }
     let shell = armed.parts.iter().find(|p| p.name == "shell").unwrap().in_hull_frame();
     let collar = armed.parts.iter().find(|p| p.name.starts_with("collar")).expect("a collar").in_hull_frame();
