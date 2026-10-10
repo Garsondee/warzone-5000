@@ -1,0 +1,9 @@
+// The triangle budget of one vehicle's render rig, counted over the meshes of the exported `RenderRig` (lane GEOMETRY). It is a product
+// decision rather than geometry, so it is stated here once and the tests and the tool message read it from here.
+BudgetParams(
+    wheeled_triangles: (
+        v: 50000.0,
+        prov: Spec,
+        src: "owner, 2026-10-10 (via ARCH, docs/swarm/lanes/geometry.md): vehicles are nearly done but close to the limit; raised from 40,000",
+    ),
+)

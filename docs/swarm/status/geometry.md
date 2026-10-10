@@ -27,6 +27,8 @@
   6. #78 the hull in regions in metres (`UtilityDims::regions_m`, `with_bed_stretch`, `axles_z`): a longer bed leaves the hood, the cab and everything anchored in them alone and moves the tail back by exactly the stretch; the 4x4 is bit-for-bit unchanged; the 6x6 is the same hull with a longer bed and a rear tandem.
   `PROVISIONAL(status:geometry)`: the socket vocabulary (`Station`, `Ring`, `Trunnion`) and frame convention (design note section 9). Triangle budget: the autocannon truck is 38.8k triangles of the 50k wheeled budget; the wheels (48-gon tyres with lugs) are the big spender, so a wheel LOD is the first thing to try if more hardware is added.
 
+- Budget as data (ARCH asked 2026-10-10): the wheeled triangle budget (50,000, owner 2026-10-10) is one `Param` in `crates/w5k_geo/shapes/budget.ron`, read by `w5k_geo::budget::wheeled_triangles()`; the export, truck and skin tests and the dimension table take it from there (checked by lowering it: the export test fails with the number in its message). No golden touched.
+
 ## In progress
 - Nothing: waiting for review of #78 (regions), #97 (the budget as a Param) and #99 (the hauler's detail back). Handoff: build a vehicle with `truck::utility_assembly`, attach a mount to `roof` and a gun to `trunnion.<label>` (see `crates/w5k_tools/src/cmd/geometry.rs::truck_assembly` for a worked recipe), export with `export::render_rig`. Needs from others: FORGE and ARCH to answer the interface request (where mounts and weapons live in `VehicleDef`); VIEWER can show armed trucks as soon as it passes a subject other than the unarmed 4x4 to `render_rig` (the node names and joint layout are the contract's).
 
