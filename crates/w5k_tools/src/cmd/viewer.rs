@@ -332,6 +332,52 @@ fn build_design(base: &Path, levers: &[(String, f64)], quality: &str) -> Result<
     Ok(Design { def, extras, rig, report: compiled.report, skin })
 }
 
+impl Design {
+    /// Write what the proving ground needs: `<id>.ron` and `<id>.extras.ron`.
+    fn write_def(&self, dir: &Path) -> Result<(), String> {
+        std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+        let id = &self.def.id;
+        let put = |name: String, text: Result<String, ron::Error>| {
+            std::fs::write(dir.join(&name), text.map_err(|e| e.to_string())?)
+                .map_err(|e| format!("cannot write {name}: {e}"))
+        };
+        put(format!("{id}.ron"), ron::to_string(&self.def))?;
+        put(format!("{id}.extras.ron"), ron::to_string(&self.extras))
+    }
+
+    /// Write what a vehicle folder needs to be driven or drawn: the definition, `<id>.rig.json` and, if baked, `<id>.skin`.
+    fn write(&self, dir: &Path) -> Result<(), String> {
+        self.write_def(dir)?;
+        let id = &self.def.id;
+        let rig = serde_json::to_string(&self.rig).map_err(|e| e.to_string())?;
+        std::fs::write(dir.join(format!("{id}.rig.json")), rig)
+            .map_err(|e| format!("cannot write {id}.rig.json: {e}"))?;
+        if let Some((bytes, _, _)) = &self.skin {
+            std::fs::write(dir.join(format!("{id}.skin")), bytes)
+                .map_err(|e| format!("cannot write {id}.skin: {e}"))?;
+        }
+        Ok(())
+    }
+}
+
+/// The scoreboard: one row per benchmark both batteries measured, with the base and design values in the display unit and the change.
+fn board_rows(
+    base: &BTreeMap<String, ProvingResult>,
+    design: &BTreeMap<String, ProvingResult>,
+) -> Vec<serde_json::Value> {
+    BOARD
+        .iter()
+        .filter_map(|&(bench, name, unit, scale, bigger)| {
+            let b = BENCHES.iter().find(|b| b.id == bench)?;
+            let read = |m: &BTreeMap<String, ProvingResult>| m.get(bench).and_then(|r| r.measured.get(b.key)).map(|v| v * scale);
+            let (base_v, value) = (read(base)?, read(design)?);
+            let (delta, better) = board_change(base_v, value, bigger);
+            let note = design.get(bench).and_then(|r| r.ended_early.clone());
+            Some(serde_json::json!({"bench": bench, "name": name, "unit": unit, "base": base_v, "value": value, "delta_pct": delta, "better": better, "note": note}))
+        })
+        .collect()
+}
+
 /// `w5k viewer design BASE --out DIR [--lever a=1.1,b=0.9] [--skin preview|final|off] [--score off]`: writes `<id>.ron`, `<id>.extras.ron`,
 /// `<id>.rig.json`, `<id>.skin` and `design.json` (what each lever became, the compile report, the scoreboard against the base, timings).
 #[allow(clippy::disallowed_methods)] // `Instant::now` only times this CLI run for design.json; nothing simulated reads it
@@ -349,33 +395,13 @@ fn design(args: &[String]) -> Result<(), String> {
     let t0 = Instant::now();
     let d = build_design(&base_file, &levers, quality)?;
     let (id, t_build) = (d.def.id.clone(), t0.elapsed().as_secs_f64());
-    let write = |name: String, bytes: &[u8]| {
-        std::fs::write(out.join(&name), bytes).map_err(|e| format!("cannot write {name}: {e}"))
-    };
-    let ron = |r: Result<String, ron::Error>| r.map_err(|e| e.to_string());
-    write(format!("{id}.ron"), ron(ron::to_string(&d.def))?.as_bytes())?;
-    write(format!("{id}.extras.ron"), ron(ron::to_string(&d.extras))?.as_bytes())?;
-    write(format!("{id}.rig.json"), serde_json::to_string(&d.rig).map_err(|e| e.to_string())?.as_bytes())?;
-    if let Some((bytes, _, _)) = &d.skin {
-        write(format!("{id}.skin"), bytes)?;
-    }
+    d.write(&out)?;
     let t1 = Instant::now();
     let board = if scored {
-        let (base_results, design_results) = (
-            run_battery(&base_file, &out.join("score/base"))?,
-            run_battery(&out.join(format!("{id}.ron")), &out.join("score/design"))?,
-        );
-        BOARD
-            .iter()
-            .filter_map(|&(bench, name, unit, scale, bigger)| {
-                let b = BENCHES.iter().find(|b| b.id == bench)?;
-                let read = |m: &BTreeMap<String, ProvingResult>| m.get(bench).and_then(|r| r.measured.get(b.key)).map(|v| v * scale);
-                let (base_v, value) = (read(&base_results)?, read(&design_results)?);
-                let (delta, better) = board_change(base_v, value, bigger);
-                let note = design_results.get(bench).and_then(|r| r.ended_early.clone());
-                Some(serde_json::json!({"bench": bench, "name": name, "unit": unit, "base": base_v, "value": value, "delta_pct": delta, "better": better, "note": note}))
-            })
-            .collect()
+        board_rows(
+            &run_battery(&base_file, &out.join("score/base"))?,
+            &run_battery(&out.join(format!("{id}.ron")), &out.join("score/design"))?,
+        )
     } else {
         Vec::new()
     };
@@ -386,7 +412,8 @@ fn design(args: &[String]) -> Result<(), String> {
         "skin": d.skin.as_ref().map(|(b, tris, axles)| serde_json::json!({"file": format!("{id}.skin"), "bytes": b.len(), "triangles": tris, "quality": quality, "axles_z_m": axles})),
         "timings_s": {"levers_compile_skin": t_build, "score": t1.elapsed().as_secs_f64(), "total": t0.elapsed().as_secs_f64()},
     });
-    write("design.json".into(), serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?.as_bytes())?;
+    std::fs::write(out.join("design.json"), serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?)
+        .map_err(|e| format!("cannot write design.json: {e}"))?;
     println!(
         "{id}: {} levers, skin {}, {} scoreboard rows, {:.2} s in all -> {}",
         levers.len(),
@@ -422,6 +449,8 @@ const SLIDERS: [(&str, &str, &str, f64, f64); 6] = [
     ("track_gauge", "Track width", "m", 0.8, 1.2), // const-ok: slider range of the Workshop page
 ];
 const MAX_BODY: usize = 1 << 16; // const-ok: a request body this big is not a design
+const DRIVE_WAIT_TRIES: u32 = 200; // const-ok: how long DRIVE waits for the simulation to listen: tries ...
+const DRIVE_WAIT_STEP: std::time::Duration = std::time::Duration::from_millis(100); // const-ok: ... of this long
 const MM_PER_M: f64 = 1000.0; // const-ok: unit conversion for the display
 const KW_PER_W: f64 = 1e-3; // const-ok: unit conversion for the display
 
@@ -447,6 +476,7 @@ fn json_reply(status: u16, v: &serde_json::Value) -> Reply {
 /// A design the server has built, by id (`d1`, `d2`, ...); the same base, levers and quality are built once.
 struct Built {
     id: String,
+    base: String,
     design: Design,
     seconds: f64,
 }
@@ -457,12 +487,25 @@ struct Cache {
     by_id: BTreeMap<String, Arc<Built>>,
 }
 
+/// Runs the proving battery on a vehicle file and writes its results under a folder: `run_battery` (a child `w5k scenario proving`), unless
+/// a test supplies a stand-in.
+type Battery = fn(&Path, &Path) -> Result<BTreeMap<String, ProvingResult>, String>;
+
 struct Shop {
     /// The folder that holds `content/`.
     root: PathBuf,
     /// The folder of static files (`workshop.html`).
     web: PathBuf,
+    /// Where designs are written for scoring and driving (a temporary folder).
+    scratch: PathBuf,
+    battery: Battery,
     cache: Mutex<Cache>,
+    /// The battery's results for each base, run once.
+    boards: Mutex<BTreeMap<String, Arc<BTreeMap<String, ProvingResult>>>>,
+    /// The scoreboard of each design that has been scored (a design is a function of its levers, so is its score).
+    scores: Mutex<BTreeMap<String, serde_json::Value>>,
+    /// The `w5k drive` the last DRIVE started, and the folder it runs from (removed when the next DRIVE replaces it).
+    drive: Mutex<Option<(std::process::Child, PathBuf)>>,
 }
 
 impl Shop {
@@ -504,11 +547,112 @@ impl Shop {
         let t0 = Instant::now();
         let design = build_design(&self.base_file(base)?, levers, quality)?;
         let mut c = self.cache.lock().map_err(|e| e.to_string())?;
-        let built =
-            Arc::new(Built { id: format!("d{}", c.by_id.len() + 1), design, seconds: t0.elapsed().as_secs_f64() });
+        let built = Arc::new(Built {
+            id: format!("d{}", c.by_id.len() + 1),
+            base: base.to_string(),
+            design,
+            seconds: t0.elapsed().as_secs_f64(),
+        });
         c.by_key.insert(key, Arc::clone(&built));
         c.by_id.insert(built.id.clone(), Arc::clone(&built));
         Ok(built)
+    }
+
+    fn new(root: PathBuf, web: PathBuf, scratch: PathBuf, battery: Battery) -> Shop {
+        Shop {
+            root,
+            web,
+            scratch,
+            battery,
+            cache: Mutex::default(),
+            boards: Mutex::default(),
+            scores: Mutex::default(),
+            drive: Mutex::default(),
+        }
+    }
+
+    fn built(&self, id: &str) -> Option<Arc<Built>> {
+        self.cache.lock().ok()?.by_id.get(id).cloned()
+    }
+
+    /// The battery on the base vehicle, run the first time it is asked for.
+    fn base_board(&self, base: &str) -> Result<Arc<BTreeMap<String, ProvingResult>>, String> {
+        if let Some(b) = self.boards.lock().map_err(|e| e.to_string())?.get(base) {
+            return Ok(Arc::clone(b));
+        }
+        let results = Arc::new((self.battery)(&self.base_file(base)?, &self.scratch.join(format!("base-{base}")))?);
+        self.boards.lock().map_err(|e| e.to_string())?.insert(base.to_string(), Arc::clone(&results));
+        Ok(results)
+    }
+
+    /// The scoreboard of a built design: the battery on the design as written, against the base's (run once per design).
+    fn score(&self, b: &Built) -> Result<serde_json::Value, String> {
+        if let Some(v) = self.scores.lock().map_err(|e| e.to_string())?.get(&b.id) {
+            return Ok(v.clone());
+        }
+        let dir = self.scratch.join(&b.id).join("vehicle");
+        b.design.write_def(&dir)?;
+        let own =
+            (self.battery)(&dir.join(format!("{}.ron", b.design.def.id)), &self.scratch.join(&b.id).join("score"))?;
+        let board = serde_json::json!({"id": b.id, "rows": board_rows(self.base_board(&b.base)?.as_ref(), &own)});
+        self.scores.lock().map_err(|e| e.to_string())?.insert(b.id.clone(), board.clone());
+        Ok(board)
+    }
+
+    /// A folder `w5k drive` can run the design from: the design as a vehicle, and a copy of the page folder with the design's skin among
+    /// the skins (the live page asks for `skins/<vehicle id>.skin`). Returns (vehicles folder, page folder).
+    fn drive_folders(&self, b: &Built) -> Result<(PathBuf, PathBuf), String> {
+        let dir = self.scratch.join(&b.id).join("drive");
+        let (vehicles, web) = (dir.join("vehicles"), dir.join("web"));
+        b.design.write(&vehicles)?;
+        let skins = web.join("skins");
+        std::fs::create_dir_all(&skins).map_err(|e| format!("cannot create {}: {e}", skins.display()))?;
+        std::fs::copy(self.web.join("index.html"), web.join("index.html"))
+            .map_err(|e| format!("the page folder has no index.html: {e}"))?;
+        for f in std::fs::read_dir(self.web.join("skins")).into_iter().flatten().filter_map(Result::ok) {
+            std::fs::copy(f.path(), skins.join(f.file_name())).map_err(|e| e.to_string())?;
+        }
+        std::fs::copy(
+            vehicles.join(format!("{}.skin", b.design.def.id)),
+            skins.join(format!("{}.skin", b.design.def.id)),
+        )
+        .map_err(|e| format!("the design has no skin to drive with: {e}"))?;
+        Ok((vehicles, web))
+    }
+
+    /// Start `w5k drive` on the design (the speed limit off: this is the adult's tool, and a power lever must show) and return the page's URL.
+    fn drive(&self, b: &Built) -> Result<String, String> {
+        let (vehicles, web) = self.drive_folders(b)?;
+        let port = TcpListener::bind("127.0.0.1:0").and_then(|l| l.local_addr()).map_err(|e| e.to_string())?.port();
+        let id = &b.design.def.id;
+        let child = Command::new(std::env::current_exe().map_err(|e| e.to_string())?)
+            .args(["drive", "--vehicle"])
+            .arg(vehicles.join(format!("{id}.ron")))
+            .arg("--vehicles-dir")
+            .arg(&vehicles)
+            .arg("--course")
+            .arg(self.root.join("content/world/courses/slice.ron"))
+            .arg("--web")
+            .arg(&web)
+            .args(["--port", &port.to_string(), "--no-speed-limit"])
+            .current_dir(&self.root)
+            .spawn()
+            .map_err(|e| format!("cannot start w5k drive: {e}"))?;
+        let dir = vehicles.parent().map(Path::to_path_buf).unwrap_or_default();
+        if let Some((mut old, old_dir)) = self.drive.lock().map_err(|e| e.to_string())?.replace((child, dir.clone())) {
+            let _ = old.kill();
+            let _ = old.wait();
+            if old_dir != dir {
+                let _ = std::fs::remove_dir_all(old_dir);
+            }
+        }
+        for _ in 0..DRIVE_WAIT_TRIES {
+            if TcpStream::connect(("127.0.0.1", port)).is_ok() {
+                return Ok(format!("http://127.0.0.1:{port}/?auto={id}&skins={id}"));
+            }
+            std::thread::sleep(DRIVE_WAIT_STEP);
+        }
+        Err("w5k drive did not come up".into())
     }
 
     fn handle(&self, method: &str, path: &str, body: &[u8]) -> Reply {
@@ -554,6 +698,20 @@ impl Shop {
                     Ok(b) => json_reply(200, &design_json(&b)),
                     Err(e) => fail(422, &e),
                 }
+            }
+            ("POST", "/api/score" | "/api/drive") => {
+                let id = serde_json::from_slice::<serde_json::Value>(body)
+                    .ok()
+                    .and_then(|v| v["id"].as_str().map(String::from));
+                let Some(built) = id.as_deref().and_then(|i| self.built(i)) else {
+                    return fail(404, "no such design: build it first");
+                };
+                let done = if path == "/api/score" {
+                    self.score(&built)
+                } else {
+                    self.drive(&built).map(|url| serde_json::json!({ "url": url }))
+                };
+                done.map_or_else(|e| fail(500, &e), |v| json_reply(200, &v))
             }
             ("GET", p) if p.starts_with("/api/skin/") => {
                 let found = self.cache.lock().ok().and_then(|c| c.by_id.get(&p["/api/skin/".len()..]).cloned());
@@ -653,7 +811,8 @@ fn workshop(args: &[String]) -> Result<(), String> {
     let listener =
         TcpListener::bind(("127.0.0.1", port)).map_err(|e| format!("cannot listen on 127.0.0.1:{port}: {e}"))?;
     println!("The Workshop: http://127.0.0.1:{port}/  (pages from {}; Ctrl-C stops it)", web.display());
-    serve_forever(listener, Arc::new(Shop { root: PathBuf::from("."), web, cache: Mutex::default() }));
+    let scratch = std::env::temp_dir().join(format!("w5k-workshop-{}", std::process::id()));
+    serve_forever(listener, Arc::new(Shop::new(PathBuf::from("."), web, scratch, run_battery)));
     Ok(())
 }
 
@@ -969,14 +1128,51 @@ mod tests {
         assert!(rig.triangle_count() > 0 && rig.id == skin_rig("scout_4x4", false).unwrap().id);
     }
 
+    static SCRATCH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    static BASE_RUNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    static DESIGN_RUNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    /// A stand-in for the proving ground (the real one is a child `w5k scenario proving`): a 0-48 km/h time of 1000 / the engine's kW, read from the
+    /// vehicle file it is given, so a score shows which design was written and which base it was set against.
+    fn fake_battery(vehicle: &Path, _out: &Path) -> Result<BTreeMap<String, ProvingResult>, String> {
+        let def = w5k_forge::compile::parse_def(&std::fs::read_to_string(vehicle).map_err(|e| e.to_string())?)?;
+        let runs = if vehicle.file_name().is_some_and(|f| f == "scout_4x4.ron") { &BASE_RUNS } else { &DESIGN_RUNS };
+        runs.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let time = ProvingResult {
+            schema: w5k_validate::proving::SCHEMA.to_string(),
+            test: "accel_0_48kmh".into(),
+            vehicle: def.id.clone(),
+            contract_pin: String::new(),
+            inputs: BTreeMap::new(),
+            labels: BTreeMap::new(),
+            measured: BTreeMap::from([(
+                "t_0_48_s".to_string(),
+                1000.0 / (def.powertrain.engine.peak_power_w.v * 1e-3),
+            )]),
+            ended_early: None,
+            replay: None,
+        };
+        Ok(BTreeMap::from([("B1".to_string(), time)]))
+    }
+
+    fn test_shop() -> Arc<Shop> {
+        let scratch = std::env::temp_dir().join(format!(
+            "w5k-workshop-test-{}-{}",
+            std::process::id(),
+            SCRATCH.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        ));
+        Arc::new(Shop::new(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            viewer_dir().join("dist"),
+            scratch,
+            fake_battery,
+        ))
+    }
+
     fn start() -> u16 {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        let shop = Arc::new(Shop {
-            root: Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
-            web: viewer_dir().join("dist"),
-            cache: Mutex::default(),
-        });
+        let shop = test_shop();
         std::thread::spawn(move || serve_forever(listener, shop));
         port
     }
@@ -1087,5 +1283,62 @@ mod tests {
             "one link a side is far fewer triangles than the whole belt"
         );
         assert!(w5k_replay::skinpack::unpack(&w5k_replay::skinpack::pack(&fixed)).unwrap().track_runs.is_empty());
+    }
+
+    /// Time is 1000 / kW in the stand-in, so 1.5x the power is a third off the time: the board must show the design that was asked for,
+    /// against a base that was measured once however many designs are scored.
+    #[test]
+    fn the_scoreboard_scores_the_design_that_was_asked_for_against_a_base_that_is_run_once() {
+        let port = start();
+        let ask = |power: f64| {
+            get_json(
+                port,
+                "POST",
+                "/api/design",
+                &format!("{{\"base\":\"scout_4x4\",\"levers\":{{\"engine_peak_power\":{power}}}}}"),
+            )
+            .1["id"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        let (a, b) = (ask(1.5), ask(2.0));
+        let score = |id: &str| get_json(port, "POST", "/api/score", &format!("{{\"id\":\"{id}\"}}"));
+        let (status, first) = score(&a);
+        assert_eq!(status, 200);
+        let row = &first["rows"][0];
+        assert_eq!(row["bench"], "B1");
+        assert!((row["delta_pct"].as_f64().unwrap() - (100.0 / 1.5 - 100.0)).abs() < 1e-9, "{row}");
+        assert_eq!(row["better"], true);
+        assert!((score(&b).1["rows"][0]["delta_pct"].as_f64().unwrap() + 50.0).abs() < 1e-9);
+        assert_eq!(BASE_RUNS.load(std::sync::atomic::Ordering::SeqCst), 1, "the base battery runs once per base");
+        assert_eq!(score(&a).1, first, "a design that is scored again gives the same board");
+        assert_eq!(
+            DESIGN_RUNS.load(std::sync::atomic::Ordering::SeqCst),
+            2,
+            "and is not measured again: two designs, two runs"
+        );
+        assert_eq!(score("d99").0, 404);
+        assert_eq!(get_json(port, "POST", "/api/drive", "{\"id\":\"d99\"}").0, 404);
+    }
+
+    /// `w5k drive --vehicles-dir` compiles every vehicle in the folder, and the live page asks for `skins/<vehicle id>.skin`.
+    #[test]
+    fn a_drive_folder_holds_the_design_as_a_vehicle_forge_compiles_and_its_skin_among_the_page_skins() {
+        let shop = test_shop();
+        let built = shop.design("scout_4x4", &[("mass".to_string(), 1.2)], "preview").unwrap();
+        let (vehicles, web) = shop.drive_folders(&built).unwrap();
+        let id = &built.design.def.id;
+        let read = |p: PathBuf| std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{}: {e}", p.display()));
+        let def = w5k_forge::compile::parse_def(&read(vehicles.join(format!("{id}.ron")))).unwrap();
+        let extras = w5k_forge::compile::parse_extras(&read(vehicles.join(format!("{id}.extras.ron")))).unwrap();
+        assert!(w5k_forge::compile::compile(&def, &extras).is_ok(), "the written design compiles");
+        assert!(
+            (def.hull.mass_kg.v - built.design.def.hull.mass_kg.v).abs() < 1e-9,
+            "the written mass is the design's mass"
+        );
+        for file in ["index.html", &format!("skins/{id}.skin"), "skins/scout_4x4.skin"] {
+            assert!(web.join(file).exists(), "{file} is missing from the page folder");
+        }
     }
 }

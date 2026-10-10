@@ -9,9 +9,10 @@ import { unpackSkin, fitSkin } from './skin.js';
 import { makeEngineSound } from './live-audio.js';
 import { makeInput } from './live-input.js';
 
-const { look: lookData, skins: skinNames } = JSON.parse(document.getElementById('data').textContent);
+const { look: lookData, skins: bakedSkins } = JSON.parse(document.getElementById('data').textContent);
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
+const skinNames = bakedSkins.concat((params.get('skins') || '').split(',').filter(Boolean)); // the Workshop names the skin of the design it has just built
 const SKY = 0xbfd4e6;
 // Each vehicle gets its own paint scheme so the three look different in the picker and on the road.
 const SCHEMES = { scout_4x4: 'desert_three', mule_4x4: 'woodland', hauler_4x4: 'nato_three_tone' };
@@ -377,6 +378,8 @@ async function boot() {
   setInterval(inputTick, 33);
   requestAnimationFrame(loop);
   await buildPicker();
+  const auto = params.get('auto'); // the Workshop opens the page on the design it has just built, and drives it
+  if (auto && vehicles.some((v) => v.id === auto)) await startDrive(auto);
 }
 window.__live = { // for the browser test only
   frame: () => (last ? last.f : null), vehicle: () => (cur ? cur.id : null), camera: () => cam.mode, input: () => lastCmd,
