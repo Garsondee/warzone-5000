@@ -1,6 +1,7 @@
 //! `w5k geometry`: the command line of lane GEOMETRY (only that lane edits this file). Pictures of generated parts.
 
 use w5k_contract::render::NodeRole;
+use w5k_geo::budget::wheeled_triangles;
 use w5k_geo::export::{glb, render_rig, slot_colour};
 use w5k_geo::flags::{bake, FlagParams};
 use w5k_geo::mesh::Mesh;
@@ -111,7 +112,7 @@ fn dimension_table(d: &UtilityDims, parts: &[Part], triangles: usize) -> String 
         // const-ok: percent
         s += &format!("| {name} | {got:.3} | {want:.3} | {:+.2}% |\n", (got / want - 1.0) * 100.0);
     }
-    s + &format!("\nTriangles in the rig: {triangles} (budget 50,000 for a wheeled vehicle).\n")
+    s + &format!("\nTriangles in the rig: {triangles} (budget {} for a wheeled vehicle).\n", wheeled_triangles())
 }
 
 /// The skin id of a subject name (`truck` is the utility truck), if it is a skin.

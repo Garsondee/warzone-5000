@@ -15,7 +15,8 @@ fn exported_rig_validates_carries_flags_in_range_and_stays_inside_the_triangle_b
     r.validate().expect("RenderRig::validate");
     let tris = r.triangle_count();
     println!("exported triangles: {tris}");
-    assert!(tris < 50_000, "{tris} triangles, budget 50,000 for a wheeled vehicle");
+    let budget = w5k_geo::budget::wheeled_triangles();
+    assert!(tris < budget, "{tris} triangles, budget {budget} for a wheeled vehicle");
     for m in &r.meshes {
         assert!(m.edge.len() == m.positions.len() && m.cavity.len() == m.positions.len(), "{}", m.name);
         assert!(m.edge.iter().chain(&m.cavity).all(|v| v.is_finite() && (0.0..=1.0).contains(v)), "{}", m.name);
