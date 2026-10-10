@@ -1,0 +1,48 @@
+{
+  "id": "nato_three_tone",
+  "pattern": {
+    "octaves": 3,
+    "lacunarity": 2.0,
+    "gain": 0.5
+  },
+  "scale_m": 0.5,
+  "seed_salt": 7,
+  "colours": [
+    {
+      "name": "green",
+      "linear": [
+        0.06124605423161761,
+        0.0822827071298148,
+        0.028426039504420793
+      ],
+      "coverage": 0.45,
+      "prov": "Estimate",
+      "band_de": 6.0,
+      "src": "dark olive green of NATO three-tone vehicles (FS 34000-series family), hand-read"
+    },
+    {
+      "name": "brown",
+      "linear": [
+        0.10461648409110419,
+        0.06124605423161761,
+        0.030713443732993635
+      ],
+      "coverage": 0.35,
+      "prov": "Estimate",
+      "band_de": 6.0,
+      "src": "chocolate brown of the same family, hand-read"
+    },
+    {
+      "name": "black",
+      "linear": [
+        0.014443843596092545,
+        0.01599629336550963,
+        0.014443843596092545
+      ],
+      "coverage": 0.2,
+      "prov": "Estimate",
+      "band_de": 6.0,
+      "src": "near-black, never pure black: 0.03 linear floor on real paint"
+    }
+  ]
+}

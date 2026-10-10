@@ -1,5 +1,7 @@
 # CCR (text): `VehicleDef` additions for contract 0.1.2
 
+> **Status (ARCH):** sections **W1 to W6 are applied in contract 0.2.0** (`def.rs`). New `Param` fields are `Option<Param>` (absent = FORGE derives or reports it) so 0.1 RON still loads; `GearboxSliders::forward_ratios` and `reverse_ratios` became `#[serde(default)]` so a `design` can stand alone (`PowertrainDef::final_drive_ratio` stays required and is overridden when `design` is present). **Sections T, G, A and M are deferred to a later contract version** (not applied in 0.2.0). The `dummy_vehicle_def()` engine request is done (95 kW at 3500 rpm).
+
 From lane FORGE, settling round. **All additions are `#[serde(default)]` or new enum variants**, so existing RON still loads; every number is a `Param`. Baselines: `docs/architecture/redteam/sketches/*`; evidence for W1 to W4: `docs/lanes/forge/spike-s5.md`. ARCH owns `def.rs`; this file is the request, not the edit.
 
 ## W. Wheeled (spike S5 and the wheeled red-team G2)

@@ -1,0 +1,6 @@
+// Engine controller settings shared by every engine (idle controller, rev-limiter fade). Not properties of one engine: of the model.
+EngineTuning(
+    idle_kp_per_rad_s: Param(v: 0.02, lo: Some(0.005), hi: Some(0.1), prov: Estimate, src: "idle controller gain, throttle per rad/s of speed error; loop-gain judgement, stable for J 0.1-2 kg m^2"),
+    idle_ki_per_rad: Param(v: 0.05, lo: Some(0.01), hi: Some(0.3), prov: Estimate, src: "idle controller integral gain, throttle per rad of accumulated error"),
+    rev_fade_fraction: Param(v: 0.03, lo: Some(0.01), hi: Some(0.08), prov: Estimate, src: "torque fades to zero over the last fraction of the redline speed (governor droop of a few percent)"),
+)
