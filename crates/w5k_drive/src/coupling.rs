@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 use w5k_contract::rig::CouplingDef;
 use w5k_contract::Param;
-use w5k_math::scalar::clamp;
+use w5k_math::scalar::{clamp, exp, lerp};
 use w5k_math::StateHasher;
 
 use crate::engine::Engine;
@@ -24,6 +24,14 @@ pub struct CouplingTuning {
     pub lockup_hysteresis_speed_ratio: Param,
     pub lockup_engage_time_s: Param,
     pub lockup_capacity_over_peak_torque: Param,
+    /// The engine speed a driver holds while slipping the clutch to pull away, over the engine's peak-torque speed.
+    pub clutch_launch_rpm_over_peak_torque_rpm: Param,
+    /// How fast an automatic clutch may close, fraction of full capacity per second (a clutch dumped at high rpm would be a launch no driver makes).
+    pub clutch_apply_rate_per_s: Param,
+    /// How long a launch pedal is remembered after the driver lifts, s: the clutch must not close on a revved engine just because the pedal came up.
+    pub clutch_launch_hold_s: Param,
+    /// The clutch keeps slipping (holding the engine up) until the input shaft reaches this fraction of the launch speed, then locks by the time it reaches it.
+    pub clutch_slip_until_fraction: Param,
 }
 
 impl CouplingTuning {
@@ -32,7 +40,11 @@ impl CouplingTuning {
         self.converter_coupling_speed_ratio.check("converter_coupling_speed_ratio")?;
         self.lockup_hysteresis_speed_ratio.check("lockup_hysteresis_speed_ratio")?;
         self.lockup_engage_time_s.check("lockup_engage_time_s")?;
-        self.lockup_capacity_over_peak_torque.check("lockup_capacity_over_peak_torque")
+        self.lockup_capacity_over_peak_torque.check("lockup_capacity_over_peak_torque")?;
+        self.clutch_launch_rpm_over_peak_torque_rpm.check("clutch_launch_rpm_over_peak_torque_rpm")?;
+        self.clutch_apply_rate_per_s.check("clutch_apply_rate_per_s")?;
+        self.clutch_launch_hold_s.check("clutch_launch_hold_s")?;
+        self.clutch_slip_until_fraction.check("clutch_slip_until_fraction")
     }
 }
 
@@ -60,8 +72,19 @@ pub struct CouplingOut {
 #[derive(Clone, Debug)]
 enum Kind {
     Direct,
-    Clutch { max_torque_nm: f64, engage_w: f64 },
-    Converter { stall_ratio: f64, k_rad: f64, lockup_sr: Option<f64> },
+    /// `launch_w` is the engine speed a driver holds while pulling away (its peak-torque speed); `launch_e0_w` is the engage speed that makes
+    /// the clutch just carry the engine's peak torque there.
+    Clutch {
+        max_torque_nm: f64,
+        engage_w: f64,
+        launch_w: f64,
+        launch_e0_w: f64,
+    },
+    Converter {
+        stall_ratio: f64,
+        k_rad: f64,
+        lockup_sr: Option<f64>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -74,6 +97,11 @@ pub struct Coupling {
     lockup_capacity_nm: f64,
     locked: bool,
     lock_fraction: f64,
+    clutch_apply_rate: f64,
+    clutch_frac: f64,
+    launch_hold_s: f64,
+    slip_until: f64,
+    launch_pedal: f64,
 }
 
 /// Torque that locks engine and downstream together at the end of the step, clamped to `+-cap`. `slope` is the engine's drag slope.
@@ -86,7 +114,12 @@ fn stick_slip(dt: f64, we: f64, te: f64, je: f64, slope: f64, ds: &Downstream, c
 }
 
 impl Coupling {
-    pub fn new(def: &CouplingDef, peak_engine_torque_nm: f64, tuning: &CouplingTuning) -> Result<Coupling, String> {
+    pub fn new(
+        def: &CouplingDef,
+        peak_engine_torque_nm: f64,
+        peak_torque_rpm: f64,
+        tuning: &CouplingTuning,
+    ) -> Result<Coupling, String> {
         tuning.check()?;
         let kind = match *def {
             CouplingDef::Direct => Kind::Direct,
@@ -94,7 +127,11 @@ impl Coupling {
                 if !(max_torque_nm > 0.0 && engage_rpm >= 0.0) {
                     return Err("clutch needs max_torque_nm > 0 and engage_rpm >= 0".into());
                 }
-                Kind::Clutch { max_torque_nm, engage_w: engage_rpm * RPM_TO_RAD_S }
+                let engage_w = engage_rpm * RPM_TO_RAD_S;
+                let launch_w = tuning.clutch_launch_rpm_over_peak_torque_rpm.v * peak_torque_rpm * RPM_TO_RAD_S;
+                let band_w = tuning.clutch_engage_band_rpm.v * RPM_TO_RAD_S;
+                let launch_e0_w = (launch_w - peak_engine_torque_nm / max_torque_nm * band_w).max(engage_w);
+                Kind::Clutch { max_torque_nm, engage_w, launch_w, launch_e0_w }
             }
             CouplingDef::TorqueConverter { stall_ratio, k_factor_rpm_per_sqrt_nm, lockup_speed_ratio } => {
                 if !(stall_ratio >= 1.0 && k_factor_rpm_per_sqrt_nm > 0.0) {
@@ -116,6 +153,11 @@ impl Coupling {
             lockup_capacity_nm: tuning.lockup_capacity_over_peak_torque.v * peak_engine_torque_nm,
             locked: false,
             lock_fraction: 0.0,
+            clutch_apply_rate: tuning.clutch_apply_rate_per_s.v,
+            clutch_frac: 0.0,
+            launch_hold_s: tuning.clutch_launch_hold_s.v,
+            slip_until: tuning.clutch_slip_until_fraction.v,
+            launch_pedal: 0.0,
         })
     }
 
@@ -160,10 +202,33 @@ impl Coupling {
                 let t = stick_slip(dt, we, prep.torque_nm, je, prep.drag_slope_nm_s_rad, ds, f64::INFINITY) * scale;
                 (t, 0.0)
             }
-            Kind::Clutch { max_torque_nm, engage_w } => {
+            Kind::Clutch { max_torque_nm, engage_w, launch_w, launch_e0_w } => {
                 let engaged = match pedal {
                     Some(p) => 1.0 - clamp(p, 0.0, 1.0),
-                    None => clamp((we - engage_w) / self.band_w, 0.0, 1.0),
+                    None => {
+                        // an automatic clutch with a driver's launch: the harder the pedal the higher the engine is held (near its peak-torque
+                        // speed) while pulling away; as the input shaft catches up the engage speed slides back down and the clutch locks
+                        // the pedal as the clutch remembers it: up at once, down slowly
+                        let t = clamp(throttle, 0.0, 1.0);
+                        self.launch_pedal = if t > self.launch_pedal {
+                            t
+                        } else {
+                            self.launch_pedal - (self.launch_pedal - t) * (1.0 - exp(-dt / self.launch_hold_s))
+                        };
+                        let t = self.launch_pedal;
+                        let e0_launch = lerp(engage_w, launch_e0_w, t * t); // only a hard pedal holds the revs up; a light one engages gently
+                        let progress =
+                            clamp((ds.omega_rad_s / launch_w - self.slip_until) / (1.0 - self.slip_until), 0.0, 1.0);
+                        let e0 = lerp(e0_launch, engage_w, progress);
+                        let target = clamp((we - e0) / self.band_w, 0.0, 1.0);
+                        // closing is rate-limited, opening is not
+                        self.clutch_frac = if target > self.clutch_frac {
+                            target.min(self.clutch_frac + dt * self.clutch_apply_rate)
+                        } else {
+                            target
+                        };
+                        self.clutch_frac
+                    }
                 };
                 self.clutch_torque(dt, &prep, we, je, ds, max_torque_nm * engaged * scale)
             }
@@ -230,6 +295,8 @@ impl Coupling {
     pub fn hash_state(&self, h: &mut StateHasher) {
         h.write_u8(u8::from(self.locked));
         h.write_f64(self.lock_fraction);
+        h.write_f64(self.clutch_frac);
+        h.write_f64(self.launch_pedal);
     }
 }
 
@@ -244,7 +311,7 @@ mod tests {
             k_factor_rpm_per_sqrt_nm: 100.0,
             lockup_speed_ratio: lockup,
         };
-        Coupling::new(&def, 400.0, &coupling_tuning()).unwrap()
+        Coupling::new(&def, 400.0, 1800.0, &coupling_tuning()).unwrap()
     }
 
     #[test]
@@ -283,7 +350,7 @@ mod tests {
             for wd in [0.0, 50.0, 150.0, 400.0] {
                 for thr in [0.0, 0.5, 1.0] {
                     let mut e = diesel_engine();
-                    let mut c = Coupling::new(&def, 400.0, &coupling_tuning()).unwrap();
+                    let mut c = Coupling::new(&def, 400.0, 1800.0, &coupling_tuning()).unwrap();
                     let ds = Downstream {
                         omega_rad_s: wd,
                         inertia_kg_m2: 1.2,
@@ -303,7 +370,7 @@ mod tests {
     /// Closed loop: clutch locked to a vehicle whose road load grows with the square of speed.
     fn run_locked(dt: f64) -> (f64, usize) {
         let def = CouplingDef::Clutch { max_torque_nm: 800.0, engage_rpm: 600.0 };
-        let mut c = Coupling::new(&def, 400.0, &coupling_tuning()).unwrap();
+        let mut c = Coupling::new(&def, 400.0, 1800.0, &coupling_tuning()).unwrap();
         let mut e = flat_engine();
         let (jd, drag) = (1.2, 0.00875);
         let mut wd = 0.0;
