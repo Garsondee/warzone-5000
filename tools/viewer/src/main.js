@@ -92,9 +92,17 @@ function jointPixels(name, value) {
   return n;
 }
 const meshCount = (name) => { const i = built.nodes.findIndex((x) => x.def.name === name); const kids = (k) => [k, ...built.nodes.flatMap((n, j) => (n.def.parent === k ? kids(j) : []))]; return kids(i).reduce((s, k) => s + built.nodes[k].g.children.filter((c) => c.isMesh).length, 0); };
+// How far the node's world position moves when only this joint changes by `delta`: the exact oracle for sliding joints.
+function worldShift(name, delta) {
+  const node = built.nodes.find((x) => x.def.name === name), base = sample(replay, 0).f0.vehicles[0].joints.slice();
+  const at = (j) => { applyVehicle(built, sample(replay, 0)); poseRig(built, j); built.root.updateMatrixWorld(true); return node.g.getWorldPosition(new THREE.Vector3()); };
+  const a = at(base), moved = base.slice();
+  moved[node.def.joint.index] += delta;
+  return at(moved).distanceTo(a);
+}
 const jointAt = (name, t) => { const j = built.nodes.find((n) => n.def.name === name).def.joint; const s = sample(replay, t); return s.f0.vehicles[0].joints[j.index]; };
 window.__v = {
-  setDebug: (on) => { debug.group.visible = on; }, only, jointPixels, meshCount, jointAt, setFreeze: (f) => { freeze = f; },
+  setDebug: (on) => { debug.group.visible = on; }, only, jointPixels, worldShift, meshCount, jointAt, setFreeze: (f) => { freeze = f; },
   renderAt, duration, poseOf, setCamera: (m) => Object.assign(cam, m),
   nodeNames: built.nodes.map((n) => n.def.name),
   triangles: built.triangles, expectedTriangles: rig.meshes.reduce((s, m) => s + m.indices.length / 3, 0),

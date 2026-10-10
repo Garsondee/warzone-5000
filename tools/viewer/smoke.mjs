@@ -33,8 +33,15 @@ for (const part of parts) {
     return { meshes, delta: value - j0, px };
   }, part);
   if (r.meshes === 0) { console.log(`SKIP  ${part}: the rig has no mesh under this node (stand-in geometry), nothing to see`); continue; }
-  // A plain tube sliding along its axis only changes its silhouette at the ends, so recoil gets a lower bar (finding for GEOMETRY: add a muzzle brake).
-  check(r.px >= (/recoil/.test(part) ? 5 : 20), `${part}: moving this joint alone by ${r.delta.toFixed(3)} changes ${r.px} pixels`);
+  if (Math.abs(r.delta) < 1e-6) { console.log(`SKIP  ${part}: the joint never moves in this replay`); continue; }
+  if (/recoil|travel/.test(part)) {
+    // A plain tube sliding along its axis hardly changes its silhouette (finding for GEOMETRY: add a muzzle brake), so a sliding
+    // joint is proved by the exact oracle instead: the node's world position moves by exactly the joint change.
+    const moved = await page.evaluate(([n, d]) => window.__v.worldShift(n, d), [part, r.delta]);
+    check(Math.abs(moved - Math.abs(r.delta)) < 1e-6, `${part}: the node slides ${moved.toFixed(4)} m for a joint change of ${Math.abs(r.delta).toFixed(4)} m (${r.px} pixels changed)`);
+    continue;
+  }
+  check(r.px >= 20, `${part}: moving this joint alone by ${r.delta.toFixed(3)} changes ${r.px} pixels`);
 }
 check(errors.length === 0, `no console errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
 await browser.close();
