@@ -5,7 +5,7 @@
     {
       "k": "Phase",
       "v": "Slice driving",
-      "s": "The Mule 4x4 drives the 520 m course with the real stack; clip, terrain and gearbox polish in progress",
+      "s": "The Mule 4x4 drives the 520 m course with the real stack on real terrain; clip, forces and plots in the viewer",
       "state": "run"
     },
     {
@@ -194,6 +194,26 @@
     }
   ],
   "pictures": [
+    {
+      "lane": "VIEWER",
+      "caption": "the truck at the mud crossing on WORLD's real terrain (rear-quarter follow camera)",
+      "file": "docs/lanes/viewer/media/course-mud-quarter.png"
+    },
+    {
+      "lane": "VIEWER",
+      "caption": "the barricade gap, force bars on the wheels, plots tucked in a corner",
+      "file": "docs/lanes/viewer/media/course-barricade-quarter.png"
+    },
+    {
+      "lane": "VIEWER",
+      "caption": "orbit camera around the truck on the course",
+      "file": "docs/lanes/viewer/media/course-orbit.png"
+    },
+    {
+      "lane": "GEOMETRY",
+      "caption": "the new silhouette: framed glass on leaning walls, front window parallel to the windscreen",
+      "file": "docs/lanes/geometry/media/truck-front34-look.png"
+    },
     {
       "lane": "GEOMETRY",
       "caption": "the parametric utility truck (fictional, HMMWV-like archetype): panel lines, tread, mirrors, canvas",
