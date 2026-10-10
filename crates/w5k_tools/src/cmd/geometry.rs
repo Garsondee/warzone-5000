@@ -4,14 +4,15 @@ use w5k_contract::render::NodeRole;
 use w5k_geo::export::{glb, render_rig, slot_colour};
 use w5k_geo::flags::{bake, FlagParams};
 use w5k_geo::mesh::Mesh;
+use w5k_geo::mount::{ring_mount, RingMountDims};
 use w5k_geo::part::Part;
 use w5k_geo::raster::{render, Camera, Item, Mode};
-use w5k_geo::truck::{utility_4x4, utility_hull, utility_truck, UtilityDims};
+use w5k_geo::truck::{utility_4x4, utility_assembly, utility_hull, utility_truck, UtilityDims};
 use w5k_geo::wheel::{segments_for, wheel, WheelDims};
 use w5k_math::Vec3;
 
 const USAGE: &str =
-    "usage: w5k geometry sheet <wheel|truck|hull|truck6>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close] [--size WxH]";
+    "usage: w5k geometry sheet <wheel|truck|hull|truck6|truck-ring>[,more subjects, stacked] --out DIR [--mode look|shaded|edge|cavity] [--detail 0|1|2] [--view front34,rear34,side,front,rear,top,low34,close,gun] [--size WxH]";
 
 /// Entry point for `w5k geometry <args>`.
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -120,13 +121,14 @@ fn subject(what: &str, detail: u8) -> Result<Vec<(Mesh, [f64; 3], bool)>, String
                 (w.nuts, [0.7, 0.7, 0.7], true),    // const-ok: picture colours and camera framing
             ])
         }
-        "truck" | "hull" | "truck6" => {
+        "truck" | "hull" | "truck6" | "truck-ring" => {
             let d = UtilityDims::placeholder();
             let z = d.wheelbase_m / 2.0;
             let parts = match what {
                 "hull" => utility_hull(&d, &[-z, z], detail).parts,
                 // front steer axle and a rear tandem 1.2 m apart
                 "truck6" => utility_truck(&d, &[-z, z - 1.2, z], &[true, false, false], detail), // const-ok: tandem spacing for the picture
+                "truck-ring" => mounted(&d, detail)?,
                 _ => utility_4x4(&d, detail),
             };
             Ok(parts.iter().map(|p| (p.in_hull_frame(), slot_colour(p.slot), p.name != "antenna")).collect())
@@ -135,9 +137,17 @@ fn subject(what: &str, detail: u8) -> Result<Vec<(Mesh, [f64; 3], bool)>, String
     }
 }
 
+/// The 4x4 with the ring mount on its roof socket.
+fn mounted(d: &UtilityDims, detail: u8) -> Result<Vec<Part>, String> {
+    let z = d.wheelbase_m / 2.0;
+    let mut asm = utility_assembly(d, &[-z, z], &[true, false], detail);
+    asm.attach("roof", &ring_mount(&RingMountDims::standard(), detail), 0.0, "ring").map_err(|e| e.to_string())?;
+    Ok(asm.parts)
+}
+
 /// Named camera directions (from the vehicle centre towards the eye, in the vehicle frame: -Z is forward) and projection.
 // const-ok: picture camera directions, not physics
-const VIEWS: [(&str, [f64; 3], bool); 8] = [
+const VIEWS: [(&str, [f64; 3], bool); 9] = [
     ("front34", [0.9, 0.6, -1.0], true), // const-ok: camera direction
     ("rear34", [0.9, 0.5, 1.0], true),   // const-ok: camera direction
     ("side", [1.0, 0.0, 0.0], false),
@@ -146,6 +156,7 @@ const VIEWS: [(&str, [f64; 3], bool); 8] = [
     ("top", [0.0, 1.0, 0.001], false),    // const-ok: camera direction
     ("low34", [-0.9, -0.15, -1.0], true), // const-ok: camera direction
     ("close", [1.0, 0.35, -0.55], true),  // const-ok: camera direction
+    ("gun", [0.8, 0.45, -1.0], true),     // const-ok: camera direction
 ];
 
 /// One picture per name in `views`: a single view fills the image, four views make a 2 x 2 sheet.
@@ -167,11 +178,15 @@ fn sheet(parts: &[(Mesh, [f64; 3], bool)], mode: Mode, views: &[&str], w: usize,
     for (i, name) in views.iter().enumerate() {
         let &(_, dir, persp) = VIEWS.iter().find(|v| v.0 == *name).ok_or(format!("unknown view {name}"))?;
         let single = views.len() == 1;
-        let close = *name == "close";
-        // the close-up looks at the greenhouse: a little above and ahead of the vehicle centre, from nearer
-        let focus = if close { c + Vec3::new(0.0, ext * 0.09, -ext * 0.06) } else { c }; // const-ok: camera framing
+        let close = *name == "close" || *name == "gun";
+        // the close-up looks at the greenhouse: a little above and ahead of the vehicle centre, from nearer; `gun` at the roof mount
+        let focus = match *name {
+            "close" => c + Vec3::new(0.0, ext * 0.09, -ext * 0.06), // const-ok: camera framing
+            "gun" => c + Vec3::new(0.0, ext * 0.12, ext * 0.03),    // const-ok: camera framing
+            _ => c,
+        };
         let cam = Camera {
-            eye: focus + Vec3::new(dir[0], dir[1], dir[2]).normalized_or_zero() * ext * if close { 0.85 } else { 1.7 }, // const-ok: camera framing
+            eye: focus + Vec3::new(dir[0], dir[1], dir[2]).normalized_or_zero() * ext * if close { 0.6 } else { 1.7 }, // const-ok: camera framing
             target: focus,
             // const-ok: camera field of view in radians
             fov_rad: persp.then_some(if close {

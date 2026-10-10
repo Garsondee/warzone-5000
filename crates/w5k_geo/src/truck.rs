@@ -51,6 +51,22 @@ struct Template {
     body: BodySpec,
     parts: Vec<PartSpec>,
     knuckle_radius_m: f64,
+    sockets: Vec<SocketSpec>,
+}
+
+/// A socket the hull offers besides the wheel stations: kind and size, a point on the shell by the part list's anchors, the normal and the
+/// reference direction of its frame.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SocketSpec {
+    name: String,
+    kind: SocketKind,
+    size_m: f64,
+    x: XR,
+    y: YR,
+    z: ZR,
+    normal: (f64, f64, f64),
+    reference: (f64, f64, f64),
 }
 
 /// One station of the shell's lines plan. Lengths are fractions: `z` of L from the front, half-widths of the nominal half-width, heights
@@ -454,6 +470,11 @@ pub fn utility_4x4(d: &UtilityDims, detail: u8) -> Vec<Part> {
 /// The utility hull on any number of axles (`axles_z`: the z of each in the hull frame, front first; `steered[i]` fits axle `i` with a
 /// steering knuckle): the hull module with a wheel module attached to every `Station` socket it published.
 pub fn utility_truck(d: &UtilityDims, axles_z: &[f64], steered: &[bool], detail: u8) -> Vec<Part> {
+    utility_assembly(d, axles_z, steered, detail).parts
+}
+
+/// The same, still an assembly: its open sockets (the roof ring) take a mount, the mount's trunnion a weapon.
+pub fn utility_assembly(d: &UtilityDims, axles_z: &[f64], steered: &[bool], detail: u8) -> Assembly {
     let mut asm = Assembly::new(utility_hull(d, axles_z, detail));
     let stations: Vec<Socket> = asm.open_sockets(SocketKind::Station).into_iter().cloned().collect();
     for s in &stations {
@@ -467,7 +488,7 @@ pub fn utility_truck(d: &UtilityDims, axles_z: &[f64], steered: &[bool], detail:
         let wheel = wheel_module(&d.wheel, segments_for(detail), knuckle);
         asm.attach(&s.name, &wheel, 0.0, &format!("{axle}.{tag}")).expect("the wheel was cut for exactly this station");
     }
-    asm.parts
+    asm
 }
 
 /// The hull module: the shell with an arch cut for every axle, every anchored fitting and the arch lips, and one `Station` socket per wheel
@@ -702,6 +723,23 @@ pub fn utility_hull(d: &UtilityDims, axles_z: &[f64], detail: u8) -> Module {
                 hints: vec![("well_x_m".into(), arches.x_n), ("max_width_m".into(), d.wheel.width_m)],
             });
         }
+    }
+    for spec in &tpl.sockets {
+        let (z0, z1) = frame.z(&spec.z);
+        let zm = (z0 + z1) / 2.0;
+        let (y0, y1) = frame.y(&spec.y, zm);
+        let ym = (y0 + y1) / 2.0;
+        let (x0, x1) = frame.x(&spec.x, zm, ym);
+        let (n, r) = (spec.normal, spec.reference);
+        sockets.push(Socket {
+            name: spec.name.clone(),
+            kind: spec.kind,
+            side: Side::Centre,
+            pose: socket_frame(Vec3::new((x0 + x1) / 2.0, ym, zm), Vec3::new(n.0, n.1, n.2), Vec3::new(r.0, r.1, r.2)),
+            size_m: spec.size_m,
+            station: None,
+            hints: Vec::new(),
+        });
     }
     Module { name: "utility_hull".into(), kind: ModuleKind::Hull, parts, sockets, mount: None, symmetric: true }
 }

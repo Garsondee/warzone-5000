@@ -16,10 +16,11 @@
 //! them, so a new hull can take an old weapon and a new weapon an old mount.
 
 use crate::part::{Part, Side};
+use serde::Deserialize;
 use w5k_math::{scalar, Quat, Transform, Vec3};
 
 /// The standard socket vocabulary (extended as families need it: keel, belly, mast, engine bay, track run).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 pub enum SocketKind {
     /// A wheel or road-wheel position on a side of the hull; the size is the largest wheel radius it was cut for.
     Station,
