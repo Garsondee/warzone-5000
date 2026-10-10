@@ -22,6 +22,8 @@ camo.schemes.forEach((s) => schemeEl.add(new Option(s, s)));
 schemeEl.value = camo.state.scheme; seedEl.value = camo.state.seed;
 const relook = () => { camo.set({ scheme: schemeEl.value, seed: Number(seedEl.value) || 0, on: camoEl.checked }); renderAt(t); };
 schemeEl.onchange = seedEl.onchange = camoEl.onchange = relook;
+// Steered wheels: joints named "<station>.steer"; the station name ends in l or r for the side.
+const steerJoints = replay.header.vehicles[0].joint_names.map((n, i) => ({ n, i })).filter((j) => j.n.endsWith('.steer')).map((j) => ({ i: j.i, side: /l\.steer$/.test(j.n) ? 'L' : /r\.steer$/.test(j.n) ? 'R' : '?' }));
 const debug = makeDebug(scene, built, replay.header);
 const scope = makeScope(document.getElementById('scope'), replay, (tt) => { t = tt; renderAt(t); });
 for (const k of Object.keys(debug.flags)) document.getElementById('t_' + k).onchange = (e) => { debug.flags[k] = e.target.checked; renderAt(t); };
@@ -29,16 +31,25 @@ const duration = (replay.frames.length - 1) * replay.header.frame_dt_s;
 
 // Camera state: orbit (drag to turn, wheel to zoom) around the vehicle, or chase (behind the hull, follows its heading).
 let freeze = false;
-const cam = { mode: 'orbit', yaw: 0.6, pitch: 0.35, dist: Math.max(6, 3.2 * built.radius) }; // frame the whole vehicle
+const cam = { mode: 'orbit', yaw: 0.6, pitch: 0.35, quarter: 0.75, front: 2.35, /* front-quarter: the steered wheels are the near ones */ /* rear-quarter: 43 degrees round from straight behind */ dist: Math.max(6, 3.2 * built.radius) }; // frame the whole vehicle
 const look = new THREE.Vector3(), eye = new THREE.Vector3(), back = new THREE.Vector3();
+// Followed heading: the direction of travel over the last 0.8 s (a deterministic function of time, so scrubbing and recording agree),
+// not the hull's own yaw, which pitches and wobbles over bumps. Look-at height is averaged over +-0.5 s for the same reason.
+const FOLLOW_S = 0.8, SMOOTH_S = 0.5;
+const posAt = (tt) => { const s = sample(replay, Math.min(Math.max(tt, 0), duration)); return new THREE.Vector3(s.f0.vehicles[0].pos_m.x, s.f0.vehicles[0].pos_m.y, s.f0.vehicles[0].pos_m.z).lerp(new THREE.Vector3(s.f1.vehicles[0].pos_m.x, s.f1.vehicles[0].pos_m.y, s.f1.vehicles[0].pos_m.z), s.a); };
+let clockT = 0;
 function placeCamera() {
   const p = built.root.position;
   if (cam.focus) built.nodes.find((n) => n.def.name === cam.focus).g.getWorldPosition(look);
   else look.copy(p).add({ x: 0, y: 1, z: 0 });
   let yaw = cam.yaw;
-  if (cam.mode === 'chase') {
-    back.set(0, 0, 1).applyQuaternion(built.root.quaternion); // the hull's +Z is behind it
-    yaw = Math.atan2(back.x, back.z);
+  if (cam.mode === 'chase' || cam.mode === 'quarter' || cam.mode === 'front') {
+    const d = posAt(clockT).sub(posAt(clockT - FOLLOW_S));
+    if (d.x * d.x + d.z * d.z > 0.01) back.set(-d.x, 0, -d.z).normalize(); // behind the direction of travel
+    else back.set(0, 0, 1).applyQuaternion(built.root.quaternion);
+    yaw = Math.atan2(back.x, back.z) + (cam.mode === 'quarter' ? cam.quarter : cam.mode === 'front' ? cam.front : 0);
+    const mean = (posAt(clockT - SMOOTH_S).y + posAt(clockT).y + posAt(clockT + SMOOTH_S).y) / 3;
+    look.set(p.x, mean + 1, p.z);
   }
   const c = Math.cos(cam.pitch);
   eye.set(look.x + cam.dist * c * Math.sin(yaw), look.y + cam.dist * Math.sin(cam.pitch), look.z + cam.dist * c * Math.cos(yaw));
@@ -47,12 +58,13 @@ function placeCamera() {
 }
 
 function renderAt(t) {
+  clockT = t;
   const s = sample(replay, Math.min(Math.max(t, 0), duration));
   applyVehicle(built, s);
   if (freeze) { built.root.position.set(0, 0, 0); built.root.quaternion.identity(); }
   placeCamera();
   debug.update(s.a < 0.5 ? s.f0 : s.f1);
-  updateHud(document.getElementById('hud'), document.getElementById('ledger'), s.a < 0.5 ? s.f0 : s.f1, t);
+  updateHud(document.getElementById('hud'), document.getElementById('ledger'), s.a < 0.5 ? s.f0 : s.f1, t, steerJoints);
   scope.draw(t);
   renderer.render(scene, camera);
 }
@@ -63,6 +75,12 @@ let t = 0, playing = true, last = performance.now();
 ui('play').onclick = () => { playing = !playing; ui('play').textContent = playing ? 'pause' : 'play'; };
 ui('scrub').oninput = (e) => { t = e.target.value * duration; renderAt(t); };
 ui('cam').onchange = (e) => { cam.mode = e.target.value; };
+const setLayout = (mode) => {
+  document.body.className = mode === 'full' ? '' : mode;
+  ui('layout').value = mode;
+  if (mode !== 'full') { debug.flags.com = false; ui('t_com').checked = false; } // recordings: no datum marker over the paint
+};
+ui('layout').onchange = (e) => setLayout(e.target.value);
 let drag = null;
 canvas.onpointerdown = (e) => { drag = e; canvas.setPointerCapture(e.pointerId); };
 canvas.onpointerup = () => { drag = null; };
@@ -112,9 +130,10 @@ function worldShift(name, delta) {
 }
 const jointAt = (name, t) => { const j = built.nodes.find((n) => n.def.name === name).def.joint; const s = sample(replay, t); return s.f0.vehicles[0].joints[j.index]; };
 window.__v = {
+  setLayout,
   setLook: (o) => { camo.set(o); renderAt(t); }, schemes: camo.schemes,
   setDebug: (on) => { debug.group.visible = on; }, only, jointPixels, worldShift, meshCount, jointAt, setFreeze: (f) => { freeze = f; },
-  renderAt, duration, poseOf, setCamera: (m) => { Object.assign(cam, m); if (m.mode) ui('cam').value = m.mode; },
+  renderAt, duration, poseOf, setCamera: (m) => { if (m.mode === 'front' && m.dist === undefined) Object.assign(cam, { dist: 7, pitch: 0.22 }); Object.assign(cam, m); if (m.mode) ui('cam').value = m.mode; },
   nodeNames: built.nodes.map((n) => n.def.name),
   triangles: built.triangles, expectedTriangles: rig.meshes.reduce((s, m) => s + m.indices.length / 3, 0),
   renderer: gl.getParameter(gl.VERSION), frames: replay.frames.length,

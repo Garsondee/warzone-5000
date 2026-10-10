@@ -198,3 +198,29 @@ fn an_arc_sweep_of_a_rectangle_has_the_pappus_volume() {
     let exact = 0.1 * 0.1 * 0.5 * ang * (w5k_math::scalar::sin(d / 2.0) / (d / 2.0));
     assert!((m.signed_volume() / exact - 1.0).abs() < 2e-3, "{} vs {}", m.signed_volume(), exact);
 }
+
+use w5k_geo::loft::{chamfer_polygon, sweep_loop};
+
+#[test]
+fn a_mitered_loop_sweep_around_a_square_has_the_frame_volume() {
+    // a 1 m square outline in the plane z = 0 swept with a rectangular profile s in [-0.02, 0.05], t in [-0.03, 0.01]: a picture frame
+    let outline =
+        [Vec3::new(-0.5, -0.5, 0.0), Vec3::new(0.5, -0.5, 0.0), Vec3::new(0.5, 0.5, 0.0), Vec3::new(-0.5, 0.5, 0.0)];
+    let profile = [[-0.02, -0.03], [0.05, -0.03], [0.05, 0.01], [-0.02, 0.01]];
+    for normal in [Vec3::Z, -Vec3::Z] {
+        let m = sweep_loop(&outline, normal, &profile);
+        assert!(m.check_closed().is_ok());
+        let (inner, outer): (f64, f64) = ((1.0 - 0.04_f64) * (1.0 - 0.04), (1.0 + 0.10) * (1.0 + 0.10));
+        assert!(close(m.signed_volume(), 0.04 * (outer - inner), 1e-9), "{}", m.signed_volume());
+    }
+}
+
+#[test]
+fn a_chamfered_polygon_has_two_points_per_corner_on_the_original_edges() {
+    let q = chamfer_polygon(&[[0.0, 0.0], [2.0, 0.0], [2.0, 1.0], [0.0, 1.0]], 0.1);
+    assert_eq!(q.len(), 8);
+    assert!(
+        q.iter().any(|p| (p[0] - 0.1).abs() < 1e-12 && p[1] == 0.0)
+            && q.iter().any(|p| (p[0] - 2.0).abs() < 1e-12 && (p[1] - 0.1).abs() < 1e-12)
+    );
+}

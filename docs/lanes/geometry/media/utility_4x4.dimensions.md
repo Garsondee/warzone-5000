@@ -2,12 +2,12 @@ PLACEHOLDER dimensions, PROVISIONAL(C-002): generated against the numbers the pa
 
 | dimension | generated (m) | stated (m) | error |
 |---|---|---|---|
-| length (hull box, no fittings) | 4.600 | 4.600 | +0.00% |
-| width (hull box, no fittings) | 2.100 | 2.100 | -0.00% |
-| height (hull box, no fittings) | 1.451 | 1.450 | +0.04% |
-| wheelbase (hub to hub) | 3.300 | 3.300 | +0.00% |
-| track (hub to hub) | 1.800 | 1.800 | +0.00% |
-| wheel diameter (over the tread) | 0.801 | 0.800 | +0.11% |
-| ground clearance (box bottom to ground) | 0.419 | 0.420 | -0.13% |
+| length (hull box, no fittings) | 4.572 | 4.572 | +0.00% |
+| width (hull box, no fittings) | 2.159 | 2.159 | -0.00% |
+| height (hull box, no fittings) | 1.370 | 1.370 | +0.00% |
+| wheelbase (hub to hub) | 3.302 | 3.302 | +0.00% |
+| track (hub to hub) | 1.820 | 1.820 | +0.00% |
+| wheel diameter (over the tread) | 0.821 | 0.820 | +0.11% |
+| ground clearance (box bottom to ground) | 0.420 | 0.420 | -0.00% |
 
-Triangles in the rig: 34108 (budget 40,000 for a wheeled vehicle).
+Triangles in the rig: 35938 (budget 40,000 for a wheeled vehicle).

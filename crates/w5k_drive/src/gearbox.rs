@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use w5k_contract::command::GearRequest;
 use w5k_contract::rig::GearboxDef;
 use w5k_contract::Param;
-use w5k_math::scalar::lerp;
+use w5k_math::scalar::{exp, lerp};
 use w5k_math::StateHasher;
 
 use crate::coupling::Downstream;
@@ -23,6 +23,11 @@ pub struct ShiftTuning {
     pub kickdown_throttle: Param,
     pub hysteresis_margin_rpm: Param,
     pub min_gear_dwell_s: Param,
+    /// Time constant of the pedal filter the shift map reads, s: a blip of the pedal does not move the shift points or trigger a kick-down.
+    pub pedal_filter_s: Param,
+    /// How much the pedal moves the downshift point (0 = it stays at the light-throttle value, 1 = it follows the pedal like the upshift point).
+    /// Kept low so a pedal swing at one road speed can never turn an upshift into a downshift: that is what makes a box hunt.
+    pub downshift_pedal_influence: Param,
     pub reverse_engage_max_speed_m_s: Param,
 }
 
@@ -32,6 +37,8 @@ impl ShiftTuning {
         self.kickdown_throttle.check("kickdown_throttle")?;
         self.hysteresis_margin_rpm.check("hysteresis_margin_rpm")?;
         self.min_gear_dwell_s.check("min_gear_dwell_s")?;
+        self.pedal_filter_s.check("pedal_filter_s")?;
+        self.downshift_pedal_influence.check("downshift_pedal_influence")?;
         self.reverse_engage_max_speed_m_s.check("reverse_engage_max_speed_m_s")
     }
 }
@@ -65,6 +72,10 @@ pub struct Gearbox {
     kickdown: f64,
     margin_rpm: f64,
     dwell_min_s: f64,
+    pedal_tau_s: f64,
+    down_influence: f64,
+    pedal: f64,
+    pedal_seeded: bool,
     reverse_max_speed: f64,
     gear: i8,
     pending: Option<i8>,
@@ -104,6 +115,10 @@ impl Gearbox {
             kickdown: tuning.kickdown_throttle.v,
             margin_rpm: tuning.hysteresis_margin_rpm.v,
             dwell_min_s: tuning.min_gear_dwell_s.v,
+            pedal_tau_s: tuning.pedal_filter_s.v,
+            down_influence: tuning.downshift_pedal_influence.v,
+            pedal: 0.0,
+            pedal_seeded: false,
             reverse_max_speed: tuning.reverse_engage_max_speed_m_s.v,
             gear: if def.forward_ratios.is_empty() { 0 } else { 1 },
             pending: None,
@@ -150,6 +165,13 @@ impl Gearbox {
         road_speed_m_s: f64,
     ) -> ShiftOut {
         self.dwell_s += dt;
+        // the shift map reads a smoothed pedal: a driver who wobbles around a cruise must not wobble the gearbox
+        if self.pedal_seeded {
+            self.pedal += (throttle.clamp(0.0, 1.0) - self.pedal) * (1.0 - exp(-dt / self.pedal_tau_s));
+        } else {
+            self.pedal = throttle.clamp(0.0, 1.0);
+            self.pedal_seeded = true;
+        }
         if self.shift_left_s > 0.0 {
             self.shift_left_s -= dt;
             if self.shift_left_s <= 0.0 {
@@ -159,7 +181,7 @@ impl Gearbox {
                     self.dwell_s = 0.0;
                 }
             }
-        } else if let Some(target) = self.choose(request, throttle, output_omega_rad_s, road_speed_m_s) {
+        } else if let Some(target) = self.choose(request, self.pedal, output_omega_rad_s, road_speed_m_s) {
             if target != self.gear {
                 self.pending = Some(target);
                 self.shift_left_s = self.shift_time_s;
@@ -197,23 +219,49 @@ impl Gearbox {
                 if !self.automatic || self.dwell_s < self.dwell_min_s {
                     return None;
                 }
-                let scale = lerp(self.light_scale, 1.0, throttle.clamp(0.0, 1.0));
-                let (up, down) = (self.up_rpm * scale, self.down_rpm * scale);
                 let g = self.gear;
-                let input_rpm = |gear: i8| w_out.abs() / RPM_TO_RAD_S * self.ratio_of(gear);
-                let here = input_rpm(g);
-                if g < top && here > up && input_rpm(g + 1) >= down + self.margin_rpm {
+                if self.wants_upshift(g, w_out, throttle) {
                     Some(g + 1)
-                } else if g > 1 && input_rpm(g - 1) <= up - self.margin_rpm && (here < down || throttle > self.kickdown)
-                {
-                    // below the downshift point, or a kick-down on the pedal; either way it must land clear of the upshift point at this
-                    // pedal, which is what stops a kick-down being undone by the next upshift
+                } else if self.wants_downshift(g, w_out, throttle, true) {
                     Some(g - 1)
                 } else {
                     None
                 }
             }
         }
+    }
+
+    /// Upshift and downshift points at a pedal position, as gearbox input rpm. Both rise with the pedal, but the downshift point only by
+    /// `downshift_pedal_influence`, so the downshift curve stays under the upshift curve at every pedal position.
+    fn shift_points(&self, pedal: f64) -> (f64, f64) {
+        let p = pedal.clamp(0.0, 1.0);
+        (
+            self.up_rpm * lerp(self.light_scale, 1.0, p),
+            self.down_rpm * lerp(self.light_scale, 1.0, self.down_influence * p),
+        )
+    }
+
+    fn input_rpm(&self, gear: i8, w_out: f64) -> f64 {
+        w_out.abs() / RPM_TO_RAD_S * self.ratio_of(gear)
+    }
+
+    /// Would the automatic go from `gear` to the next one up at this output speed and pedal (ignoring the dwell timer)?
+    pub fn wants_upshift(&self, gear: i8, w_out: f64, pedal: f64) -> bool {
+        let top = i8::try_from(self.forward.len()).unwrap_or(i8::MAX);
+        let (up, down) = self.shift_points(pedal);
+        gear >= 1
+            && gear < top
+            && self.input_rpm(gear, w_out) > up
+            && self.input_rpm(gear + 1, w_out) >= down + self.margin_rpm
+    }
+
+    /// Would it drop a gear? Below the downshift point, or (with `kickdown`) on a pedal past the kick-down threshold; either way the
+    /// lower gear must sit clear of the upshift point at this pedal, which is what stops a downshift being undone by the next upshift.
+    pub fn wants_downshift(&self, gear: i8, w_out: f64, pedal: f64, kickdown: bool) -> bool {
+        let (up, down) = self.shift_points(pedal);
+        gear > 1
+            && self.input_rpm(gear - 1, w_out) <= up - self.margin_rpm
+            && (self.input_rpm(gear, w_out) < down || (kickdown && pedal > self.kickdown))
     }
 
     /// The driven side as the coupling sees it (everything reflected through the ratio to the gearbox input).
@@ -239,6 +287,7 @@ impl Gearbox {
         h.write_u8(self.gear.to_le_bytes()[0]);
         h.write_f64(self.shift_left_s);
         h.write_f64(self.dwell_s);
+        h.write_f64(self.pedal);
         h.write_u8(u8::from(self.driving));
     }
 }
@@ -286,7 +335,8 @@ mod tests {
         let dt = 1.0 / 120.0;
         let (mut g, ratios) = (gb(), [2.48, 1.48, 1.0, 0.73]);
         let scale = 0.45 + (1.0 - 0.45) * 0.8; // pedal 0.8 is below kick-down: the points scale with the pedal
-        let (up, down) = (3200.0 * scale, 1500.0 * scale);
+        let down_scale = 0.45 + (1.0 - 0.45) * 0.3 * 0.8; // the downshift point follows the pedal only by the stated influence (0.3)
+        let (up, down) = (3200.0 * scale, 1500.0 * down_scale);
         let mut shifts: Vec<(f64, i8)> = Vec::new();
         let mut last = g.gear();
         // the road (output) speed in rpm rises to 1300 over 10 s and falls back; the gearbox input follows through the current ratio
@@ -367,5 +417,86 @@ mod tests {
             }
         }
         assert_eq!(shifts, 0);
+    }
+
+    /// A driver on a speed controller that is bang-bang around its target (lift when above, press when below) sits right on the line where
+    /// a first-cut map flips: at a light pedal the upshift point is low, at a moderate pedal the downshift point is higher.
+    fn bang_bang_shifts(target_kmh: f64, press: f64) -> usize {
+        let mut def = def();
+        def.forward_ratios = vec![2.48, 1.48, 1.0, 0.75];
+        def.shift.upshift_rpm = 3500.0;
+        def.shift.downshift_rpm = 1400.0;
+        def.shift.shift_time_s = 0.35;
+        let mut g = Gearbox::new(&def, &shift_tuning()).unwrap();
+        g.gear = 2;
+        let (dt, wheel_r, final_drive) = (0.01, 0.4, 5.13);
+        let (mut v, mut shifts, mut last) = (target_kmh / 3.6, 0, 2);
+        for _ in 0..12000 {
+            let pedal = if v > target_kmh / 3.6 { 0.0 } else { press };
+            v += dt * if pedal > 0.0 { 0.25 } else { -0.15 }; // gentle acceleration under power, coasting down without
+            let o = g.update(dt, GearRequest::Auto, pedal, v / wheel_r * final_drive, v);
+            if o.gear != last {
+                shifts += 1;
+                last = o.gear;
+            }
+        }
+        shifts
+    }
+
+    #[test]
+    fn a_bang_bang_speed_driver_does_not_make_the_box_hunt() {
+        for target in [28.0, 30.0, 31.0, 32.0, 34.0, 36.0, 40.0] {
+            let n = bang_bang_shifts(target, 0.5);
+            assert!(n <= 1, "{n} shifts in 120 s at {target} km/h");
+        }
+    }
+
+    #[test]
+    fn no_road_speed_can_trigger_an_upshift_at_one_pedal_and_a_downshift_at_another() {
+        // the property that makes a box hunt when it fails: the downshift curve must sit under the upshift curve at every pair of pedals
+        let mut def = def();
+        def.forward_ratios = vec![2.48, 1.48, 1.0, 0.75];
+        def.shift.upshift_rpm = 3500.0;
+        def.shift.downshift_rpm = 1400.0;
+        let g = Gearbox::new(&def, &shift_tuning()).unwrap();
+        for gear in 1..=3_i8 {
+            for k in 0..4000 {
+                let w = f64::from(k) * 0.1; // output shaft speed, 0 to 400 rad/s
+                for pa in (0..=9).map(|i| f64::from(i) * 0.1) {
+                    if g.wants_upshift(gear, w, pa) {
+                        for pb in (0..=9).map(|i| f64::from(i) * 0.1) {
+                            assert!(
+                                !g.wants_downshift(gear + 1, w, pb, false),
+                                "gear {gear}->{} at {w} rad/s, pedals {pa} then {pb}",
+                                gear + 1
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_short_pedal_blip_does_not_kick_down() {
+        let mut def = def();
+        def.forward_ratios = vec![2.48, 1.48, 1.0, 0.75];
+        let mut g = Gearbox::new(&def, &shift_tuning()).unwrap();
+        g.gear = 3;
+        let w_out = 1300.0 * RPM; // input 1300 rpm in third: comfortably above the downshift point
+        for _ in 0..500 {
+            g.update(0.01, GearRequest::Auto, 0.3, w_out, 9.0);
+        }
+        let mut changes = 0;
+        for k in 0..800 {
+            let pedal = if (100..140).contains(&k) { 1.0 } else { 0.3 }; // a 0.4 s stab at full throttle
+            changes += usize::from(g.update(0.01, GearRequest::Auto, pedal, w_out, 9.0).gear != 3);
+        }
+        assert_eq!(changes, 0, "a 0.4 s blip must not downshift");
+        // a held full pedal does kick down
+        for _ in 0..400 {
+            g.update(0.01, GearRequest::Auto, 1.0, w_out, 9.0);
+        }
+        assert_eq!(g.gear(), 2, "a held full pedal must kick down");
     }
 }
