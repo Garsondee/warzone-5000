@@ -42,6 +42,7 @@ An RNG stream consumed in query order (queries must be pure functions); a soil n
 
 ## Owner's answers that apply to you (2026-10-08, card C-003)
 - The courses are built by us, not hand-authored by the owner, so the tooling is the product: generator parameters, validators and lint (reachability, slopes, soil sanity), preview renders, and a course diff that shows what a change did. An in-Godot course editor is a very long-term milestone and not on your list.
+- Card C-004 (2026-10-09): the world is parametric too: landscapes, roads, mud, trees and buildings come from generators with parameters (and anything else the courses need along the way), with simple procedural materials.
 
 ## Done
 M1 acceptance passes in CI, the theory note is written, the status file has the handoff note, you have idled; richer course features for M2 come as follow-up tasks.

@@ -49,6 +49,7 @@ A pattern that reads world position, time or UVs; `fract(sin())` hashes or any l
 
 ## Owner's answers that apply to you (2026-10-08, card C-002)
 - The world is fiction, not Earth: factions and insignia are invented (no real national markings or flags). Camouflage pattern styles are fine as generators, but name them by look (woodland, desert, splinter, fleck), not by army.
+- Card C-004 (2026-10-09): textures stay simple and procedural; no hand-painted or photo textures. Panel lines and surface detail come from GEOMETRY's parametric shapes and your masks, not from image maps.
 
 ## Done
 M1 deliverables pass (tests in CI or pasted), theory note written, status file has the handoff note, you have idled.
