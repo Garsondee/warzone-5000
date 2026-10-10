@@ -461,9 +461,14 @@ mod tests {
     }
 
     #[test]
-    fn a_vehicle_held_below_0_3_m_s_with_the_throttle_down_is_recovered_after_3_s() {
-        // The speed cap is a crawl, so full throttle cannot move the vehicle: the stuck rule is what fires.
-        let mut s = session("scout_4x4", true, |t| t.assist.speed_cap_m_s.v = 0.1);
+    fn a_vehicle_held_below_the_stuck_speed_with_the_throttle_down_is_recovered_after_3_s() {
+        // The speed cap is a crawl, so full throttle cannot move the vehicle for long: the stuck rule is what fires. A clutch that launches at
+        // the engine's torque peak lets the vehicle surge to about 1 m/s before the cap's throttle easing and brake catch it, so the stuck
+        // speed is set above the surge (the default 0.3 m/s is for a vehicle that is really held).
+        let mut s = session("scout_4x4", true, |t| {
+            t.assist.speed_cap_m_s.v = 0.1;
+            t.assist.stuck_speed_m_s.v = 2.0;
+        });
         let mut at = None;
         for _ in 0..(5.0 * TICK_HZ) as u32 {
             s.step(&full_throttle());
