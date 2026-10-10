@@ -16,6 +16,18 @@ pub struct Extras {
     pub aero_cop_height_m: Param,
     /// Peak friction of the terrain table's dry hard reference surface (the denominator of `mu_scale`).
     pub ref_surface_mu_peak: Param,
+    /// PROVISIONAL(CCR-forge): the tyre's load sensitivity (contract 0.3, CHASSIS CCR-4). Absent = linear tyres (0).
+    #[serde(default)]
+    pub tyre_load: Option<TyreLoadExtras>,
+}
+
+/// `s(k) = 1 / (1 + k (Fz / Fz0 - 1))` scales the friction coefficient and the slip and cornering stiffnesses (Pacejka, ch. 4); `Fz0`
+/// is the tyre's static load (the solver's default while the rig's `nominal_load_n` is 0).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TyreLoadExtras {
+    pub mu_load_sensitivity: Param,
+    pub stiffness_load_sensitivity: Param,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -77,6 +89,10 @@ pub struct BrakeExtras {
 impl Extras {
     pub fn visit_params(&self, f: &mut dyn FnMut(&str, &Param)) {
         let (s, d, b) = (&self.susp, &self.drive, &self.brake);
+        if let Some(l) = &self.tyre_load {
+            f("tyre_load.mu_load_sensitivity", &l.mu_load_sensitivity);
+            f("tyre_load.stiffness_load_sensitivity", &l.stiffness_load_sensitivity);
+        }
         f("drive.centre_diff.bias", &d.centre_diff.bias);
         f("drive.axle_diff.bias", &d.axle_diff.bias);
         for (i, p) in b.axle_torque_nm.iter().enumerate() {
