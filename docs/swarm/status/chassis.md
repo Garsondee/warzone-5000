@@ -2,7 +2,7 @@
 
 *Update with every PR. Keep it under 40 lines. ARCH reads this file at every check-in instead of your whole session.*
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/chassis/hauler-skid | **Contract pinned:** 0.3.0 (`0982843`) | **Phase:** slice 2, stage A
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/chassis/carrier | **Contract pinned:** 0.3.0 (`0982843`) | **Phase:** slice 2, stage A
 
 ## Done
 - S1, design note, quarter car, suspension, tyre, hull, wheeled assembly, Mule strip, modes, ledger, benches (#7-#76); slice 2 stage A (below).
@@ -27,7 +27,7 @@
 - Nothing.
 
 ## Next
-- Idle after this, per ARCH. Open on ARCH's call: tank replay frames, FORGE's T2 rig in the tank tests, linkages (6x6 walking beams), tyre slide drop.
+- Carrier: `TrackedChassis` accepts the features it or DRIVE implements; FORGE's `carrier_tracked` rests at its ride height (0.8 mm). Idle after this, per ARCH. Open on ARCH's call: tank replay frames, FORGE's T2 rig in the tank tests, linkages (6x6 walking beams), tyre slide drop.
 
 ## Cards needed / PROVISIONAL decisions in force
 - PROVISIONAL: sprocket `dR/dw` estimate (TRACKS to report it); private Bekker pressure in `soil_wheel.rs` (until terramech's soil module).
