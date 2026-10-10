@@ -29,7 +29,7 @@
 
 - Live test-drive page (PR on `lane/viewer/live`): `tools/viewer/dist/index.html` (committed build; `node tools/viewer/build.mjs --live`), modules `live.js`, `live-input.js`, `live-audio.js`, `live.html`; `live-smoke.mjs` runs 21 checks against a real `w5k drive`. Named `index.html` (not `live.html`) because the server serves that name. Note for the tripwire list: the page fetches from the local server (same origin); that is the owner's goal for this page, not a replay-viewer network fetch.
 
-- Skins for the live page (PR on `lane/viewer/skins`, stacked on the live-page PR): GEOMETRY's truck packed to `tools/viewer/dist/skins/utility_4x4.skin` (`w5k viewer pack-skin`, `w5k_replay::skinpack`), fitted onto scout, mule and hauler by `skin.js`; an RTS-view ring under the truck. Waiting for GEOMETRY's own scout/hauler skins: drop `scout_4x4.skin` / `hauler_4x4.skin` into `dist/skins/` and rebuild.
+- Skins for the live page (PR on `lane/viewer/skins`, stacked on the live-page PR): GEOMETRY's truck packed to `tools/viewer/dist/skins/utility_4x4.skin` (`w5k viewer pack-skin`, `w5k_replay::skinpack`), fitted onto scout, mule and hauler by `skin.js`; an RTS-view ring under the truck. The scout wears GEOMETRY's own skin (`scout_4x4.skin`, via `Skin::for_id`); for the hauler, pack GEOMETRY's hauler skin when it exists (`w5k viewer pack-skin hauler_4x4 ...`, then `node tools/viewer/build.mjs --live`). Finding for ARCH: `tools/ci/package_testdrive.py` zips only `index.html`; it must add `tools/viewer/dist/skins/*.skin` as `viewer/skins/` or the packaged game falls back to boxes.
 
 ## In progress
 - Nothing: PRs #15, #22, #26, #28, #33 (stacked, merge in that order) await ARCH. Idle.
