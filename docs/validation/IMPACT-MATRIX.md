@@ -95,5 +95,12 @@ Sign: `-` the benchmark decreases, `+` it increases, `~0` essentially no change.
 | Stabiliser rejection | B16 | `-` | the gun stays on target while the hull moves |
 | Gun mass (barrel) | B16 | `~0` or `+` | heavier barrel, harder to stabilise |
 
+## Regimes (where the sign depends on what limits the vehicle)
+The runner reads the regime from the baseline run's labels and applies it before comparing: the `-`/`+` rows above hold **in the regime that the row's "Why" assumes**.
+- **Braking (B4):** `peak_decel_g` at 95% of `mu` or more is tyre-limited: a lever that only changes brake size or mass must give `~0`; below that it is brake-limited and the table's non-zero sign applies.
+- **Side slope (B7):** `mode = slide` (the vehicle slides before it tips): centre-of-mass height, track gauge and ground clearance must give `~0`; `mode = roll` (a wheel lifts): the table's signs apply.
+- **Skidpad (B12):** `limited_by` naming power: the chassis levers (centre-of-mass height, track, ride frequency, tyre friction) must give `~0`.
+Added 2026-10-10 by VALIDATION after the first runs, from the physics (the tipping formula applies only when tipping happens first), not from the results' direction: the rows without a regime keep their signs.
+
 ## Coverage rule
 Each lever above appears in at least one row with a non-`~0` sign (no dead levers), and every benchmark B1-B16 appears in at least one such row (no orphan effects). VALIDATION extends the table as lanes add levers; adding a lever without a row is a merge-gate failure.
