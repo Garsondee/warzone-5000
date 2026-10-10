@@ -37,6 +37,8 @@ Provisional extras now carry centre and axle differential kind and bias and the 
 
 ## Tracked T1 (this PR)
 `tracked.rs` (stations in loop order, TrackDef per side with the computed belt length, road-wheel springs, steer unit, sprocket brakes), `TrackedExtras`, `carrier_tracked` def + extras (M113-class archetype, 10.6 t, 65 links, 8 substeps), `tests/carrier.rs`. Next: T2 (belly proxy, steer law extras), T3 (render rig with track_runs, picture).
+## Tracked compile (slice 2 stage B)
+Design note: `docs/lanes/forge/tracked-design-note.md` (stations and loop order, belt, steer unit, belly proxy, extras, test list, PR plan T1 to T3). Contract pin v0.3 = 0982843.
 
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).
