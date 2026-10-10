@@ -14,5 +14,7 @@ pub mod flags;
 pub mod loft;
 pub mod mass;
 pub mod mesh;
+pub mod part;
 pub mod raster;
+pub mod truck;
 pub mod wheel;

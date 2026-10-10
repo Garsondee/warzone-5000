@@ -84,7 +84,7 @@ fn on_wheel(local: &Mesh, theta: f64, x: f64, rho: f64) -> Mesh {
 }
 
 /// A closed cylinder along +X from `x0` to `x1`.
-fn cylinder_x(r: f64, x0: f64, x1: f64, n: u32) -> Mesh {
+pub fn cylinder_x(r: f64, x0: f64, x1: f64, n: u32) -> Mesh {
     let ring: Vec<[f64; 2]> = (0..n)
         .map(|i| {
             let (s, c) = scalar::sin_cos(-2.0 * std::f64::consts::PI * f64::from(i) / f64::from(n));

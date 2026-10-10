@@ -170,4 +170,44 @@ impl Mesh {
         }
         twice / 2.0
     }
+
+    /// Conforming refinement: split every edge longer than `max_edge_m` at its midpoint (all triangles sharing an edge split it, so the mesh
+    /// stays closed) and repeat until none is longer. The surface does not change; the vertices let a per-vertex flag vary smoothly across
+    /// a large face (spike S-G: a flag can only change where there is a vertex).
+    pub fn subdivided(&self, max_edge_m: f64) -> Mesh {
+        let mut m = self.clone();
+        loop {
+            let mut split: std::collections::BTreeMap<(u32, u32), u32> = std::collections::BTreeMap::new();
+            for &[a, b, c] in &m.t {
+                for (p, q) in [(a, b), (b, c), (c, a)] {
+                    if (m.v[p as usize] - m.v[q as usize]).length() > max_edge_m {
+                        split.insert((p.min(q), p.max(q)), 0);
+                    }
+                }
+            }
+            if split.is_empty() {
+                return m;
+            }
+            let keys: Vec<(u32, u32)> = split.keys().copied().collect();
+            for k in keys {
+                split.insert(k, m.v.len() as u32);
+                m.v.push((m.v[k.0 as usize] + m.v[k.1 as usize]) * 0.5);
+            }
+            let mid = |p: u32, q: u32| split.get(&(p.min(q), p.max(q))).copied();
+            let mut t = Vec::with_capacity(m.t.len() * 2);
+            for &[a, b, c] in &m.t {
+                match (mid(a, b), mid(b, c), mid(c, a)) {
+                    (None, None, None) => t.push([a, b, c]),
+                    (Some(x), None, None) => t.extend([[a, x, c], [x, b, c]]),
+                    (None, Some(y), None) => t.extend([[a, b, y], [a, y, c]]),
+                    (None, None, Some(z)) => t.extend([[a, b, z], [z, b, c]]),
+                    (Some(x), Some(y), None) => t.extend([[x, b, y], [a, x, y], [a, y, c]]),
+                    (None, Some(y), Some(z)) => t.extend([[y, c, z], [a, b, y], [a, y, z]]),
+                    (Some(x), None, Some(z)) => t.extend([[a, x, z], [x, b, c], [x, c, z]]),
+                    (Some(x), Some(y), Some(z)) => t.extend([[a, x, z], [x, b, y], [z, y, c], [x, y, z]]),
+                }
+            }
+            m.t = t;
+        }
+    }
 }

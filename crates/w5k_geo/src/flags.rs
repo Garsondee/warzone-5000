@@ -11,6 +11,8 @@ use serde::Deserialize;
 pub struct FlagParams {
     pub edge_ramp_lo_deg: f64,
     pub edge_ramp_hi_deg: f64,
+    pub edge_band_m: f64,
+    pub max_edge_m: f64,
     pub cavity_rays: u32,
     pub cavity_cap_m: f64,
     pub cavity_lift_m: f64,
@@ -28,10 +30,12 @@ pub struct Flags {
     pub cavity: Vec<f64>,
 }
 
-/// `edge` per part (its own geometry); `cavity` on the union of all parts (they occlude each other).
-pub fn bake(parts: &[&Mesh], p: &FlagParams) -> Vec<Flags> {
+/// Each part is first subdivided to `max_edge_m` (the flags need vertices where they vary), then `edge` is computed per part and `cavity`
+/// on the union of all parts (they occlude each other). Returns the refined meshes with their flags.
+pub fn bake(parts: &[&Mesh], p: &FlagParams) -> Vec<(Mesh, Flags)> {
+    let parts: Vec<Mesh> = parts.iter().map(|m| m.subdivided(p.max_edge_m)).collect();
     let mut all = Mesh::default();
-    for m in parts {
+    for m in &parts {
         all.append(m);
     }
     let bvh = Bvh::build(&all);
@@ -40,7 +44,7 @@ pub fn bake(parts: &[&Mesh], p: &FlagParams) -> Vec<Flags> {
         .iter()
         .map(|m| {
             let normals = m.vertex_normals();
-            Flags {
+            let flags = Flags {
                 edge: edge_values(m, rad(p.edge_ramp_lo_deg), rad(p.edge_ramp_hi_deg)).1,
                 cavity: m
                     .v
@@ -48,7 +52,8 @@ pub fn bake(parts: &[&Mesh], p: &FlagParams) -> Vec<Flags> {
                     .zip(&normals)
                     .map(|(&v, &n)| cavity_at(&bvh, v, n, p.cavity_rays, p.cavity_cap_m, p.cavity_lift_m))
                     .collect(),
-            }
+            };
+            (m.clone(), flags)
         })
         .collect()
 }

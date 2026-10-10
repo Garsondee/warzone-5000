@@ -1,0 +1,11 @@
+// PLACEHOLDER dimensions for the utility 4x4, PROVISIONAL(C-002) (the M998 dossier has not landed; nothing is quoted from memory).
+// Provenance ESTIMATE, band +-20% each, reason: pictures and tests only until FORGE passes the real hull Params.
+UtilityDims(
+    length_m: 4.6,
+    width_m: 2.1,
+    height_m: 1.45,
+    wheelbase_m: 3.3,
+    track_m: 1.8,
+    ground_clearance_m: 0.42,
+    wheel: (outer_radius_m: 0.40, width_m: 0.28, rim_radius_m: 0.24, lug_depth_m: 0.02, lugs_around: 28),
+)

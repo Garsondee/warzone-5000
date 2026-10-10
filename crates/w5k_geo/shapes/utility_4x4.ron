@@ -1,0 +1,42 @@
+// Parametric 4x4 utility truck, a fictional design of the M998 archetype (lane GEOMETRY, card C-004). Everything is a proportion of the
+// hull box, so the same list scales to other sizes: x as a fraction of the full width W measured from the centre line, y from the hull
+// box bottom as a fraction of the height H, z from the front as a fraction of the length L. Sizes with an `_m` suffix are absolute
+// metres (bevels, lamp radii, panel relief). Provenance ESTIMATE for every number, bands +-15% for fractions and +-50% for the small
+// absolute sizes, reason: original design in the proportions of the archetype, not a copy of a real vehicle; nothing quoted from memory.
+// `mirror: true` makes a right part (x >= 0, +X is right) and its left twin.
+(
+    parts: [
+        // ---- body
+        (name: "tub", role: Hull, slot: Paint, fitting: false, mirror: false, shape: Loft(corner_m: 0.05, sections: [
+            (0.14, 0.64, 0.0, 0.57), (0.60, 0.70, 0.0, 0.57), (1.0, 0.70, 0.0, 0.57)])),
+        (name: "hood", role: Hull, slot: Paint, fitting: false, mirror: false, shape: Loft(corner_m: 0.04, sections: [
+            (0.02, 0.68, 0.30, 0.50), (0.12, 0.70, 0.30, 0.53), (0.32, 0.72, 0.30, 0.60)])),
+        (name: "cab", role: Hull, slot: Paint, fitting: false, mirror: false, shape: Loft(corner_m: 0.16, sections: [
+            (0.32, 0.84, 0.55, 0.60), (0.43, 0.82, 0.55, 0.97), (0.70, 0.82, 0.55, 1.0), (0.74, 0.84, 0.55, 0.90)])),
+        (name: "bed", role: Hull, slot: Paint, fitting: false, mirror: false, shape: Loft(corner_m: 0.05, sections: [
+            (0.74, 0.84, 0.55, 0.80), (0.995, 0.84, 0.55, 0.80)])),
+        (name: "cover", role: Hull, slot: Canvas, fitting: false, mirror: false, shape: Loft(corner_m: 0.12, sections: [
+            (0.74, 0.76, 0.80, 0.92), (0.98, 0.74, 0.80, 0.88)])),
+        (name: "bumper_front", role: Hull, slot: Metal, fitting: false, mirror: false, shape: Block(x: (-0.47, 0.47), y: (0.08, 0.24), z: (0.0, 0.045), corner_m: 0.02)),
+        (name: "bumper_rear", role: Hull, slot: Metal, fitting: false, mirror: false, shape: Block(x: (-0.47, 0.47), y: (0.08, 0.24), z: (0.955, 1.0), corner_m: 0.02)),
+        (name: "flare", role: Hull, slot: Paint, fitting: false, mirror: false, shape: Flares(above_wheel_m: 0.02, height_m: 0.16, length_per_radius: 2.7, inboard_m: 0.02, corner_m: 0.03)),
+        // ---- panel plates (relief in the paint: the lines between them read as panel gaps)
+        (name: "hood_panel", role: Hull, slot: Paint, fitting: true, mirror: false, shape: Block(x: (-0.30, 0.30), y: (0.545, 0.575), z: (0.05, 0.31), corner_m: 0.006)),
+        (name: "door_front", role: Hull, slot: Paint, fitting: true, mirror: true, shape: Block(x: (0.405, 0.415), y: (0.59, 0.88), z: (0.45, 0.57), corner_m: 0.004)),
+        (name: "door_rear", role: Hull, slot: Paint, fitting: true, mirror: true, shape: Block(x: (0.405, 0.415), y: (0.59, 0.88), z: (0.58, 0.70), corner_m: 0.004)),
+        (name: "tailgate", role: Hull, slot: Paint, fitting: true, mirror: false, shape: Block(x: (-0.38, 0.38), y: (0.58, 0.79), z: (0.995, 1.002), corner_m: 0.004)),
+        // ---- glass
+        (name: "windscreen", role: Hull, slot: Glass, fitting: true, mirror: false, shape: Slab(from_yz: (0.605, 0.325), to_yz: (0.965, 0.425), width: 0.62, thickness_m: 0.012, lift_m: 0.004)),
+        (name: "window_front", role: Hull, slot: Glass, fitting: true, mirror: true, shape: Block(x: (0.410, 0.419), y: (0.70, 0.92), z: (0.46, 0.56), corner_m: 0.003)),
+        (name: "window_rear", role: Hull, slot: Glass, fitting: true, mirror: true, shape: Block(x: (0.410, 0.419), y: (0.70, 0.92), z: (0.59, 0.69), corner_m: 0.003)),
+        // ---- fittings
+        (name: "headlamp", role: Hull, slot: Optics, fitting: true, mirror: true, shape: Cyl(axis: Z, at: (0.27, 0.43, 0.006), radius_m: 0.075, length_m: 0.05)),
+        (name: "grille", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Block(x: (-0.15, 0.15), y: (0.36, 0.50), z: (0.0, 0.03), corner_m: 0.008)),
+        (name: "mirror_arm", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: (0.405, 0.475), y: (0.80, 0.82), z: (0.345, 0.36), corner_m: 0.004)),
+        (name: "mirror", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Block(x: (0.46, 0.50), y: (0.78, 0.88), z: (0.34, 0.37), corner_m: 0.01)),
+        (name: "tow_hook", role: Hull, slot: Metal, fitting: true, mirror: true, shape: Cyl(axis: Z, at: (0.30, 0.15, -0.012), radius_m: 0.03, length_m: 0.12)),
+        (name: "tail_lamp", role: Hull, slot: Optics, fitting: true, mirror: true, shape: Block(x: (0.40, 0.44), y: (0.62, 0.72), z: (0.995, 1.0), corner_m: 0.004)),
+        (name: "exhaust", role: Hull, slot: Metal, fitting: true, mirror: false, shape: Cyl(axis: Z, at: (-0.24, 0.10, 0.93), radius_m: 0.045, length_m: 0.30)),
+    ],
+    knuckle_radius_m: 0.09,
+)
