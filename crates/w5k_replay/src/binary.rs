@@ -18,10 +18,10 @@ pub const KEYFRAME_INTERVAL: usize = 30;
 /// Position quantum 1 mm, velocity quantum 1 mm/s, travel quantum 0.05 mm, spin/steer/aim quantum 2 pi / 65536 rad (0.096 mrad).
 /// const-ok: quantisation steps of the file format, not physical constants.
 const MM: f64 = 1000.0;
-const TRAVEL_STEPS_PER_M: f64 = 20_000.0;
-const ANGLE_STEPS_PER_RAD: f64 = 65536.0 / std::f64::consts::TAU;
+const TRAVEL_STEPS_PER_M: f64 = 20_000.0; // const-ok: quantisation step of the file format
+const ANGLE_STEPS_PER_RAD: f64 = 65536.0 / std::f64::consts::TAU; // const-ok: quantisation step of the file format
 /// Smallest-three rotation: components lie within +-1/sqrt(2), mapped onto +-32767 (step 2.2e-5, under 0.003 degrees).
-const ROT_STEPS: f64 = 32767.0 * std::f64::consts::SQRT_2;
+const ROT_STEPS: f64 = 32767.0 * std::f64::consts::SQRT_2; // const-ok: quantisation step of the file format
 const LIMITING: [LimitingFactor; 10] = [
     LimitingFactor::None,
     LimitingFactor::Power,
@@ -87,7 +87,7 @@ fn get_rot(it: &mut impl Iterator<Item = i64>) -> Result<Quat, String> {
 }
 
 fn flatten(f: &Frame, joint_names: &[Vec<String>]) -> Vec<i64> {
-    let mut o = vec![q(f.t_s, 1e6), f.vehicles.len() as i64];
+    let mut o = vec![q(f.t_s, 1e6), f.vehicles.len() as i64]; // const-ok: quantisation step of the file format
     for v in &f.vehicles {
         o.extend([
             v.vehicle as i64,
@@ -113,8 +113,8 @@ fn flatten(f: &Frame, joint_names: &[Vec<String>]) -> Vec<i64> {
             o.extend([
                 i64::from(c.flags),
                 q(f64::from(c.normal_force_n), 0.25),
-                q(f64::from(c.sinkage_m), 10_000.0),
-                q(f64::from(c.slip), 1000.0),
+                q(f64::from(c.sinkage_m), 10_000.0), // const-ok: quantisation step of the file format
+                q(f64::from(c.slip), 1000.0),        // const-ok: quantisation step of the file format
                 i64::from(c.material),
             ]);
         }
@@ -122,9 +122,9 @@ fn flatten(f: &Frame, joint_names: &[Vec<String>]) -> Vec<i64> {
         for w in &v.weapons {
             o.extend([
                 i64::from(w.ready),
-                q(f64::from(w.reload_s), 1000.0),
+                q(f64::from(w.reload_s), 1000.0), // const-ok: quantisation step of the file format
                 i64::from(w.rounds),
-                q(f64::from(w.aim_error_rad), 100_000.0),
+                q(f64::from(w.aim_error_rad), 100_000.0), // const-ok: quantisation step of the file format
             ]);
         }
     }
@@ -133,7 +133,7 @@ fn flatten(f: &Frame, joint_names: &[Vec<String>]) -> Vec<i64> {
 
 fn unflatten(ints: &[i64], joint_names: &[Vec<String>]) -> Result<Frame, String> {
     let mut it = ints.iter().copied();
-    let t_s = next(&mut it)? as f64 / 1e6;
+    let t_s = next(&mut it)? as f64 / 1e6; // const-ok: quantisation step of the file format
     let n = next(&mut it)? as usize;
     let mut vehicles = Vec::with_capacity(n);
     for _ in 0..n {
@@ -157,8 +157,8 @@ fn unflatten(ints: &[i64], joint_names: &[Vec<String>]) -> Result<Frame, String>
             contacts.push(ContactFrame {
                 flags: next(&mut it)? as u8,
                 normal_force_n: (next(&mut it)? as f64 / 0.25) as f32,
-                sinkage_m: (next(&mut it)? as f64 / 10_000.0) as f32,
-                slip: (next(&mut it)? as f64 / 1000.0) as f32,
+                sinkage_m: (next(&mut it)? as f64 / 10_000.0) as f32, // const-ok: quantisation step of the file format
+                slip: (next(&mut it)? as f64 / 1000.0) as f32,        // const-ok: quantisation step of the file format
                 material: next(&mut it)? as u16,
             });
         }
@@ -170,9 +170,9 @@ fn unflatten(ints: &[i64], joint_names: &[Vec<String>]) -> Result<Frame, String>
         for _ in 0..nw {
             weapons.push(WeaponFrame {
                 ready: next(&mut it)? != 0,
-                reload_s: (next(&mut it)? as f64 / 1000.0) as f32,
+                reload_s: (next(&mut it)? as f64 / 1000.0) as f32, // const-ok: quantisation step of the file format
                 rounds: next(&mut it)? as u16,
-                aim_error_rad: (next(&mut it)? as f64 / 100_000.0) as f32,
+                aim_error_rad: (next(&mut it)? as f64 / 100_000.0) as f32, // const-ok: quantisation step of the file format
             });
         }
         vehicles.push(VehicleFrame {
