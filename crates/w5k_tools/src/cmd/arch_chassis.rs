@@ -52,6 +52,14 @@ impl AnyChassis {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn hull_mut(&mut self) -> &mut Hull {
+        match self {
+            AnyChassis::Wheeled(c) => &mut c.hull,
+            AnyChassis::Tracked(c) => &mut c.hull,
+        }
+    }
+
     pub(crate) fn time_s(&self) -> f64 {
         match self {
             AnyChassis::Wheeled(c) => c.time_s,
