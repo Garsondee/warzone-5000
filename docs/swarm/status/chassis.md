@@ -36,6 +36,5 @@
 ## Owner instructions received
 - 2026-10-10 (owner, in chat): "go ahead with the hull".
 - ARCH (2026-10-10): CCR-1..3 landed in contract-v0.2 (applied); rolling-resistance fade speed is a `Param` (done).
-
 ## Handoff note (fill in when you stop)
 - (fill in at M1)
