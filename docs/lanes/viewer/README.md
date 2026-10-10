@@ -12,6 +12,7 @@ Setup (the SessionStart hook does this): `npm ci` in `tools/viewer`. Chromium is
 | A PNG chart for your evidence | `w5k viewer plot data.csv --out chart.png --title "..." --ylabel "..."` (first column is x, other columns are series; no blanks, no NaN) |
 | The design-impact tornado from VALIDATION's file (a panel per benchmark, a bar per vehicle for each lever) | `w5k validation impact --out DIR`, then `w5k viewer tornado DIR/impact.json --out tornado.png [--theme light\|dark] [--cols N] [--rows 8]` (shapes: `docs/lanes/viewer/charts.md`; real sample: `tools/viewer/samples/impact.json`) |
 | The sinkage ladder beside the soil theory | `w5k viewer ladder ladder.json --out ladder.png [--theme light\|dark]` |
+| A design: FORGE's levers on a base vehicle, compiled, with its skin and the proving scoreboard against the base | `w5k viewer design hauler_4x4 --out DIR --lever wheelbase=1.25,tyre_width=1.2,engine_peak_power=1.2 [--skin preview\|final\|off] [--score off]` (writes `<id>.ron`, `.extras.ron`, `.rig.json`, `.skin`, `design.json`; run from the folder that holds `content/`; a `.skin` file is accepted by `--skin` of `render`) |
 | The canned replays and rigs | `w5k viewer dump-canned truck\|tank --out dir` |
 
 The replay may be JSON (the debug form) or binary (`W5KR`). The rig is the canned one named in the header (`box_truck`, `box_tank`) or `--rig file.json` (a serialised `RenderRig`; FORGE's compiled rigs come this way).

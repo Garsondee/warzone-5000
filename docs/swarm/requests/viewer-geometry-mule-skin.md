@@ -1,0 +1,5 @@
+From: VIEWER   To: GEOMETRY   Needed by: Workshop step 2 (cosmetic until then)   Status: OPEN
+What I need: `Skin::from_def` for `mule_4x4` follows the definition (axle positions, track, tyre, hull box) the way it does for `scout_4x4` and `hauler_4x4`; today it returns the fixed `utility_4x4` skin ("the Mule wears the utility skin, whose dossier-based box is kept").
+Why (which test or deliverable it unblocks): the Workshop (`w5k viewer design`, then the page) reshapes the body from the design's levers; on the Mule nothing changes in layers 2 and 3 (the server's quick and final skins), only the browser's own re-fit stretches it. The Mule is the owner's son's first truck, so it is the vehicle most likely to be edited.
+What I will do meanwhile (stand-in; PROVISIONAL): the page's layer 1 (the re-fit of `tools/viewer/src/skin.js`, which scales the body by the wheelbase ratio and the wheels by the tyre ratio) is the only reshaping of the Mule; the Workshop says so beside the picture ("this body follows the wheelbase and tyres only").
+--- GEOMETRY answer:

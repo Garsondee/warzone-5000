@@ -1,6 +1,6 @@
 # Status: VIEWER
 
-**Last updated:** 2026-10-10 18:10 UTC | **Branch:** lane/viewer/track-plan | **Contract pinned:** contract-v0.3 (commit 0982843) | **Phase:** slice 2 stage A (charts, Workshop note) done; idle until stage B
+**Last updated:** 2026-10-10 22:28 UTC | **Branch:** lane/viewer/workshop-1 | **Contract pinned:** contract-v0.3 (commit 0982843) | **Phase:** slice 2 stage C (Workshop) step 1 in progress; then the tracked carrier when FORGE T3 lands
 
 ## Done
 - Spike S-V passes (WebGL 2 under SwiftShader, 46 ms/frame, 10 s clip = 72 KB): `docs/lanes/viewer/spike-v.md`.
@@ -39,6 +39,8 @@
 - Workshop design note (text only, same PR): `docs/lanes/viewer/workshop-design-note.md`: three layers of answer (instant re-fit in the browser, proxy skin about 0.5 s, final skin about 5 s), the endpoints `w5k drive` needs, the budget against "under 10 s", the test that will enforce it, five open questions with defaults.
 
 - Track animation plan (text only, at ARCH's request, `docs/lanes/viewer/track-animation-note.md`): the belt needs no new replay data (`RenderRig.track_runs` plus the sprocket spin already in the frame); GEOMETRY's `Belt::round` is the path in closed form, ported to JS and checked against a Rust-written vector; the decisive risk is aliasing (links 0.152 m apart look frozen at 16 km/h at 30 fps), fixed by temporal supersampling (shutter blur); the sinkage overlay reads `ContactFrame.sinkage_m` now, and pressure needs a footprint area per contact (default: show sinkage and force until it exists). No code until ARCH says the contact data is real.
+
+- **Workshop stage C, PR 1 (this PR, `lane/viewer/workshop-1`): `w5k viewer design`.** Levers in (FORGE `apply_both`), compiled design, skin (`FlagParams::preview()`), proving scoreboard against the base, timings out; `.skin` files accepted by `--skin`; 6 new tests (lever parsing, wheelbase factor reaches the skin's axles exactly, a refused lever says why, the board's change and direction, every board row is a benchmark the impact runner measures, a `.skin` file in place of a skin id). Picture `docs/lanes/viewer/media/workshop-design-hauler.jpg`. Decisions made (in the design note, "Step 1 as built"): own `w5k viewer workshop` server and DRIVE as a child `w5k drive`, so no change to ARCH's files. Next: PR 2 the server and page (sliders, three layers of answer, scoreboard), PR 3 DRIVE and the end-to-end test.
 
 ## In progress
 - Nothing. Waiting for ARCH's stage B (track animation, sinkage and ground-pressure overlay) and for the real impact and ladder files; the charts then read them instead of the stubs.
