@@ -105,12 +105,12 @@ Default: (a).
 Answer: (pending; the owner asked for the capability but did not choose the route). In practice: the owner downloaded and ran the Windows package on 2026-10-10 ("I love the demo") and asked for the speed limiter to be removed from `START.bat`; `START-KID.bat` keeps it. Route (a) is working.
 
 ### C-016  What is slice 2?
-Asked by: ARCH | Date: 2026-10-10 | Status: OPEN, default taken (the owner asked for "a good objective ... something that elevates most parts of the systems")
+Asked by: ARCH | Date: 2026-10-10 | Status: ANSWERED (2026-10-10, owner in chat: "go ahead with slice 2"): (a), The Design Loop. TRACKS launched, COMBAT launched for spike S6 and the ballistics kernel only. (the owner asked for "a good objective ... something that elevates most parts of the systems")
 Options: (a) "The Design Loop" (`docs/swarm/SLICE-2.md`): the first tracked vehicle and soft ground that decides who passes, the Design Impact Matrix running for real, and a Workshop page where a design change moves measured numbers and can be driven; TRACKS launched, COMBAT for the S6 spike only; (b) guns and targets first (M3); (c) the AI driver first (M4); (d) the Godot front end first.
 Recommendation: (a). It retires the two contract regions no code has touched (tracks and soil S3 and S4, articulation S6) before the freeze, measures the claim the whole project rests on (design changes outcomes) before stacking guns and AI on it, and gives the owner a tank and a workshop. (b), (c) and (d) are easier after it.
 Cost of being wrong: (a) is bigger than slice 1 (about two five-hour windows); drop stage C first if the budget is tight. (b) to (d) risk building on an unmeasured base.
 Default: (a), but no new lane (TRACKS, COMBAT) launches until the owner says go in chat, because it spends money.
-Answer: (pending)
+Answer: Go ahead with slice 2 (owner, chat, 2026-10-10 17:10 UTC). Recorded; C-017 and C-018 keep their defaults until the owner answers.
 
 ### C-017  Where do validation's published figures come from?
 Asked by: VALIDATION (spike S9), numbered by ARCH | Date: 2026-10-10 | Status: OPEN, default taken
