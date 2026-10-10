@@ -7,6 +7,7 @@ use w5k_contract::Material;
 
 use w5k_math::scalar;
 
+use crate::belly::{Belly, BellyGeom};
 use crate::gear::{GearConfig, GearInput, GearTotals, TrackedRunningGear};
 use crate::tuning::Tuning;
 
@@ -36,6 +37,7 @@ pub struct PlanVehicle {
     pub mass_kg: f64,
     pub yaw_inertia_kg_m2: f64,
     pub motion: PlanMotion,
+    pub belly: Option<Belly>,
     ground: Material,
     penetration_m: Vec<f64>,
     rate_m_s: Vec<f64>,
@@ -53,7 +55,26 @@ impl PlanVehicle {
         ground: &Material,
         max_penetration_m: f64,
     ) -> Option<PlanVehicle> {
-        let d = uniform_penetration_for_load_m(&cfg, tuning, ground, 0.5 * weight_n, max_penetration_m)?; // const-ok: half the weight per track
+        PlanVehicle::new_with_belly(cfg, tuning, gauge_m, weight_n, ground, max_penetration_m, None)
+    }
+
+    /// As [`PlanVehicle::new`], with a belly that bears on the soil once the sinkage passes its clearance: the static penetration then carries the
+    /// weight on the two gears plus the belly.
+    pub fn new_with_belly(
+        cfg: GearConfig,
+        tuning: Tuning,
+        gauge_m: f64,
+        weight_n: f64,
+        ground: &Material,
+        max_penetration_m: f64,
+        belly: Option<BellyGeom>,
+    ) -> Option<PlanVehicle> {
+        let belly_load = |d: f64| belly.map_or(0.0, |g| Belly::new(g, tuning).step(d, 0.0, 0.0, ground, 0.0).fz_n);
+        let d = bisect_penetration_m(
+            |d| 2.0 * gear_load_n(&cfg, tuning, ground, d) + belly_load(d),
+            weight_n,
+            max_penetration_m,
+        )?; // const-ok: two gears
         let mass_kg = weight_n / tuning.gravity_m_s2;
         let nw = cfg.wheel_x_m.len();
         let l = cfg.contact_length_m;
@@ -64,11 +85,17 @@ impl PlanVehicle {
             gauge_m,
             mass_kg,
             motion: PlanMotion::default(),
+            belly: belly.map(|g| Belly::new(g, tuning)),
             ground: ground.clone(),
             penetration_m: vec![d; nw],
             rate_m_s: vec![0.0; nw],
             grounds: vec![ground.clone(); cfg.samples.max(1)],
         })
+    }
+
+    /// Penetration of the belt bottoms into the undeformed ground at the static equilibrium, m.
+    pub fn static_penetration_m(&self) -> f64 {
+        self.penetration_m.first().copied().unwrap_or(0.0)
     }
 
     pub fn ground(&self) -> &Material {
@@ -97,9 +124,13 @@ impl PlanVehicle {
         let r = run(&mut self.right, -h, belts_m_s.1);
         let power = l.shaft_reaction_nm * belts_m_s.0 / self.left.config().sprocket_radius_m
             + r.shaft_reaction_nm * belts_m_s.1 / self.right.config().sprocket_radius_m;
+        let b = match &mut self.belly {
+            Some(belly) => belly.step(self.penetration_m[0], m.vx_m_s, m.vy_m_s, &self.ground, dt_s),
+            None => Default::default(),
+        };
         PlanWrench {
-            fx_n: l.fx_n + r.fx_n,
-            fy_n: l.fy_n + r.fy_n,
+            fx_n: l.fx_n + r.fx_n + b.fx_n,
+            fy_n: l.fy_n + r.fy_n + b.fy_n,
             mz_nm: l.mz_nm + r.mz_nm - h * l.fx_n + h * r.fx_n,
             left: l,
             right: r,
@@ -121,22 +152,12 @@ impl PlanVehicle {
     }
 }
 
-/// The belt's penetration needed so that a uniform set of wheel penetrations carries `load_n` on `ground` (a bisection on the gear's own law);
-/// used by benches and tests to start a rig in vertical equilibrium. Returns `None` if even `max_m` cannot carry the load.
-pub fn uniform_penetration_for_load_m(
-    cfg: &GearConfig,
-    tuning: Tuning,
-    ground: &Material,
-    load_n: f64,
-    max_m: f64,
-) -> Option<f64> {
+fn gear_load_n(cfg: &GearConfig, tuning: Tuning, ground: &Material, penetration_m: f64) -> f64 {
     let wheels = cfg.wheel_x_m.len();
     let grounds: Vec<&Material> = vec![ground; cfg.samples.max(1)];
-    let load_at = |d: f64| {
-        let mut g = TrackedRunningGear::new(cfg.clone(), tuning);
-        let pen = vec![d; wheels];
-        let rate = vec![0.0; wheels];
-        g.step(&GearInput {
+    let (pen, rate) = (vec![penetration_m; wheels], vec![0.0; wheels]);
+    TrackedRunningGear::new(cfg.clone(), tuning)
+        .step(&GearInput {
             wheel_penetration_m: &pen,
             wheel_penetration_rate_m_s: &rate,
             vel_long_m_s: 0.0,
@@ -147,7 +168,10 @@ pub fn uniform_penetration_for_load_m(
             dt_s: 0.0,
         })
         .fz_n
-    };
+}
+
+/// Bisection for the penetration at which `load_at` equals `load_n`; `None` if even `max_m` carries less.
+fn bisect_penetration_m(load_at: impl Fn(f64) -> f64, load_n: f64, max_m: f64) -> Option<f64> {
     if load_at(max_m) < load_n {
         return None;
     }
@@ -162,4 +186,15 @@ pub fn uniform_penetration_for_load_m(
         }
     }
     Some(scalar::clamp(0.5 * (lo + hi), 0.0, max_m)) // const-ok: midpoint
+}
+
+/// The uniform wheel penetration at which one gear carries `load_n` on `ground` (used by benches and tests to start in vertical equilibrium).
+pub fn uniform_penetration_for_load_m(
+    cfg: &GearConfig,
+    tuning: Tuning,
+    ground: &Material,
+    load_n: f64,
+    max_m: f64,
+) -> Option<f64> {
+    bisect_penetration_m(|d| gear_load_n(cfg, tuning, ground, d), load_n, max_m)
 }
