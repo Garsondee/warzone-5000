@@ -103,11 +103,12 @@ function placeCamera() {
 // Distance driven so far by each vehicle (path length of the replay positions): the leader is whoever has driven furthest.
 const driven = replay.header.vehicles.map((_, vi) => { const d = new Float64Array(replay.frames.length); for (let k = 1; k < d.length; k++) { const a = replay.frames[k - 1].vehicles[vi].pos_m, b = replay.frames[k].vehicles[vi].pos_m; d[k] = d[k - 1] + Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z); } return d; });
 const tmp = new THREE.Vector3();
+let frameS = 1 / 60; // replay time a displayed frame covers: the real time between frames x the playback speed (the recorder sets 1 / fps); belts fade their pattern by it
 function renderAt(t) {
   clockT = t;
   const s = sample(replay, Math.min(Math.max(t, 0), duration));
   const frame = s.a < 0.5 ? s.f0 : s.f1, fi = Math.min(replay.frames.length - 1, Math.round(Math.min(Math.max(t, 0), duration) / replay.header.frame_dt_s));
-  fleet.forEach((f, vi) => { applyVehicle(f.built, s, vi); f.built.root.visible = !(freeze && vi > 0); });
+  fleet.forEach((f, vi) => { f.built.frame_s = frameS; applyVehicle(f.built, s, vi); f.built.root.visible = !(freeze && vi > 0); });
   if (freeze) { built.root.position.set(0, 0, 0); built.root.quaternion.identity(); }
   placeCamera();
   camera.updateMatrixWorld(true);
@@ -147,6 +148,7 @@ canvas.onpointermove = (e) => { if (drag) { cam.yaw -= (e.clientX - drag.clientX
 canvas.onwheel = (e) => { cam.dist = Math.min(80, Math.max(3, cam.dist * (e.deltaY > 0 ? 1.1 : 0.9))); e.preventDefault(); };
 addEventListener('keydown', (e) => { if (e.key === ' ') ui('play').click(); });
 function tick(now) {
+  frameS = Math.min((now - last) / 1000, 0.1) * Number(ui('speed').value) || frameS;
   if (playing) t = (t + ((now - last) / 1000) * Number(ui('speed').value)) % duration;
   last = now;
   ui('scrub').value = t / duration;
@@ -198,6 +200,7 @@ window.__v = {
   triangles: built.triangles, expectedTriangles: rig.meshes.reduce((s, m) => s + m.indices.length / 3, 0),
   renderer: gl.getParameter(gl.VERSION), frames: replay.frames.length,
   pause: () => { playing = false; },
+  setFrameRate: (fps) => { frameS = 1 / fps; },
 };
 renderAt(0);
 window.__ready = true;
