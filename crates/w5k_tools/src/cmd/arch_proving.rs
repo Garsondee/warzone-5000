@@ -118,7 +118,7 @@ impl Outcome {
         Outcome {
             ended_early: sim.early.clone(),
             hash: sim.hash(),
-            time_s: sim.chassis.time_s,
+            time_s: sim.chassis.time_s(),
             frames: sim.frames,
             ..Outcome::default()
         }
@@ -132,13 +132,16 @@ pub(crate) fn flat_world() -> Box<dyn WorldQuery> {
 
 type Runner = fn(&Ctx) -> Result<Outcome, String>;
 
-const RUNNERS: &[(&str, Runner)] = &[
-    ("braking_50kmh", longitudinal::braking),
-    ("accel_0_48kmh", longitudinal::acceleration),
-    ("side_slope_rollover", mobility::side_slope),
-    ("step_climb", mobility::step_climb),
-    ("skidpad", traction::skidpad),
-    ("gradeability", traction::gradeability),
+/// Each test with its runner and whether it applies to a tracked vehicle. A tracked vehicle has no steered wheel (no skidpad: it turns by
+/// running its belts at different speeds, which TRACKS's pivot-turn bench measures) and no wheel to put against a step (a belt is a
+/// different obstacle problem, with a different bound than one wheel radius).
+const RUNNERS: &[(&str, Runner, bool)] = &[
+    ("braking_50kmh", longitudinal::braking, true),
+    ("accel_0_48kmh", longitudinal::acceleration, true),
+    ("side_slope_rollover", mobility::side_slope, true),
+    ("step_climb", mobility::step_climb, false),
+    ("skidpad", traction::skidpad, false),
+    ("gradeability", traction::gradeability, true),
 ];
 
 /// The contract the result was produced against, e.g. `contract-v0.2`.
@@ -236,11 +239,14 @@ fn run(args: &[String], root: &Path) -> Result<(), String> {
         let compiled = w5k_forge::compile::compile(&entry.def, &entry.extras)
             .map_err(|r| format!("FORGE refused {name}: {r:?}"))?;
         let ctx = Ctx { rig: &compiled.rig, tuning: &tuning, cfg: &cfg };
+        let tracked = !compiled.rig.tracks.is_empty();
         for t in &tests {
-            let Some((_, runner)) = RUNNERS.iter().find(|r| r.0 == *t) else {
-                println!("{name}/{t}: not implemented (docs/swarm/requests/arch-proving-gaps.md); nothing written");
+            let found = RUNNERS.iter().find(|r| r.0 == *t);
+            let Some((_, runner, _)) = found.filter(|r| r.2 || !tracked) else {
+                let why = if found.is_some() { "does not apply to a tracked vehicle" } else { "not implemented" };
+                println!("{name}/{t}: {why} (docs/swarm/requests/arch-proving-gaps.md); nothing written");
                 if test != "all" {
-                    return Err(format!("{t}: not implemented (docs/swarm/requests/arch-proving-gaps.md)"));
+                    return Err(format!("{t}: {why} (docs/swarm/requests/arch-proving-gaps.md)"));
                 }
                 continue;
             };
@@ -287,6 +293,8 @@ mod tests {
         "content/vehicles/game/mule_4x4.ron",
         "content/vehicles/game/hauler_4x4.ron",
     ];
+
+    const CARRIER: &str = "content/vehicles/game/carrier_tracked.ron";
 
     /// A compiled garage vehicle with the shipped scenario file, ready to run tests on.
     struct Fixture {
@@ -572,5 +580,75 @@ mod tests {
             assert!((slick.inputs["mu"] - 0.5 * full.inputs["mu"]).abs() < 1e-6, "the echoed mu follows the tyre"); // const-ok: tolerance
             assert!(slick.measured["max_grade_ratio"] < full.measured["max_grade_ratio"] + 1e-9);
         }
+    }
+
+    #[test]
+    fn the_whole_battery_runs_on_the_tracked_carrier_and_the_tests_that_do_not_apply_say_so_and_write_nothing() {
+        let out = temp("carrier-all");
+        let args = |test: &str| -> Vec<String> {
+            ["--vehicle", CARRIER, "--test", test, "--out", out.to_str().expect("utf8")].map(String::from).to_vec()
+        };
+        run(&args("all"), &root()).expect("a tracked vehicle runs --test all without an error");
+        let dir = out.join("carrier_tracked");
+        for done in ["braking_50kmh", "accel_0_48kmh", "side_slope_rollover", "gradeability"] {
+            let text = std::fs::read_to_string(dir.join(format!("{done}.json"))).expect("written");
+            ProvingResult::from_json(&text).expect("parses").check().expect("valid");
+        }
+        for skipped in ["step_climb", "skidpad"] {
+            assert!(!dir.join(format!("{skipped}.json")).exists(), "{skipped} does not apply to a tracked vehicle");
+        }
+        let e = run(&args("skidpad"), &root()).expect_err("asked for by name");
+        assert!(e.contains("does not apply to a tracked vehicle"), "{e}");
+        let _ = std::fs::remove_dir_all(&out);
+    }
+
+    #[test]
+    fn the_carrier_stops_no_shorter_than_friction_allows_and_slides_on_a_side_slope_no_steeper_than_the_rigid_bounds() {
+        let f = Fixture::load(CARRIER);
+        let r = f.run("braking_50kmh");
+        r.check().expect("valid");
+        w5k_validate::oracle::score_braking(&r).expect("VALIDATION's scorer accepts the result");
+        let (v, mu, d) = (r.inputs["speed_m_s"], r.inputs["mu"], r.measured["stop_distance_m"]);
+        assert!(d >= 0.97 * v * v / (2.0 * mu * scalar::G), "stopped in {d} m from {v} m/s with mu {mu}"); // const-ok: the oracle's idealisations
+        assert!(r.measured["peak_decel_g"] <= mu * 1.05, "peak decel {} g with mu {mu}", r.measured["peak_decel_g"]); // const-ok: test band
+        let r = f.run("side_slope_rollover");
+        r.check().expect("valid");
+        w5k_validate::oracle::score_side_slope(&r).expect("VALIDATION's scorer accepts the result");
+        let (t, h, mu) = (r.inputs["track_m"], r.inputs["cg_height_m"], r.inputs["mu"]);
+        let (tip, slide) = (scalar::atan(t / (2.0 * h)), scalar::atan(mu));
+        let a = r.measured["slope_angle_rad"];
+        assert_eq!(r.labels["mode"], if tip < slide { "roll" } else { "slide" }, "tip {tip}, slide {slide}");
+        assert!(a <= 1.03 * tip.min(slide), "{a} rad is above the rigid bound {}", tip.min(slide)); // const-ok: the scorer's slack
+        assert!(a >= 0.75 * tip.min(slide), "{a} rad is far below the bound {}", tip.min(slide));
+        // const-ok: the spec's green band
+    }
+
+    #[test]
+    fn the_carrier_climbs_no_more_than_its_belts_grip_and_its_driveline_allow_and_takes_longer_than_its_power_allows_to_reach_48_kmh(
+    ) {
+        let f = Fixture::load(CARRIER);
+        let r = f.run("gradeability");
+        r.check().expect("valid");
+        let i = &r.inputs;
+        assert!((i["driven_load_fraction"] - 1.0).abs() < 1e-9, "every belt is driven and carries weight"); // const-ok: exact by construction
+        let force_n = i["wheel_torque_crawl_nm"] / i["wheel_radius_m"];
+        let (mut lo, mut hi) = (0.0, 1.5);
+        for _ in 0..60 {
+            let a = 0.5 * (lo + hi);
+            if i["mass_kg"] * scalar::G * (scalar::sin(a) + i["rolling_resistance_coeff"] * scalar::cos(a)) < force_n {
+                lo = a;
+            } else {
+                hi = a;
+            }
+        }
+        let bound = i["mu"].min(scalar::tan(lo));
+        let g = r.measured["max_grade_ratio"];
+        assert!(g <= 1.03 * bound, "climbs {g} but min(mu f, torque) = {bound}"); // const-ok: the scorer's slack
+        assert!(g > 0.2 * bound, "climbs only {g} of {bound}"); // const-ok: test band
+        let r = f.run("accel_0_48kmh");
+        r.check().expect("valid");
+        let (m, p, v) = (r.inputs["mass_kg"], r.inputs["power_w"], r.inputs["speed_m_s"]);
+        let t = r.measured["t_0_48_s"];
+        assert!(t >= m * v * v / (2.0 * p), "{t} s beats the energy bound {} s", m * v * v / (2.0 * p));
     }
 }

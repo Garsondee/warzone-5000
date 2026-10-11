@@ -30,3 +30,6 @@ From: arch   To: validation   Needed by: when the dashboard grid lands   Status:
 ## 6. Measurement notes (not gaps)
 - `skidpad`: the Hauler is power-limited (labelled `limited_by`), so its `max_lat_accel_g` is a lower bound of its grip; VALIDATION may want to read the label. The CHASSIS bench returns no frames, so the skidpad result has no replay.
 - `gradeability`: `wheel_torque_crawl_nm` is an upper bound (converter stall multiplication at peak engine torque), so the Hauler and Scout land at 53 % and 73 % of the torque bound; whether that is the converter model or the crawl shift logic is for DRIVE.
+
+## 7. Tracked vehicles (done in part)
+The runner runs braking, acceleration, side slope and gradeability on a tracked vehicle (the carrier): `docs/lanes/arch/proving.md`, "Tracked vehicles". Not applicable, and said so: skidpad (no steered wheel; TRACKS's pivot-turn bench is its counterpart) and step climb (a belt is a different obstacle problem). Still open: a tracked **step** and a tracked **turn** test with their own oracles (VALIDATION: the bounds are not one wheel radius and not `v^2 / R`), and the ride tests of item 1.

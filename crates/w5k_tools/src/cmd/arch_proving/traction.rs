@@ -92,7 +92,7 @@ fn holds_grade<'a>(c: &Ctx<'a>, grade: f64) -> Result<(bool, Sim<'a>), String> {
     let cfg = c.cfg;
     let mut sim = Sim::new(c.rig, c.tuning, flat_world(), cfg.frame_every_ticks)?;
     let angle = scalar::atan(grade);
-    sim.chassis.gravity_m_s2 = Vec3::new(0.0, -scalar::cos(angle), scalar::sin(angle)) * scalar::G;
+    sim.chassis.set_gravity(Vec3::new(0.0, -scalar::cos(angle), scalar::sin(angle)) * scalar::G);
     sim.park(cfg.settle_s.v);
     let start = sim.chassis.datum_m();
     let go = DriveInputs { throttle: 1.0, gear: GearRequest::Auto, ..DriveInputs::default() };
@@ -129,9 +129,16 @@ pub fn gradeability(c: &Ctx) -> Result<Outcome, String> {
     let facts = Facts::read(&level);
     let driven: Vec<_> = c.rig.stations.iter().filter(|s| s.drive_output.is_some()).collect();
     let n = driven.len().max(1) as f64;
+    // the driven wheels are the tyres' (or the sprockets' pitch circles); the resistance is the tyre's plus the surface's rolling
+    // coefficient, or for a tracked vehicle the running resistance of its belts (`TrackDef::resist_c0`), which stands in for both
     let radius_m = driven.iter().map(|s| s.wheel.radius_m).sum::<f64>() / n;
-    let tyre_rolling = driven.iter().map(|s| s.wheel.tyre.as_ref().map_or(0.0, |t| t.rolling_coeff)).sum::<f64>() / n;
-    let surface_rolling = level.world.materials().get(level.chassis.stations[0].report.material).rolling_coeff;
+    let rolling = match level.chassis.wheeled() {
+        Some(w) => {
+            let tyre = driven.iter().map(|s| s.wheel.tyre.as_ref().map_or(0.0, |t| t.rolling_coeff)).sum::<f64>() / n;
+            tyre + level.world.materials().get(w.stations[0].report.material).rolling_coeff
+        }
+        None => c.rig.tracks.iter().map(|t| t.resist_c0).sum::<f64>() / c.rig.tracks.len().max(1) as f64,
+    };
     let mut out = Outcome::from_sim(sim);
     out.inputs.extend([
         ("mass_kg", facts.mass_kg),
@@ -139,7 +146,7 @@ pub fn gradeability(c: &Ctx) -> Result<Outcome, String> {
         ("driven_load_fraction", facts.driven_load_fraction),
         ("wheel_torque_crawl_nm", wheel_torque_crawl_nm(c.rig)),
         ("wheel_radius_m", radius_m),
-        ("rolling_resistance_coeff", tyre_rolling + surface_rolling),
+        ("rolling_resistance_coeff", rolling),
     ]);
     out.labels.extend([
         ("surface", "dry_asphalt"),

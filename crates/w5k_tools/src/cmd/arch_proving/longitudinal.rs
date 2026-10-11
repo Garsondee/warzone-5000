@@ -46,7 +46,7 @@ pub fn braking(c: &Ctx) -> Result<Outcome, String> {
     let start = sim.chassis.datum_m();
     let mut speeds = vec![v0];
     let brake = DriveInputs { brake: 1.0, gear: GearRequest::Neutral, ..DriveInputs::default() };
-    let t_brake = sim.chassis.time_s;
+    let t_brake = sim.chassis.time_s();
     let mut stopped = false;
     for _ in 0..ticks(cfg.braking_max_s.v) {
         if !sim.tick(&brake) {
@@ -91,16 +91,16 @@ pub fn acceleration(c: &Ctx) -> Result<Outcome, String> {
     let facts = Facts::read(&sim);
 
     let go = DriveInputs { throttle: 1.0, gear: GearRequest::Auto, ..DriveInputs::default() };
-    let t0 = sim.chassis.time_s;
+    let t0 = sim.chassis.time_s();
     let mut reached = None;
     for _ in 0..ticks(cfg.accel_max_s.v) {
-        let (v_prev, t_prev) = (sim.speed_m_s(), sim.chassis.time_s);
+        let (v_prev, t_prev) = (sim.speed_m_s(), sim.chassis.time_s());
         if !sim.tick(&go) {
             break;
         }
         let v = sim.speed_m_s();
         if v >= target_m_s {
-            reached = Some(t_prev - t0 + (sim.chassis.time_s - t_prev) * scalar::inv_lerp(v_prev, v, target_m_s));
+            reached = Some(t_prev - t0 + (sim.chassis.time_s() - t_prev) * scalar::inv_lerp(v_prev, v, target_m_s));
             break;
         }
     }
