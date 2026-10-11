@@ -1,11 +1,11 @@
 {
  "subtitle": "warzone-5000: a realistic ground-vehicle simulator, built by thirteen domain agents working in parallel. This page is the coordinator's view.",
- "updated": "2026-10-11 00:55 UTC",
+ "updated": "2026-10-11 01:15 UTC",
  "strip": [
   {
    "k": "Phase",
-   "v": "Slice 2: report written, package v3 building",
-   "s": "The carrier finishes the course and the mud pit; the Workshop works for the trucks (design 0.5 s, scoreboard 2 to 3 s, DRIVE 0.7 s); the Impact Matrix reads 82 % (v3, noise-aware: 42 of 51); the proving battery now runs on the carrier too. Open: three scorers (VALIDATION), the Workshop's consequences panel (VIEWER), the carrier in the Workshop, and running the package on Windows (you). Report: docs/swarm/SLICE-2-REPORT.md",
+   "v": "Slice 2: report written, package v3 built",
+   "s": "Package v3 is built and green on Windows (run 38099600024, artifact Warzone5000-TestDrive-windows); every proving light has an oracle; Impact Matrix 82 %; the first design-loop experiment on the carrier found a physics bug (its nose dives 18 degrees under braking), now with CHASSIS. Open: the Workshop's consequences panel (VIEWER, review), design-audit flags (FORGE), running the package on Windows (you). Report: docs/swarm/SLICE-2-REPORT.md",
    "state": "run"
   },
   {
@@ -54,15 +54,15 @@
    "rank": 1,
    "state": "building",
    "mission": "Contracts, CI and guardrails, the integration spine, merges, reviews. Writes no feature code.",
-   "last": "step-climb bench made repeatable (it reports its own noise), the proving battery on the tracked carrier, package v3 (the Workshop, the carrier's skin), the live stream's sinkage and belt footprint, the slice-2 report"
+   "last": "step-climb bench made repeatable, the proving battery on the carrier, package v3 (Workshop, carrier skin) built green, a CI smoke test of the package, the slice-2 report"
   },
   {
    "name": "CHASSIS",
    "squad": "dynamics",
    "rank": 1,
-   "state": "idle",
+   "state": "building",
    "mission": "A wheeled vehicle that rides, grips and handles: hull, suspension, tyres, steering.",
-   "last": "tracked hull (torsion arms, reflected sprocket inertia, soil forces) merged; Hauler skidpad diagnosed (open diffs once the inner wheels unload); idle"
+   "last": "asked to find why the tracked carrier's nose dips 18 degrees under braking and turns end over end from 0.7 g (the design loop found it); tracked hull and sinking tyre merged earlier"
   },
   {
    "name": "DRIVE",
@@ -84,9 +84,9 @@
    "name": "FORGE",
    "squad": "design",
    "rank": 1,
-   "state": "idle",
+   "state": "building",
    "mission": "Designer choices to solver parameters; the reference garage starts with the HMMWV.",
-   "last": "tracked compile T1 to T3 (the carrier compiles, renders), tyre load sensitivity filled, component mass budget (mass, COM and inertia from the parts) merged; design audit next"
+   "last": "component mass budget merged; design audit D2b-1 merged (w5k forge audit: mass by system, balance, power, ride, each with unit, because-line and provenance); flags and thresholds next"
   },
   {
    "name": "VIEWER",
@@ -102,7 +102,7 @@
    "rank": 1,
    "state": "building",
    "mission": "Real-vehicle dossiers, the harness, the dashboard and the Design Impact Matrix.",
-   "last": "Impact Matrix v3 merged: ARCH's noise rule adopted, headline four ways (82 % noise-aware, 42 of 51); the three remaining scorers (acceleration, gradeability, skidpad) next"
+   "last": "Impact Matrix v3 (82 % noise-aware) and the three remaining scorers merged: every proving light has an oracle; the vehicle-by-test grid is live"
   },
   {
    "name": "GEOMETRY",
@@ -298,6 +298,11 @@
    "lane": "ARCH",
    "caption": "the carrier on the test-drive page's start screen, beside the three trucks",
    "file": "docs/lanes/arch/media/carrier-live-picker.jpg"
+  },
+  {
+   "lane": "VALIDATION",
+   "caption": "every proving light, vehicle by test: shape, word, value and what limited it (nothing tuned)",
+   "file": "docs/lanes/validation/media/proving-grid.png"
   }
  ],
  "log": [
@@ -360,6 +365,11 @@
    "t": "2026-10-11 00:55",
    "sessions": "11 of 13",
    "note": "Slice 2 report written (docs/swarm/SLICE-2-REPORT.md): acceptance 1, 2, 3 and 5 met, 6 met for the trucks, 4 partly (three scorers pending), 7 needs you to run the package. The step-climb bench was found noisy (one ray under each tyre) and now reports its own spread; the Impact Matrix reads 82 % either way. The proving battery now runs on the carrier; its braking is red (its brakes, not its tracks). Package v3 adds the Workshop. Lanes about $266."
+  },
+  {
+   "t": "2026-10-11 01:15",
+   "sessions": "11 of 13",
+   "note": "Package v3 built green on Windows (run 38099600024); VALIDATION's three scorers and FORGE's first design audit merged. Sweeping the carrier's brake lever found that its nose dips 18 degrees at the authored brake and it somersaults from 0.7 g: filed for CHASSIS with the evidence. CI now smoke-tests the package itself. Lanes about $266."
   }
  ],
  "footer": "Defaults apply to every open card until you answer it."
