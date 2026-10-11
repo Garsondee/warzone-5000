@@ -147,6 +147,8 @@ pub struct Entry {
     pub observed: Sign,
     pub allowed: Vec<Sign>,
     pub verdict: Verdict,
+    /// A transient response (see `Observations::transient`): shown, not counted.
+    pub transient: bool,
 }
 
 /// A measured pair per (vehicle, lever id, benchmark id): baseline and +10% values. `regimes` are per vehicle, for B4.
@@ -218,7 +220,7 @@ impl Report {
 }
 
 pub fn evaluate(table: &[Expected], levers: &[Lever], obs: &Observations) -> Report {
-    evaluate_full(table, levers, obs, &[])
+    evaluate_full(table, levers, obs, &[], &Default::default())
 }
 
 /// The benchmark ids and names of the table's first section (`| B1 | 0-32 km/h time (s) | ... |`).
@@ -235,7 +237,15 @@ pub fn parse_benchmarks(md: &str) -> Vec<Named> {
 
 /// `evaluate`, plus which benchmarks have no runner and which table rows were therefore not tested (`all_benchmarks` from
 /// [`parse_benchmarks`]).
-pub fn evaluate_full(table: &[Expected], levers: &[Lever], obs: &Observations, all_benchmarks: &[Named]) -> Report {
+/// `transient` lists (vehicle, benchmark) cells whose response is a transient, not a smooth one (the Hauler's gradeability is a
+/// launch-transient limit, DRIVE): reported with a `transient` tag and left out of the sign count.
+pub fn evaluate_full(
+    table: &[Expected],
+    levers: &[Lever],
+    obs: &Observations,
+    all_benchmarks: &[Named],
+    transient: &std::collections::BTreeSet<(String, String)>,
+) -> Report {
     let mut entries = Vec::new();
     for ((vehicle, lever_id, bench), (base, pert)) in &obs.pairs {
         let Some(lever) = levers.iter().find(|l| l.id == lever_id) else { continue };
@@ -276,10 +286,12 @@ pub fn evaluate_full(table: &[Expected], levers: &[Lever], obs: &Observations, a
             observed,
             allowed,
             verdict,
+            transient: transient.contains(&(vehicle.clone(), bench.clone())),
         });
     }
-    let scored = entries.iter().filter(|e| matches!(e.verdict, Verdict::Right | Verdict::Wrong)).count();
-    let right = entries.iter().filter(|e| e.verdict == Verdict::Right).count();
+    let scored =
+        entries.iter().filter(|e| !e.transient && matches!(e.verdict, Verdict::Right | Verdict::Wrong)).count();
+    let right = entries.iter().filter(|e| !e.transient && e.verdict == Verdict::Right).count();
     let mut dead_levers = Vec::new();
     for ((vehicle, lever), _) in
         obs.pairs.keys().map(|(v, l, _)| ((v.clone(), l.clone()), ())).collect::<BTreeMap<_, _>>()
@@ -299,7 +311,7 @@ pub fn evaluate_full(table: &[Expected], levers: &[Lever], obs: &Observations, a
         .collect();
     let right_at_1pct = entries
         .iter()
-        .filter(|e| !e.allowed.is_empty() && e.allowed.contains(&classify_with(2.0 * EPS, e.delta)))
+        .filter(|e| !e.transient && !e.allowed.is_empty() && e.allowed.contains(&classify_with(2.0 * EPS, e.delta)))
         .count();
     let mut untested_rows = Vec::new();
     for e in table {
@@ -373,6 +385,7 @@ pub fn render_markdown(r: &Report) -> String {
                             Verdict::Unlisted => "unlisted",
                             Verdict::Quiet => "",
                         };
+                        let mark = if e.transient { "transient" } else { mark };
                         let want = if e.verdict == Verdict::Wrong {
                             format!(
                                 " (table: {})",
@@ -538,7 +551,7 @@ mod tests {
     #[test]
     fn the_report_lists_benchmarks_with_no_runner_and_the_rows_that_cannot_be_tested() {
         let o = obs(&[("engine_power", "B1", -0.08)]);
-        let r = evaluate_full(&table(), &levers(), &o, &parse_benchmarks(&matrix()));
+        let r = evaluate_full(&table(), &levers(), &o, &parse_benchmarks(&matrix()), &Default::default());
         assert!(
             r.not_run_benchmarks.iter().any(|b| b.id == "B2") && !r.not_run_benchmarks.iter().any(|b| b.id == "B1")
         );
@@ -572,5 +585,15 @@ mod tests {
         assert_eq!((ok.right, ok.scored), (2, 2));
         let bad = evaluate(&table(), &levers(), &obs(&[("engine_power", "B11", -0.3)]));
         assert_eq!((bad.right, bad.scored), (0, 1));
+    }
+
+    #[test]
+    fn a_transient_cell_is_shown_with_its_tag_and_left_out_of_the_count() {
+        let o = obs(&[("engine_power", "B6", -0.11), ("engine_power", "B1", -0.08)]);
+        let transient = [("t".to_string(), "B6".to_string())].into();
+        let r = evaluate_full(&table(), &levers(), &o, &[], &transient);
+        assert_eq!((r.right, r.scored), (1, 1), "only the smooth B1 cell counts");
+        assert!(r.entries.iter().any(|e| e.bench == "B6" && e.transient && e.verdict == Verdict::Wrong));
+        assert!(render_markdown(&r).contains("transient"));
     }
 }
