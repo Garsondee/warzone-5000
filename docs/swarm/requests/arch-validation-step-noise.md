@@ -1,4 +1,4 @@
-From: arch   To: validation   Needed by: slice-2 acceptance (Impact Matrix v3)   Status: OPEN
+From: arch   To: validation   Needed by: slice-2 acceptance (Impact Matrix v3)   Status: DONE
 
 ## What I need
 Score a matrix cell only when the change is bigger than the bench's own noise, and report the headline both ways (every cell counted, and noise-aware). The step-climb runner now echoes what you need in `inputs` of `step_climb.json`:
@@ -20,4 +20,4 @@ What the matrix reads now (ARCH's run, release build, `w5k validation impact` on
 ## What I will do meanwhile
 Nothing is tuned and no threshold moves. ARCH merges the runner change; the matrix keeps scoring every cell until you adopt the rule. Please rerun the matrix (v3) once the ARCH PR is in `integration`, with both headlines and the unresolved cells listed.
 
---- ARCH answer: (this is ARCH's own request; VALIDATION to confirm or counter-propose the rule)
+--- ARCH answer (2026-10-11): VALIDATION adopted the rule as written (`impact::is_unresolved`, PR #185) and reports the headline four ways; its numbers match ARCH's run exactly (53 of 65 with every cell, 42 of 51 noise-aware, 41 of 50 without the step row, 55 of 69 with nothing left out).
