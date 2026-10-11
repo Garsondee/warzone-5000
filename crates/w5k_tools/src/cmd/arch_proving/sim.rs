@@ -2,19 +2,18 @@
 //! replay frames and ends the run early (saying why) on a non-finite state or a rollover.
 
 use w5k_chassis::tuning::ChassisTuning;
-use w5k_chassis::wheeled::WheeledChassis;
 use w5k_contract::frame::Frame;
 use w5k_contract::rig::{PhysRig, TICK_HZ};
 use w5k_contract::{DriveInputs, DrivePort, GearRequest, WorldQuery};
 use w5k_drive::powertrain::{Powertrain, Tunings};
 use w5k_math::{StateHasher, Vec3};
 
-use crate::cmd::arch_course::vehicle_frame;
+use crate::cmd::arch_chassis::AnyChassis;
 
 pub(crate) struct Sim<'a> {
     pub rig: &'a PhysRig,
     pub world: Box<dyn WorldQuery>,
-    pub chassis: WheeledChassis,
+    pub chassis: AnyChassis,
     pub drive: Powertrain,
     pub frames: Vec<Frame>,
     pub ticks: u64,
@@ -30,8 +29,7 @@ impl<'a> Sim<'a> {
         world: Box<dyn WorldQuery>,
         frame_every_ticks: u32,
     ) -> Result<Sim<'a>, String> {
-        let chassis = WheeledChassis::new(rig, tuning, world.as_ref(), 0.0, 0.0, 0.0)
-            .map_err(|e| format!("CHASSIS refused {}: {e:?}", rig.id))?;
+        let chassis = AnyChassis::new(rig, tuning, world.as_ref(), 0.0, 0.0, 0.0)?;
         let drive = Powertrain::new(&rig.drivetrain, &Tunings::shipped())
             .map_err(|e| format!("DRIVE refused the drivetrain of {}: {e}", rig.id))?;
         Ok(Sim {
@@ -53,15 +51,15 @@ impl<'a> Sim<'a> {
         }
         self.chassis.tick(1.0 / TICK_HZ, inputs, self.world.as_ref(), &mut self.drive);
         if !self.chassis.is_finite() {
-            self.early = Some(format!("non-finite state at t = {:.3} s", self.chassis.time_s));
-        } else if self.chassis.hull.rot.rotate(Vec3::Y).y <= 0.0 {
-            self.early = Some(format!("rolled over at t = {:.3} s", self.chassis.time_s));
+            self.early = Some(format!("non-finite state at t = {:.3} s", self.chassis.time_s()));
+        } else if self.chassis.hull().rot.rotate(Vec3::Y).y <= 0.0 {
+            self.early = Some(format!("rolled over at t = {:.3} s", self.chassis.time_s()));
         }
         if self.ticks.is_multiple_of(self.every) {
             let tel = self.drive.telemetry();
             self.frames.push(Frame {
-                t_s: self.chassis.time_s,
-                vehicles: vec![vehicle_frame(&self.chassis, self.rig, &tel)],
+                t_s: self.chassis.time_s(),
+                vehicles: vec![self.chassis.frame(self.rig, &tel)],
                 events: Vec::new(),
                 projectiles: Vec::new(),
             });

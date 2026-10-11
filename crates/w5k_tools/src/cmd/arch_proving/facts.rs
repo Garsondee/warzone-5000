@@ -1,6 +1,7 @@
 //! What the proving-ground results echo as `inputs`: the numbers the simulation actually used, read from the rig and from the settled
 //! chassis (never from a spec sheet), so VALIDATION's oracle judges the run by its own numbers.
 
+use w5k_chassis::wheeled::WheeledChassis;
 use w5k_contract::rig::{CouplingDef, DriveNode, PhysRig};
 use w5k_math::scalar;
 
@@ -87,8 +88,15 @@ pub struct Facts {
 
 impl Facts {
     pub fn read(sim: &Sim) -> Facts {
+        match sim.chassis.wheeled() {
+            Some(chassis) => Facts::wheeled(sim, chassis),
+            None => Facts::tracked(sim),
+        }
+    }
+
+    fn wheeled(sim: &Sim, chassis: &WheeledChassis) -> Facts {
         let (mut fz_sum, mut mu_fz, mut driven_fz, mut front_fz) = (0.0, 0.0, 0.0, 0.0);
-        for (st, def) in sim.chassis.stations.iter().zip(&sim.rig.stations) {
+        for (st, def) in chassis.stations.iter().zip(&sim.rig.stations) {
             let fz = st.report.contact.fz_n;
             let scale = def.wheel.tyre.as_ref().map_or(1.0, |t| t.mu_scale);
             fz_sum += fz;
@@ -107,6 +115,28 @@ impl Facts {
             driven_load_fraction: share(driven_fz),
             power_w: wheel_power_w(sim.rig),
             front_load_fraction: share(front_fz),
+        }
+    }
+
+    /// A tracked vehicle: every belt carries weight and is driven, so the driven share is one; the friction is the ground's times the shoes'
+    /// (`TrackDef::shoe_mu_scale`, the product the belt contact uses on firm ground); the front share is the load on the road wheels forward
+    /// of the middle of the run.
+    fn tracked(sim: &Sim) -> Facts {
+        let at = sim.chassis.datum_m();
+        let ground_mu = sim.world.material_at(at.x, at.z).mu_peak;
+        let tracks = &sim.rig.tracks;
+        let shoe_mu = tracks.iter().map(|t| t.shoe_mu_scale).sum::<f64>() / tracks.len().max(1) as f64;
+        let loads = sim.chassis.wheel_loads();
+        let z_of = |name: &str| sim.rig.stations.iter().find(|s| s.name == name).map_or(0.0, |s| s.rest_pos_m.z);
+        let mid_z = loads.iter().map(|(n, _)| z_of(n)).sum::<f64>() / loads.len().max(1) as f64;
+        let total: f64 = loads.iter().map(|(_, fz)| fz).sum();
+        let front: f64 = loads.iter().filter(|(n, _)| z_of(n) < mid_z).map(|(_, fz)| fz).sum();
+        Facts {
+            mass_kg: mass_kg(sim.rig),
+            mu: ground_mu * shoe_mu,
+            driven_load_fraction: 1.0,
+            power_w: wheel_power_w(sim.rig),
+            front_load_fraction: if total > 0.0 { front / total } else { 0.0 },
         }
     }
 }
