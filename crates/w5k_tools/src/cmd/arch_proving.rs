@@ -651,4 +651,26 @@ mod tests {
         let t = r.measured["t_0_48_s"];
         assert!(t >= m * v * v / (2.0 * p), "{t} s beats the energy bound {} s", m * v * v / (2.0 * p));
     }
+
+    /// The carrier's authored service brake is 0.6 g with a band up to 0.75 g (`brakes.service_decel_g`). Braking at the top of that band must
+    /// stop it, not turn it end over end, and its nose must not dip more than 15 degrees (the springs' own statics give about 6 degrees at
+    /// 0.75 g). Red today: the nose dips 18 degrees at the authored 0.6 g and the carrier somersaults from about 0.7 g
+    /// (docs/swarm/requests/arch-chassis-tracked-braking-pitch.md).
+    #[test]
+    #[ignore = "red until CHASSIS fixes the tracked braking pitch: docs/swarm/requests/arch-chassis-tracked-braking-pitch.md"]
+    fn a_tracked_carrier_braking_at_the_top_of_its_authored_band_does_not_somersault_and_keeps_its_nose_within_fifteen_degrees(
+    ) {
+        let entry = load_entry(&root(), CARRIER).expect("entry");
+        let (def, extras) = w5k_forge::levers::apply_both(&entry.def, &entry.extras, "brake_torque", 1.25)
+            .expect("0.6 g x 1.25 = 0.75 g, the top of the authored band");
+        let rig = w5k_forge::compile::compile(&def, &extras).expect("compiles").rig;
+        let cfg: Config = ron::from_str(&read(&root(), DEFAULT_SCENARIO).expect("scenario")).expect("parses");
+        let tuning = ChassisTuning::from_ron(&read(&root(), &cfg.chassis_tuning).expect("tuning")).expect("tuning");
+        let out = longitudinal::braking(&Ctx { rig: &rig, tuning: &tuning, cfg: &cfg }).expect("runs");
+        assert!(out.ended_early.is_none(), "{:?}", out.ended_early);
+        let nose =
+            out.frames.iter().map(|f| f.vehicles[0].rot.rotate(w5k_math::Vec3::FORWARD).y).fold(f64::MAX, f64::min);
+        let dip_deg = scalar::asin(-nose.min(0.0)).to_degrees();
+        assert!(dip_deg < 15.0, "the nose dipped {dip_deg} degrees"); // const-ok: the stated bound, about twice the springs' statics
+    }
 }

@@ -1,11 +1,11 @@
 {
  "subtitle": "warzone-5000: a realistic ground-vehicle simulator, built by thirteen domain agents working in parallel. This page is the coordinator's view.",
- "updated": "2026-10-10 23:55 UTC",
+ "updated": "2026-10-11 00:55 UTC",
  "strip": [
   {
    "k": "Phase",
-   "v": "Slice 2: carrier drives, Workshop built",
-   "s": "The tracked carrier finishes the 504 m course and the mud pit; the Workshop page (sliders, scoreboard, DRIVE) is merged; mass is becoming a consequence of the parts (your direction, C-020); Impact Matrix and the Windows package v3 come next",
+   "v": "Slice 2: report written, package v3 building",
+   "s": "The carrier finishes the course and the mud pit; the Workshop works for the trucks (design 0.5 s, scoreboard 2 to 3 s, DRIVE 0.7 s); the Impact Matrix reads 82 % (v3, noise-aware: 42 of 51); the proving battery now runs on the carrier too. Open: three scorers (VALIDATION), the Workshop's consequences panel (VIEWER), the carrier in the Workshop, and running the package on Windows (you). Report: docs/swarm/SLICE-2-REPORT.md",
    "state": "run"
   },
   {
@@ -23,13 +23,13 @@
   {
    "k": "Sessions",
    "v": "11 of 13",
-   "s": "ARCH plus 10 lanes; DRIVE, CHASSIS, TRACKS, WORLD, FORGE between tasks; COMBAT and LOOK idle; GODOT and AI parked",
+   "s": "ARCH plus 10 lanes; GEOMETRY, VIEWER and VALIDATION working; DRIVE, CHASSIS, TRACKS, WORLD, FORGE between tasks; COMBAT and LOOK idle; GODOT and AI parked",
    "state": "run"
   },
   {
    "k": "Usage",
-   "v": "lanes about $261",
-   "s": "from list_sessions: GEOMETRY 65.0, CHASSIS 59.5, WORLD 34.0, DRIVE 28.0, FORGE 26.2, VIEWER 25.1, VALIDATION 9.8, TRACKS 7.0; about $12 for the last 90 minutes; the five-hour window is out of its warning band",
+   "v": "lanes about $266",
+   "s": "from list_sessions: GEOMETRY 68.1, CHASSIS 59.5, WORLD 34.0, DRIVE 28.0, FORGE 26.2, VIEWER 25.1, VALIDATION 12.1, TRACKS 7.0, LOOK 3.1, COMBAT 2.9; ARCH's own meter $478; about $5 for the last two hours; the five-hour window is out of its warning band",
    "state": "run"
   }
  ],
@@ -54,7 +54,7 @@
    "rank": 1,
    "state": "building",
    "mission": "Contracts, CI and guardrails, the integration spine, merges, reviews. Writes no feature code.",
-   "last": "tracked path in the course runner and the drive server (the carrier is in the garage, kid mode steers it), design model written down (mass is emergent), cards C-019 to C-022"
+   "last": "step-climb bench made repeatable (it reports its own noise), the proving battery on the tracked carrier, package v3 (the Workshop, the carrier's skin), the live stream's sinkage and belt footprint, the slice-2 report"
   },
   {
    "name": "CHASSIS",
@@ -94,7 +94,7 @@
    "rank": 1,
    "state": "building",
    "mission": "Replay format, the browser viewer with forces drawn on, MP4 and chart tools.",
-   "last": "Workshop: server, page, scoreboard and DRIVE merged; carrier skin packing and belts (#177) in review; Consequences panel next"
+   "last": "carrier belts, the belt's wagon-wheel fix and the track footprint overlay merged; the Workshop's choices-not-consequences panel (#184) in review"
   },
   {
    "name": "VALIDATION",
@@ -102,7 +102,7 @@
    "rank": 1,
    "state": "building",
    "mission": "Real-vehicle dossiers, the harness, the dashboard and the Design Impact Matrix.",
-   "last": "Impact Matrix v1 (72%) and the honest table corrections merged; rerunning it on the mass-budget model"
+   "last": "Impact Matrix v3 merged: ARCH's noise rule adopted, headline four ways (82 % noise-aware, 42 of 51); the three remaining scorers (acceleration, gradeability, skidpad) next"
   },
   {
    "name": "GEOMETRY",
@@ -175,8 +175,8 @@
   {
    "id": "S2",
    "name": "Slice 2: The Design Loop",
-   "state": "under way, headline reached",
-   "criteria": "A tracked carrier, mud that separates the vehicles, the Impact Matrix running, a Workshop page where a design change moves measured numbers and can be driven. Reached: the carrier finishes the course and the pit, the Workshop is merged. Open: Impact Matrix at 80%, ISO 8608 road bands, package v3. See docs/swarm/SLICE-2.md and cards C-016, C-019."
+   "state": "report written; package building",
+   "criteria": "A tracked carrier, mud that separates the vehicles, the Impact Matrix running, a Workshop page where a design change moves measured numbers and can be driven. Met: the carrier finishes the course and the pit; pivot turn within 25 % (+4.6 %); Impact Matrix 82 % (four readings, 80 to 84 %); ISO 8608 bands green (provisional); the Workshop for the trucks. Partly: the proving lights (three scorers pending), the carrier is not in the Workshop. Yours: run the package on Windows. See docs/swarm/SLICE-2-REPORT.md."
   },
   {
    "id": "M2",
@@ -283,6 +283,21 @@
    "lane": "VIEWER",
    "caption": "the tracked carrier with its belts",
    "file": "docs/lanes/viewer/media/carrier-static-belt.jpg"
+  },
+  {
+   "lane": "ARCH",
+   "caption": "the Impact Matrix tornado from v3 (42 of 51 signs right, 82 %; the step panel is the noisy one)",
+   "file": "docs/lanes/arch/media/slice2-tornado-v3.png"
+  },
+  {
+   "lane": "ARCH",
+   "caption": "is the step test a steady ruler? same truck, same step, only the run-up changes",
+   "file": "docs/lanes/arch/media/step-repeatability.png"
+  },
+  {
+   "lane": "ARCH",
+   "caption": "the carrier on the test-drive page's start screen, beside the three trucks",
+   "file": "docs/lanes/arch/media/carrier-live-picker.jpg"
   }
  ],
  "log": [
@@ -340,6 +355,11 @@
    "t": "2026-10-10 23:55",
    "sessions": "11 of 13",
    "note": "The tracked carrier finishes the course and the mud pit (the steering bug in the drivetrain model was the blocker); the Workshop page is merged; FORGE's component mass budget landed after your direction that mass must come from the configuration (design model, cards C-020 to C-022). Lanes about $261."
+  },
+  {
+   "t": "2026-10-11 00:55",
+   "sessions": "11 of 13",
+   "note": "Slice 2 report written (docs/swarm/SLICE-2-REPORT.md): acceptance 1, 2, 3 and 5 met, 6 met for the trucks, 4 partly (three scorers pending), 7 needs you to run the package. The step-climb bench was found noisy (one ray under each tyre) and now reports its own spread; the Impact Matrix reads 82 % either way. The proving battery now runs on the carrier; its braking is red (its brakes, not its tracks). Package v3 adds the Workshop. Lanes about $266."
   }
  ],
  "footer": "Defaults apply to every open card until you answer it."

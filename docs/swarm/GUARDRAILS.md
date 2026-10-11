@@ -48,7 +48,7 @@ cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings
 
 Each script has `--help`. Exit status 0 means pass, 1 means your PR breaks a rule, 2 means the setup is broken (tell ARCH); `affected.py` only prints a selection. ARCH, after changing a check: `python3 -I -m unittest discover -s tools/ci/tests`.
 
-`package_testdrive.py` is not a check: it builds the owner's test-drive zip (the program, content, the browser page, START.bat and a README) and `integration.yml` runs it on Windows once `tools/viewer/dist/index.html` exists; the zip is kept as the artifact `Warzone5000-TestDrive-windows`.
+`package_testdrive.py` is not a check: it builds the owner's test-drive zip (the program, content, the browser page, START.bat and a README) and `integration.yml` runs it on Windows once `tools/viewer/dist/index.html` exists; the zip is kept as the artifact `Warzone5000-TestDrive-windows`. `smoke_package.py` is not a check either: right after the zip is built, `integration.yml` unzips it, starts the drive server and the Workshop the way `START.bat` and `START-WORKSHOP.bat` do, and checks that they list the four vehicles, serve the page and the carrier's skin, and build and score a design (what the owner would otherwise find out by double-clicking); the zip is kept even when that fails.
 
 ## What a cloud session may run without asking (`.claude/settings.json`)
 
