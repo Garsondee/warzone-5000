@@ -119,8 +119,8 @@ pub(crate) fn start(o: &Opts) -> Result<Started, String> {
     Ok(Started { addr, shared })
 }
 
-/// Ask the default browser to open `url`; failures are ignored.
-fn open_browser(url: &str) {
+/// Ask the default browser to open `url`; failures are ignored. (Shared with `w5k viewer workshop --open`.)
+pub(crate) fn open_browser(url: &str) {
     let mut cmd = if cfg!(windows) {
         let mut c = std::process::Command::new("cmd");
         c.args(["/C", "start", "", url]);
@@ -273,6 +273,19 @@ mod tests {
         }
         let scout = list.as_array().expect("array").iter().find(|v| v["id"] == "scout_4x4").expect("scout");
         assert!(scout["mass_kg"].as_f64().expect("mass") > 500.0 && scout["wheelbase_m"].as_f64().expect("wb") > 1.5);
+        assert_eq!(scout["tracks"], serde_json::json!([]), "a wheeled vehicle has no belts");
+        // the tracked carrier lists each belt's footprint, the numbers the page lays the contact samples along
+        let carrier = list
+            .as_array()
+            .expect("array")
+            .iter()
+            .find(|v| v["id"] == "carrier_tracked")
+            .expect("the carrier is in the garage");
+        let belts = carrier["tracks"].as_array().expect("tracks");
+        assert_eq!(belts.len(), 2, "one belt a side");
+        assert!(belts.iter().all(|b| b["contact_length_m"].as_f64().expect("length") > 2.0
+            && b["samples"].as_u64().expect("samples") >= 8
+            && b["width_m"].as_f64().expect("width") > 0.2));
         let joints = get_json(a, "/api/rig/scout_4x4")["joint_count"].as_u64().expect("joint_count") as usize;
         assert_eq!(http(a, "GET", "/api/rig/nope", "").0, 404);
         assert_eq!(get_json(a, "/api/world")["format"], "w5k-terrain-1");
@@ -294,6 +307,11 @@ mod tests {
             assert!(
                 f["contacts"][0]["in_contact"].as_bool().expect("flag")
                     && f["contacts"][0]["normal_n"].as_f64().expect("n") > 0.0
+            );
+            assert!(
+                f["contacts"][0]["sinkage_m"].is_f64() && f["contacts"][0]["slip"].is_f64(),
+                "{}",
+                f["contacts"][0]
             );
             assert!(f["engine_rpm"].as_f64().expect("rpm") > 0.0 && f["gear"].is_i64() && f["speed_m_s"].is_f64());
             assert_eq!(f["assist"]["on"], true);

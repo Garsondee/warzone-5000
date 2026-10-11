@@ -185,7 +185,11 @@ fn route(mut stream: TcpStream, req: Req, app: &App) -> std::io::Result<()> {
             let list: Vec<Value> = app
                 .garage
                 .iter()
-                .map(|c| json!({"id": c.id, "name": c.name, "mass_kg": mm(c.mass_kg), "wheelbase_m": mm(c.wheelbase_m), "skin": c.id}))
+                .map(|c| {
+                    // a tracked vehicle's footprint, as TrackDef states it (the page lays the contact samples along it); wheeled: none
+                    let tracks: Vec<Value> = c.rig.tracks.iter().map(|t| json!({"name": t.name, "contact_length_m": mm(t.contact_length_m), "samples": t.samples, "width_m": mm(t.width_m)})).collect();
+                    json!({"id": c.id, "name": c.name, "mass_kg": mm(c.mass_kg), "wheelbase_m": mm(c.wheelbase_m), "skin": c.id, "tracks": tracks})
+                })
                 .collect();
             json_reply(w, 200, &Value::Array(list))
         }

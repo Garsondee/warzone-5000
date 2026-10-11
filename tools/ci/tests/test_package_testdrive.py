@@ -90,6 +90,61 @@ class PackageTestDrive(unittest.TestCase):
         pkg.build(self.root / "w5k.exe", self.root / "content", self.root / "index.html", out2, "windows", self.root / "no-such-folder")
         self.assertTrue(out2.is_file())
 
+    def test_the_workshop_page_and_its_start_file_are_packaged_when_given(self):
+        (self.root / "workshop.html").write_text("<title>Workshop</title>")
+        out = self.root / "shop.zip"
+        names = pkg.build(
+            self.root / "w5k.exe", self.root / "content", self.root / "index.html", out, "windows", None, self.root / "workshop.html"
+        )
+        with zipfile.ZipFile(out) as z:
+            inside = set(z.namelist())
+            bat = z.read(f"{pkg.FOLDER}/START-WORKSHOP.bat").decode()
+        self.assertIn(f"{pkg.FOLDER}/viewer/workshop.html", inside)
+        self.assertEqual(len(names), len(inside))
+        self.assertIn('cd /d "%~dp0"', bat)
+        self.assertIn("w5k.exe viewer workshop", bat)
+        self.assertIn(pkg.WORKSHOP_URL, bat)  # the address the browser is sent to, and the one printed for a person
+        self.assertTrue(bat.endswith("\r\n"))
+        self.assertNotIn("\n\n", bat.replace("\r\n", "\n"))
+        lin = self.root / "shop-linux.zip"
+        pkg.build(self.root / "w5k.exe", self.root / "content", self.root / "index.html", lin, "linux", None, self.root / "workshop.html")
+        with zipfile.ZipFile(lin) as z:
+            sh = z.read(f"{pkg.FOLDER}/start-workshop.sh").decode()
+            self.assertTrue(z.getinfo(f"{pkg.FOLDER}/start-workshop.sh").external_attr >> 16 & 0o100)
+        self.assertIn("./w5k viewer workshop", sh)
+
+    def test_without_a_workshop_page_there_is_no_workshop_start_file_and_a_missing_one_is_refused(self):
+        out, _ = self.build()
+        with zipfile.ZipFile(out) as z:
+            names = set(z.namelist())
+        self.assertNotIn(f"{pkg.FOLDER}/START-WORKSHOP.bat", names)
+        self.assertNotIn(f"{pkg.FOLDER}/viewer/workshop.html", names)
+        with self.assertRaises(SystemExit) as cm:
+            pkg.build(self.root / "w5k.exe", self.root / "content", self.root / "index.html", self.root / "x.zip", "windows", None, self.root / "nope.html")
+        self.assertIn("the Workshop page", str(cm.exception))
+
+    def test_the_readme_tells_a_grown_up_how_to_open_the_workshop_and_what_the_carrier_is(self):
+        self.assertIn("START-WORKSHOP.bat", pkg.README)
+        self.assertIn(pkg.WORKSHOP_URL, pkg.README)
+        self.assertIn("carrier", pkg.README)
+
+    def test_skins_from_several_folders_are_all_packaged_and_a_later_folder_wins(self):
+        committed, packed = self.root / "committed", self.root / "packed"
+        committed.mkdir()
+        packed.mkdir()
+        (committed / "scout_4x4.skin").write_bytes(b"old-scout")
+        (committed / "mule.skin").write_bytes(b"mule")
+        (packed / "scout_4x4.skin").write_bytes(b"new-scout")
+        (packed / "carrier_tracked.skin").write_bytes(b"carrier")
+        out = self.root / "multi.zip"
+        pkg.build(self.root / "w5k.exe", self.root / "content", self.root / "index.html", out, "windows", [committed, packed])
+        with zipfile.ZipFile(out) as z:
+            names = set(z.namelist())
+            scout = z.read(f"{pkg.FOLDER}/viewer/skins/scout_4x4.skin")
+        for skin in ("scout_4x4", "mule", "carrier_tracked"):
+            self.assertIn(f"{pkg.FOLDER}/viewer/skins/{skin}.skin", names, skin)
+        self.assertEqual(scout, b"new-scout")
+
     def test_a_missing_input_is_refused_with_its_name(self):
         (self.root / "index.html").unlink()
         with self.assertRaises(SystemExit) as cm:
