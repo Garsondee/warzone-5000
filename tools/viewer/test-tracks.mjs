@@ -1,7 +1,8 @@
 // The belt maths of the viewer (src/tracks.js) against closed forms and against GEOMETRY's Rust belt.
 //   node tools/viewer/test-tracks.mjs [dir with belt.json]     (w5k viewer dump-canned belt --out <dir> writes belt.json; without it the Rust check is skipped and says so)
 import fs from 'node:fs';
-import { round, band, linkFrames, linkMatrix, contrast } from './src/tracks.js';
+import { decodeReplay } from './src/replay.js';
+import { round, band, linkFrames, linkMatrix, contrast, groundRun, cellCentres } from './src/tracks.js';
 
 let failed = false;
 const check = (ok, msg) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${msg}`); failed ||= !ok; };
@@ -85,6 +86,22 @@ else {
       outward += (y2 * (base.frames[4 * k] - cz) + y1 * (base.frames[4 * k + 1] - cy)) > 0 ? 1 : 0; // +Y . (point - middle) in (z, y)
     }
     check(near(det, 1, 1e-6) && outward === n, `a_link_matrix_is_a_rotation_that_points_out_of_the_belt (${name}): determinant ${det.toFixed(6)}, ${outward} of ${n} links face out`);
+  }
+
+  // the footprint: the viewer derives it from the road wheels (no contact length in the RenderRig), TRACKS spaces its samples over `contact_length_m`
+  {
+    const road = forge.run.wheels.map((w, i) => ({ z: forge.centres[i][0], y: forge.centres[i][1], r: w.radius_m })).filter((_, i) => forge.roles[i] === 'RoadWheel');
+    const g = groundRun(road), { cells, length } = cellCentres(g, forge.track.samples), want = forge.track.contact_length_m / forge.track.samples;
+    check(road.length === 5 && near(length, want, want * 0.03), `the_footprint_the_viewer_derives_is_the_contact_length_tracks_uses: ${road.length} road wheels give ${(length * forge.track.samples).toFixed(3)} m, FORGE's contact length is ${forge.track.contact_length_m} m (cells of ${(length * 1000).toFixed(0)} mm for ${(want * 1000).toFixed(0)} mm)`);
+    check(cells.every((c, k) => k === 0 || c[0] < cells[k - 1][0]) && cells[0][0] > 0 && cells[cells.length - 1][0] < 0, 'cell_zero_is_the_rearmost_and_the_last_cell_the_front: the cells run from +z (behind) to -z (ahead)');
+    check(groundRun(road.slice(0, 1)) === null, 'a track with one road wheel has no footprint to draw');
+    // a_track_entering_soft_ground_sinks_its_front_cell_first: a real drive into the slice course's mud crossing at 48 km/h (TRACKS's samples under FORGE's carrier)
+    const mud = decodeReplay(new Uint8Array(fs.readFileSync(new URL('./samples/carrier-mud.w5kr', import.meta.url)))), names = mud.header.vehicles[0].contact_names;
+    const first = mud.frames.find((f) => f.vehicles[0].contacts.some((c) => c.sinkage_m > 0)), cs = first.vehicles[0].contacts;
+    const sunk = (side) => cs.slice(side * 12, side * 12 + 12).map((c, k) => (c.sinkage_m > 0 ? k : -1)).filter((k) => k >= 0);
+    const side = sunk(0).length ? 0 : 1, ks = sunk(side), rest = cells.filter((_, j) => !ks.includes(j));
+    check(names[0] === 'track_l.0' && names[12] === 'track_r.0' && ks.length >= 1 && ks.every((k) => cells[k][0] < Math.min(...rest.map((c) => c[0]))),
+      `a_track_entering_soft_ground_sinks_its_front_cell_first: at t = ${first.t_s.toFixed(2)} s only the ${side ? 'right' : 'left'} track's cell${ks.length > 1 ? 's' : ''} ${ks.join(', ')} ${ks.length > 1 ? 'sink' : 'sinks'} (${(Math.max(...cs.map((c) => c.sinkage_m)) * 1000).toFixed(0)} mm) and ${ks.length > 1 ? 'they are' : 'it is'} ahead of every cell that does not`);
   }
 
   // a_wheel_lifted_inside_the_band_is_skipped_not_fatal: rubber band round nails

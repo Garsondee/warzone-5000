@@ -1,6 +1,6 @@
 // Reference viewer core: a pure function of (rig, replay, t). No physics, no network.
 import * as THREE from 'three';
-import { linkFrames, linkMatrix, contrast } from './tracks.js';
+import { linkFrames, linkMatrix, contrast, groundRun } from './tracks.js';
 
 const V = (o) => new THREE.Vector3(o.x, o.y, o.z);
 const Q = (o) => new THREE.Quaternion(o.x, o.y, o.z, o.w);
@@ -47,7 +47,8 @@ export function buildRig(rig) {
     const mesh = run ? new THREE.InstancedMesh(geo, mats[m.material_slot], run.links) : new THREE.Mesh(geo, mats[m.material_slot]);
     if (run) { // the instances move, the geometry's own bounds do not
       mesh.frustumCulled = false;
-      const belt = { run, mesh, contrast: 1 };
+      geo.computeBoundingBox();
+      const belt = { run, mesh, contrast: 1, width_m: geo.boundingBox.max.z - geo.boundingBox.min.z, half_thickness_m: geo.boundingBox.max.y };
       shadeLinks(belt, 1);
       belts.push(belt);
     }
@@ -101,7 +102,8 @@ function poseBelts(built, joints, perFrame) {
     const step = Math.abs(perFrame?.[run.sprocket_joint] ?? 0) * run.wheels[run.sprocket].radius_m; // metres the belt moves between displayed frames
     const c = contrast(step, out.length / run.links);
     if (Math.abs(c - b.contrast) > 0.005) shadeLinks(b, c);
-    Object.assign(b, { length_m: out.length, skipped: out.skipped, step_m: step });
+    const road = run.wheels.map((w, i) => ({ z: centres[i][2], y: centres[i][1], r: w.radius_m })).filter((_, i) => built.nodes[run.wheels[i].node].def.role === 'RoadWheel');
+    Object.assign(b, { length_m: out.length, skipped: out.skipped, step_m: step, ground: groundRun(road), x }); // the footprint the contact overlay draws on
   }
 }
 
