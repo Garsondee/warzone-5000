@@ -119,8 +119,8 @@ pub(crate) fn start(o: &Opts) -> Result<Started, String> {
     Ok(Started { addr, shared })
 }
 
-/// Ask the default browser to open `url`; failures are ignored.
-fn open_browser(url: &str) {
+/// Ask the default browser to open `url`; failures are ignored. (Shared with `w5k viewer workshop --open`.)
+pub(crate) fn open_browser(url: &str) {
     let mut cmd = if cfg!(windows) {
         let mut c = std::process::Command::new("cmd");
         c.args(["/C", "start", "", url]);
