@@ -23,7 +23,7 @@
       "unit": "m",
       "test": "braking_50kmh",
       "light": "red",
-      "note": ""
+      "note": "21% longer than v^2/(2 mu g): the brakes or the load distribution set the distance, not tyre friction"
     },
     "braking_speed_m_s": 13.838269024085712,
     "time_0_48kmh_s": {
@@ -125,7 +125,7 @@
       "unit": "m",
       "test": "braking_50kmh",
       "light": "red",
-      "note": ""
+      "note": "63% longer than v^2/(2 mu g): the brakes or the load distribution set the distance, not tyre friction"
     },
     "braking_speed_m_s": 13.900346447641178,
     "time_0_48kmh_s": {
@@ -155,21 +155,40 @@
   {
     "schema": "w5k.capability.v1",
     "vehicle": "carrier_tracked",
-    "contract_pin": "",
+    "contract_pin": "contract-v0.3",
     "surface": "dry asphalt (the proving ground's flat plane)",
-    "max_grade_ratio": null,
-    "max_side_slope_rad": null,
-    "braking_distance_m": null,
-    "braking_speed_m_s": null,
-    "time_0_48kmh_s": null,
+    "max_grade_ratio": {
+      "value": 0.71484375,
+      "unit": "ratio",
+      "test": "gradeability",
+      "light": "amber",
+      "note": "82% of the torque bound: something other than traction or torque limits the climb (launch, converter, shift logic)"
+    },
+    "max_side_slope_rad": {
+      "value": 0.7126666666666547,
+      "unit": "rad",
+      "test": "side_slope_rollover",
+      "light": "green",
+      "note": "slide"
+    },
+    "braking_distance_m": {
+      "value": 22.266472409964706,
+      "unit": "m",
+      "test": "braking_50kmh",
+      "light": "red",
+      "note": "98% longer than v^2/(2 mu g): the brakes or the load distribution set the distance, not tyre friction"
+    },
+    "braking_speed_m_s": 14.094457868295116,
+    "time_0_48kmh_s": {
+      "value": 24.347651407675187,
+      "unit": "s",
+      "test": "accel_0_48kmh",
+      "light": "amber",
+      "note": ""
+    },
     "max_lateral_accel_m_s2": null,
     "max_step_m": null,
-    "missing": [
-      "gradeability",
-      "side_slope_rollover",
-      "braking_50kmh",
-      "accel_0_48kmh"
-    ],
+    "missing": [],
     "not_applicable": [
       "skidpad",
       "step_climb"

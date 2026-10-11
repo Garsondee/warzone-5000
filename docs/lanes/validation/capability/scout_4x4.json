@@ -22,7 +22,7 @@
     "unit": "m",
     "test": "braking_50kmh",
     "light": "red",
-    "note": ""
+    "note": "21% longer than v^2/(2 mu g): the brakes or the load distribution set the distance, not tyre friction"
   },
   "braking_speed_m_s": 13.838269024085712,
   "time_0_48kmh_s": {

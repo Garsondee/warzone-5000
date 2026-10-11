@@ -78,9 +78,17 @@ pub fn score_braking(r: &ProvingResult) -> Result<TestScore, String> {
     let (v, mu) = (r.inputs["speed_m_s"], r.inputs["mu"]);
     let expected = v * v / (2.0 * mu * G);
     let d = r.measured["stop_distance_m"];
-    let note =
-        if d < expected { "stopped shorter than friction allows: the tyre force exceeds its own peak" } else { "" };
-    let mut checks = vec![check("stop_distance_m", d, expected, light_above_floor(d / expected), note)];
+    let note = if d < expected {
+        "stopped shorter than friction allows: the tyre force exceeds its own peak".to_string()
+    } else if d > expected * (1.0 + ORACLE_AMBER) {
+        format!(
+            "{:.0}% longer than v^2/(2 mu g): the brakes or the load distribution set the distance, not tyre friction",
+            PERCENT_OF * (d / expected - 1.0)
+        )
+    } else {
+        String::new()
+    };
+    let mut checks = vec![check("stop_distance_m", d, expected, light_above_floor(d / expected), &note)];
     let a = r.measured["peak_decel_g"];
     let cap = mu * (1.0 + BOUND_SLACK);
     checks.push(check(
@@ -340,7 +348,13 @@ mod tests {
         let oracle = 13.89_f64 * 13.89 / (2.0 * 0.8 * G);
         assert_eq!(score_braking(&braking(oracle * 1.05, 0.76)).expect("score").light, Light::Green);
         assert_eq!(score_braking(&braking(oracle * 1.15, 0.7)).expect("score").light, Light::Amber);
-        assert_eq!(score_braking(&braking(oracle * 1.5, 0.5)).expect("score").light, Light::Red);
+        let slow = score_braking(&braking(oracle * 1.5, 0.5)).expect("score");
+        assert_eq!(slow.light, Light::Red);
+        assert!(
+            slow.checks[0].note.contains("50% longer") && slow.checks[0].note.contains("brakes"),
+            "{}",
+            slow.checks[0].note
+        );
     }
 
     #[test]
