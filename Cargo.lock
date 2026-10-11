@@ -270,6 +270,7 @@ version = "0.1.0"
 dependencies = [
  "ron",
  "serde",
+ "serde_json",
  "w5k_contract",
  "w5k_geo",
  "w5k_math",
