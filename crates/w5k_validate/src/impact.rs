@@ -147,8 +147,10 @@ pub struct Entry {
     pub observed: Sign,
     pub allowed: Vec<Sign>,
     pub verdict: Verdict,
-    /// A transient response (see `Observations::transient`): shown, not counted.
+    /// A transient response (`Exclusions::transient`): shown, not counted in the noise-aware headline.
     pub transient: bool,
+    /// A change within the bench's own noise (`is_unresolved`): shown, not counted in the noise-aware headline.
+    pub unresolved: bool,
 }
 
 /// A measured pair per (vehicle, lever id, benchmark id): baseline and +10% values. `regimes` are per vehicle, for B4.
@@ -189,8 +191,19 @@ pub struct Untested {
     pub reason: &'static str,
 }
 
+/// One way of counting the signs: how many agree with the table, out of how many scored, at 0.5% and at 1%.
+#[derive(Debug, Serialize)]
+pub struct Headline {
+    pub name: String,
+    pub right: usize,
+    pub scored: usize,
+    pub right_at_1pct: usize,
+}
+
 #[derive(Debug, Serialize)]
 pub struct Report {
+    /// The headline three ways; `right`, `scored` and `right_at_1pct` below are the noise-aware one.
+    pub headlines: Vec<Headline>,
     /// Scored entries that agree with the table when the no-change threshold is 1% instead of 0.5% (reported next to the headline).
     pub right_at_1pct: usize,
     pub table_rows: usize,
@@ -220,7 +233,7 @@ impl Report {
 }
 
 pub fn evaluate(table: &[Expected], levers: &[Lever], obs: &Observations) -> Report {
-    evaluate_full(table, levers, obs, &[], &Default::default())
+    evaluate_full(table, levers, obs, &[], &Exclusions::default())
 }
 
 /// The benchmark ids and names of the table's first section (`| B1 | 0-32 km/h time (s) | ... |`).
@@ -237,14 +250,30 @@ pub fn parse_benchmarks(md: &str) -> Vec<Named> {
 
 /// `evaluate`, plus which benchmarks have no runner and which table rows were therefore not tested (`all_benchmarks` from
 /// [`parse_benchmarks`]).
-/// `transient` lists (vehicle, benchmark) cells whose response is a transient, not a smooth one (the Hauler's gradeability is a
-/// launch-transient limit, DRIVE): reported with a `transient` tag and left out of the sign count.
+/// Cells that are shown but not counted in the noise-aware headline.
+#[derive(Default)]
+pub struct Exclusions {
+    /// (vehicle, benchmark) cells whose response is a transient, not a smooth one (the Hauler's gradeability is a launch-transient
+    /// limit, DRIVE): hand-kept until a bench echoes a spread for gradeability too.
+    pub transient: std::collections::BTreeSet<(String, String)>,
+    /// (vehicle, lever, benchmark) cells whose change is within the bench's own noise (see [`is_unresolved`]).
+    pub unresolved: std::collections::BTreeSet<(String, String, String)>,
+}
+
+/// ARCH's rule (`docs/swarm/requests/arch-validation-step-noise.md`), adopted as written: a cell is unresolved when the change, in the
+/// bench's own unit, is at most twice the larger of the two designs' run-up spreads, and never below the bisection resolution.
+pub fn is_unresolved(change: f64, spread_base: f64, spread_pert: f64, resolution: f64) -> bool {
+    change.abs() <= (2.0 * spread_base.max(spread_pert)).max(resolution)
+}
+
+/// `excl` marks cells that are shown, tagged, and left out of the noise-aware headline; the report states the headline three ways
+/// (every cell counted, noise-aware, without B11).
 pub fn evaluate_full(
     table: &[Expected],
     levers: &[Lever],
     obs: &Observations,
     all_benchmarks: &[Named],
-    transient: &std::collections::BTreeSet<(String, String)>,
+    excl: &Exclusions,
 ) -> Report {
     let mut entries = Vec::new();
     for ((vehicle, lever_id, bench), (base, pert)) in &obs.pairs {
@@ -286,12 +315,28 @@ pub fn evaluate_full(
             observed,
             allowed,
             verdict,
-            transient: transient.contains(&(vehicle.clone(), bench.clone())),
+            transient: excl.transient.contains(&(vehicle.clone(), bench.clone())),
+            unresolved: excl.unresolved.contains(&(vehicle.clone(), lever_id.clone(), bench.clone())),
         });
     }
-    let scored =
-        entries.iter().filter(|e| !e.transient && matches!(e.verdict, Verdict::Right | Verdict::Wrong)).count();
-    let right = entries.iter().filter(|e| !e.transient && e.verdict == Verdict::Right).count();
+    let count = |name: &str, skip: &dyn Fn(&Entry) -> bool| {
+        let es: Vec<&Entry> =
+            entries.iter().filter(|e| !skip(e) && matches!(e.verdict, Verdict::Right | Verdict::Wrong)).collect();
+        Headline {
+            name: name.to_string(),
+            right: es.iter().filter(|e| e.verdict == Verdict::Right).count(),
+            scored: es.len(),
+            right_at_1pct: es.iter().filter(|e| e.allowed.contains(&classify_with(2.0 * EPS, e.delta))).count(),
+        }
+    };
+    // The first three leave out the hand-kept transient cells (the Hauler's gradeability), as v2 did, so they are comparable with it.
+    let headlines = vec![
+        count("every cell counted, transient cells left out", &|e| e.transient),
+        count("noise-aware (transient and unresolved cells left out)", &|e| e.transient || e.unresolved),
+        count("without B11 (the step-climb cells), transient cells left out", &|e| e.transient || e.bench == "B11"),
+        count("no cell left out at all", &|_| false),
+    ];
+    let (right, scored, right_at_1pct) = (headlines[1].right, headlines[1].scored, headlines[1].right_at_1pct);
     let mut dead_levers = Vec::new();
     for ((vehicle, lever), _) in
         obs.pairs.keys().map(|(v, l, _)| ((v.clone(), l.clone()), ())).collect::<BTreeMap<_, _>>()
@@ -309,10 +354,6 @@ pub fn evaluate_full(
         })
         .map(String::from)
         .collect();
-    let right_at_1pct = entries
-        .iter()
-        .filter(|e| !e.transient && !e.allowed.is_empty() && e.allowed.contains(&classify_with(2.0 * EPS, e.delta)))
-        .count();
     let mut untested_rows = Vec::new();
     for e in table {
         let lever = levers.iter().find(|l| e.lever.starts_with(l.row));
@@ -336,6 +377,7 @@ pub fn evaluate_full(
     let benchmarks = BENCHES.iter().map(|b| Named { id: b.id.into(), name: b.name.into() }).collect();
     let levers = levers.iter().map(|l| Named { id: l.id.into(), name: l.row.into() }).collect();
     Report {
+        headlines,
         right_at_1pct,
         table_rows: table.len(),
         table_rows_tested: table.len() - untested_rows.len(),
@@ -385,7 +427,13 @@ pub fn render_markdown(r: &Report) -> String {
                             Verdict::Unlisted => "unlisted",
                             Verdict::Quiet => "",
                         };
-                        let mark = if e.transient { "transient" } else { mark };
+                        let mark = if e.transient {
+                            "transient"
+                        } else if e.unresolved {
+                            "unresolved"
+                        } else {
+                            mark
+                        };
                         let want = if e.verdict == Verdict::Wrong {
                             format!(
                                 " (table: {})",
@@ -403,15 +451,20 @@ pub fn render_markdown(r: &Report) -> String {
         }
         s += "\n";
     }
-    s += &format!(
-        "**Right signs: {} of {} scored ({:.0}%) at the 0.5% no-change threshold; {} of {} ({:.0}%) at 1%.** Both are reported; the threshold is never chosen to reach a bar.\n\n",
-        r.right,
-        r.scored,
-        PERCENT * r.right_fraction(),
-        r.right_at_1pct,
-        r.scored,
-        PERCENT * r.right_at_1pct as f64 / r.scored.max(1) as f64
-    );
+    s += "**Right signs, three ways (the no-change threshold is 0.5%, the one committed in v0; the count at 1% is beside it, and neither is chosen to reach a bar):**\n\n";
+    for h in &r.headlines {
+        s += &format!(
+            "- {}: {} of {} ({:.0}%) at 0.5%; {} of {} ({:.0}%) at 1%\n",
+            h.name,
+            h.right,
+            h.scored,
+            PERCENT * h.right as f64 / h.scored.max(1) as f64,
+            h.right_at_1pct,
+            h.scored,
+            PERCENT * h.right_at_1pct as f64 / h.scored.max(1) as f64
+        );
+    }
+    s += "\n";
     s += &format!(
         "**Tested today: {} of {} table rows.** Benchmarks with no runner: {}.\n\nUntested rows ({}):\n",
         r.table_rows_tested,
@@ -551,7 +604,7 @@ mod tests {
     #[test]
     fn the_report_lists_benchmarks_with_no_runner_and_the_rows_that_cannot_be_tested() {
         let o = obs(&[("engine_power", "B1", -0.08)]);
-        let r = evaluate_full(&table(), &levers(), &o, &parse_benchmarks(&matrix()), &Default::default());
+        let r = evaluate_full(&table(), &levers(), &o, &parse_benchmarks(&matrix()), &Exclusions::default());
         assert!(
             r.not_run_benchmarks.iter().any(|b| b.id == "B2") && !r.not_run_benchmarks.iter().any(|b| b.id == "B1")
         );
@@ -569,7 +622,7 @@ mod tests {
         let r = evaluate(&table(), &levers(), &o);
         assert_eq!((r.right, r.right_at_1pct, r.scored), (0, 1, 1));
         let md = render_markdown(&r);
-        assert!(md.contains("0 of 1 scored") && md.contains("1 of 1") && md.contains("at 1%"), "{md}");
+        assert!(md.contains("0 of 1 (0%) at 0.5%; 1 of 1 (100%) at 1%"), "{md}");
     }
 
     #[test]
@@ -590,10 +643,41 @@ mod tests {
     #[test]
     fn a_transient_cell_is_shown_with_its_tag_and_left_out_of_the_count() {
         let o = obs(&[("engine_power", "B6", -0.11), ("engine_power", "B1", -0.08)]);
-        let transient = [("t".to_string(), "B6".to_string())].into();
-        let r = evaluate_full(&table(), &levers(), &o, &[], &transient);
+        let excl = Exclusions { transient: [("t".to_string(), "B6".to_string())].into(), ..Exclusions::default() };
+        let r = evaluate_full(&table(), &levers(), &o, &[], &excl);
         assert_eq!((r.right, r.scored), (1, 1), "only the smooth B1 cell counts");
         assert!(r.entries.iter().any(|e| e.bench == "B6" && e.transient && e.verdict == Verdict::Wrong));
         assert!(render_markdown(&r).contains("transient"));
+    }
+
+    #[test]
+    fn a_change_within_twice_the_runup_spread_is_unresolved_and_never_below_the_resolution() {
+        assert!(is_unresolved(0.004, 0.002, 0.001, 0.0005), "4 mm is within 2 x 2 mm");
+        assert!(!is_unresolved(0.0041, 0.002, 0.001, 0.0005));
+        assert!(
+            !is_unresolved(0.0008, 0.0, 0.0, 0.0005) && is_unresolved(0.0005, 0.0, 0.0, 0.0005),
+            "the resolution is the floor"
+        );
+    }
+
+    #[test]
+    fn the_headline_is_stated_three_ways_and_unresolved_cells_leave_only_the_noise_aware_one() {
+        // B11: a torque lever with a loss (wrong, but unresolved) and a gain (right); B1: right
+        let o = obs(&[("engine_power", "B11", -0.07), ("final_drive", "B11", 0.2), ("engine_power", "B1", -0.08)]);
+        let excl = Exclusions {
+            unresolved: [("t".to_string(), "engine_power".to_string(), "B11".to_string())].into(),
+            ..Exclusions::default()
+        };
+        let r = evaluate_full(&table(), &levers(), &o, &[], &excl);
+        let h = |name: &str| {
+            r.headlines.iter().find(|h| h.name.starts_with(name)).map(|h| (h.right, h.scored)).expect("headline")
+        };
+        assert_eq!(h("every cell counted"), (2, 3));
+        assert_eq!(h("noise-aware"), (2, 2), "the unresolved loss is shown, not counted");
+        assert_eq!(h("without B11"), (1, 1));
+        assert_eq!(h("no cell left out"), (2, 3));
+        assert!(r.entries.iter().any(|e| e.unresolved && e.verdict == Verdict::Wrong));
+        let md = render_markdown(&r);
+        assert!(md.contains("three ways") && md.contains("unresolved"));
     }
 }
