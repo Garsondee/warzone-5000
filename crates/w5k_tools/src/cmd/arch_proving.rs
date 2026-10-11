@@ -73,6 +73,8 @@ scenario_file!(
     tilt_max_rad,
     step_speed_m_s,
     step_distance_m,
+    step_run_ups,
+    step_run_up_stride_m,
     step_ramp_m,
     step_max_s,
     step_search_max_m,
@@ -469,7 +471,7 @@ mod tests {
     }
 
     #[test]
-    fn no_truck_climbs_a_step_above_one_wheel_radius_and_the_scout_and_hauler_stop_near_the_traction_limit() {
+    fn no_truck_climbs_a_step_above_one_wheel_radius_or_stops_below_half_its_traction_limit() {
         for v in GARAGE {
             let r = Fixture::load(v).run("step_climb");
             r.check().expect("valid");
@@ -477,15 +479,47 @@ mod tests {
             let (radius, mu, h) = (r.inputs["wheel_radius_m"], r.inputs["mu"], r.measured["step_height_m"]);
             assert!(h <= radius, "{v}: climbed {h} m with a wheel of radius {radius} m");
             // A rigid wheel on the corner of a step needs the contact force to be able to point straight up: the corner normal leans
-            // by theta with cos(theta) = (r - h) / r, and friction can recover atan(mu) of it, so h <= r (1 - 1 / sqrt(1 + mu^2)).
+            // by theta with cos(theta) = (r - h) / r, and friction can recover atan(mu) of it, so h <= r (1 - 1 / sqrt(1 + mu^2)) when
+            // creeping. At walking pace the truck's momentum carries it past that quasi-static limit (the Scout by 1.8 times, the Mule by
+            // 2.8 times; see arch-proving-gaps.md), so only the lower side is a bound: it cannot do worse than creeping.
             let traction_limit = radius * (1.0 - 1.0 / scalar::sqrt(1.0 + mu * mu));
-            if v != GARAGE[1] {
-                // const-ok: the Mule's momentum at 2 m/s carries it past the quasi-static limit (see arch-proving-gaps.md); the others do not
-                assert!(
-                    h >= 0.5 * traction_limit && h <= 1.5 * traction_limit,
-                    "{v}: {h} m against the traction limit {traction_limit} m"
-                );
-            }
+            assert!(h >= 0.5 * traction_limit, "{v}: {h} m against the traction limit {traction_limit} m");
+            // const-ok: test band
+        }
+    }
+
+    #[test]
+    fn the_truck_meets_the_step_at_walking_pace_and_the_reported_height_is_the_median_of_its_run_ups() {
+        for v in GARAGE {
+            let f = Fixture::load(v);
+            let r = f.run("step_climb");
+            let i = &r.inputs;
+            // the speed at the face: the driver holds 2 m/s (the Mule cannot go slower than its idle creep, 0.11 m/s above)
+            assert!(
+                (i["approach_speed_m_s"] - f.cfg.step_speed_m_s.v).abs() < 0.15,
+                "{v}: met the step at {} m/s",
+                i["approach_speed_m_s"]
+            ); // const-ok: test band
+            assert!(
+                i["step_resolution_m"] > 0.0 && i["step_resolution_m"] <= f.cfg.step_resolution_m.v,
+                "{v}: bracket {}",
+                i["step_resolution_m"]
+            );
+            // the run-ups on their own: the median is the middle one, the spread is the range, and each one is inside the range
+            let ups = f.cfg.step_run_ups.v.round() as usize;
+            let mut heights: Vec<f64> = (0..ups)
+                .map(|k| {
+                    let mut one = Fixture::load(v);
+                    one.cfg.step_run_ups.v = 1.0;
+                    one.cfg.step_distance_m.v += k as f64 * f.cfg.step_run_up_stride_m.v;
+                    one.run("step_climb").measured["step_height_m"]
+                })
+                .collect();
+            heights.sort_by(f64::total_cmp);
+            let (median, spread) = (r.measured["step_height_m"], i["step_run_up_spread_m"]);
+            // const-ok: the same arithmetic on the same runs, so equal to rounding
+            assert!((median - heights[ups / 2]).abs() < 1e-9, "{v}: the median of {heights:?}");
+            assert!((spread - (heights[ups - 1] - heights[0])).abs() < 1e-9, "{v}: the range of {heights:?}");
         }
     }
 
