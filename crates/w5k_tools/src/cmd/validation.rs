@@ -101,6 +101,8 @@ fn terrain(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+/// The garage for the capability export: the three trucks and the tracked carrier.
+const CAPABILITY_VEHICLES: &str = "content/vehicles/game/scout_4x4.ron,content/vehicles/game/mule_4x4.ron,content/vehicles/game/hauler_4x4.ron,content/vehicles/game/carrier_tracked.ron";
 const IMPACT_VEHICLES: &str =
     "content/vehicles/game/scout_4x4.ron,content/vehicles/game/mule_4x4.ron,content/vehicles/game/hauler_4x4.ron";
 /// Cells whose response is a launch transient, not a smooth one: shown tagged, not counted (DRIVE, via ARCH 2026-10-10).
@@ -247,22 +249,35 @@ fn impact(args: &[String]) -> Result<(), String> {
 /// `DIR/<vehicle>.json` (one `w5k.capability.v1` table) and `DIR/capability.json` (all vehicles).
 fn capability(args: &[String]) -> Result<(), String> {
     let out = PathBuf::from(flag(args, "--out").ok_or("--out DIR is required")?);
-    let list = flag(args, "--vehicles").unwrap_or(IMPACT_VEHICLES);
+    let list = flag(args, "--vehicles").unwrap_or(CAPABILITY_VEHICLES);
     let mut all = Vec::new();
     for path in list.split(',').filter(|v| !v.is_empty()) {
         let path = root().join(path);
         let def = w5k_forge::compile::parse_def(
             &std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?,
         )?;
-        let results = proving_results(&path, &out.join("runs").join(&def.id))?;
-        let table = w5k_validate::capability::from_results(&def.id, &results);
+        // a vehicle the runner refuses (the tracked carrier before its runner lands) gets a table of missing tests, never a stop
+        let results = proving_results(&path, &out.join("runs").join(&def.id)).unwrap_or_else(|e| {
+            eprintln!("{}: {e}; its table lists every test as missing", def.id);
+            BTreeMap::new()
+        });
+        let tracked = matches!(def.running_gear, w5k_contract::def::RunningGearDef::Tracked(_));
+        let table = w5k_validate::capability::from_results(&def.id, &results, tracked);
         std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
         let text = serde_json::to_string_pretty(&table).map_err(|e| e.to_string())?;
         std::fs::write(out.join(format!("{}.json", def.id)), format!("{text}\n")).map_err(|e| e.to_string())?;
-        println!("{}: {} values, missing {:?}", def.id, 6 - table.missing.len(), table.missing);
+        println!(
+            "{}: {} values, missing {:?}, does not apply {:?}",
+            def.id,
+            6 - table.missing.len() - table.not_applicable.len(),
+            table.missing,
+            table.not_applicable
+        );
         all.push(table);
     }
     let text = serde_json::to_string_pretty(&all).map_err(|e| e.to_string())?;
     std::fs::write(out.join("capability.json"), format!("{text}\n")).map_err(|e| e.to_string())?;
+    let grid = w5k_validate::dashboard::render_grid("Proving ground: vehicle by test", &all);
+    std::fs::write(out.join("grid.html"), grid).map_err(|e| e.to_string())?;
     Ok(())
 }
