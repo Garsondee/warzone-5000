@@ -7,44 +7,45 @@
     "value": 0.64453125,
     "unit": "ratio",
     "test": "gradeability",
-    "light": "not scored",
-    "note": ""
+    "light": "red",
+    "note": "72% of the traction bound: something other than traction or torque limits the climb (launch, converter, shift logic)"
   },
   "max_side_slope_rad": {
-    "value": 0.7233333333333202,
+    "value": 0.7236666666666535,
     "unit": "rad",
     "test": "side_slope_rollover",
     "light": "green",
     "note": "slide"
   },
   "braking_distance_m": {
-    "value": 11.957621385326647,
+    "value": 11.951497051867307,
     "unit": "m",
     "test": "braking_50kmh",
     "light": "green",
     "note": ""
   },
-  "braking_speed_m_s": 13.879630502517442,
+  "braking_speed_m_s": 13.880075011538628,
   "time_0_48kmh_s": {
-    "value": 4.6458377088826825,
+    "value": 4.655988009872799,
     "unit": "s",
     "test": "accel_0_48kmh",
-    "light": "not scored",
+    "light": "green",
     "note": ""
   },
   "max_lateral_accel_m_s2": {
-    "value": 7.867530552532458,
+    "value": 7.869398001435024,
     "unit": "m/s^2",
     "test": "skidpad",
-    "light": "not scored",
+    "light": "green",
     "note": "grip plateau (speed rose, lateral acceleration did not)"
   },
   "max_step_m": {
-    "value": 0.34375,
+    "value": 0.2958984375,
     "unit": "m",
     "test": "step_climb",
     "light": "green",
     "note": ""
   },
-  "missing": []
+  "missing": [],
+  "not_applicable": []
 }
