@@ -1,6 +1,6 @@
 # Status: VIEWER
 
-**Last updated:** 2026-10-11 01:15 UTC | **Branch:** lane/viewer/footprint | **Contract pinned:** contract-v0.3 (commit 0982843) | **Phase:** slice 2 stage C (Workshop) step 1 done; stage B: the carrier's belts (#177 merged), the belt aliasing (#180 in review), the footprint overlay (PR C, stacked on #180)
+**Last updated:** 2026-10-11 01:04 UTC | **Branch:** lane/viewer/carrier-skin | **Contract pinned:** contract-v0.3 (commit 0982843) | **Phase:** slice 2 stage C (Workshop) and stage B (the tracked carrier) delivered; in review: #184 (the Workshop offers choices, not consequences) and this PR (the carrier's skin, `workshop --open`, the step row's noise)
 
 ## Done
 - Spike S-V passes (WebGL 2 under SwiftShader, 46 ms/frame, 10 s clip = 72 KB): `docs/lanes/viewer/spike-v.md`.
@@ -56,14 +56,16 @@
 
 - **Skin pack carries `track_runs` (ARCH's small item before the Workshop; `lane/viewer/skin-trackruns`).** `w5k_replay::skinpack` packs and unpacks `track_runs` (absent when empty: wheeled skin files are byte for byte unchanged), the JS reader keeps them, `w5k viewer pack-skin carrier_tracked [--instanced]` packs the carrier (static belt by default: the page draws no links yet), the stale-skin guard covers `carrier_tracked.skin` once GEOMETRY commits it. Tests: round trip with exact runs, empty list left out of the header, the carrier packs both ways, JS reader. Answer to GEOMETRY in `docs/swarm/requests/viewer-skin-trackruns.md` (a lane may not edit another lane's request file). Picture `docs/lanes/viewer/media/carrier-static-belt.jpg`: the carrier on the slice course at 25 km/h, FORGE's rig (boxes) beside GEOMETRY's skin with the static belt, which is what the page draws until the links move. (I read ARCH's message late and did Workshop PRs 1 and 2 first; they are merged. PR 3 and 4 follow.)
 
+- **ARCH's four asks, PR `lane/viewer/carrier-skin`.** (1) `tools/viewer/dist/skins/carrier_tracked.skin` committed (`pack-skin carrier_tracked --instanced`, 479 KB, 28,536 triangles; the skin guard covers it) **and `fitSkin` taught to dress a tracked skeleton**: with the file committed as it was, the joint-index fit put the skin's wheels up to 3.18 m from the simulation's (GEOMETRY drives from the rear, FORGE from the front), so the pairing is now by side, place in the belt's loop and role, each wheel takes its partner's place, joint and radius ratio, and the belt is the rig's drawn with the skin's link mesh; a loop that does not match is refused and the page draws the rig. Picture `docs/lanes/viewer/media/carrier-skin-fit.jpg`; 14 new checks in `test-skin.mjs`, one in `live-smoke.mjs`; notes `track-animation-note.md` (PR D) and `docs/theory/viewer.md`. (2) `w5k viewer workshop --open` (`arch_drive::open_browser`, test `workshop_open_asks_for_the_bound_address_once_and_only_when_told_to`), so START-WORKSHOP can drop its delayed start. (3) The scoreboard's step row: where both results echo `step_run_up_spread_m`, a change of at most twice the larger spread and never below `step_resolution_m` (VALIDATION's `impact::is_unresolved`) is shown grey with "within the bench's noise" and no verdict (`unresolved: true` in the row); on the Hauler at engine power x1.5 the +10.7% step (+14.2 mm against a floor of 23.4 mm) is inside it. Picture `docs/lanes/viewer/media/workshop-scoreboard-noise.jpg`; five Rust tests and a canned-row check in `workshop-smoke.mjs`. (4) `viewer-contact-footprint` is ARCH's now.
+
 ## In progress
-- Stage B: belts (#177) merged; the aliasing fade (#180) and the footprint overlay (PR C) in review. Then the handoff note: the Workshop (step 1 done, step 2 would be the tracked carrier's levers once FORGE has them) and stage B are delivered; the charts still read stubs until the real ladder file exists.
+- #184 (owner direction D1: the Workshop offers choices, not consequences) and the PR above are in review. When both have merged: the handoff note below, then idle.
 
 ## Blocked
 - Nothing. (Lane to ARCH messaging was enabled by ARCH; the old request `viewer-lane-messaging.md` is answered.)
 
 ## Next
-1. Stage B when TRACKS lands track contact: track animation in the replay page (links along the belt, from the contract's `RenderRig.track_runs`, new in 0.3.0 and carried through `skinpack` by ARCH's migration edit), a sinkage and ground-pressure overlay under each vehicle. 2. Swap the stub samples for VALIDATION's and TRACKS's real output the day they land. 3. Stage C (Workshop) only after ARCH launches it; the note lists the requests I will file first.
+1. After #184 and the carrier-skin PR merge: fill in the handoff note below and idle (the brief's deliverables are delivered; ARCH takes `viewer-contact-footprint`). 2. Swap the ladder stub for VALIDATION's and TRACKS's real output the day it lands. 3. If the Workshop is to level a tracked carrier, that is a new brief (FORGE's tracked levers first).
 
 ## Cards needed / PROVISIONAL decisions in force
 - None. Compression (flate2) deferred: would need a dependency card.
@@ -75,11 +77,13 @@
 - VALIDATION: the whole proving battery for the Mule runs in 0.47 s on a release build (`w5k scenario proving --test all`), so a live scoreboard is affordable.
 - ARCH/contract: `Frame` has no centre-of-mass offset (the marker shows the hull datum) and the ledger summary is magnitude-only (no direction or application point), so force *arrows* per term are drawn as a magnitude panel, not in 3D; the stand-ins write an empty ledger. CCR candidates: `VehicleHeader::com_m`, ledger vectors.
 - GEOMETRY/FORGE: the box rigs' gun barrel is a plain tube, so 5 cm of recoil changes only ~8 pixels; a muzzle brake or ring makes recoil legible. Wheels have one small lug each (the only thing that shows spin).
+- GEOMETRY, FORGE (via ARCH): **the two carriers still disagree about their layout, and the new fit only hides it.** GEOMETRY's hull was modelled for a 4.45 m wheelbase, a 2.3 m track and a rear drive; FORGE's rig has 4.0 m, 2.2 m and a front drive. The page now scales the hull x0.899 and lays the running gear out as the simulation has it (the sprocket moves from the rear to the front under a hull whose sloped bow was drawn for the other end; the belt's outer edge stands 8 cm outside the scaled hull's side). It is a drawing of the right physics under a hull from the wrong one. Once the lanes agree on one layout the pairing is the identity and the fit costs nothing; until then `docs/swarm/requests/viewer-track-runs-winding.md` (the winding rule) is still open for the same reason.
 
 ## Evidence
 - `docs/lanes/viewer/media/tank-gun-fired.png`.
 - `smoke.mjs` PASS on both canned rigs: turret_yaw, gun_pitch, gun_recoil, wheels, steer each move pixels alone. Pictures `docs/lanes/viewer/media/page-*.png`.
 - `docs/lanes/viewer/media/spike-v-tank.png`.
+- `docs/lanes/viewer/media/carrier-skin-fit.jpg` (the carrier's skin matched by joint number and by place in the belt's loop), `docs/lanes/viewer/media/workshop-scoreboard-noise.jpg` (a step change inside the bench's noise).
 
 ## Owner instructions received
 - 2026-10-10: run without checking in (STATE.md); continuing straight into build steps.

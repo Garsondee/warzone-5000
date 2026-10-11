@@ -21,7 +21,7 @@ use w5k_geo::skin::Skin;
 use w5k_geo::track::{link_frames, Belt, Circle};
 use w5k_math::scalar;
 use w5k_replay::ReplayFile;
-use w5k_validate::impact::{BENCHES, EPS};
+use w5k_validate::impact::{is_unresolved, BENCHES, EPS};
 use w5k_validate::proving::ProvingResult;
 use w5k_world::strip::DataStrip;
 
@@ -34,7 +34,7 @@ const USAGE: &str = "usage:
   w5k viewer tornado <impact.json> --out tornado.png [--theme light|dark] [--cols N] [--rows N]   (the impact.json of `w5k validation impact`: a panel per benchmark, a bar per vehicle for each lever; docs/lanes/viewer/charts.md)
   w5k viewer ladder  <ladder.json> --out ladder.png [--theme light|dark]   (sinkage up a ladder of load or track width, beside the soil theory)
   w5k viewer design <scout_4x4|mule_4x4|hauler_4x4|base.ron> --out DIR [--lever wheelbase=1.1,mass=0.9] [--skin preview|final|off] [--score off]   (the Workshop's step: levers in; the compiled design, its skin and the proving scoreboard out)
-  w5k viewer workshop [--port 8789] [--web DIR]   (the Workshop's design endpoints and page on 127.0.0.1; run it from the folder that holds content/)
+  w5k viewer workshop [--port 8789] [--web DIR] [--open]   (the Workshop's design endpoints and page on 127.0.0.1; run it from the folder that holds content/; --open asks the default browser for the page)
   w5k viewer dump-canned <truck|tank|belt> --out <dir>   (writes replay.w5kr, replay.json and rig.json; belt: belt.json, GEOMETRY's belt maths for test-tracks.mjs)";
 
 /// Entry point for `w5k viewer <args>`.
@@ -361,7 +361,28 @@ impl Design {
     }
 }
 
-/// The scoreboard: one row per benchmark both batteries measured, with the base and design values in the display unit and the change.
+/// What a bench echoes in its result's `inputs` to say how much it differs from itself (ARCH, `docs/swarm/requests/arch-validation-step-noise.md`):
+/// the step climb's range over its three run-ups, and the width of its last bisection bracket, both in metres like the step height.
+const NOISE_SPREAD_KEY: &str = "step_run_up_spread_m";
+const NOISE_RESOLUTION_KEY: &str = "step_resolution_m";
+const NOISE_NOTE: &str = "within the bench's noise";
+
+/// Is `change` (in the result's own unit) within the bench's noise? VALIDATION's `impact::is_unresolved` is the rule: at most twice the larger of the two
+/// results' spreads, and never below the bisection resolution. A bench whose results do not both echo a spread is not judged.
+fn within_noise(base: &ProvingResult, design: &ProvingResult, change: f64) -> bool {
+    let echoed = |r: &ProvingResult, key: &str| r.inputs.get(key).copied();
+    let (Some(spread_base), Some(spread_design)) = (echoed(base, NOISE_SPREAD_KEY), echoed(design, NOISE_SPREAD_KEY))
+    else {
+        return false;
+    };
+    let resolution =
+        echoed(base, NOISE_RESOLUTION_KEY).unwrap_or(0.0).max(echoed(design, NOISE_RESOLUTION_KEY).unwrap_or(0.0));
+    is_unresolved(change, spread_base, spread_design, resolution)
+}
+
+/// The scoreboard: one row per benchmark both batteries measured, with the base and design values in the display unit and the change. A change
+/// within the bench's own noise is shown but not judged: `better` stays null, `unresolved` is true and `note` says so. A run that ended early says
+/// why in `note` instead, and is not judged against a noise it did not measure.
 fn board_rows(
     base: &BTreeMap<String, ProvingResult>,
     design: &BTreeMap<String, ProvingResult>,
@@ -373,8 +394,11 @@ fn board_rows(
             let read = |m: &BTreeMap<String, ProvingResult>| m.get(bench).and_then(|r| r.measured.get(b.key)).map(|v| v * scale);
             let (base_v, value) = (read(base)?, read(design)?);
             let (delta, better) = board_change(base_v, value, bigger);
-            let note = design.get(bench).and_then(|r| r.ended_early.clone());
-            Some(serde_json::json!({"bench": bench, "name": name, "unit": unit, "base": base_v, "value": value, "delta_pct": delta, "better": better, "note": note}))
+            let ended = design.get(bench).and_then(|r| r.ended_early.clone());
+            let noisy = ended.is_none()
+                && base.get(bench).zip(design.get(bench)).is_some_and(|(rb, rd)| within_noise(rb, rd, (value - base_v) / scale));
+            let (better, note) = if noisy { (None, Some(NOISE_NOTE.to_string())) } else { (better, ended) };
+            Some(serde_json::json!({"bench": bench, "name": name, "unit": unit, "base": base_v, "value": value, "delta_pct": delta, "better": better, "note": note, "unresolved": noisy}))
         })
         .collect()
 }
@@ -801,9 +825,20 @@ fn serve_forever(listener: TcpListener, shop: Arc<Shop>) {
     }
 }
 
-/// `w5k viewer workshop [--port 8789] [--web DIR]`: the Workshop page and its design endpoints, on 127.0.0.1 only. Run it from the folder
-/// that holds `content/`.
+/// `w5k viewer workshop [--port 8789] [--web DIR] [--open]`: the Workshop page and its design endpoints, on 127.0.0.1 only. Run it from the
+/// folder that holds `content/`. `--open` asks the default browser for the page (what START-WORKSHOP does).
 fn workshop(args: &[String]) -> Result<(), String> {
+    workshop_on(args, crate::cmd::arch_drive::open_browser, serve_forever)
+}
+
+/// `workshop` with the two things it does to the outside world handed in, so a test can watch them. `open` gets the page's address once the port
+/// is bound, and only when `--open` was given: a browser that asks at once waits in the listener's queue until `serve` answers, so nothing
+/// needs delaying.
+fn workshop_on(
+    args: &[String],
+    open: impl FnOnce(&str),
+    serve: impl FnOnce(TcpListener, Arc<Shop>),
+) -> Result<(), String> {
     let port: u16 = opt(args, "--port").map_or(Ok(8789), str::parse).map_err(|_| "--port is a number")?; // const-ok: the default port
     let web = opt(args, "--web").map(PathBuf::from).unwrap_or_else(|| {
         let beside = std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.join("viewer")));
@@ -811,9 +846,13 @@ fn workshop(args: &[String]) -> Result<(), String> {
     });
     let listener =
         TcpListener::bind(("127.0.0.1", port)).map_err(|e| format!("cannot listen on 127.0.0.1:{port}: {e}"))?;
-    println!("The Workshop: http://127.0.0.1:{port}/  (pages from {}; Ctrl-C stops it)", web.display());
+    let url = format!("http://127.0.0.1:{}/", listener.local_addr().map_err(|e| e.to_string())?.port()); // port 0 binds any free one
+    println!("The Workshop: {url}  (pages from {}; Ctrl-C stops it)", web.display());
+    if args.iter().any(|a| a == "--open") {
+        open(&url);
+    }
     let scratch = std::env::temp_dir().join(format!("w5k-workshop-{}", std::process::id()));
-    serve_forever(listener, Arc::new(Shop::new(PathBuf::from("."), web, scratch, run_battery)));
+    serve(listener, Arc::new(Shop::new(PathBuf::from("."), web, scratch, run_battery)));
     Ok(())
 }
 
@@ -1167,11 +1206,135 @@ mod tests {
         }
     }
 
+    /// A step-climb result as the proving ground writes it: the height cleared, and (when the bench echoes them) its run-up spread and resolution.
+    fn step_result(height_m: f64, echo: Option<(f64, f64)>, ended_early: Option<&str>) -> ProvingResult {
+        let inputs = echo.map_or_else(BTreeMap::new, |(spread, resolution)| {
+            BTreeMap::from([(NOISE_SPREAD_KEY.to_string(), spread), (NOISE_RESOLUTION_KEY.to_string(), resolution)])
+        });
+        ProvingResult {
+            schema: w5k_validate::proving::SCHEMA.to_string(),
+            test: "step_climb".into(),
+            vehicle: "v".into(),
+            contract_pin: String::new(),
+            inputs,
+            labels: BTreeMap::new(),
+            measured: BTreeMap::from([("step_height_m".to_string(), height_m)]),
+            ended_early: ended_early.map(String::from),
+            replay: None,
+        }
+    }
+
+    /// The step row of a board made from a base and a design step result.
+    fn step_row(base: ProvingResult, design: ProvingResult) -> serde_json::Value {
+        let rows =
+            board_rows(&BTreeMap::from([("B11".to_string(), base)]), &BTreeMap::from([("B11".to_string(), design)]));
+        rows.into_iter().find(|r| r["bench"] == "B11").expect("the step row")
+    }
+
+    /// ARCH's rule as VALIDATION adopted it: a step change of at most twice the larger run-up spread is shown, not judged: no better, no worse.
+    #[test]
+    fn a_step_change_within_twice_the_run_up_spread_is_shown_but_not_judged() {
+        // 6 mm on a 300 mm step, spreads of 4 mm and 3 mm: within 2 x 4 mm
+        let row =
+            step_row(step_result(0.300, Some((0.004, 0.0005)), None), step_result(0.306, Some((0.003, 0.0005)), None));
+        assert_eq!(row["better"], serde_json::Value::Null, "within the noise it is neither better nor worse");
+        assert_eq!(row["note"], NOISE_NOTE);
+        assert_eq!(row["unresolved"], true);
+        assert!((row["delta_pct"].as_f64().unwrap() - 2.0).abs() < 1e-9, "the change itself is still shown: {row}");
+    }
+
+    #[test]
+    fn a_step_change_beyond_twice_the_run_up_spread_is_judged() {
+        let spreads = Some((0.004, 0.0005));
+        let up = step_row(step_result(0.300, spreads, None), step_result(0.312, spreads, None));
+        assert_eq!(
+            (up["better"].clone(), up["unresolved"].clone(), up["note"].clone()),
+            (true.into(), false.into(), serde_json::Value::Null)
+        );
+        let down = step_row(step_result(0.300, spreads, None), step_result(0.288, spreads, None));
+        assert_eq!(down["better"], false, "12 mm lost is worse beyond 8 mm of noise");
+    }
+
+    /// The bench cannot tell a change smaller than the width of its last bisection bracket whatever its spread says: the resolution is the floor.
+    #[test]
+    fn the_bisection_resolution_is_the_floor_of_a_steps_noise() {
+        let at = |change_m: f64| {
+            step_row(
+                step_result(0.020, Some((0.0, 0.0005)), None),
+                step_result(0.020 + change_m, Some((0.0, 0.0005)), None),
+            )
+        };
+        assert_eq!(
+            at(0.0004)["unresolved"],
+            true,
+            "a change under the resolution is not resolved, though the spread is zero"
+        );
+        assert_eq!(at(0.0006)["unresolved"], false);
+        assert_eq!(at(0.0006)["better"], true);
+    }
+
+    /// Where a result does not echo a spread the rule does not apply: older results, other benches, and a pair where only one side echoes.
+    #[test]
+    fn a_bench_that_echoes_no_spread_on_both_sides_is_judged_as_before() {
+        let echo = Some((0.01, 0.0005));
+        for (base, design) in [
+            (step_result(0.300, None, None), step_result(0.306, None, None)),
+            (step_result(0.300, echo, None), step_result(0.306, None, None)),
+            (step_result(0.300, None, None), step_result(0.306, echo, None)),
+        ] {
+            let row = step_row(base, design);
+            assert_eq!(
+                (row["better"].clone(), row["unresolved"].clone(), row["note"].clone()),
+                (true.into(), false.into(), serde_json::Value::Null)
+            );
+        }
+    }
+
+    /// A run that ended early says why instead (its number is not a measurement of the design), and a noise note never replaces that.
+    #[test]
+    fn a_step_run_that_ended_early_keeps_its_own_note() {
+        let row = step_row(
+            step_result(0.300, Some((0.004, 0.0005)), None),
+            step_result(0.301, Some((0.004, 0.0005)), Some("rolled over")),
+        );
+        assert_eq!((row["note"].clone(), row["unresolved"].clone()), ("rolled over".into(), false.into()));
+    }
+
     #[test]
     fn a_packed_skin_file_is_accepted_where_a_skin_id_is() {
         let file = viewer_dir().join("dist/skins/scout_4x4.skin");
         let rig = skin_rig(file.to_str().unwrap(), false).unwrap();
         assert!(rig.triangle_count() > 0 && rig.id == skin_rig("scout_4x4", false).unwrap().id);
+    }
+
+    /// `--open` hands the browser opener the address the Workshop is listening on (port 0 takes any free port, so the address must be the bound
+    /// one), after the port is bound, once, and only when asked: a browser that asks at once waits in the listener's queue.
+    #[test]
+    fn workshop_open_asks_for_the_bound_address_once_and_only_when_told_to() {
+        let start = |extra: &[&str]| {
+            let args: Vec<String> = ["--port", "0"].iter().chain(extra).map(ToString::to_string).collect();
+            let (asked, bound) = (std::cell::RefCell::new(Vec::new()), std::cell::Cell::new(None));
+            let open = |url: &str| {
+                // the browser is asked with the port already bound: a connection made now is queued, not refused
+                let port: u16 = url
+                    .trim_start_matches("http://127.0.0.1:")
+                    .trim_end_matches('/')
+                    .parse()
+                    .expect("the address names a port");
+                assert!(
+                    TcpStream::connect(("127.0.0.1", port)).is_ok(),
+                    "{url} is not listening when the browser is asked"
+                );
+                asked.borrow_mut().push(url.to_string());
+            };
+            let serve = |listener: TcpListener, _: Arc<Shop>| bound.set(Some(listener.local_addr().unwrap().port()));
+            workshop_on(&args, open, serve).expect("the Workshop starts");
+            (asked.into_inner(), bound.get().expect("serve was called"))
+        };
+        let (asked, port) = start(&["--open"]);
+        assert_ne!(port, 0, "a bound port is a real one");
+        assert_eq!(asked, vec![format!("http://127.0.0.1:{port}/")]);
+        assert!(start(&[]).0.is_empty(), "without --open the browser is left alone");
     }
 
     static SCRATCH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);

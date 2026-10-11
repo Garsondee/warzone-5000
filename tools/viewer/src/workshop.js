@@ -145,9 +145,11 @@ function setBoard(rows) {
   if (!rows) return;
   t.tBodies[0].replaceChildren(...rows.map((r) => {
     const tr = document.createElement('tr');
-    const change = r.delta_pct == null ? '' : r.better == null ? 'no change' : `${r.delta_pct > 0 ? '+' : '\u2212'}${Math.abs(r.delta_pct).toFixed(1)}% ${r.better ? 'better' : 'worse'}`;
-    const why = r.note ? `<small>ended early: ${esc(r.note)}</small>` : ''; // a run that stops early says why
-    tr.innerHTML = `<th>${esc(r.name)}<small>${fmt(r.base, Math.min(Math.abs(r.base), Math.abs(r.value)))} \u2192 ${fmt(r.value, Math.min(Math.abs(r.base), Math.abs(r.value)))} ${esc(r.unit)}</small>${why}</th><td class="${r.better == null ? '' : r.better ? 'better' : 'worse'}">${change}</td>`;
+    const signed = r.delta_pct == null ? '' : `${r.delta_pct > 0 ? '+' : '\u2212'}${Math.abs(r.delta_pct).toFixed(1)}%`;
+    // a change inside the bench's own scatter is shown, grey, with no verdict; a run that stops early says why
+    const change = r.unresolved ? signed : r.delta_pct == null ? '' : r.better == null ? 'no change' : `${signed} ${r.better ? 'better' : 'worse'}`;
+    const why = r.note ? `<small>${r.unresolved ? '' : 'ended early: '}${esc(r.note)}</small>` : '';
+    tr.innerHTML = `<th>${esc(r.name)}<small>${fmt(r.base, Math.min(Math.abs(r.base), Math.abs(r.value)))} \u2192 ${fmt(r.value, Math.min(Math.abs(r.base), Math.abs(r.value)))} ${esc(r.unit)}</small>${why}</th><td class="${r.unresolved ? 'noise' : r.better == null ? '' : r.better ? 'better' : 'worse'}">${change}</td>`;
     return tr;
   }));
 }
@@ -199,7 +201,7 @@ window.__workshop = {
   base: () => base && base.id,
   levers: () => (base ? base.levers.map((l) => l.id) : []),
   detail: () => detail,
-  board: () => [...$('board').tBodies[0].rows].map((r) => ({ name: r.cells[0].firstChild.textContent, change: r.cells[1].textContent, class: r.cells[1].className })),
+  board: () => [...$('board').tBodies[0].rows].map((r) => ({ name: r.cells[0].firstChild.textContent, change: r.cells[1].textContent, class: r.cells[1].className, why: [...r.cells[0].querySelectorAll('small')].slice(1).map((m) => m.textContent).join(' ') })),
   stale: () => $('board').classList.contains('stale'),
   designId: () => designId,
   error: () => ($('status').className === 'error' ? $('status').textContent : null),
