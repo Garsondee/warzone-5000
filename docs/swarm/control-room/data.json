@@ -1,6 +1,6 @@
 {
  "subtitle": "warzone-5000: a realistic ground-vehicle simulator, built by thirteen domain agents working in parallel. This page is the coordinator's view.",
- "updated": "2026-10-11 01:15 UTC",
+ "updated": "2026-10-11 01:25 UTC",
  "strip": [
   {
    "k": "Phase",
@@ -94,7 +94,7 @@
    "rank": 1,
    "state": "building",
    "mission": "Replay format, the browser viewer with forces drawn on, MP4 and chart tools.",
-   "last": "carrier belts, the belt's wagon-wheel fix and the track footprint overlay merged; the Workshop's choices-not-consequences panel (#184) in review"
+   "last": "carrier belts, belt aliasing, footprint overlay, the carrier's skin fitted to the simulation's skeleton and committed, Workshop --open, the step row's noise shown grey; the choices-not-consequences panel (#184) still to land"
   },
   {
    "name": "VALIDATION",

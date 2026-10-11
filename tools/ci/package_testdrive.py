@@ -38,18 +38,16 @@ def _bat(extra: str, who: str) -> str:
 START_BAT = _bat(" --no-speed-limit", "full speed")
 START_KID_BAT = _bat("", "kid mode, speed limited")
 
-# START-WORKSHOP.bat: the Workshop (sliders, scoreboard, DRIVE) in the browser. The program prints its address and serves in this window;
-# a second, hidden command waits a few seconds and opens the browser at it (the program is not asked to: `w5k viewer workshop` has no
-# --open yet; if the browser does not come up the address is in the window and in the README).
+# START-WORKSHOP.bat: the Workshop (sliders, scoreboard, DRIVE) in the browser. `--open` makes the program ask the default browser for the page once
+# its port is bound (as `w5k drive --open` does for START.bat); the address is also printed and in the README if the browser does not come up.
 WORKSHOP_URL = "http://127.0.0.1:8789/"
 START_WORKSHOP_BAT = (
     "@echo off\r\n"
     'cd /d "%~dp0"\r\n'
-    "echo Starting the Warzone 5000 Workshop. A browser window will open in a few seconds.\r\n"
+    "echo Starting the Warzone 5000 Workshop. A browser window will open.\r\n"
     f"echo If it does not, open {WORKSHOP_URL} in your browser.\r\n"
     "echo Leave this window open while you work. Close it to stop.\r\n"
-    f'start "" /b cmd /c "ping -n 4 127.0.0.1 >nul & start {WORKSHOP_URL}"\r\n'
-    "w5k.exe viewer workshop\r\n"
+    "w5k.exe viewer workshop --open\r\n"
     "pause\r\n"
 )
 
@@ -57,7 +55,7 @@ START_WORKSHOP_SH = (
     "#!/bin/sh\n"
     'cd "$(dirname "$0")" || exit 1\n'
     f"echo 'Starting the Warzone 5000 Workshop. Open {WORKSHOP_URL} in a browser.'\n"
-    "./w5k viewer workshop\n"
+    "./w5k viewer workshop --open\n"
 )
 
 START_SH = (
