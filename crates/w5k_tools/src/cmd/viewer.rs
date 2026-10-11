@@ -823,9 +823,17 @@ const BELT_SPINS_RAD: [f64; 3] = [0.0, 1.234, -2.5]; // const-ok: the sprocket s
 /// (counter-clockwise, rear sprocket) and FORGE's (clockwise, front sprocket: GEOMETRY refuses that winding, so the reference is its mirror
 /// image, z negated, which the test mirrors back).
 fn dump_belt(root: &Path, out: &Path) -> Result<(), String> {
-    let forge = build_design(&root.join("content/vehicles/game/carrier_tracked.ron"), &[], "off")?.rig;
+    let design = build_design(&root.join("content/vehicles/game/carrier_tracked.ron"), &[], "off")?;
+    let physics = w5k_forge::compile::compile(&design.def, &design.extras).map_err(|r| {
+        format!("FORGE refused the carrier: {}", r.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "))
+    })?;
+    let footprint = physics.rig.tracks.first().map(
+        |t| serde_json::json!({"contact_length_m": t.contact_length_m, "samples": t.samples, "width_m": t.width_m}),
+    );
     let mut cases = Vec::new();
-    for (name, rig, mirror) in [("geometry", skin_rig("carrier_tracked", true)?, false), ("forge", forge, true)] {
+    for (name, rig, mirror, track) in
+        [("geometry", skin_rig("carrier_tracked", true)?, false, None), ("forge", design.rig, true, footprint)]
+    {
         let run = rig.track_runs.first().ok_or_else(|| format!("the {name} carrier has no track runs"))?;
         let centres: Vec<[f64; 2]> = run // each wheel's (z, y) in the hull frame: the rest poses of its node and its parents
             .wheels
@@ -845,7 +853,8 @@ fn dump_belt(root: &Path, out: &Path) -> Result<(), String> {
         let length = Belt::round(&circles)?.length_m;
         for spin in BELT_SPINS_RAD {
             let frames: Vec<_> = link_frames(run, &seen, spin)?.iter().map(|(p, t)| [p[0], p[1], t[0], t[1]]).collect();
-            cases.push(serde_json::json!({"name": name, "run": run, "centres": centres, "mirror": mirror, "spin_rad": spin, "length_m": length, "frames": frames}));
+            let roles: Vec<String> = run.wheels.iter().map(|w| format!("{:?}", rig.nodes[w.node].role)).collect();
+            cases.push(serde_json::json!({"name": name, "run": run, "roles": roles, "track": track, "centres": centres, "mirror": mirror, "spin_rad": spin, "length_m": length, "frames": frames}));
         }
     }
     let doc = serde_json::to_string(&cases).map_err(|e| e.to_string())?;
