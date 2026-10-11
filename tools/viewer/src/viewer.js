@@ -1,11 +1,19 @@
 // Reference viewer core: a pure function of (rig, replay, t). No physics, no network.
 import * as THREE from 'three';
-import { linkFrames, linkMatrix } from './tracks.js';
+import { linkFrames, linkMatrix, contrast } from './tracks.js';
 
 const V = (o) => new THREE.Vector3(o.x, o.y, o.z);
 const Q = (o) => new THREE.Quaternion(o.x, o.y, o.z, o.w);
 
-const LIGHT_LINK = new THREE.Color(1, 1, 1), DARK_LINK = new THREE.Color(0.8, 0.8, 0.8); // multipliers of the track material's colour
+const LINK_MEAN = 1.0, LINK_SWING = 0.4, _shade = new THREE.Color(); // light and dark pads are the mean shade +- the swing, multipliers of the track material's colour
+// Alternate the links light and dark by `c` (1: the full swing, 0: all the mean shade): the pattern is what shows the belt turning, and it is faded
+// where it would show false motion (tracks.js `contrast`). Link k keeps its shade as it travels, so the pattern rides the belt.
+function shadeLinks(b, c) {
+  for (let k = 0; k < b.run.links; k++) b.mesh.setColorAt(k, _shade.setScalar(LINK_MEAN + (k % 2 ? -1 : 1) * LINK_SWING * c));
+  b.mesh.instanceColor.needsUpdate = true;
+  b.contrast = c;
+}
+const DEFAULT_FRAME_S = 1 / 60; // replay time one displayed frame covers when the host has not said
 
 export function buildRig(rig) {
   const nodes = rig.nodes.map((n) => {
@@ -39,8 +47,9 @@ export function buildRig(rig) {
     const mesh = run ? new THREE.InstancedMesh(geo, mats[m.material_slot], run.links) : new THREE.Mesh(geo, mats[m.material_slot]);
     if (run) { // the instances move, the geometry's own bounds do not
       mesh.frustumCulled = false;
-      for (let k = 0; k < run.links; k++) mesh.setColorAt(k, k % 2 ? DARK_LINK : LIGHT_LINK); // worn and clean pads alternate: the pattern is what shows the belt turning
-      belts.push({ run, mesh });
+      const belt = { run, mesh, contrast: 1 };
+      shadeLinks(belt, 1);
+      belts.push(belt);
     }
     nodes[m.node].g.add(mesh);
     meshes.push(mesh);
@@ -60,7 +69,8 @@ export function buildRig(rig) {
 }
 
 // Forward kinematics: rest pose, then the joint coordinate (rotation or translation along the axis in the parent frame).
-export function poseRig(built, joints) {
+// `perFrame` (optional, one entry per joint) is how far each joint moves between this displayed frame and the next: the host's estimate (rest poses: none).
+export function poseRig(built, joints, perFrame) {
   const q = new THREE.Quaternion();
   for (const n of built.nodes) {
     const j = n.def.joint;
@@ -72,12 +82,12 @@ export function poseRig(built, joints) {
     if (j.kind === 'Revolute') n.g.quaternion.premultiply(q.setFromAxisAngle(axis, x));
     else n.g.position.addScaledVector(axis, x);
   }
-  if (built.belts.length) poseBelts(built, joints);
+  if (built.belts.length) poseBelts(built, joints, perFrame);
 }
 
 // Each belt's links ride the taut band round its wheels as they stand now (the suspension moves them), advanced by the sprocket's spin.
 const _inv = new THREE.Matrix4(), _v = new THREE.Vector3();
-function poseBelts(built, joints) {
+function poseBelts(built, joints, perFrame) {
   built.root.updateMatrixWorld(true);
   for (const b of built.belts) {
     const { run, mesh } = b;
@@ -88,7 +98,10 @@ function poseBelts(built, joints) {
     if (out.error) continue; // a belt that cannot be built keeps its last shape
     for (let k = 0; k < run.links; k++) linkMatrix(mesh.instanceMatrix.array, 16 * k, out.frames, k, x, out.mirrored);
     mesh.instanceMatrix.needsUpdate = true;
-    Object.assign(b, { length_m: out.length, skipped: out.skipped });
+    const step = Math.abs(perFrame?.[run.sprocket_joint] ?? 0) * run.wheels[run.sprocket].radius_m; // metres the belt moves between displayed frames
+    const c = contrast(step, out.length / run.links);
+    if (Math.abs(c - b.contrast) > 0.005) shadeLinks(b, c);
+    Object.assign(b, { length_m: out.length, skipped: out.skipped, step_m: step });
   }
 }
 
@@ -97,14 +110,15 @@ export function sample(replay, t) {
   const dt = replay.header.frame_dt_s, f = replay.frames;
   const u = Math.min(Math.max(t / dt, 0), f.length - 1);
   const i = Math.min(Math.floor(u), f.length - 2), a = u - i;
-  return { a, f0: f[i], f1: f[i + 1] };
+  return { a, f0: f[i], f1: f[i + 1], dt };
 }
 
 export function applyVehicle(built, s, vi = 0) {
   const v0 = s.f0.vehicles[vi], v1 = s.f1.vehicles[vi], a = s.a;
   built.root.position.copy(V(v0.pos_m)).lerp(V(v1.pos_m), a);
   built.root.quaternion.copy(Q(v0.rot)).slerp(Q(v1.rot), a);
-  poseRig(built, v0.joints.map((x, k) => x + (v1.joints[k] - x) * a));
+  const per = (built.frame_s ?? DEFAULT_FRAME_S) / s.dt; // displayed frames are `frame_s` of replay time apart: the host sets it (recorder: 1 / fps)
+  poseRig(built, v0.joints.map((x, k) => x + (v1.joints[k] - x) * a), v0.joints.map((x, k) => (v1.joints[k] - x) * per));
 }
 
 import { terrainMesh, propsGroup, roadMesh } from './world.js';

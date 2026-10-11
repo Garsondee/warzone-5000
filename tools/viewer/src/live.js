@@ -110,7 +110,7 @@ async function ensureVehicle(id) {
   makeLook(lookData, built.paint).set({ scheme: schemeFor(id), seed: hash(id) });
   if (cur) { scene.remove(cur.built.root); disposeTree(cur.built.root); }
   scene.add(built.root);
-  cur = { id, built, radius: built.radius, fit: rig.fit || null, joints: new Array(rig.joint_count).fill(0) };
+  cur = { id, built, radius: built.radius, fit: rig.fit || null, joints: new Array(rig.joint_count).fill(0), perFrame: new Array(rig.joint_count).fill(0) };
   snap = true;
 }
 
@@ -344,11 +344,14 @@ function loop(now) {
     const A = prev || last;
     pos.copy(A.pos).lerp(last.pos, a);
     q.copy(A.quat).slerp(last.quat, a);
-    const jA = A.f.joints, jB = last.f.joints;
-    for (let i = 0; i < cur.joints.length; i++) cur.joints[i] = jA[i] + (jB[i] - jA[i]) * a;
+    const jA = A.f.joints, jB = last.f.joints, span = prev ? Math.max(1, last.at - prev.at) / 1000 : 0; // seconds between the two stream frames
+    for (let i = 0; i < cur.joints.length; i++) {
+      cur.joints[i] = jA[i] + (jB[i] - jA[i]) * a;
+      cur.perFrame[i] = span ? (jB[i] - jA[i]) * (dt / span) : 0; // how far this joint moves before the next displayed frame (belts fade their pattern by it)
+    }
     cur.built.root.position.copy(pos);
     cur.built.root.quaternion.copy(q);
-    poseRig(cur.built, cur.joints);
+    poseRig(cur.built, cur.joints, cur.perFrame);
     updateCamera(dt, pos, q, speed);
     marker.visible = cam.mode === 'rts';
     marker.position.set(pos.x, ground(pos.x, pos.z) + 0.25, pos.z);
@@ -385,6 +388,6 @@ window.__live = { // for the browser test only
   frame: () => (last ? last.f : null), vehicle: () => (cur ? cur.id : null), camera: () => cam.mode, input: () => lastCmd,
   thumbs: () => thumbs, fit: () => (cur ? cur.fit : null), sound: () => sound.state, picking, pick: startDrive, selected: () => selected, streaming: () => streaming, setCamera,
   vehicles: () => vehicles.map((v) => v.id),
-  belts: () => (cur ? cur.built.belts.map((b) => ({ links: b.run.links, length_m: b.length_m, skipped: b.skipped })) : []),
+  belts: () => (cur ? cur.built.belts.map((b) => ({ links: b.run.links, length_m: b.length_m, skipped: b.skipped, step_m: b.step_m, contrast: b.contrast })) : []),
 };
 boot();

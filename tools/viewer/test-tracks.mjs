@@ -1,7 +1,7 @@
 // The belt maths of the viewer (src/tracks.js) against closed forms and against GEOMETRY's Rust belt.
 //   node tools/viewer/test-tracks.mjs [dir with belt.json]     (w5k viewer dump-canned belt --out <dir> writes belt.json; without it the Rust check is skipped and says so)
 import fs from 'node:fs';
-import { round, band, linkFrames, linkMatrix } from './src/tracks.js';
+import { round, band, linkFrames, linkMatrix, contrast } from './src/tracks.js';
 
 let failed = false;
 const check = (ok, msg) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${msg}`); failed ||= !ok; };
@@ -18,6 +18,23 @@ const pts = (cs) => cs.map(([z, y]) => ({ z, y }));
   const [R, r, d] = [0.5, 0.2, 1.7], a = Math.asin((R - r) / d), un = round(wheels([[0, 0], [d, 0.4]], [R, r]));
   const dd = Math.hypot(d, 0.4), aa = Math.asin((R - r) / dd);
   check(near(un.length, 2 * Math.sqrt(dd * dd - (R - r) ** 2) + R * (Math.PI + 2 * aa) + r * (Math.PI - 2 * aa), 1e-12), `...and unequal discs: ${un.length.toFixed(6)} m (a = ${a.toFixed(3)} rad)`);
+}
+
+// no_belt_pattern_with_visible_contrast_ever_moves_the_wrong_way: the light-and-dark pattern repeats every two links (period P). A pattern that moves
+// a metres between frames is seen to move by the nearest of a - k P; from a = P / 2 (one pitch) that is the wrong way, or none (the wagon-wheel
+// effect). The contrast must be gone wherever that happens, at every frame rate, and be full at rest.
+{
+  const pitch = 0.149, P = 2 * pitch, apparent = (a) => { const r = a % P; return r > P / 2 ? r - P : r; };
+  let raw = 0, shown = 0, falseAt = [];
+  for (const fps of [24, 30, 48, 60, 120]) for (let v = 0; v <= 30; v += 0.005) {
+    const a = v / fps, wrong = Math.abs(apparent(a) - a) > 1e-9;
+    if (wrong) { raw++; shown = Math.max(shown, contrast(a, pitch)); if (fps === 30) falseAt.push(v); }
+  }
+  check(raw > 0 && shown === 0, `no_belt_pattern_with_visible_contrast_ever_moves_the_wrong_way: without the fade the pattern shows false motion at ${raw} of the sampled speeds (at 30 frames a second from ${(falseAt[0] * 3.6).toFixed(1)} km/h); with it the contrast there is ${shown}`);
+  let monotone = true, smooth = 0;
+  for (let a = 0; a < 0.3; a += 0.001) { monotone &&= contrast(a + 0.001, pitch) <= contrast(a, pitch) + 1e-12; smooth = Math.max(smooth, Math.abs(contrast(a + 0.001, pitch) - contrast(a, pitch))); }
+  check(contrast(0, pitch) === 1 && near(contrast(pitch / 2, pitch), 0.5, 1e-12) && contrast(pitch, pitch) === 0 && contrast(10, pitch) === 0 && monotone && smooth < 0.012,
+    `the pattern is full at rest, half at half a pitch a frame, gone at a pitch, never grows with speed and moves by under ${(smooth * 100).toFixed(2)}% per millimetre (no pop)`);
 }
 
 // The loops below are the carrier's: GEOMETRY's (rear sprocket, counter-clockwise) and FORGE's (front sprocket, clockwise), as the Rust test writes them.
