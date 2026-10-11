@@ -12,6 +12,7 @@ const getJSON = async (p) => { const r = await fetch(p); if (!r.ok) throw new Er
 const SCHEMES = { scout_4x4: 'desert_three', mule_4x4: 'woodland', hauler_4x4: 'nato_three_tone' };
 const hash = (s) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
 const QUICK_DEBOUNCE_MS = 150; // a slider that is still moving is not asked about
+const CONSEQUENCES_DEBOUNCE_MS = 50; // the numbers cost milliseconds, so they follow the slider almost live
 const FINAL_AFTER_MS = 1200; // the final bake starts when the sliders have rested this long
 const STILL = new URLSearchParams(location.search).has('still'); // ?still keeps the turntable still, for pictures that must share one angle
 
@@ -84,6 +85,7 @@ async function show(d, reframe) {
   shadow.position.set(centre.x, 0.02, centre.z);
   if (reframe) { orbit.target.copy(centre); orbit.dist = Math.max(size.x, size.y, size.z) * 2.6; }
   $('report').textContent = (d.report || []).join('\n');
+  if (d.consequences) { setConsequences(d.consequences); setFlags(d.flags || []); }
   designId = d.id;
   $('drive').disabled = false;
 }
@@ -116,6 +118,10 @@ function changed() {
   epoch++; // whatever is on its way is now out of date
   detail = 'pending';
   setBoard(null);
+  $('conseq').classList.add('stale'); // the old numbers answer the previous question
+  clearTimeout(conseqTimer);
+  const mine = epoch;
+  conseqTimer = setTimeout(() => askConsequences(mine), CONSEQUENCES_DEBOUNCE_MS);
   $('drive').disabled = true; // until the body that goes with these sliders has arrived
   quick = setTimeout(() => ask('preview'), QUICK_DEBOUNCE_MS);
 }
@@ -150,6 +156,39 @@ function setBoard(rows) {
     tr.innerHTML = `<th>${esc(r.name)}<small>${fmt(r.base, Math.min(Math.abs(r.base), Math.abs(r.value)))} \u2192 ${fmt(r.value, Math.min(Math.abs(r.base), Math.abs(r.value)))} ${esc(r.unit)}</small>${why}</th><td class="${r.better == null ? '' : r.better ? 'better' : 'worse'}">${change}</td>`;
     return tr;
   }));
+}
+// ---- the Consequences and the Flags -----------------------------------------------------------------------------------------
+// Read-only: what follows from the choices (the design model, docs/architecture/DESIGN-MODEL.md). They come with every design answer and, faster,
+// from /api/consequences (no body to bake), so they follow a slider live while the body catches up.
+function setConsequences(rows) {
+  const ul = $('conseq');
+  ul.classList.remove('stale');
+  ul.replaceChildren(...rows.map((r) => {
+    const li = document.createElement('li');
+    li.tabIndex = 0; // the because shows on hover or focus where the column is narrow
+    li.innerHTML = `<span class="k">${esc(r.label)}</span><b>${esc(r.text ?? fmt(r.value))} ${esc(r.unit)}</b><small>${esc(r.because)}</small>`;
+    return li;
+  }));
+}
+function setFlags(flags) {
+  // each flag: { level: 'amber' | 'red', text, because }; none until FORGE's design audit exists
+  $('flags').replaceChildren(...(flags.length ? flags : [{ level: '', text: 'None yet', because: 'FORGE\u2019s design audit will list what will not work, with the cause and the slider that matters most.' }]).map((f) => {
+    const li = document.createElement('li');
+    li.className = f.level;
+    li.innerHTML = `${esc(f.text)}<small>${esc(f.because)}</small>`;
+    return li;
+  }));
+}
+let conseqTimer = 0;
+async function askConsequences(mine) {
+  try {
+    const r = await fetch('/api/consequences', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ base: base.id, levers: factors }) });
+    const d = await r.json();
+    if (mine !== epoch) return;
+    if (!r.ok) { setStatus('error', d.error); return; } // a design FORGE refuses is said in words, as for the body
+    setConsequences(d.consequences);
+    setFlags(d.flags);
+  } catch (e) { if (mine === epoch) setStatus('error', String(e.message || e)); }
 }
 async function measure(id, mine) {
   setBoard(null);
@@ -201,6 +240,9 @@ window.__workshop = {
   detail: () => detail,
   board: () => [...$('board').tBodies[0].rows].map((r) => ({ name: r.cells[0].firstChild.textContent, change: r.cells[1].textContent, class: r.cells[1].className })),
   stale: () => $('board').classList.contains('stale'),
+  consequences: () => [...$('conseq').children].map((li) => ({ label: li.querySelector('.k').textContent, value: li.querySelector('b').textContent, because: li.querySelector('small').textContent })),
+  consequencesStale: () => $('conseq').classList.contains('stale'),
+  flags: () => [...$('flags').children].map((li) => li.textContent),
   designId: () => designId,
   error: () => ($('status').className === 'error' ? $('status').textContent : null),
   size: () => { const b = new THREE.Box3().setFromObject(shown.root).getSize(new THREE.Vector3()); return [b.x, b.y, b.z]; },

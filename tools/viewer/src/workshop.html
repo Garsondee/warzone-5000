@@ -11,12 +11,14 @@
 html,body{margin:0;height:100%;background:var(--surface);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
 #app{display:grid;grid-template-columns:minmax(280px,350px) 1fr minmax(300px,340px);height:100%}
 aside{display:contents}
-#controls,#results{grid-row:1;padding:20px 22px;overflow:auto;min-height:0}
+#controls,#right{grid-row:1;padding:20px 22px;overflow:auto;min-height:0}
 #controls{grid-column:1;border-right:1px solid var(--grid)}
 #stage{grid-column:2}
-#results{grid-column:3;border-left:1px solid var(--grid)}
+#right{grid-column:3;border-left:1px solid var(--grid)}
 h1{font-size:20px;margin:0 0 4px}
-h2{font-size:15px;margin:0 0 2px}
+h2{font-size:15px;margin:18px 0 2px}
+#right h2:first-child{margin-top:0}
+.note{color:var(--ink2);font-size:13px;margin:0 0 8px}
 .sub{color:var(--ink2);margin:0 0 16px}
 #bases{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
 #bases button{font:inherit;padding:6px 12px;border-radius:8px;border:1px solid var(--grid);background:transparent;color:var(--ink);cursor:pointer}
@@ -39,13 +41,33 @@ h2{font-size:15px;margin:0 0 2px}
 #board.stale{opacity:.45}
 .better::before{content:"\2713  ";color:#0ca30c;font-weight:700}
 .worse::before{content:"\2715  ";color:var(--bad);font-weight:700}
-#drive{width:100%;font:inherit;font-size:18px;font-weight:700;padding:12px;border:0;border-radius:12px;background:#2fbf5b;color:#fff;cursor:pointer}
+#conseq{list-style:none;margin:0 0 4px;padding:0;font-variant-numeric:tabular-nums}
+#conseq li{display:grid;grid-template-columns:1fr auto;gap:0 8px;padding:6px 0;border-top:1px solid var(--grid)}
+#conseq .k{color:var(--ink)}
+#conseq b{font-weight:600;text-align:right;white-space:nowrap}
+#conseq li{position:relative;outline:none}
+#conseq small{grid-column:1 / 3;color:var(--ink2);font-size:12px;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+#conseq li:focus .k,#conseq li:hover .k{text-decoration:underline dotted}
+#conseq.stale{opacity:.45}
+#flags{margin:0 0 12px}
+#flags li{list-style:none;padding:6px 0;border-top:1px solid var(--grid)}
+#flags small{display:block;color:var(--ink2)}
+#flags .amber::before,#flags .red::before{content:"\25B2  ";font-weight:700}
+#flags .amber::before{color:#c98a00}
+#flags .red::before{color:var(--bad)}
+#drive{position:sticky;bottom:0;width:100%;font:inherit;font-size:18px;font-weight:700;padding:12px;border:0;border-radius:12px;background:#2fbf5b;color:#fff;cursor:pointer;box-shadow:0 -10px 12px -6px var(--surface)}
 #drive:disabled{opacity:.4;cursor:default}
 details{margin-top:14px;color:var(--ink2)}
 details pre{white-space:pre-wrap;font:12px/1.45 ui-monospace,Consolas,monospace;margin:8px 0 0}
 #stage{position:relative;background:radial-gradient(120% 100% at 50% 30%,var(--stage2),var(--stage))}
 #c{position:absolute;inset:0;width:100%;height:100%;display:block}
-@media (max-width:1100px){#app{grid-template-columns:minmax(300px,380px) 1fr}aside{display:block;overflow:auto;border-right:1px solid var(--grid)}#controls,#results{padding:20px 22px 0;overflow:visible;border:0}#results{padding-top:6px}}
+@media (max-width:1499px){
+  .note{display:none}
+  #conseq small{display:none;position:absolute;left:0;right:0;top:calc(100% - 2px);padding:8px 10px;background:var(--surface);color:var(--ink);border:1px solid var(--grid);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.25);z-index:5;font-size:13px;-webkit-line-clamp:unset;overflow:visible}
+  #conseq li:hover small,#conseq li:focus small{display:block}
+}
+@media (min-width:1500px){#app{grid-template-columns:minmax(280px,340px) 1fr minmax(300px,340px) minmax(300px,340px)}#right{display:contents}#consequences,#results{grid-row:1;padding:20px 22px;overflow:auto;min-height:0;border-left:1px solid var(--grid)}#consequences{grid-column:3}#results{grid-column:4}#consequences h2:first-child,#results h2:first-child{margin-top:0}}
+@media (max-width:1100px){#conseq small{position:static;display:-webkit-box;width:auto;padding:0;border:0;box-shadow:none;background:none;color:var(--ink2);font-size:12px;-webkit-line-clamp:2;overflow:hidden}.note{display:block}#app{grid-template-columns:minmax(300px,380px) 1fr}aside{display:block;overflow:auto;border-right:1px solid var(--grid)}#controls,#right{padding:20px 22px 0;overflow:visible;border:0}#right{padding-top:6px}}
 @media (max-width:760px){#app{grid-template-columns:1fr;grid-template-rows:42vh 1fr}#stage{grid-column:1;grid-row:1}aside{grid-column:1;grid-row:2;border-right:0;border-top:1px solid var(--grid)}}
 </style>
 <div id="app">
@@ -56,12 +78,21 @@ details pre{white-space:pre-wrap;font:12px/1.45 ui-monospace,Consolas,monospace;
       <div id="bases" role="group" aria-label="Base vehicle"></div>
       <div id="levers"></div>
     </div>
-    <div id="results">
-      <h2>Proving ground</h2>
-      <div id="status" role="status" aria-live="polite"></div>
-      <table id="board" class="stale" aria-label="Proving ground scoreboard"><caption>as authored → this design</caption><tbody></tbody></table>
-      <button id="drive" type="button" disabled>DRIVE</button>
-      <details><summary>What the compile made of it</summary><pre id="report"></pre></details>
+    <div id="right">
+      <section id="consequences">
+        <h2>Consequences</h2>
+        <p class="note">What follows from your choices: read-only, nothing here is a slider.</p>
+        <ul id="conseq" class="stale" aria-label="Consequences of the design"></ul>
+      </section>
+      <section id="results">
+        <h2>Proving ground</h2>
+        <div id="status" role="status" aria-live="polite"></div>
+        <table id="board" class="stale" aria-label="Proving ground scoreboard"><caption>as authored → this design</caption><tbody></tbody></table>
+        <h2>Flags</h2>
+        <ul id="flags" aria-label="Flags"></ul>
+        <button id="drive" type="button" disabled>DRIVE</button>
+        <details><summary>What the compile made of it</summary><pre id="report"></pre></details>
+      </section>
     </div>
   </aside>
   <div id="stage"><canvas id="c"></canvas></div>

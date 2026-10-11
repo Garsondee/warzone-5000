@@ -298,6 +298,8 @@ struct Design {
     extras: w5k_forge::extras::Extras,
     rig: RenderRig,
     report: Vec<String>,
+    /// The Consequences panel: `{id, label, value, unit, because}` rows that follow from the choices (`consequences`).
+    consequences: Vec<serde_json::Value>,
     skin: Option<(Vec<u8>, usize, Vec<f64>)>,
 }
 
@@ -330,7 +332,123 @@ fn build_design(base: &Path, levers: &[(String, f64)], quality: &str) -> Result<
         }
         other => return Err(format!("--skin is preview, final or off, not {other}")),
     };
-    Ok(Design { def, extras, rig, report: compiled.report, skin })
+    let consequences = consequences(&def, &compiled);
+    Ok(Design { def, extras, rig, report: compiled.report, consequences, skin })
+}
+
+/// The Consequences panel (the design model, D1): what follows from the choices by statics and arithmetic, instantly, each with its unit and a
+/// one-line "because". PROVISIONAL(audit): FORGE exports these as a structured design audit (card C-020); the page reads rows of this shape
+/// either way. Wheeled vehicles only (the Workshop offers no others).
+fn consequences(def: &VehicleDef, c: &w5k_forge::compile::Compiled) -> Vec<serde_json::Value> {
+    let rig = &c.rig;
+    // `text` is what the page shows when a row is several numbers ("59 / 41"); `value` is the first of them
+    let row = |id: &str, label: &str, value: f64, text: Option<String>, unit: &str, because: String| serde_json::json!({"id": id, "label": label, "value": value, "text": text, "unit": unit, "because": because});
+    let mass = rig.total_mass_kg();
+    let mut parts: Vec<_> = c.mass_items.iter().map(|m| (m.mass_kg, m.name.replace('_', " "))).collect();
+    parts.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let listed: Vec<_> = parts.iter().map(|(m, n)| format!("{n} {m:.0}")).collect();
+    let mut rows = vec![row(
+        "mass",
+        "Total mass",
+        mass,
+        None,
+        "kg",
+        if listed.is_empty() {
+            "the hull as authored plus the wheels".to_string()
+        } else {
+            format!("the parts add up (kg): {}; plus the wheels", listed.join(", "))
+        },
+    )];
+    // static axle loads: the centre of mass of hull and wheels against the first and last axle (hull frame: -z is forward)
+    let (hull, wheels) = (&rig.hull, &rig.stations);
+    let z_cm = (hull.mass_kg * hull.com_m.z + wheels.iter().map(|s| s.unsprung_mass_kg * s.rest_pos_m.z).sum::<f64>())
+        / (hull.mass_kg + wheels.iter().map(|s| s.unsprung_mass_kg).sum::<f64>());
+    let axle_z = |axle: u8| {
+        let zs: Vec<f64> = wheels.iter().filter(|s| s.axle == axle).map(|s| s.rest_pos_m.z).collect();
+        (!zs.is_empty()).then(|| zs.iter().sum::<f64>() / zs.len() as f64)
+    };
+    let last = wheels.iter().map(|s| s.axle).max().unwrap_or(0);
+    if let (Some(zf), Some(zr), 1) = (axle_z(0), axle_z(last), last) {
+        let front = 100.0 * (zr - z_cm) / (zr - zf); // const-ok: a share as a percentage
+        rows.push(row(
+            "axle_load",
+            "Axle load, front / rear",
+            front,
+            Some(format!("{front:.0} / {:.0}", 100.0 - front)), // const-ok: a share as a percentage
+            "%",
+            format!(
+                "statics: the centre of mass is {:.2} m behind the front axle on a {:.2} m wheelbase",
+                z_cm - zf,
+                zr - zf
+            ),
+        ));
+    }
+    let power_w = def.powertrain.engine.peak_power_w.v;
+    rows.push(row(
+        "power_to_weight",
+        "Power to weight",
+        power_w / mass, // W per kg is kW per tonne
+        None,
+        "kW/t",
+        format!("{:.0} kW of peak power over {mass:.0} kg", power_w * KW_PER_W),
+    ));
+    if let Some((tyre, width)) = wheels.iter().find_map(|s| s.wheel.tyre.as_ref().map(|t| (t, s.wheel.width_m))) {
+        rows.push(row(
+            "ground_pressure",
+            "Ground pressure",
+            tyre.inflation_pa * KW_PER_W,
+            None,
+            "kPa",
+            format!(
+                "FORGE sizes the contact patch so that wheel load = inflation pressure x patch: {:.0} mm long on a {:.0} mm tyre",
+                tyre.patch_length_m * MM_PER_M,
+                width * MM_PER_M
+            ),
+        ));
+    }
+    rows.push(row(
+        "com_height",
+        "Centre of mass above ground",
+        hull.com_m.y + rig.ride_height_m,
+        None,
+        "m",
+        "the sprung masses at their places in the budget, about the hull datum, and the ride height".to_string(),
+    ));
+    // the report says "axle 0: ...; f 1.9 Hz -> ..." for each axle
+    let hz: Vec<f64> = c
+        .report
+        .iter()
+        .filter(|l| l.starts_with("axle "))
+        .filter_map(|l| l.split("; f ").nth(1)?.split(" Hz").next()?.parse().ok())
+        .collect();
+    if let Some(&front) = hz.first() {
+        rows.push(row(
+            "ride_frequency",
+            "Ride frequency, front / rear",
+            front,
+            Some(hz.iter().map(|f| format!("{f:.1}")).collect::<Vec<_>>().join(" / ")),
+            "Hz",
+            "authored for each axle; FORGE derives the spring from it and the sprung mass on that axle".to_string(),
+        ));
+    }
+    if let Some(line) = c.report.iter().find(|l| l.starts_with("obstacle geometry")) {
+        let angle = |key: &str| {
+            line.split(key)
+                .nth(1)
+                .and_then(|r| r.split(|ch: char| !(ch.is_ascii_digit() || ch == '.')).next()?.parse::<f64>().ok())
+        };
+        if let (Some(a), Some(d), Some(b)) = (angle("approach "), angle("departure "), angle("breakover ")) {
+            rows.push(row(
+                "obstacle_angles",
+                "Approach / departure / breakover",
+                a,
+                Some(format!("{a:.0} / {d:.0} / {b:.0}")),
+                "deg",
+                "from the ground clearance and the axle positions: the steepest ramp it can drive onto, off, and over the crest between the axles".to_string(),
+            ));
+        }
+    }
+    rows
 }
 
 impl Design {
@@ -446,7 +564,7 @@ const SLIDERS: [(&str, &str, &str, f64, f64); 6] = [
     ("tyre_width", "Tyre width", "mm", 0.7, 1.5), // const-ok: slider range of the Workshop page
     ("spring_rate", "Spring rate", "", 0.5, 2.0), // const-ok: slider range of the Workshop page
     ("engine_peak_power", "Engine power", "kW", 0.5, 2.0), // const-ok: slider range of the Workshop page
-    ("mass", "Mass", "kg", 0.6, 1.6),          // const-ok: slider range of the Workshop page
+    ("tyre_pressure", "Tyre pressure", "kPa", 0.6, 1.6), // const-ok: slider range of the Workshop page
     ("track_gauge", "Track width", "m", 0.8, 1.2), // const-ok: slider range of the Workshop page
 ];
 const MAX_BODY: usize = 1 << 16; // const-ok: a request body this big is not a design
@@ -462,7 +580,7 @@ fn base_value(def: &VehicleDef, lever: &str) -> Option<f64> {
         "wheelbase" => g.axles.last()?.from_front_m.v - g.axles.first()?.from_front_m.v,
         "tyre_width" => g.tyre.section_width_m.v * MM_PER_M,
         "engine_peak_power" => def.powertrain.engine.peak_power_w.v * KW_PER_W,
-        "mass" => def.hull.mass_kg.v,
+        "tyre_pressure" => g.tyre.inflation_pa.v * KW_PER_W, // Pa to kPa: the same factor as W to kW
         "track_gauge" => g.axles.first()?.track_width_m.v,
         _ => return None,
     })
@@ -679,23 +797,17 @@ impl Shop {
                     Err(e) => fail(500, &e),
                 }
             }
-            ("POST", "/api/design") => {
-                let Ok(v) = serde_json::from_slice::<serde_json::Value>(body) else {
-                    return fail(400, "the body is not JSON");
+            ("POST", "/api/design" | "/api/consequences") => {
+                let (base, levers, quality) = match parse_design_request(body) {
+                    Ok(r) => r,
+                    Err(e) => return fail(400, &e),
                 };
-                let Some(base) = v["base"].as_str() else { return fail(400, "`base` is the id of a vehicle") };
-                let mut levers = Vec::new();
-                for (name, f) in v["levers"].as_object().into_iter().flatten() {
-                    match f.as_f64() {
-                        Some(x) if x.is_finite() && x > 0.0 => {
-                            if (x - 1.0).abs() > f64::EPSILON {
-                                levers.push((name.clone(), x)); // the base is the design with no levers: a factor of one is no lever
-                            }
-                        }
-                        _ => return fail(400, &format!("lever {name}: the factor must be a positive number")),
+                // the Consequences need no body: "off" compiles and does the statics, without baking a skin (milliseconds, so the panel follows a slider live)
+                let asked = if path == "/api/consequences" { "off" } else { quality.as_str() };
+                match self.design(&base, &levers, asked) {
+                    Ok(b) if path == "/api/consequences" => {
+                        json_reply(200, &serde_json::json!({"consequences": b.design.consequences, "flags": []}))
                     }
-                }
-                match self.design(base, &levers, v["quality"].as_str().unwrap_or("preview")) {
                     Ok(b) => json_reply(200, &design_json(&b)),
                     Err(e) => fail(422, &e),
                 }
@@ -727,10 +839,31 @@ impl Shop {
     }
 }
 
+type DesignRequest = (String, Vec<(String, f64)>, String);
+
+/// A design request: the base's id, the levers as (name, factor) with a factor of one dropped (the base is the design with no levers), and the
+/// quality asked for.
+fn parse_design_request(body: &[u8]) -> Result<DesignRequest, String> {
+    let v = serde_json::from_slice::<serde_json::Value>(body).map_err(|_| "the body is not JSON".to_string())?;
+    let base = v["base"].as_str().ok_or("`base` is the id of a vehicle")?.to_string();
+    let mut levers = Vec::new();
+    for (name, f) in v["levers"].as_object().into_iter().flatten() {
+        match f.as_f64() {
+            Some(x) if x.is_finite() && x > 0.0 => {
+                if (x - 1.0).abs() > f64::EPSILON {
+                    levers.push((name.clone(), x));
+                }
+            }
+            _ => return Err(format!("lever {name}: the factor must be a positive number")),
+        }
+    }
+    Ok((base, levers, v["quality"].as_str().unwrap_or("preview").to_string()))
+}
+
 /// What the page needs of a built design: the physics rig (to fit the skin to), FORGE's report, and where the skin is.
 fn design_json(b: &Built) -> serde_json::Value {
     let skin = b.design.skin.as_ref().map(|(bytes, tris, _)| serde_json::json!({"url": format!("/api/skin/{}", b.id), "bytes": bytes.len(), "triangles": tris}));
-    serde_json::json!({"id": b.id, "name": b.design.def.name, "rig": b.design.rig, "report": b.design.report, "skin": skin, "seconds": b.seconds})
+    serde_json::json!({"id": b.id, "name": b.design.def.name, "rig": b.design.rig, "report": b.design.report, "consequences": b.design.consequences, "flags": [], "skin": skin, "seconds": b.seconds})
 }
 
 /// A file of the page's folder; nothing outside it (no `..`, no backslash).
@@ -1393,5 +1526,136 @@ mod tests {
         assert!(cases
             .iter()
             .all(|c| c["frames"].as_array().unwrap().len() == c["run"]["links"].as_u64().unwrap() as usize));
+    }
+
+    fn consequence(rows: &serde_json::Value, id: &str) -> serde_json::Value {
+        rows.as_array()
+            .and_then(|r| r.iter().find(|x| x["id"] == id))
+            .cloned()
+            .unwrap_or_else(|| panic!("no consequence {id}: {rows}"))
+    }
+
+    /// The design model's rule: the Workshop offers choices, and the quantities that follow from them are read-only.
+    #[test]
+    fn the_workshop_offers_choices_and_never_a_consequence() {
+        let ids: Vec<_> = SLIDERS.iter().map(|s| s.0).collect();
+        assert!(ids.contains(&"tyre_pressure") && ids.contains(&"engine_peak_power"));
+        for consequence in ["mass", "com_height", "tyre_friction", "ground_clearance"] {
+            assert!(!ids.contains(&consequence), "{consequence} is a probe or a consequence, not a slider");
+        }
+    }
+
+    /// Engine power has a price: the driveline gets heavier with the torque it carries, so power to weight grows by less than the power does.
+    #[test]
+    fn more_engine_power_adds_mass_and_gives_less_than_proportional_power_to_weight() {
+        let port = start();
+        let ask = |levers: &str| {
+            get_json(port, "POST", "/api/consequences", &format!("{{\"base\":\"hauler_4x4\",\"levers\":{levers}}}")).1
+                ["consequences"]
+                .clone()
+        };
+        let (base, more) = (ask("{}"), ask("{\"engine_peak_power\":1.5}"));
+        let (m0, m1) = (
+            consequence(&base, "mass")["value"].as_f64().unwrap(),
+            consequence(&more, "mass")["value"].as_f64().unwrap(),
+        );
+        let (p0, p1) = (
+            consequence(&base, "power_to_weight")["value"].as_f64().unwrap(),
+            consequence(&more, "power_to_weight")["value"].as_f64().unwrap(),
+        );
+        assert!(m1 > m0 + 100.0, "{m0} kg to {m1} kg: power must cost mass");
+        assert!(p1 > p0 && p1 < 1.5 * p0, "power to weight {p0} to {p1} kW/t for 1.5x the power");
+        let kw = |rows: &serde_json::Value| {
+            consequence(rows, "power_to_weight")["because"]
+                .as_str()
+                .unwrap()
+                .split(' ')
+                .next()
+                .unwrap()
+                .parse::<f64>()
+                .unwrap()
+        };
+        assert!((kw(&more) / kw(&base) - 1.5).abs() < 0.01, "the because line names the power it divided");
+    }
+
+    /// FORGE sizes a tyre's patch so that load = inflation pressure x patch area, so a harder tyre has a shorter patch and a higher ground pressure,
+    /// and its pressure is a choice that moves no mass.
+    #[test]
+    fn a_harder_tyre_has_a_higher_ground_pressure_and_the_same_mass() {
+        let port = start();
+        let ask = |f: f64| {
+            get_json(
+                port,
+                "POST",
+                "/api/consequences",
+                &format!("{{\"base\":\"hauler_4x4\",\"levers\":{{\"tyre_pressure\":{f}}}}}"),
+            )
+            .1["consequences"]
+                .clone()
+        };
+        let (soft, hard) = (ask(0.6), ask(1.5));
+        let kpa = |r: &serde_json::Value| consequence(r, "ground_pressure")["value"].as_f64().unwrap();
+        assert!((kpa(&hard) / kpa(&soft) - 1.5 / 0.6).abs() < 1e-9, "{} vs {}", kpa(&soft), kpa(&hard));
+        let patch = |r: &serde_json::Value| {
+            consequence(r, "ground_pressure")["because"]
+                .as_str()
+                .unwrap()
+                .split("patch: ")
+                .nth(1)
+                .unwrap()
+                .split(" mm")
+                .next()
+                .unwrap()
+                .parse::<f64>()
+                .unwrap()
+        };
+        assert!(patch(&hard) < patch(&soft), "{} mm vs {} mm", patch(&soft), patch(&hard));
+        assert!(
+            (consequence(&soft, "mass")["value"].as_f64().unwrap()
+                - consequence(&hard, "mass")["value"].as_f64().unwrap())
+            .abs()
+                < 1e-9
+        );
+    }
+
+    /// The front share of the static load comes from the centre of mass of hull and wheels; FORGE's own statics (the sprung load on each axle in its
+    /// report) must agree to within what the unsprung weight, which splits evenly, moves it.
+    #[test]
+    fn the_front_axle_share_agrees_with_forges_static_axle_loads() {
+        let port = start();
+        let design =
+            get_json(port, "POST", "/api/design", "{\"base\":\"hauler_4x4\",\"levers\":{},\"quality\":\"off\"}").1;
+        let load = |axle: u8| {
+            let line = design["report"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|l| l.as_str())
+                .find(|l| l.starts_with(&format!("axle {axle}:")))
+                .unwrap();
+            line.split("load ").nth(1).unwrap().split(" N").next().unwrap().parse::<f64>().unwrap()
+        };
+        let forge = 100.0 * load(0) / (load(0) + load(1));
+        let share = consequence(&design["consequences"], "axle_load")["value"].as_f64().unwrap();
+        assert!(
+            (share - forge).abs() < 2.0 && (share - forge).abs() > 0.0,
+            "front share {share:.1}% against FORGE's {forge:.1}%"
+        );
+    }
+
+    /// The Consequences answer needs no skin, and the same design asked for in full carries the same rows.
+    #[test]
+    fn the_consequences_endpoint_gives_the_rows_of_the_design_without_baking_a_body() {
+        let port = start();
+        let levers = "{\"base\":\"scout_4x4\",\"levers\":{\"wheelbase\":1.2},";
+        let (status, quick) = get_json(port, "POST", "/api/consequences", &format!("{levers}\"quality\":\"final\"}}"));
+        assert_eq!(status, 200);
+        assert!(quick["flags"].as_array().unwrap().is_empty(), "no flags until FORGE's audit exists");
+        let full = get_json(port, "POST", "/api/design", &format!("{levers}\"quality\":\"preview\"}}")).1;
+        assert_eq!(quick["consequences"], full["consequences"]);
+        assert_eq!(
+            get_json(port, "POST", "/api/consequences", "{\"base\":\"scout_4x4\",\"levers\":{\"wheelbase\":-1}}").0,
+            400
+        );
     }
 }

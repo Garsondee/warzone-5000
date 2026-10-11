@@ -21,7 +21,11 @@ const lengthOf = async () => (await w(() => window.__workshop.size()))[2];
 await page.goto(url);
 await until(() => window.__workshop && window.__workshop.detail() === 'authored');
 const sliders = await page.$$eval('#levers input[type=range]', (els) => els.map((e) => e.id));
-check(sliders.length === 6, `six sliders: ${sliders.join(', ')}`);
+check(sliders.length === 6 && sliders.includes('s-tyre_pressure') && !sliders.includes('s-mass'), `six sliders, all choices (tyre pressure, no mass): ${sliders.join(', ')}`);
+const rows0 = await w(() => window.__workshop.consequences());
+check(['Total mass', 'Axle load', 'Power to weight', 'Ground pressure', 'Centre of mass', 'Ride frequency', 'Approach'].every((k) => rows0.some((r) => r.label.startsWith(k))) && rows0.every((r) => r.because.length > 10 && /\d/.test(r.value)),
+  `the Consequences are there from the start, each with a value and a because: ${rows0.map((r) => `${r.label} ${r.value}`).join(' | ')}`);
+check((await w(() => window.__workshop.flags())).length === 1 && /None yet/.test((await w(() => window.__workshop.flags()))[0]), 'the Flags panel says none yet until the audit exists');
 check((await w(() => window.__workshop.base())) === 'mule_4x4', 'the Mule is the first vehicle shown');
 await page.screenshot({ path: `${out}/1-authored.png` });
 
@@ -56,7 +60,14 @@ await page.screenshot({ path: `${out}/3-wheelbase-120-final.png` });
 // the scoreboard: measured against the base, and more power is a better launch and a better climb
 await slide('wheelbase', 1);
 const tBoard = Date.now();
+const massBefore = parseFloat((await w(() => window.__workshop.consequences())).find((r) => r.label === 'Total mass').value);
 await slide('engine_peak_power', 1.5);
+check(await w(() => window.__workshop.consequencesStale()), 'the old consequences are greyed the moment a slider moves');
+await until(([m]) => !window.__workshop.consequencesStale() && parseFloat(window.__workshop.consequences().find((r) => r.label === 'Total mass').value) !== m, [massBefore], 20000);
+const conseqTook = (Date.now() - tBoard) / 1000, rows1 = await w(() => window.__workshop.consequences());
+const massAfter = parseFloat(rows1.find((r) => r.label === 'Total mass').value);
+check(massAfter > massBefore + 100 && conseqTook < 1.5, `engine power has a price: mass ${massBefore} to ${massAfter} kg, shown in ${conseqTook.toFixed(2)} s, without waiting for the body (${await w(() => window.__workshop.detail())})`);
+check(parseFloat(rows1.find((r) => r.label === 'Power to weight').value) < 1.5 * parseFloat(rows0.find((r) => r.label === 'Power to weight').value) * 1.2, `power to weight grows by less than the power does: ${rows1.find((r) => r.label === 'Power to weight').value}`);
 await until(() => window.__workshop.detail() === 'preview');
 await until(() => !window.__workshop.stale() && window.__workshop.board().length === 6, null, 120000);
 const boardTook = (Date.now() - tBoard) / 1000;
@@ -68,11 +79,14 @@ check(/^\u2212.*better$/.test(row('0-48').change), `more power shortens the 0-48
 check(board.every((r) => /^(no change|[+\u2212]\d+(\.\d+)?% (better|worse))$/.test(r.change)), `every row says how it changed in words: ${board.map((r) => r.change).join(' | ')}`);
 check(board.every((r) => r.name && r.change !== undefined), `six rows, each with a name and a change: ${board.map((r) => r.name).join(' / ')}`);
 await page.screenshot({ path: `${out}/4-scoreboard.png` });
-await slide('mass', 1.3);
+await slide('tyre_pressure', 1.5);
 check(await w(() => window.__workshop.stale()), 'the old numbers are greyed the moment a slider moves');
 check(await page.$eval('#drive', (b) => b.disabled), 'DRIVE waits for the body that goes with the sliders');
 await until(() => window.__workshop.detail() === 'preview');
 await until(() => !window.__workshop.stale(), null, 120000);
+const kpa0 = info.levers.find((l) => l.id === 'tyre_pressure').base, pressure = (await w(() => window.__workshop.consequences())).find((r) => r.label === 'Ground pressure').value;
+check(Math.abs(parseFloat(pressure) - 1.5 * kpa0) < 1, `a harder tyre has a higher ground pressure: ${pressure} for ${kpa0} kPa x 1.5`);
+await page.screenshot({ path: `${out}/5-consequences.png` });
 
 // DRIVE: the real simulation starts on exactly this design, in another tab
 const [game] = await Promise.all([page.waitForEvent('popup'), page.click('#drive')]);
