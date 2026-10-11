@@ -1,11 +1,12 @@
 # Status: VALIDATION
 
-**Last updated:** 2026-10-10 UTC | **Branch:** lane/validation/impact-v2 | **Contract pinned:** contract-v0.3 | **Phase:** building
+**Last updated:** 2026-10-10 UTC | **Branch:** lane/validation/impact-v3 | **Contract pinned:** contract-v0.3 | **Phase:** building
 
 ## Done
 - Spike S9 (`docs/lanes/validation/spike-s9.md`), design note with CCR text (`design-note.md`), theory note stub (`docs/theory/validation.md`).
 
 ## In progress
+- Impact Matrix v3 (`docs/lanes/validation/impact-v3.md`): ARCH's unresolved-cell rule adopted; headline four ways (every cell 53 of 65, noise-aware 42 of 51, without B11 41 of 50, no cell left out 55 of 69); corrects my v2 reading of the step noise; the step row's big changes are regime switches. PR open; then idle.
 - Impact Matrix v2 on FORGE's mass budget (`docs/lanes/validation/impact-v2.md`, `impact-v2.json`): 49 of 65 (75%) at 0.5%, 50 of 65 (77%) at 1%; Hauler B6 tagged transient; engine-power sweep answers VIEWER; asks ARCH to echo `step_resolution_m`. PR open; then idle.
 - Matrix honesty PR (ARCH's three requests): table rows corrected (B11 torque rows, B12 power-limited rule removed), headline at 0.5% and 1%, 23 of 53 rows tested and the untested list; `docs/lanes/validation/impact-v1-corrected.md`. Then idle.
 - Impact Matrix v1 (`docs/lanes/validation/impact-v1.md`, tornado JSON `impact-v1.json`): 41 of 57 (72%) on the integration head after #147; 16 wrong signs with causes. PR open; then idle.

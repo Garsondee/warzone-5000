@@ -145,7 +145,10 @@ fn impact(args: &[String]) -> Result<(), String> {
     let matrix = std::fs::read_to_string(root().join("docs/validation/IMPACT-MATRIX.md")).map_err(|e| e.to_string())?;
     let table = impact::parse_table(&matrix);
     let all_benchmarks = impact::parse_benchmarks(&matrix);
-    let transient = IMPACT_TRANSIENT.iter().map(|(v, b)| (v.to_string(), b.to_string())).collect();
+    let mut excl = impact::Exclusions {
+        transient: IMPACT_TRANSIENT.iter().map(|(v, b)| (v.to_string(), b.to_string())).collect(),
+        ..impact::Exclusions::default()
+    };
     // `--factor X` perturbs by X instead of +10% (a sweep); `--only a,b` runs just those levers (lever ids of `impact::levers`)
     let factor =
         flag(args, "--factor").map_or(Ok(IMPACT_FACTOR), |f| f.parse::<f64>().map_err(|e| format!("--factor: {e}")))?;
@@ -212,11 +215,25 @@ fn impact(args: &[String]) -> Result<(), String> {
                 };
                 if let (Some(a), Some(b)) = (value(&base), value(&pert)) {
                     obs.pairs.insert((def.id.clone(), lever.id.to_string(), bench.id.to_string()), (a, b));
+                    // ARCH's rule: where the bench echoes its own run-up spread, a change within twice the larger spread is noise
+                    let input = |m: &BTreeMap<String, ProvingResult>, k: &str| {
+                        m.get(bench.test).and_then(|r| r.inputs.get(k)).copied()
+                    };
+                    if let (Some(sb), Some(sp)) =
+                        (input(&base, "step_run_up_spread_m"), input(&pert, "step_run_up_spread_m"))
+                    {
+                        let resolution = input(&base, "step_resolution_m")
+                            .unwrap_or(0.0)
+                            .max(input(&pert, "step_resolution_m").unwrap_or(0.0));
+                        if impact::is_unresolved(b - a, sb, sp, resolution) {
+                            excl.unresolved.insert((def.id.clone(), lever.id.to_string(), bench.id.to_string()));
+                        }
+                    }
                 }
             }
         }
     }
-    let report = impact::evaluate_full(&table, &levers, &obs, &all_benchmarks, &transient);
+    let report = impact::evaluate_full(&table, &levers, &obs, &all_benchmarks, &excl);
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     std::fs::write(out.join("impact.json"), serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?)
         .map_err(|e| e.to_string())?;
