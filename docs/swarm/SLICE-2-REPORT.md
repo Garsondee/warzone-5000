@@ -40,13 +40,13 @@
 
 ![Design impact: every lever against every benchmark](../lanes/arch/media/slice2-tornado-v3.png)
 
-**4. A design is an assembly, and its weight comes from its parts** (your C-020). FORGE's component mass budget is merged: engine power now changes the vehicle's mass, balance and inertia. What is still to come: the audit of derived numbers and flags, the read-only Consequences panel in the Workshop, and the armour and weapon prices.
+**4. A design is an assembly, and its weight comes from its parts** (your C-020). FORGE's component mass budget is merged: engine power now changes the vehicle's mass, balance and inertia. FORGE's first design audit is merged too (`w5k forge audit <vehicle>`: mass by system, balance and radii of gyration, power and thrust to weight, ride frequency, damping, sag and bump capacity, each with its unit, its because-line and how sure we are of it). What is still to come: the flags and their thresholds (what will not work, with the cause and the slider that matters most), the Workshop's read-only Consequences panel (VIEWER, in review), and the armour and weapon prices.
 
 ## Not true yet (so nobody is surprised)
 - Published figures are unreachable from the lane sessions, so every "validated" light is "consistent with first principles" (card C-017 has the options).
 - The carrier's brakes are weak (content for FORGE and DRIVE) and its hull pitches too far under braking (the request to CHASSIS above); it is not in the Workshop; it has no step or turn bench of its own.
 - Ride quality, top speed, range, soft-ground mobility and combat benchmarks have no runner.
-- The Workshop has no consequences panel and no hit map yet; the vulnerability model (weak points that cannot be armoured, an engine over 100 %) is designed (`DESIGN-MODEL.md`) but not built.
+- The Workshop's consequences panel is in review and has no flags yet; there is no hit map; the vulnerability model (weak points that cannot be armoured, an engine over 100 %) is designed (`DESIGN-MODEL.md`) but not built.
 
 ## Try it
 Download the package (Windows): the artifact **`Warzone5000-TestDrive-windows`** (4.3 MB) of `integration` run 38099600024, commit `29f45cb`: https://github.com/Garsondee/warzone-5000/actions/runs/38099600024 (scroll to "Artifacts"; direct link, GitHub login needed: https://github.com/Garsondee/warzone-5000/suites/103227822159/artifacts/11687950399). Every later `integration` run carries the same artifact; from the run that follows this report on, the Windows job also unzips the package and starts the drive server and the Workshop itself before it keeps the zip (`tools/ci/smoke_package.py`). Unzip it anywhere, then:
