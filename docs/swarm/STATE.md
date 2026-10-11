@@ -22,6 +22,10 @@ assists on by default; CI packages a Windows zip (`w5k.exe`, `content/`, the pag
 local folder `C:\Users\Hivemind\Documents\Warzone 5000` (cloud sessions cannot write to the owner's machine). The owner also praised GEOMETRY's parametric,
 modular vehicles; GEOMETRY continues with scout/hauler skins, then modules.
 
+## Owner direction, round 4 (2026-10-10 evening): mass is emergent; the roster
+- **Design model (C-020, C-021, `docs/architecture/DESIGN-MODEL.md`, merged):** a vehicle's weight comes from its configuration; sliders are choices and consequences are shown; wacky builds may fail and say why; an engine over 100% adds unarmourable weak points. In flight: VIEWER drops the Workshop's Mass slider (tyre pressure instead) and adds a Consequences panel; FORGE builds a component mass budget (D2a, design note merged) then a design audit (D2b); GEOMETRY, COMBAT, VALIDATION, DRIVE and CHASSIS have lines in their briefs for later stages.
+- **Roster drawings (C-022):** the owner pasted four side-view drawings (rigid 4x4/6x6/8x8 trucks, a tracked launcher carrier with a rear spade and outriggers, tractor plus semitrailer) into GEOMETRY's session. They stay off the repo as silhouette references. Default sequence after slice 2: more axles, then deployable stabilisers with the launcher carrier, then trailers (a contract change).
+
 ## Owner direction, round 3 (2026-10-10 16:20 UTC): the demo works; faster; what next
 The owner ran the Windows package ("I love the demo", the exe alone did nothing but `START.bat` worked) and asked for two things. (1) **Remove the speed
 limiter**: `START.bat` now passes `w5k drive --no-speed-limit` (the other assists stay), and a new `START-KID.bat` keeps the 25 km/h cap for the five-year-old;

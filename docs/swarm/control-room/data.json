@@ -1,11 +1,11 @@
 {
  "subtitle": "warzone-5000: a realistic ground-vehicle simulator, built by thirteen domain agents working in parallel. This page is the coordinator's view.",
- "updated": "2026-10-10 18:15 UTC",
+ "updated": "2026-10-10 23:55 UTC",
  "strip": [
   {
    "k": "Phase",
-   "v": "Slice 2 under way",
-   "s": "The Design Loop: tracked carrier, mud that decides who passes, the Impact Matrix running, a Workshop page. Slice 1 (three trucks, kid test drive) delivered and packaged",
+   "v": "Slice 2: carrier drives, Workshop built",
+   "s": "The tracked carrier finishes the 504 m course and the mud pit; the Workshop page (sliders, scoreboard, DRIVE) is merged; mass is becoming a consequence of the parts (your direction, C-020); Impact Matrix and the Windows package v3 come next",
    "state": "run"
   },
   {
@@ -23,14 +23,14 @@
   {
    "k": "Sessions",
    "v": "11 of 13",
-   "s": "ARCH plus 10 lanes; COMBAT, LOOK, VALIDATION idle; GODOT and AI parked",
+   "s": "ARCH plus 10 lanes; DRIVE, CHASSIS, TRACKS, WORLD, FORGE between tasks; COMBAT and LOOK idle; GODOT and AI parked",
    "state": "run"
   },
   {
    "k": "Usage",
-   "v": "lanes about $177",
-   "s": "from list_sessions: GEOMETRY 45.5, CHASSIS 39.3, VIEWER 22.8, DRIVE 19.5, WORLD 16.4, FORGE 13.4, VALIDATION 7.0, TRACKS 6.6; the five-hour window is in its warning band (resets 20:30 UTC), so DRIVE, GEOMETRY, VIEWER idle and WORLD stops after one step",
-   "state": "wait"
+   "v": "lanes about $261",
+   "s": "from list_sessions: GEOMETRY 65.0, CHASSIS 59.5, WORLD 34.0, DRIVE 28.0, FORGE 26.2, VIEWER 25.1, VALIDATION 9.8, TRACKS 7.0; about $12 for the last 90 minutes; the five-hour window is out of its warning band",
+   "state": "run"
   }
  ],
  "ranks": [
@@ -54,15 +54,15 @@
    "rank": 1,
    "state": "building",
    "mission": "Contracts, CI and guardrails, the integration spine, merges, reviews. Writes no feature code.",
-   "last": "w5k drive (live test-drive server, kid assists), course-compare, the proving-ground runner (braking, acceleration merged), the Windows package; lanes may now message ARCH"
+   "last": "tracked path in the course runner and the drive server (the carrier is in the garage, kid mode steers it), design model written down (mass is emergent), cards C-019 to C-022"
   },
   {
    "name": "CHASSIS",
    "squad": "dynamics",
    "rank": 1,
-   "state": "building",
+   "state": "idle",
    "mission": "A wheeled vehicle that rides, grips and handles: hull, suspension, tyres, steering.",
-   "last": "wheeled assembly, ledger, benches; sinking tyre (rigid-wheel Bekker) and tyre load sensitivity now read from the contract; the trucks stay linear until FORGE fills the fields"
+   "last": "tracked hull (torsion arms, reflected sprocket inertia, soil forces) merged; Hauler skidpad diagnosed (open diffs once the inner wheels unload); idle"
   },
   {
    "name": "DRIVE",
@@ -70,47 +70,47 @@
    "rank": 1,
    "state": "idle",
    "mission": "Engine map, converter, gearbox, differentials, brakes with heat, fuel.",
-   "last": "clutch launch and hill hold, authored brake torque, open/limited-slip/locked demonstration (Mule +13% grade from limited slip; Hauler is a launch-transient limit); steering-unit note for TRACKS; idle"
+   "last": "regenerative steering servo: the carrier now steers; shift map reads the slowest wheel (no hunting in a turn); limited slip raises the Hauler's cornering limit; idle"
   },
   {
    "name": "WORLD",
    "squad": "world",
    "rank": 1,
-   "state": "building",
+   "state": "idle",
    "mission": "The obstacle course: hills, roads, mud, trees, barricades, buildings.",
-   "last": "rock fields, river, cliffs, bridges, mobility map (go/slow/no-go per vehicle) merged; mud pit and proving fixtures await a merge of integration; visual target V0 in progress"
+   "last": "mud pit, fixtures, mobility map, V1 terrain mesh, V2 painting merged; the clay note says the pit walls separate the vehicles (C-019); V3 waits for the owner's go"
   },
   {
    "name": "FORGE",
    "squad": "design",
    "rank": 1,
-   "state": "building",
+   "state": "idle",
    "mission": "Designer choices to solver parameters; the reference garage starts with the HMMWV.",
-   "last": "levers for differentials and brake torque merged; tracked-compile design note merged, T1 (stations, tracks, sprocket) in review"
+   "last": "tracked compile T1 to T3 (the carrier compiles, renders), tyre load sensitivity filled, component mass budget (mass, COM and inertia from the parts) merged; design audit next"
   },
   {
    "name": "VIEWER",
    "squad": "visuals",
    "rank": 1,
-   "state": "idle",
+   "state": "building",
    "mission": "Replay format, the browser viewer with forces drawn on, MP4 and chart tools.",
-   "last": "tornado and ladder charts and the Workshop design note merged; idle until the tracked contact is real"
+   "last": "Workshop: server, page, scoreboard and DRIVE merged; carrier skin packing and belts (#177) in review; Consequences panel next"
   },
   {
    "name": "VALIDATION",
    "squad": "truth",
    "rank": 1,
-   "state": "idle",
+   "state": "building",
    "mission": "Real-vehicle dossiers, the harness, the dashboard and the Design Impact Matrix.",
-   "last": "Impact Matrix v0 run (31 of 54 signs), capability export for the mobility map merged; idle"
+   "last": "Impact Matrix v1 (72%) and the honest table corrections merged; rerunning it on the mass-budget model"
   },
   {
    "name": "GEOMETRY",
    "squad": "design",
    "rank": 2,
-   "state": "idle",
+   "state": "building",
    "mission": "Realistic hulls, turrets, wheels and tracks from lofted sections.",
-   "last": "the tracked carrier (belt module, skin from the compiled rig) merged; cavity-ray count to be exposed; idle"
+   "last": "tracked carrier skin merged; writing a module wish list from the owner's roster drawings (C-022)"
   },
   {
    "name": "LOOK",
@@ -124,9 +124,9 @@
    "name": "TRACKS",
    "squad": "dynamics",
    "rank": 2,
-   "state": "building",
+   "state": "idle",
    "mission": "Tracked running gear and soft ground: floats where tyres bog, turns by skidding.",
-   "last": "S3 pivot torque within 4.6% of mu W L/4, S4 thrust within 0.4% of Wong; contact kernel, skid model, belly drag and ladder bench merged; wrapper and glue note next"
+   "last": "contact kernel, skid model, belly, ladder bench, TrackedVehicleGear wrapper merged; idle"
   },
   {
    "name": "GODOT",
@@ -175,8 +175,8 @@
   {
    "id": "S2",
    "name": "Slice 2: The Design Loop",
-   "state": "under way",
-   "criteria": "A tracked carrier, mud that decides who passes, the Impact Matrix running, a Workshop page where a design change moves measured numbers and can be driven. See docs/swarm/SLICE-2.md and card C-016."
+   "state": "under way, headline reached",
+   "criteria": "A tracked carrier, mud that separates the vehicles, the Impact Matrix running, a Workshop page where a design change moves measured numbers and can be driven. Reached: the carrier finishes the course and the pit, the Workshop is merged. Open: Impact Matrix at 80%, ISO 8608 road bands, package v3. See docs/swarm/SLICE-2.md and cards C-016, C-019."
   },
   {
    "id": "M2",
@@ -263,6 +263,26 @@
    "lane": "TRACKS",
    "caption": "drawbar pull vs slip on soft soil: the model against Wong's closed form",
    "file": "docs/lanes/tracks/media/thrust_slip.png"
+  },
+  {
+   "lane": "ARCH",
+   "caption": "the tracked carrier (blue) finishes the whole course and the mud pit; the Hauler (green) sinks at 180 m",
+   "file": "docs/lanes/arch/media/slice-compare-carrier.png"
+  },
+  {
+   "lane": "ARCH",
+   "caption": "your design direction as one picture: what you choose, what the vehicle becomes, what happens",
+   "file": "docs/lanes/arch/media/design-model.png"
+  },
+  {
+   "lane": "VIEWER",
+   "caption": "the Workshop: sliders on the left, the truck and its proving-ground scoreboard",
+   "file": "docs/lanes/viewer/media/workshop-scoreboard.jpg"
+  },
+  {
+   "lane": "VIEWER",
+   "caption": "the tracked carrier with its belts",
+   "file": "docs/lanes/viewer/media/carrier-static-belt.jpg"
   }
  ],
  "log": [
@@ -315,6 +335,11 @@
    "t": "2026-10-10 18:15",
    "sessions": "11 of 13",
    "note": "Contract 0.3.0 merged; seven lane PRs landed this hour (DRIVE launch and hill hold, FORGE levers, TRACKS contact, skid and ladder, GEOMETRY carrier, VIEWER charts, CHASSIS sinking tyre, WORLD mobility map). Spikes S3 and S4 passed, so the tracked path is safe to build. Usage window in its warning band: lanes about $177, non-critical lanes idled until 20:30 UTC."
+  },
+  {
+   "t": "2026-10-10 23:55",
+   "sessions": "11 of 13",
+   "note": "The tracked carrier finishes the course and the mud pit (the steering bug in the drivetrain model was the blocker); the Workshop page is merged; FORGE's component mass budget landed after your direction that mass must come from the configuration (design model, cards C-020 to C-022). Lanes about $261."
   }
  ],
  "footer": "Defaults apply to every open card until you answer it."
