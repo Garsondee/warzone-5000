@@ -1,0 +1,23 @@
+{
+  "schema": "w5k.capability.v1",
+  "vehicle": "carrier_tracked",
+  "contract_pin": "",
+  "surface": "dry asphalt (the proving ground's flat plane)",
+  "max_grade_ratio": null,
+  "max_side_slope_rad": null,
+  "braking_distance_m": null,
+  "braking_speed_m_s": null,
+  "time_0_48kmh_s": null,
+  "max_lateral_accel_m_s2": null,
+  "max_step_m": null,
+  "missing": [
+    "gradeability",
+    "side_slope_rollover",
+    "braking_50kmh",
+    "accel_0_48kmh"
+  ],
+  "not_applicable": [
+    "skidpad",
+    "step_climb"
+  ]
+}
