@@ -309,7 +309,13 @@ impl Session {
             .iter()
             .zip(&f.contacts)
             .map(|(n, c)| {
-                serde_json::json!({"name": n, "normal_n": r(f64::from(c.normal_force_n)), "in_contact": c.flags & 1 == 1})
+                serde_json::json!({
+                    "name": n,
+                    "normal_n": r(f64::from(c.normal_force_n)),
+                    "in_contact": c.flags & 1 == 1,
+                    "sinkage_m": r(f64::from(c.sinkage_m)),
+                    "slip": r(f64::from(c.slip)),
+                })
             })
             .collect();
         let mut v = serde_json::json!({

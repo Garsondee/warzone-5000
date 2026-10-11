@@ -93,3 +93,19 @@ export function linkMatrix(out, at, frames, k, x, mirrored) {
 export function contrast(step, pitch) {
   return 0.5 * (1 + Math.cos(Math.PI * Math.min(Math.abs(step) / pitch, 1)));
 }
+
+// A track's footprint on the ground, from its road wheels (circles {z, y, r} in the Track node's frame): FORGE sets the belt's contact length to the span
+// of the road wheel centres plus one wheel diameter, so the footprint runs from the rear edge of the rearmost wheel to the front edge of the frontmost
+// (forward is -z), at the height of their lowest points; [z, y] each. Null with fewer than two road wheels.
+export function groundRun(road) {
+  if (road.length < 2) return null;
+  const rear = road.reduce((a, w) => (w.z > a.z ? w : a)), front = road.reduce((a, w) => (w.z < a.z ? w : a));
+  return { rear: [rear.z + rear.r, rear.y - rear.r], front: [front.z - front.r, front.y - front.r] };
+}
+
+// The `n` cells of that footprint (TRACKS spaces its samples evenly along it, sample 0 the rearmost and the last one the front): the centre of each,
+// [z, y] in the Track node's frame, and the cell's length.
+export function cellCentres(ground, n) {
+  const dz = ground.front[0] - ground.rear[0], dy = ground.front[1] - ground.rear[1];
+  return { cells: Array.from({ length: n }, (_, k) => [ground.rear[0] + (dz * (k + 0.5)) / n, ground.rear[1] + (dy * (k + 0.5)) / n]), length: Math.hypot(dz, dy) / n };
+}

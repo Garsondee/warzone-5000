@@ -13,7 +13,7 @@ Run it from the folder that holds `content/`. It binds `127.0.0.1` only and prin
 SI, as `docs/architecture/UNITS-AND-FRAMES.md`: metres, seconds, radians, newtons. Right-handed, +Y up, -Z forward, +X right. `rot` is the hull quaternion `[w, x, y, z]`. Steering `+1` is right (as `Command`). Joint angles are radians, travel is metres.
 
 ## Requests
-- `GET /api/vehicles` -> `[{"id": "scout_4x4", "name": "Scout 4x4", "mass_kg": 1210.0, "wheelbase_m": 2.4, "skin": "scout_4x4"}, ...]` for every `*.ron` (not `*.extras.ron`) under `--vehicles-dir` that compiles and that the wheeled chassis accepts, sorted by id. `skin` is the look id the page should use for the vehicle (today equal to `id`).
+- `GET /api/vehicles` -> `[{"id": "scout_4x4", "name": "Scout 4x4", "mass_kg": 1210.0, "wheelbase_m": 2.4, "skin": "scout_4x4", "tracks": []}, ...]` for every `*.ron` (not `*.extras.ron`) under `--vehicles-dir` that compiles and that the wheeled or the tracked chassis accepts, sorted by id. `skin` is the look id the page should use for the vehicle (today equal to `id`). `tracks` is empty for a wheeled vehicle; for a tracked one it has an entry per belt, `{"name": "track.l", "contact_length_m": 2.9, "samples": 12, "width_m": 0.38}` (`TrackDef`'s own numbers: the length of belt on firm ground, how many contact samples lie along it, the belt's width; for a tracked vehicle `wheelbase_m` is the longest `contact_length_m`). The contacts of a tracked frame are the belt samples, belt by belt in `tracks` order, each belt rearmost sample first.
 - `GET /api/rig/<id>` -> the `RenderRig` JSON of that vehicle (the same as `rig.json` from `w5k scenario mule-course`). Joint order of every stream frame is `PhysRig::joint_names()` (spin of each station, steer of each steered station, travel of each station).
 - `GET /api/world` -> `terrain.json`, format `w5k-terrain-1` (see `world-viewer-terrain.md`), of the course.
 - `POST /api/select` body `{"vehicle": "scout_4x4"}` -> `{"ok": true}`. Resets the simulation with that vehicle at the road start (unknown id: 404 `{"error": ...}`).
@@ -31,7 +31,7 @@ SI, as `docs/architecture/UNITS-AND-FRAMES.md`: metres, seconds, radians, newton
   "engine_rpm": 2100.0,
   "gear": 3,                       // 0 neutral, positive forward, negative reverse
   "speed_m_s": 6.2,                // along the nose; negative when reversing
-  "contacts": [ {"name": "axle1.l", "normal_n": 3900.0, "in_contact": true}, ... ],
+  "contacts": [ {"name": "axle1.l", "normal_n": 3900.0, "in_contact": true, "sinkage_m": 0.0, "slip": 0.02}, ... ],   // sinkage_m: how deep the tyre or belt sample sits in soft ground (0 on firm ground); slip: its slip ratio
   "assist": {"on": true, "message": "speed limit"},   // message: "" or a short status of the assist that is acting
   "message_event": "back on the road"                 // optional: only in the frame after an event, show it for a moment
 }

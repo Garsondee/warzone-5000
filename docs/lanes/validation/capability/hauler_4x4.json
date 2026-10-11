@@ -4,11 +4,11 @@
   "contract_pin": "contract-v0.3",
   "surface": "dry asphalt (the proving ground's flat plane)",
   "max_grade_ratio": {
-    "value": 0.375,
+    "value": 0.416015625,
     "unit": "ratio",
     "test": "gradeability",
-    "light": "not scored",
-    "note": ""
+    "light": "red",
+    "note": "58% of the torque bound: something other than traction or torque limits the climb (launch, converter, shift logic)"
   },
   "max_side_slope_rad": {
     "value": 0.5853333333333354,
@@ -18,33 +18,34 @@
     "note": "roll"
   },
   "braking_distance_m": {
-    "value": 18.863875123780815,
+    "value": 18.854815441628176,
     "unit": "m",
     "test": "braking_50kmh",
     "light": "red",
-    "note": ""
+    "note": "63% longer than v^2/(2 mu g): the brakes or the load distribution set the distance, not tyre friction"
   },
-  "braking_speed_m_s": 13.902724361803084,
+  "braking_speed_m_s": 13.900346447641178,
   "time_0_48kmh_s": {
-    "value": 11.36188892499316,
+    "value": 11.360434701453471,
     "unit": "s",
     "test": "accel_0_48kmh",
-    "light": "not scored",
+    "light": "green",
     "note": ""
   },
   "max_lateral_accel_m_s2": {
-    "value": 5.78163217915313,
+    "value": 5.59522811293511,
     "unit": "m/s^2",
     "test": "skidpad",
-    "light": "not scored",
+    "light": "green",
     "note": "power (speed stopped rising below the grip limit)"
   },
   "max_step_m": {
-    "value": 0.1015625,
+    "value": 0.1328125,
     "unit": "m",
     "test": "step_climb",
-    "light": "red",
+    "light": "green",
     "note": ""
   },
-  "missing": []
+  "missing": [],
+  "not_applicable": []
 }

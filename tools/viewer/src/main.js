@@ -115,7 +115,7 @@ function renderAt(t) {
   fleet.forEach((f, vi) => f.debug.update(frame, vi));
   let lead = 0; // the HUD line and the ledger panel follow the leader (the furthest driven); one vehicle: that one
   driven.forEach((d, i) => { if (d[fi] > driven[lead][fi]) lead = i; });
-  updateHud(document.getElementById('hud'), document.getElementById('ledger'), frame, t, steerJoints, lead);
+  updateHud(document.getElementById('hud'), document.getElementById('ledger'), frame, t, steerJoints, lead, fleet[lead].debug.summary(frame, lead));
   if (multi) {
     updateFleet(document.getElementById('fleet'), frame, fleet, replay.header, driven, fi);
     fleet.forEach((f) => { // name label above each truck, projected to the screen
@@ -201,6 +201,7 @@ window.__v = {
   renderer: gl.getParameter(gl.VERSION), frames: replay.frames.length,
   pause: () => { playing = false; },
   setFrameRate: (fps) => { frameS = 1 / fps; },
+  footprints: (vi = 0) => fleet[vi].debug.cells(),
 };
 renderAt(0);
 window.__ready = true;

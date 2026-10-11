@@ -198,6 +198,8 @@ mod tests {
     }
 
     const MULE: &str = "content/vehicles/game/mule_4x4.ron";
+    const CARRIER: &str = "content/vehicles/game/carrier_tracked.ron";
+    const HAULER: &str = "content/vehicles/game/hauler_4x4.ron";
     const COURSE: &str = "content/world/courses/slice.ron";
 
     pub(super) fn setup() -> Setup {
@@ -213,6 +215,26 @@ mod tests {
             let runs = run_all(&setup, &entries).expect("three runs, each deterministic");
             (setup, runs)
         })
+    }
+
+    /// Slice 2, acceptance 1 (card C-019's wording): on the slice course, whose clay mud pit starts at 35 % of the route and is 25 m long,
+    /// the tracked carrier and the Mule finish unaided, and the Hauler stalls on the pit's entry wall.
+    #[test]
+    fn the_carrier_finishes_the_course_and_the_mud_pit_unaided_while_the_hauler_stalls_on_the_pit_walls() {
+        let setup = setup();
+        let entries: Vec<Entry> =
+            [CARRIER, MULE, HAULER].iter().map(|f| load_entry(&root(), f).expect("vehicle")).collect();
+        let runs = run_all(&setup, &entries).expect("three runs, each deterministic");
+        let (carrier, mule, hauler) = (&runs[0].run, &runs[1].run, &runs[2].run);
+        assert!(carrier.stop_reason.starts_with("finished"), "carrier: {}", carrier.stop_reason);
+        assert!(mule.stop_reason.starts_with("finished"), "mule: {}", mule.stop_reason);
+        assert!(hauler.stop_reason.starts_with("stalled"), "hauler: {}", hauler.stop_reason);
+        let pit_m = 0.35 * hauler.route_m; // const-ok: `at_fraction` of the mud crossing in slice.ron
+        assert!(
+            hauler.stopped_at_s_m > pit_m - 5.0 && hauler.stopped_at_s_m < pit_m + 25.0, // const-ok: the crossing's length
+            "the Hauler stopped at {} m, the pit starts at {pit_m} m",
+            hauler.stopped_at_s_m
+        );
     }
 
     #[test]
