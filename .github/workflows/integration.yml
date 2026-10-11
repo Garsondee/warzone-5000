@@ -74,8 +74,16 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' && hashFiles('tools/viewer/dist/index.html') != '' }}
         run: python tools/ci/package_testdrive.py --exe target/release/w5k.exe --content content --page tools/viewer/dist/index.html --skins tools/viewer/dist/skins --skins out/extra-skins --workshop tools/viewer/dist/workshop.html --out out/Warzone5000-TestDrive-windows.zip --os windows
 
-      - name: Keep the test-drive package
+      # Unzip the package and start it the way START.bat and START-WORKSHOP.bat do (tools/ci/smoke_package.py): the drive server lists the four
+      # vehicles and serves the page and the carrier's skin; the Workshop builds a design and scores it (the program starts itself again).
+      # What the owner would otherwise find out by double-clicking.
+      - name: Smoke-test the test-drive package (Windows)
         if: ${{ matrix.os == 'windows-latest' && hashFiles('tools/viewer/dist/index.html') != '' }}
+        run: python tools/ci/smoke_package.py out/Warzone5000-TestDrive-windows.zip --os windows
+
+      # Kept even when the smoke test failed (a broken package is the one to download and look at), but not when the run was cancelled.
+      - name: Keep the test-drive package
+        if: ${{ !cancelled() && matrix.os == 'windows-latest' && hashFiles('out/Warzone5000-TestDrive-windows.zip') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: Warzone5000-TestDrive-windows
