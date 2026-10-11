@@ -102,7 +102,8 @@ class PackageTestDrive(unittest.TestCase):
         self.assertIn(f"{pkg.FOLDER}/viewer/workshop.html", inside)
         self.assertEqual(len(names), len(inside))
         self.assertIn('cd /d "%~dp0"', bat)
-        self.assertIn("w5k.exe viewer workshop", bat)
+        self.assertIn("w5k.exe viewer workshop --open", bat)  # the program opens the browser itself, as START.bat does
+        self.assertNotIn("ping", bat)  # no delayed-start trick
         self.assertIn(pkg.WORKSHOP_URL, bat)  # the address the browser is sent to, and the one printed for a person
         self.assertTrue(bat.endswith("\r\n"))
         self.assertNotIn("\n\n", bat.replace("\r\n", "\n"))
@@ -111,7 +112,7 @@ class PackageTestDrive(unittest.TestCase):
         with zipfile.ZipFile(lin) as z:
             sh = z.read(f"{pkg.FOLDER}/start-workshop.sh").decode()
             self.assertTrue(z.getinfo(f"{pkg.FOLDER}/start-workshop.sh").external_attr >> 16 & 0o100)
-        self.assertIn("./w5k viewer workshop", sh)
+        self.assertIn("./w5k viewer workshop --open", sh)
 
     def test_without_a_workshop_page_there_is_no_workshop_start_file_and_a_missing_one_is_refused(self):
         out, _ = self.build()
