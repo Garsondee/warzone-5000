@@ -65,9 +65,26 @@ const board = await w(() => window.__workshop.board());
 const row = (name) => board.find((r) => r.name.startsWith(name));
 check(/^\u2212.*better$/.test(row('0-48').change), `more power shortens the 0-48 km/h time: ${row('0-48').change}`);
 // (the gradient row is not asserted: the model says more power does NOT climb steeper on the Hauler, which is VALIDATION's finding 2; the page shows it as it is)
-check(board.every((r) => /^(no change|[+\u2212]\d+(\.\d+)?% (better|worse))$/.test(r.change)), `every row says how it changed in words: ${board.map((r) => r.change).join(' | ')}`);
+check(board.every((r) => /^(no change|[+\u2212]\d+(\.\d+)?% (better|worse))$/.test(r.change) || (r.class === 'noise' && /^[+\u2212]\d+(\.\d+)?%$/.test(r.change) && r.why === "within the bench's noise")), `every row says how it changed in words, or says it is within the bench's noise: ${board.map((r) => r.change + (r.why ? ` (${r.why})` : '')).join(' | ')}`);
 check(board.every((r) => r.name && r.change !== undefined), `six rows, each with a name and a change: ${board.map((r) => r.name).join(' / ')}`);
 await page.screenshot({ path: `${out}/4-scoreboard.png` });
+
+// a change inside the bench's own noise is shown grey with the reason and no verdict; a run that ended early says so (canned answers: the noise depends on the run-ups)
+const canned = [
+  { bench: 'B1', name: '0-48 km/h time', unit: 's', base: 10, value: 9, delta_pct: -10, better: true, note: null, unresolved: false },
+  { bench: 'B11', name: 'step height cleared', unit: 'm', base: 0.3, value: 0.306, delta_pct: 2, better: null, note: "within the bench's noise", unresolved: true },
+  { bench: 'B7', name: 'side-slope limit', unit: 'deg', base: 30, value: 31, delta_pct: 3.3, better: null, note: 'rolled over', unresolved: false },
+];
+await page.route('**/api/score', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ rows: canned }) }));
+await slide('engine_peak_power', 1.2);
+await until(() => window.__workshop.detail() === 'preview');
+await until(() => !window.__workshop.stale() && window.__workshop.board().length === 3, null, 120000);
+const noisy = await w(() => window.__workshop.board());
+const step = noisy.find((r) => r.name.startsWith('step'));
+check(step.class === 'noise' && step.change === '+2.0%' && step.why === "within the bench's noise", `a_step_change_inside_the_benchs_noise_is_grey_with_its_reason_and_no_verdict: "${step.change}" ${step.class} / "${step.why}"`);
+check(noisy.find((r) => r.name.startsWith('0-48')).class === 'better' && noisy.find((r) => r.name.startsWith('side')).why === 'ended early: rolled over', 'a judged row keeps its verdict and a run that ended early still says so');
+await page.screenshot({ path: `${out}/4b-scoreboard-noise.png` });
+await page.unroute('**/api/score');
 await slide('mass', 1.3);
 check(await w(() => window.__workshop.stale()), 'the old numbers are greyed the moment a slider moves');
 check(await page.$eval('#drive', (b) => b.disabled), 'DRIVE waits for the body that goes with the sliders');

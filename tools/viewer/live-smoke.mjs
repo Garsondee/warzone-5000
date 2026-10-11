@@ -128,11 +128,13 @@ check(true, 'Enter drives the chosen vehicle');
 await page.click('#garage');
 check(await live(() => window.__live.picking()), 'the garage button reopens the picker');
 
-// The tracked carrier: its two belts are links on the taut band round the wheels (src/tracks.js), built from the rig's track_runs.
+// The tracked carrier: GEOMETRY's skin on FORGE's skeleton, its two belts links on the taut band round the wheels (src/tracks.js), built from the rig's track_runs.
 await live(() => window.__live.pick('carrier_tracked'));
 await page.waitForFunction(() => window.__live.vehicle() === 'carrier_tracked' && window.__live.frame(), null, { timeout: 60000 });
 const belts = await live(() => window.__live.belts());
 check(belts.length === 2 && belts.every((b) => b.links > 3 && b.length_m > 5 && b.length_m < 20 && Array.isArray(b.skipped)), `the carrier's belts are built: ${JSON.stringify(belts.map((b) => [b.links, +b.length_m.toFixed(2)]))} (links, metres)`);
+const fitted = await live(() => window.__live.fit());
+check(fitted && Number.isFinite(fitted.scale) && fitted.scale > 0, `the carrier is drawn from GEOMETRY's skin on the simulation's skeleton (hull scale ${fitted && fitted.scale.toFixed(2)}), not from the plain boxes of the rig`);
 check(belts.every((b) => b.contrast === 1), 'a belt at rest shows the full link pattern (contrast 1)');
 await page.keyboard.down('ArrowUp');
 await page.waitForFunction(() => window.__live.frame() && window.__live.frame().speed_m_s > 3, null, { timeout: 60000 });
