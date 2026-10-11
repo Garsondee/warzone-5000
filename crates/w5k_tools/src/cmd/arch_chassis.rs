@@ -120,6 +120,41 @@ impl AnyChassis {
         }
     }
 
+    /// Turn gravity (the proving tests tilt a vehicle by rotating it, which is the physics of tilting the ground).
+    pub(crate) fn set_gravity(&mut self, g_m_s2: Vec3) {
+        match self {
+            AnyChassis::Wheeled(c) => c.gravity_m_s2 = g_m_s2,
+            AnyChassis::Tracked(c) => c.gravity_m_s2 = g_m_s2,
+        }
+    }
+
+    /// The wheeled chassis, if that is what this is (its stations carry the tyre contact reports).
+    pub(crate) fn wheeled(&self) -> Option<&WheeledChassis> {
+        match self {
+            AnyChassis::Wheeled(c) => Some(c),
+            AnyChassis::Tracked(_) => None,
+        }
+    }
+
+    /// Every loaded contact patch (tyre patch, or belt sample) is at its friction or shear limit: the onset of sliding.
+    pub(crate) fn every_loaded_patch_is_at_its_limit(&self) -> bool {
+        match self {
+            AnyChassis::Wheeled(c) => {
+                c.stations.iter().all(|s| s.report.contact.fz_n <= 0.0 || s.report.contact.saturated)
+            }
+            AnyChassis::Tracked(c) => {
+                (0..c.tracks.len()).all(|k| c.gear.track(k).outputs().iter().all(|o| o.fz_n <= 0.0 || o.saturated))
+            }
+        }
+    }
+
+    /// A wheel on the -x side of the rig (the uphill side when gravity is turned toward +x) carries no load: the wheel has lifted.
+    pub(crate) fn a_wheel_on_the_minus_x_side_has_lifted(&self, rig: &PhysRig) -> bool {
+        self.wheel_loads()
+            .iter()
+            .any(|(name, fz_n)| *fz_n <= 0.0 && rig.stations.iter().any(|s| s.name == *name && s.rest_pos_m.x < 0.0))
+    }
+
     /// The load carried by each wheel (tyre normal force, or the soil's reaction on a road wheel), N, with its name.
     pub(crate) fn wheel_loads(&self) -> Vec<(&str, f64)> {
         match self {

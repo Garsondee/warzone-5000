@@ -23,19 +23,13 @@ pub fn side_slope(c: &Ctx) -> Result<Outcome, String> {
     let (mut angle, mut found) = (0.0, None);
     while angle < cfg.tilt_max_rad.v && found.is_none() {
         angle += cfg.tilt_rate_rad_s.v * dt;
-        sim.chassis.gravity_m_s2 = Vec3::new(scalar::sin(angle), -scalar::cos(angle), 0.0) * scalar::G;
+        sim.chassis.set_gravity(Vec3::new(scalar::sin(angle), -scalar::cos(angle), 0.0) * scalar::G);
         if !sim.tick(&parked) {
             break;
         }
-        let lifted = sim
-            .chassis
-            .stations
-            .iter()
-            .zip(&c.rig.stations)
-            .any(|(s, d)| d.rest_pos_m.x < 0.0 && s.report.contact.fz_n <= 0.0);
-        if lifted {
+        if sim.chassis.a_wheel_on_the_minus_x_side_has_lifted(c.rig) {
             found = Some("roll");
-        } else if sim.chassis.stations.iter().all(|s| s.report.contact.fz_n <= 0.0 || s.report.contact.saturated) {
+        } else if sim.chassis.every_loaded_patch_is_at_its_limit() {
             found = Some("slide");
         }
     }
