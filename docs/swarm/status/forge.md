@@ -51,6 +51,9 @@ Braking, 0-48, side slope, Mule and Hauler skidpad, Scout and Mule gradeability 
 ## Mass as a consequence (card C-020)
 Design note: `docs/lanes/forge/mass-budget-note.md` (D2a component mass budget, D2b design audit, PR plan). Next: D2a-1.
 
+## Design audit D2b-1 (this PR)
+`audit.rs` + `w5k forge audit <vehicle.ron> [--lever name=factor ...] [--out FILE]` (and `w5k forge compile <vehicle.ron> --out DIR`): `w5k.audit.v1` JSON in the Workshop's shape (`{consequences: [{id, group, label, value, text?, unit, because, provenance, lo?, hi?}], flags: []}`). Rows so far: mass by system, balance (COM, front share, radii of gyration), power (power to weight, torque to weight, first-gear thrust to weight), ride (frequency, damping, static sag, bump capacity). Next PR (D2b-2): stability, ground contact (pressure, wheel load, obstacle angles), the flags and `content/parts/envelope.ron`, cooling aperture.
+
 ## Blocked
 - Nothing blocking the settling round. Later: `w5k_geo` mass integrals (stub today); VALIDATION's M998 dossier; CHASSIS' spike S1 (substep constant).
 
